@@ -1,8 +1,8 @@
 //go:build linux && !(js && wasm)
 
-// FFI error handling follows ADR-049 three-tier strategy:
+// Error handling follows ADR-049 three-tier strategy:
 //
-//	Tier 1 (creation/submit): check both FFI error and API result code
+//	Tier 1 (creation/submit): check the API result code
 //	Tier 2 (void/hot path): infallible by GPU API contract — Vulkan §6.6, WebGPU §21.2
 //	Tier 3 (platform syscalls): use errno for diagnostics (Wayland, X11, Win32)
 //
@@ -13,15 +13,29 @@
 // display protocol errors.
 package software
 
+/*
+#include "trampolines_x11_linux.h"
+#cgo noescape sw_i_p
+#cgo nocallback sw_i_p
+#cgo noescape sw_u_uuuu
+#cgo nocallback sw_u_uuuu
+#cgo noescape sw_v_u
+#cgo nocallback sw_v_u
+#cgo noescape sw_v_uu
+#cgo nocallback sw_v_uu
+#cgo noescape sw_v_uuupiiiiii
+#cgo nocallback sw_v_uuupiiiiii
+*/
+import "C"
+
 import (
 	"image"
 	"log/slog"
 	"sync"
 	"unsafe"
 
-	"github.com/go-webgpu/goffi/ffi"
-	"github.com/go-webgpu/goffi/types"
 	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/gowgpu/internal/dl"
 )
 
 // X11 constants (from X.h / Xlib.h).
@@ -73,7 +87,7 @@ var (
 	x11Once  sync.Once
 	x11Ready bool // true if libX11 loaded successfully
 
-	x11Lib unsafe.Pointer
+	x11Lib dl.Lib
 
 	symXCreateGC  unsafe.Pointer
 	symXFreeGC    unsafe.Pointer
@@ -82,119 +96,34 @@ var (
 	symXInitImage unsafe.Pointer
 
 	// XCreateGC(Display*, Drawable, unsigned long valuemask, XGCValues*) -> GC
-	cifXCreateGC types.CallInterface
 	// XFreeGC(Display*, GC) -> int
-	cifXFreeGC types.CallInterface
 	// XPutImage(Display*, Drawable, GC, XImage*, int, int, int, int, uint, uint) -> int
-	cifXPutImage types.CallInterface
 	// XFlush(Display*) -> int
-	cifXFlush types.CallInterface
 	// XInitImage(XImage*) -> Status (int)
-	cifXInitImage types.CallInterface
 )
 
 // initX11 loads libX11.so and prepares call interfaces.
 // Called once via sync.Once; sets x11Ready on success.
 func initX11() {
 	var err error
-
-	// Load library: try .so.6 first (standard versioned SONAME), then unversioned.
-	x11Lib, err = ffi.LoadLibrary("libX11.so.6")
-	if err != nil {
-		x11Lib, err = ffi.LoadLibrary("libX11.so")
-		if err != nil {
-			slog.Debug("software: X11 blit unavailable — could not load libX11", "error", err)
+	if x11Lib, err = dl.Open("libX11.so.6", "libX11.so"); err != nil {
+		slog.Debug("software: X11 blit unavailable — could not load libX11", "error", err)
+		return
+	}
+	for _, sym := range []struct {
+		name string
+		dst  *unsafe.Pointer
+	}{
+		{"XCreateGC", &symXCreateGC},   // GC XCreateGC(Display*, Drawable, unsigned long valuemask, XGCValues*)
+		{"XFreeGC", &symXFreeGC},       // int XFreeGC(Display*, GC)
+		{"XPutImage", &symXPutImage},   // int XPutImage(Display*, Drawable, GC, XImage*, int, int, int, int, unsigned, unsigned)
+		{"XFlush", &symXFlush},         // int XFlush(Display*)
+		{"XInitImage", &symXInitImage}, // Status XInitImage(XImage*)
+	} {
+		if *sym.dst, err = x11Lib.Sym(sym.name); err != nil {
+			slog.Debug("software: X11 blit unavailable", "error", err)
 			return
 		}
-	}
-
-	// Load symbols.
-	symXCreateGC, err = ffi.GetSymbol(x11Lib, "XCreateGC")
-	if err != nil {
-		return
-	}
-	symXFreeGC, err = ffi.GetSymbol(x11Lib, "XFreeGC")
-	if err != nil {
-		return
-	}
-	symXPutImage, err = ffi.GetSymbol(x11Lib, "XPutImage")
-	if err != nil {
-		return
-	}
-	symXFlush, err = ffi.GetSymbol(x11Lib, "XFlush")
-	if err != nil {
-		return
-	}
-	symXInitImage, err = ffi.GetSymbol(x11Lib, "XInitImage")
-	if err != nil {
-		return
-	}
-
-	// Prepare call interfaces.
-
-	// GC XCreateGC(Display *display, Drawable d, unsigned long valuemask, XGCValues *values)
-	// On LP64: Drawable = unsigned long (8 bytes), valuemask = unsigned long (8 bytes)
-	// GC = pointer. Using Pointer for Drawable since it's XID (unsigned long = pointer-sized on LP64).
-	err = ffi.PrepareCallInterface(&cifXCreateGC, types.DefaultCall,
-		types.PointerTypeDescriptor, // return: GC (pointer)
-		[]*types.TypeDescriptor{
-			types.PointerTypeDescriptor, // Display*
-			types.PointerTypeDescriptor, // Drawable (unsigned long = pointer-sized)
-			types.PointerTypeDescriptor, // unsigned long valuemask (pointer-sized on LP64)
-			types.PointerTypeDescriptor, // XGCValues*
-		})
-	if err != nil {
-		return
-	}
-
-	// int XFreeGC(Display *display, GC gc)
-	err = ffi.PrepareCallInterface(&cifXFreeGC, types.DefaultCall,
-		types.SInt32TypeDescriptor, // return: int
-		[]*types.TypeDescriptor{
-			types.PointerTypeDescriptor, // Display*
-			types.PointerTypeDescriptor, // GC
-		})
-	if err != nil {
-		return
-	}
-
-	// int XPutImage(Display*, Drawable, GC, XImage*, int, int, int, int, unsigned int, unsigned int)
-	err = ffi.PrepareCallInterface(&cifXPutImage, types.DefaultCall,
-		types.SInt32TypeDescriptor, // return: int
-		[]*types.TypeDescriptor{
-			types.PointerTypeDescriptor, // Display*
-			types.PointerTypeDescriptor, // Drawable (unsigned long)
-			types.PointerTypeDescriptor, // GC
-			types.PointerTypeDescriptor, // XImage*
-			types.SInt32TypeDescriptor,  // src_x
-			types.SInt32TypeDescriptor,  // src_y
-			types.SInt32TypeDescriptor,  // dest_x
-			types.SInt32TypeDescriptor,  // dest_y
-			types.UInt32TypeDescriptor,  // width
-			types.UInt32TypeDescriptor,  // height
-		})
-	if err != nil {
-		return
-	}
-
-	// int XFlush(Display *display)
-	err = ffi.PrepareCallInterface(&cifXFlush, types.DefaultCall,
-		types.SInt32TypeDescriptor, // return: int
-		[]*types.TypeDescriptor{
-			types.PointerTypeDescriptor, // Display*
-		})
-	if err != nil {
-		return
-	}
-
-	// Status XInitImage(XImage *image)
-	err = ffi.PrepareCallInterface(&cifXInitImage, types.DefaultCall,
-		types.SInt32TypeDescriptor, // return: Status (int)
-		[]*types.TypeDescriptor{
-			types.PointerTypeDescriptor, // XImage*
-		})
-	if err != nil {
-		return
 	}
 
 	x11Ready = true
@@ -265,11 +194,7 @@ func (s *Surface) destroyPlatformFramebuffer() {
 
 	display := s.displayHandle
 	gc := s.gc
-	args := [2]unsafe.Pointer{
-		unsafe.Pointer(&display),
-		unsafe.Pointer(&gc),
-	}
-	_, _ = ffi.CallFunction(&cifXFreeGC, symXFreeGC, nil, args[:])
+	C.sw_v_uu(C.uintptr_t(uintptr(symXFreeGC)), C.uintptr_t(display), C.uintptr_t(gc))
 	s.gc = 0
 }
 
@@ -308,13 +233,7 @@ func (s *Surface) blitFramebufferToWindow(data []byte, width, height int32) {
 		var valuemask uintptr // 0 = no special GC values
 		var values uintptr    // NULL = default values
 		var gc uintptr
-		args := [4]unsafe.Pointer{
-			unsafe.Pointer(&display),
-			unsafe.Pointer(&window),
-			unsafe.Pointer(&valuemask),
-			unsafe.Pointer(&values),
-		}
-		_, _ = ffi.CallFunction(&cifXCreateGC, symXCreateGC, unsafe.Pointer(&gc), args[:])
+		gc = uintptr(C.sw_u_uuuu(C.uintptr_t(uintptr(symXCreateGC)), C.uintptr_t(display), C.uintptr_t(window), C.uintptr_t(valuemask), C.uintptr_t(values)))
 		if gc == 0 {
 			slog.Warn("software: XCreateGC failed — blit skipped")
 			return
@@ -339,10 +258,9 @@ func (s *Surface) blitFramebufferToWindow(data []byte, width, height int32) {
 
 	// XInitImage fills the function pointer struct at the end of XImage.
 	// Without this call, XPutImage would crash dereferencing nil func ptrs.
-	imagePtr := uintptr(unsafe.Pointer(&ximg))
+	imagePtr := &ximg
 	var status int32
-	initArgs := [1]unsafe.Pointer{unsafe.Pointer(&imagePtr)}
-	_, _ = ffi.CallFunction(&cifXInitImage, symXInitImage, unsafe.Pointer(&status), initArgs[:])
+	status = int32(C.sw_i_p(C.uintptr_t(uintptr(symXInitImage)), (*C.uint8_t)(unsafe.Pointer(imagePtr))))
 	if status == 0 {
 		slog.Warn("software: XInitImage failed — blit skipped")
 		return
@@ -353,24 +271,11 @@ func (s *Surface) blitFramebufferToWindow(data []byte, width, height int32) {
 	var srcX, srcY, dstX, dstY int32
 	w := uint32(width)
 	h := uint32(height)
-	putArgs := [10]unsafe.Pointer{
-		unsafe.Pointer(&display),
-		unsafe.Pointer(&window),
-		unsafe.Pointer(&gc),
-		unsafe.Pointer(&imagePtr),
-		unsafe.Pointer(&srcX),
-		unsafe.Pointer(&srcY),
-		unsafe.Pointer(&dstX),
-		unsafe.Pointer(&dstY),
-		unsafe.Pointer(&w),
-		unsafe.Pointer(&h),
-	}
-	_, _ = ffi.CallFunction(&cifXPutImage, symXPutImage, nil, putArgs[:])
+	C.sw_v_uuupiiiiii(C.uintptr_t(uintptr(symXPutImage)), C.uintptr_t(display), C.uintptr_t(window), C.uintptr_t(gc), (*C.uint8_t)(unsafe.Pointer(imagePtr)), C.uint32_t(srcX), C.uint32_t(srcY), C.uint32_t(dstX), C.uint32_t(dstY), C.uint32_t(w), C.uint32_t(h))
 
 	// XFlush ensures the X server processes the put request immediately.
 	// Without this, pixels may not appear until the next X event.
-	flushArgs := [1]unsafe.Pointer{unsafe.Pointer(&display)}
-	_, _ = ffi.CallFunction(&cifXFlush, symXFlush, nil, flushArgs[:])
+	C.sw_v_u(C.uintptr_t(uintptr(symXFlush)), C.uintptr_t(display))
 }
 
 // blitDamageRectsToWindow copies only the specified damage regions from the
@@ -406,13 +311,7 @@ func (s *Surface) blitDamageRectsToWindow(data []byte, width, height int32, rect
 		var valuemask uintptr
 		var values uintptr
 		var gc uintptr
-		args := [4]unsafe.Pointer{
-			unsafe.Pointer(&display),
-			unsafe.Pointer(&window),
-			unsafe.Pointer(&valuemask),
-			unsafe.Pointer(&values),
-		}
-		_, _ = ffi.CallFunction(&cifXCreateGC, symXCreateGC, unsafe.Pointer(&gc), args[:])
+		gc = uintptr(C.sw_u_uuuu(C.uintptr_t(uintptr(symXCreateGC)), C.uintptr_t(display), C.uintptr_t(window), C.uintptr_t(valuemask), C.uintptr_t(values)))
 		if gc == 0 {
 			slog.Warn("software: XCreateGC failed — damage blit skipped")
 			return
@@ -435,10 +334,9 @@ func (s *Surface) blitDamageRectsToWindow(data []byte, width, height int32, rect
 	img.bytesPerLine = 0 // XInitImage calculates this
 	img.bitsPerPixel = 32
 
-	imagePtr := uintptr(unsafe.Pointer(&img))
+	imagePtr := &img
 	var status int32
-	initArgs := [1]unsafe.Pointer{unsafe.Pointer(&imagePtr)}
-	_, _ = ffi.CallFunction(&cifXInitImage, symXInitImage, unsafe.Pointer(&status), initArgs[:])
+	status = int32(C.sw_i_p(C.uintptr_t(uintptr(symXInitImage)), (*C.uint8_t)(unsafe.Pointer(imagePtr))))
 	if status == 0 {
 		slog.Warn("software: XInitImage failed — damage blit skipped")
 		return
@@ -461,22 +359,9 @@ func (s *Surface) blitDamageRectsToWindow(data []byte, width, height int32, rect
 		dstY := int32(r.Min.Y)
 		w := uint32(r.Dx())
 		h := uint32(r.Dy())
-		putArgs := [10]unsafe.Pointer{
-			unsafe.Pointer(&display),
-			unsafe.Pointer(&window),
-			unsafe.Pointer(&gc),
-			unsafe.Pointer(&imagePtr),
-			unsafe.Pointer(&srcX),
-			unsafe.Pointer(&srcY),
-			unsafe.Pointer(&dstX),
-			unsafe.Pointer(&dstY),
-			unsafe.Pointer(&w),
-			unsafe.Pointer(&h),
-		}
-		_, _ = ffi.CallFunction(&cifXPutImage, symXPutImage, nil, putArgs[:])
+		C.sw_v_uuupiiiiii(C.uintptr_t(uintptr(symXPutImage)), C.uintptr_t(display), C.uintptr_t(window), C.uintptr_t(gc), (*C.uint8_t)(unsafe.Pointer(imagePtr)), C.uint32_t(srcX), C.uint32_t(srcY), C.uint32_t(dstX), C.uint32_t(dstY), C.uint32_t(w), C.uint32_t(h))
 	}
 
 	// XFlush ensures the X server processes all put requests immediately.
-	flushArgs := [1]unsafe.Pointer{unsafe.Pointer(&display)}
-	_, _ = ffi.CallFunction(&cifXFlush, symXFlush, nil, flushArgs[:])
+	C.sw_v_u(C.uintptr_t(uintptr(symXFlush)), C.uintptr_t(display))
 }

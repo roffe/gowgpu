@@ -3,9 +3,9 @@
 // Copyright 2025 The GoGPU Authors
 // SPDX-License-Identifier: MIT
 
-// FFI error handling follows ADR-049 three-tier strategy:
+// Error handling follows ADR-049 three-tier strategy:
 //
-//	Tier 1 (creation/submit): check both FFI error and API result code
+//	Tier 1 (creation/submit): check the API result code
 //	Tier 2 (void/hot path): infallible by GPU API contract — Vulkan §6.6, WebGPU §21.2
 //	Tier 3 (platform syscalls): use errno for diagnostics (Wayland, X11, Win32)
 //
@@ -16,6 +16,55 @@
 // wl_display_roundtrip_queue returns -1 on error (checked via result variable).
 package software
 
+/*
+#include <stdint.h>
+
+uintptr_t swl_call_u_u(void *fn, uintptr_t a);
+void swl_call_v_u(void *fn, uintptr_t a);
+void swl_call_v_uu(void *fn, uintptr_t a, uintptr_t b);
+int swl_call_i_u(void *fn, uintptr_t a);
+int swl_call_i_uu(void *fn, uintptr_t a, uintptr_t b);
+uintptr_t swl_get_registry(void *fn, uintptr_t display, const void *registry_iface);
+uintptr_t swl_registry_bind(void *fn, uintptr_t registry, uint32_t name, const void *iface, const char *iface_name, uint32_t version);
+uintptr_t swl_create_pool(void *fn, uintptr_t shm, const void *pool_iface, int32_t fd, int32_t size);
+uintptr_t swl_create_buffer(void *fn, uintptr_t pool, const void *buffer_iface, int32_t offset, int32_t width, int32_t height, int32_t stride, uint32_t format);
+void swl_marshal0(void *fn, uintptr_t proxy, uint32_t opcode);
+void swl_surface_attach(void *fn, uintptr_t surface, uintptr_t buffer, int32_t x, int32_t y);
+void swl_surface_damage_buffer(void *fn, uintptr_t surface, int32_t x, int32_t y, int32_t w, int32_t h);
+int swl_add_registry_listener(void *fn, uintptr_t registry);
+int swl_add_buffer_listener(void *fn, uintptr_t buffer);
+
+// Everything but swl_call_i_uu (wl_display_roundtrip_queue, which runs the
+// listeners and through them Go) neither calls back nor keeps a pointer.
+#cgo noescape swl_call_u_u
+#cgo nocallback swl_call_u_u
+#cgo noescape swl_call_v_u
+#cgo nocallback swl_call_v_u
+#cgo noescape swl_call_v_uu
+#cgo nocallback swl_call_v_uu
+#cgo noescape swl_call_i_u
+#cgo nocallback swl_call_i_u
+#cgo noescape swl_get_registry
+#cgo nocallback swl_get_registry
+#cgo noescape swl_registry_bind
+#cgo nocallback swl_registry_bind
+#cgo noescape swl_create_pool
+#cgo nocallback swl_create_pool
+#cgo noescape swl_create_buffer
+#cgo nocallback swl_create_buffer
+#cgo noescape swl_marshal0
+#cgo nocallback swl_marshal0
+#cgo noescape swl_surface_attach
+#cgo nocallback swl_surface_attach
+#cgo noescape swl_surface_damage_buffer
+#cgo nocallback swl_surface_damage_buffer
+#cgo noescape swl_add_registry_listener
+#cgo nocallback swl_add_registry_listener
+#cgo noescape swl_add_buffer_listener
+#cgo nocallback swl_add_buffer_listener
+*/
+import "C"
+
 import (
 	"image"
 	"log/slog"
@@ -23,9 +72,9 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/go-webgpu/goffi/ffi"
-	"github.com/go-webgpu/goffi/types"
 	"golang.org/x/sys/unix"
+
+	"github.com/roffe/gowgpu/internal/dl"
 )
 
 // Wayland SHM presentation for the software backend.
@@ -60,17 +109,15 @@ var (
 	waylandOnce  sync.Once
 	waylandReady bool // true if Wayland SHM path is available
 
-	wlClientLib unsafe.Pointer
+	wlClientLib dl.Lib
 
 	// wl_display functions
-	symWlDisplayRoundtrip      unsafe.Pointer
-	symWlDisplayFlush          unsafe.Pointer
-	symWlDisplayCreateQueue    unsafe.Pointer // wl_display_create_queue(display) -> queue*
-	symWlDisplayDispatchQueueP unsafe.Pointer // wl_display_dispatch_queue_pending(display, queue) -> int
+	symWlDisplayFlush       unsafe.Pointer
+	symWlDisplayCreateQueue unsafe.Pointer // wl_display_create_queue(display) -> queue*
 
 	// wl_registry / wl_shm / wl_shm_pool / wl_surface / wl_buffer / proxy functions
 	symWlProxyMarshalConstructor          unsafe.Pointer
-	symWlProxyMarshalConstructorVersioned unsafe.Pointer //nolint:unused // reserved for versioned bind
+	symWlProxyMarshalConstructorVersioned unsafe.Pointer
 	symWlProxyAddListener                 unsafe.Pointer
 	symWlProxyMarshal                     unsafe.Pointer
 	symWlProxyDestroy                     unsafe.Pointer
@@ -82,33 +129,9 @@ var (
 
 	// wl_interface pointers (loaded from libwayland-client.so data section)
 	wlRegistryInterface unsafe.Pointer
+	wlShmInterface      unsafe.Pointer
 	wlShmPoolInterface  unsafe.Pointer
 	wlBufferInterface   unsafe.Pointer
-
-	// CIF for wl_display_roundtrip(wl_display*) -> int
-	cifWlDisplayRoundtrip types.CallInterface
-	// CIF for wl_display_flush(wl_display*) -> int
-	cifWlDisplayFlush types.CallInterface
-	// CIF for wl_display_create_queue(wl_display*) -> wl_event_queue*
-	cifWlDisplayCreateQueue types.CallInterface
-	// CIF for wl_display_dispatch_queue_pending(wl_display*, wl_event_queue*) -> int
-	cifWlDisplayDispatchQueueP types.CallInterface
-	// CIF for wl_proxy_marshal_constructor(proxy*, opcode, interface*, ...) -> proxy*
-	cifWlProxyMarshalConstructor types.CallInterface
-	// CIF for wl_proxy_add_listener(proxy*, listener_impl**, data*) -> int
-	cifWlProxyAddListener types.CallInterface
-	// CIF for wl_proxy_destroy(proxy*) -> void
-	cifWlProxyDestroy types.CallInterface
-	// CIF for wl_proxy_set_queue(wl_proxy*, wl_event_queue*) -> void
-	cifWlProxySetQueue types.CallInterface
-	// CIF for wl_proxy_create_wrapper(void*) -> wl_proxy*
-	cifWlProxyCreateWrapper types.CallInterface
-	// CIF for wl_proxy_wrapper_destroy(void*) -> void
-	cifWlProxyWrapperDestroy types.CallInterface
-	// CIF for wl_display_roundtrip_queue(wl_display*, wl_event_queue*) -> int
-	cifWlDisplayRoundtripQueue types.CallInterface
-	// CIF for wl_event_queue_destroy(wl_event_queue*) -> void
-	cifWlEventQueueDestroy types.CallInterface
 )
 
 // waylandBlitState holds per-Surface Wayland SHM resources for triple-buffered
@@ -158,27 +181,9 @@ type waylandShmBuffer struct {
 	needsFullCopy bool // true after allocation — first frame must be full copy
 }
 
-// Cached CIFs for per-frame marshal calls (zero alloc after init).
-var (
-	// wl_proxy_marshal(proxy, opcode) — commit (opcode 6), pool destroy, buffer destroy.
-	cifMarshal2 types.CallInterface
-	// wl_proxy_marshal(proxy, opcode, buffer, x, y) — wl_surface_attach (opcode 1).
-	cifSurfaceAttach types.CallInterface
-	// wl_proxy_marshal(proxy, opcode, x, y, w, h) — wl_surface_damage_buffer (opcode 9).
-	cifSurfaceDamageBuffer types.CallInterface
-)
-
 // Global registry listener callback state.
 // Protected by waylandOnce (only one goroutine does init).
 var (
-	registryListenerFuncs [2]uintptr // global, announce, remove
-	registryListenersOnce sync.Once
-
-	// Buffer release listener: wl_buffer has one event (release, opcode 0).
-	// Single callback slot — all buffers share the same function.
-	bufferListenerFuncs [1]uintptr
-	bufferListenerOnce  sync.Once
-
 	// pendingShmBindName stores the wl_shm global name during registry roundtrip.
 	pendingShmBindMu   sync.Mutex
 	pendingShmBindName uint32
@@ -189,29 +194,24 @@ var (
 	bufferBusyMap = map[uintptr]*waylandShmBuffer{}
 )
 
-// initWayland loads libwayland-client.so and prepares CIFs for SHM presentation.
+// initWayland loads libwayland-client.so and the symbols SHM presentation calls.
 func initWayland() {
 	var err error
-
-	wlClientLib, err = ffi.LoadLibrary("libwayland-client.so.0")
+	wlClientLib, err = dl.Open("libwayland-client.so.0", "libwayland-client.so")
 	if err != nil {
-		wlClientLib, err = ffi.LoadLibrary("libwayland-client.so")
-		if err != nil {
-			slog.Debug("software: Wayland blit unavailable — could not load libwayland-client", "error", err)
-			return
-		}
+		slog.Debug("software: Wayland blit unavailable — could not load libwayland-client", "error", err)
+		return
 	}
 
-	// Load function symbols.
+	// Functions, and the wl_interface data symbols the constructors take.
 	symbols := []struct {
 		name string
 		dst  *unsafe.Pointer
 	}{
-		{"wl_display_roundtrip", &symWlDisplayRoundtrip},
 		{"wl_display_flush", &symWlDisplayFlush},
 		{"wl_display_create_queue", &symWlDisplayCreateQueue},
-		{"wl_display_dispatch_queue_pending", &symWlDisplayDispatchQueueP},
 		{"wl_proxy_marshal_constructor", &symWlProxyMarshalConstructor},
+		{"wl_proxy_marshal_constructor_versioned", &symWlProxyMarshalConstructorVersioned},
 		{"wl_proxy_add_listener", &symWlProxyAddListener},
 		{"wl_proxy_marshal", &symWlProxyMarshal},
 		{"wl_proxy_destroy", &symWlProxyDestroy},
@@ -220,191 +220,19 @@ func initWayland() {
 		{"wl_proxy_wrapper_destroy", &symWlProxyWrapperDestroy},
 		{"wl_display_roundtrip_queue", &symWlDisplayRoundtripQueue},
 		{"wl_event_queue_destroy", &symWlEventQueueDestroy},
-	}
-	for _, s := range symbols {
-		*s.dst, err = ffi.GetSymbol(wlClientLib, s.name)
-		if err != nil {
-			slog.Debug("software: Wayland blit unavailable — missing symbol", "symbol", s.name, "error", err)
-			return
-		}
-	}
-
-	// Load wl_interface pointers (data symbols in libwayland-client.so).
-	interfaces := []struct {
-		name string
-		dst  *unsafe.Pointer
-	}{
 		{"wl_registry_interface", &wlRegistryInterface},
+		{"wl_shm_interface", &wlShmInterface},
 		{"wl_shm_pool_interface", &wlShmPoolInterface},
 		{"wl_buffer_interface", &wlBufferInterface},
 	}
-	for _, iface := range interfaces {
-		*iface.dst, err = ffi.GetSymbol(wlClientLib, iface.name)
-		if err != nil {
-			slog.Debug("software: Wayland blit unavailable — missing interface", "interface", iface.name, "error", err)
+	for _, sym := range symbols {
+		if *sym.dst, err = wlClientLib.Sym(sym.name); err != nil {
+			slog.Debug("software: Wayland blit unavailable — missing symbol", "error", err)
 			return
 		}
 	}
 
-	// Prepare CIFs.
-
-	// wl_registry* wl_display_get_registry(wl_display*)
-	// Actually wl_proxy_marshal_constructor, but we'll use the direct symbol.
-	// wl_display_get_registry is: wl_proxy_marshal_constructor((wl_proxy*)display, WL_DISPLAY_GET_REGISTRY, &wl_registry_interface, NULL)
-	// We'll call wl_proxy_marshal_constructor directly.
-
-	// int wl_display_roundtrip(wl_display*)
-	if err = ffi.PrepareCallInterface(&cifWlDisplayRoundtrip, types.DefaultCall,
-		types.SInt32TypeDescriptor,
-		[]*types.TypeDescriptor{types.PointerTypeDescriptor}); err != nil {
-		return
-	}
-
-	// int wl_display_flush(wl_display*)
-	if err = ffi.PrepareCallInterface(&cifWlDisplayFlush, types.DefaultCall,
-		types.SInt32TypeDescriptor,
-		[]*types.TypeDescriptor{types.PointerTypeDescriptor}); err != nil {
-		return
-	}
-
-	// wl_event_queue* wl_display_create_queue(wl_display*)
-	if err = ffi.PrepareCallInterface(&cifWlDisplayCreateQueue, types.DefaultCall,
-		types.PointerTypeDescriptor,
-		[]*types.TypeDescriptor{types.PointerTypeDescriptor}); err != nil {
-		return
-	}
-
-	// int wl_display_dispatch_queue_pending(wl_display*, wl_event_queue*)
-	if err = ffi.PrepareCallInterface(&cifWlDisplayDispatchQueueP, types.DefaultCall,
-		types.SInt32TypeDescriptor,
-		[]*types.TypeDescriptor{
-			types.PointerTypeDescriptor, // display
-			types.PointerTypeDescriptor, // queue
-		}); err != nil {
-		return
-	}
-
-	// wl_proxy* wl_proxy_marshal_constructor(wl_proxy*, uint32 opcode, wl_interface*, ...)
-	// Variadic: 3 fixed args (proxy, opcode, interface), rest variadic.
-	// nfixedargs=3 ensures correct ABI on ARM64 (Apple AAPCS64 variadic convention).
-	if err = ffi.PrepareVariadicCallInterface(&cifWlProxyMarshalConstructor, types.DefaultCall,
-		3, // nfixedargs: proxy, opcode, interface are fixed
-		types.PointerTypeDescriptor,
-		[]*types.TypeDescriptor{
-			types.PointerTypeDescriptor, // proxy
-			types.UInt32TypeDescriptor,  // opcode
-			types.PointerTypeDescriptor, // interface
-			types.PointerTypeDescriptor, // first variadic (NULL or arg)
-		}); err != nil {
-		return
-	}
-
-	// int wl_proxy_add_listener(wl_proxy*, void(**)(void), void* data)
-	if err = ffi.PrepareCallInterface(&cifWlProxyAddListener, types.DefaultCall,
-		types.SInt32TypeDescriptor,
-		[]*types.TypeDescriptor{
-			types.PointerTypeDescriptor, // proxy
-			types.PointerTypeDescriptor, // implementation
-			types.PointerTypeDescriptor, // data
-		}); err != nil {
-		return
-	}
-
-	// void wl_proxy_destroy(wl_proxy*)
-	if err = ffi.PrepareCallInterface(&cifWlProxyDestroy, types.DefaultCall,
-		types.VoidTypeDescriptor,
-		[]*types.TypeDescriptor{types.PointerTypeDescriptor}); err != nil {
-		return
-	}
-
-	// void wl_proxy_set_queue(wl_proxy*, wl_event_queue*)
-	if err = ffi.PrepareCallInterface(&cifWlProxySetQueue, types.DefaultCall,
-		types.VoidTypeDescriptor,
-		[]*types.TypeDescriptor{
-			types.PointerTypeDescriptor, // proxy
-			types.PointerTypeDescriptor, // queue
-		}); err != nil {
-		return
-	}
-
-	// wl_proxy* wl_proxy_create_wrapper(void* proxy)
-	if err = ffi.PrepareCallInterface(&cifWlProxyCreateWrapper, types.DefaultCall,
-		types.PointerTypeDescriptor,
-		[]*types.TypeDescriptor{types.PointerTypeDescriptor}); err != nil {
-		return
-	}
-
-	// void wl_proxy_wrapper_destroy(void* wrapper)
-	if err = ffi.PrepareCallInterface(&cifWlProxyWrapperDestroy, types.DefaultCall,
-		types.VoidTypeDescriptor,
-		[]*types.TypeDescriptor{types.PointerTypeDescriptor}); err != nil {
-		return
-	}
-
-	// int wl_display_roundtrip_queue(wl_display*, wl_event_queue*)
-	if err = ffi.PrepareCallInterface(&cifWlDisplayRoundtripQueue, types.DefaultCall,
-		types.SInt32TypeDescriptor,
-		[]*types.TypeDescriptor{
-			types.PointerTypeDescriptor, // display
-			types.PointerTypeDescriptor, // queue
-		}); err != nil {
-		return
-	}
-
-	// void wl_event_queue_destroy(wl_event_queue*)
-	if err = ffi.PrepareCallInterface(&cifWlEventQueueDestroy, types.DefaultCall,
-		types.VoidTypeDescriptor,
-		[]*types.TypeDescriptor{types.PointerTypeDescriptor}); err != nil {
-		return
-	}
-
-	// Cached CIFs for per-frame calls (zero alloc after init).
-
-	// marshal2: wl_proxy_marshal(proxy, opcode) — for commit, pool destroy, buffer destroy.
-	// wl_proxy_marshal is variadic: nfixedargs=2 (proxy, opcode), no variadic args in this CIF.
-	if err = ffi.PrepareVariadicCallInterface(&cifMarshal2, types.DefaultCall,
-		2, // nfixedargs: proxy + opcode are fixed
-		types.VoidTypeDescriptor,
-		[]*types.TypeDescriptor{
-			types.PointerTypeDescriptor, // proxy
-			types.UInt32TypeDescriptor,  // opcode
-		}); err != nil {
-		return
-	}
-
-	// attach: wl_proxy_marshal(proxy, opcode, buffer, x, y) — wl_surface_attach.
-	// wl_proxy_marshal is variadic: nfixedargs=2 (proxy, opcode), buffer/x/y are variadic.
-	if err = ffi.PrepareVariadicCallInterface(&cifSurfaceAttach, types.DefaultCall,
-		2, // nfixedargs: proxy + opcode are fixed
-		types.VoidTypeDescriptor,
-		[]*types.TypeDescriptor{
-			types.PointerTypeDescriptor, // proxy (surface)
-			types.UInt32TypeDescriptor,  // opcode (1)
-			types.PointerTypeDescriptor, // buffer (variadic)
-			types.SInt32TypeDescriptor,  // x (variadic)
-			types.SInt32TypeDescriptor,  // y (variadic)
-		}); err != nil {
-		return
-	}
-
-	// damage_buffer: wl_proxy_marshal(proxy, opcode, x, y, w, h) — opcode 9.
-	// wl_proxy_marshal is variadic: nfixedargs=2 (proxy, opcode), x/y/w/h are variadic.
-	if err = ffi.PrepareVariadicCallInterface(&cifSurfaceDamageBuffer, types.DefaultCall,
-		2, // nfixedargs: proxy + opcode are fixed
-		types.VoidTypeDescriptor,
-		[]*types.TypeDescriptor{
-			types.PointerTypeDescriptor, // proxy (surface)
-			types.UInt32TypeDescriptor,  // opcode (9)
-			types.SInt32TypeDescriptor,  // x (variadic)
-			types.SInt32TypeDescriptor,  // y (variadic)
-			types.SInt32TypeDescriptor,  // w (variadic)
-			types.SInt32TypeDescriptor,  // h (variadic)
-		}); err != nil {
-		return
-	}
-
 	waylandReady = true
-	slog.Debug("software: Wayland SHM blit initialized")
 }
 
 // obtainWlShm gets the wl_shm global by creating a wl_registry, listening
@@ -431,35 +259,18 @@ func obtainWlShm(display, shmQueue uintptr) (uintptr, uintptr) {
 		return 0, 0
 	}
 
-	wrapperArgs := [1]unsafe.Pointer{unsafe.Pointer(&display)}
-	var wrapper uintptr
-	_, _ = ffi.CallFunction(&cifWlProxyCreateWrapper, symWlProxyCreateWrapper, unsafe.Pointer(&wrapper), wrapperArgs[:])
+	wrapper := uintptr(C.swl_call_u_u(symWlProxyCreateWrapper, C.uintptr_t(display)))
 	if wrapper == 0 {
 		slog.Warn("software: wl_proxy_create_wrapper failed")
 		return 0, 0
 	}
-	setQueueArgs := [2]unsafe.Pointer{
-		unsafe.Pointer(&wrapper),
-		unsafe.Pointer(&shmQueue),
-	}
-	_, _ = ffi.CallFunction(&cifWlProxySetQueue, symWlProxySetQueue, nil, setQueueArgs[:])
+	C.swl_call_v_uu(symWlProxySetQueue, C.uintptr_t(wrapper), C.uintptr_t(shmQueue))
 
 	// wl_display_get_registry via WRAPPER → registry inherits shmQueue.
-	var opcode uint32 = 1
-	var null uintptr
-	ifacePtr := uintptr(wlRegistryInterface)
-	args := [4]unsafe.Pointer{
-		unsafe.Pointer(&wrapper), // wrapper, NOT raw display
-		unsafe.Pointer(&opcode),
-		unsafe.Pointer(&ifacePtr),
-		unsafe.Pointer(&null),
-	}
-	var registry uintptr
-	_, _ = ffi.CallFunction(&cifWlProxyMarshalConstructor, symWlProxyMarshalConstructor, unsafe.Pointer(&registry), args[:])
+	registry := uintptr(C.swl_get_registry(symWlProxyMarshalConstructor, C.uintptr_t(wrapper), wlRegistryInterface))
 
 	// Wrapper no longer needed — child proxies already inherited the queue.
-	destroyWrapperArgs := [1]unsafe.Pointer{unsafe.Pointer(&wrapper)}
-	_, _ = ffi.CallFunction(&cifWlProxyWrapperDestroy, symWlProxyWrapperDestroy, nil, destroyWrapperArgs[:])
+	C.swl_call_v_u(symWlProxyWrapperDestroy, C.uintptr_t(wrapper))
 
 	if registry == 0 {
 		slog.Warn("software: wl_display_get_registry failed")
@@ -467,37 +278,17 @@ func obtainWlShm(display, shmQueue uintptr) (uintptr, uintptr) {
 	}
 
 	// Add registry listener to catch wl_shm global.
-	registryListenersOnce.Do(func() {
-		registryListenerFuncs[0] = ffi.NewCallback(registryGlobalCb)
-		registryListenerFuncs[1] = ffi.NewCallback(registryGlobalRemoveCb)
-	})
-
 	pendingShmBindMu.Lock()
 	pendingShmBindName = 0
 	pendingShmBindMu.Unlock()
-
-	listenerPtr := uintptr(unsafe.Pointer(&registryListenerFuncs[0]))
-	var listenerData uintptr
-	addArgs := [3]unsafe.Pointer{
-		unsafe.Pointer(&registry),
-		unsafe.Pointer(&listenerPtr),
-		unsafe.Pointer(&listenerData),
-	}
-	var addResult int32
-	_, _ = ffi.CallFunction(&cifWlProxyAddListener, symWlProxyAddListener, unsafe.Pointer(&addResult), addArgs[:])
+	C.swl_add_registry_listener(symWlProxyAddListener, C.uintptr_t(registry))
 
 	// Roundtrip on shmQueue (not default) to receive registry events.
-	roundtripArgs := [2]unsafe.Pointer{
-		unsafe.Pointer(&display),
-		unsafe.Pointer(&shmQueue),
-	}
-	var rtResult int32
 	// wl_display_roundtrip_queue returns -1 on error and sets errno.
 	// EPIPE/ECONNRESET = compositor dead, EPROTO = protocol error.
 	// Qt6 qwaylanddisplay.cpp and SDL3 SDL_waylandevents.c check errno here.
-	rtErrno, _ := ffi.CallFunction(&cifWlDisplayRoundtripQueue, symWlDisplayRoundtripQueue, unsafe.Pointer(&rtResult), roundtripArgs[:])
-	if rtResult < 0 {
-		slog.Warn("software: wl_display_roundtrip_queue failed (init registry)", "errno", rtErrno, "errstr", rtErrno.Error())
+	if rt, err := C.swl_call_i_uu(symWlDisplayRoundtripQueue, C.uintptr_t(display), C.uintptr_t(shmQueue)); rt < 0 {
+		slog.Warn("software: wl_display_roundtrip_queue failed (init registry)", "error", err)
 	}
 
 	pendingShmBindMu.Lock()
@@ -506,90 +297,22 @@ func obtainWlShm(display, shmQueue uintptr) (uintptr, uintptr) {
 
 	if shmName == 0 {
 		slog.Warn("software: wl_shm not found in registry")
-		destroyArgs := [1]unsafe.Pointer{unsafe.Pointer(&registry)}
-		_, _ = ffi.CallFunction(&cifWlProxyDestroy, symWlProxyDestroy, nil, destroyArgs[:])
+		C.swl_call_v_u(symWlProxyDestroy, C.uintptr_t(registry))
 		return 0, 0
 	}
 
-	// Bind wl_shm: wl_registry_bind = wl_proxy_marshal_constructor_versioned
-	// But simpler: use wl_proxy_marshal_constructor with opcode 0 (bind).
-	// wl_registry::bind opcode = 0, signature "usun" → name, interface_name, version, new_id
-	// Actually wl_registry_bind is implemented as:
-	//   wl_proxy_marshal_constructor_versioned(registry, WL_REGISTRY_BIND, &wl_shm_interface, version, name, interface_name, version, NULL)
-	// This is complex. Let's load the versioned variant.
-
-	// Simpler approach: load wl_proxy_marshal_constructor_versioned.
-	var symVersioned unsafe.Pointer
-	symVersioned, _ = ffi.GetSymbol(wlClientLib, "wl_proxy_marshal_constructor_versioned")
-	if symVersioned == nil {
-		slog.Warn("software: wl_proxy_marshal_constructor_versioned not found")
-		destroyArgs := [1]unsafe.Pointer{unsafe.Pointer(&registry)}
-		_, _ = ffi.CallFunction(&cifWlProxyDestroy, symWlProxyDestroy, nil, destroyArgs[:])
-		return 0, 0
-	}
-
-	// Prepare CIF for versioned: wl_proxy*(proxy, opcode, interface, version, name, ifaceName, version, NULL)
-	// The actual signature for wl_registry_bind is:
-	//   wl_proxy_marshal_constructor_versioned(registry, 0, &wl_shm_interface, 1, name, "wl_shm", 1, NULL)
-	// Variadic: nfixedargs=4 (proxy, opcode, interface, version), rest variadic.
-	var cifVersioned types.CallInterface
-	if err := ffi.PrepareVariadicCallInterface(&cifVersioned, types.DefaultCall,
-		4, // nfixedargs: proxy, opcode, interface, version are fixed
-		types.PointerTypeDescriptor,
-		[]*types.TypeDescriptor{
-			types.PointerTypeDescriptor, // proxy (registry)
-			types.UInt32TypeDescriptor,  // opcode (0 = bind)
-			types.PointerTypeDescriptor, // interface (&wl_shm_interface)
-			types.UInt32TypeDescriptor,  // version
-			types.UInt32TypeDescriptor,  // name (variadic)
-			types.PointerTypeDescriptor, // interface_name string (variadic)
-			types.UInt32TypeDescriptor,  // version (variadic, repeated)
-			types.PointerTypeDescriptor, // NULL terminator (variadic)
-		}); err != nil {
-		destroyArgs := [1]unsafe.Pointer{unsafe.Pointer(&registry)}
-		_, _ = ffi.CallFunction(&cifWlProxyDestroy, symWlProxyDestroy, nil, destroyArgs[:])
-		return 0, 0
-	}
-
-	// Get wl_shm_interface pointer.
-	var symShmInterface unsafe.Pointer
-	symShmInterface, _ = ffi.GetSymbol(wlClientLib, "wl_shm_interface")
-	if symShmInterface == nil {
-		slog.Warn("software: wl_shm_interface not found")
-		destroyArgs := [1]unsafe.Pointer{unsafe.Pointer(&registry)}
-		_, _ = ffi.CallFunction(&cifWlProxyDestroy, symWlProxyDestroy, nil, destroyArgs[:])
-		return 0, 0
-	}
-
-	shmIfacePtr := uintptr(symShmInterface)
-	var bindOpcode uint32
-	var bindVersion uint32 = 1
+	// wl_registry_bind(registry, name, &wl_shm_interface, 1)
 	shmNameCStr := append([]byte("wl_shm"), 0)
-	shmNamePtr := uintptr(unsafe.Pointer(&shmNameCStr[0]))
-
-	bindArgs := [8]unsafe.Pointer{
-		unsafe.Pointer(&registry),
-		unsafe.Pointer(&bindOpcode),
-		unsafe.Pointer(&shmIfacePtr),
-		unsafe.Pointer(&bindVersion),
-		unsafe.Pointer(&shmName),
-		unsafe.Pointer(&shmNamePtr),
-		unsafe.Pointer(&bindVersion),
-		unsafe.Pointer(&null),
-	}
-	var shm uintptr
-	_, _ = ffi.CallFunction(&cifVersioned, symVersioned, unsafe.Pointer(&shm), bindArgs[:])
+	shm := uintptr(C.swl_registry_bind(symWlProxyMarshalConstructorVersioned, C.uintptr_t(registry), C.uint32_t(shmName), wlShmInterface, (*C.char)(unsafe.Pointer(&shmNameCStr[0])), 1))
 
 	// Roundtrip on shmQueue to ensure bind completes.
-	rtErrno, _ = ffi.CallFunction(&cifWlDisplayRoundtripQueue, symWlDisplayRoundtripQueue, unsafe.Pointer(&rtResult), roundtripArgs[:])
-	if rtResult < 0 {
-		slog.Warn("software: wl_display_roundtrip_queue failed (init bind)", "errno", rtErrno, "errstr", rtErrno.Error())
+	if rt, err := C.swl_call_i_uu(symWlDisplayRoundtripQueue, C.uintptr_t(display), C.uintptr_t(shmQueue)); rt < 0 {
+		slog.Warn("software: wl_display_roundtrip_queue failed (init bind)", "error", err)
 	}
 
 	if shm == 0 {
 		slog.Warn("software: wl_registry_bind for wl_shm failed")
-		destroyArgs := [1]unsafe.Pointer{unsafe.Pointer(&registry)}
-		_, _ = ffi.CallFunction(&cifWlProxyDestroy, symWlProxyDestroy, nil, destroyArgs[:])
+		C.swl_call_v_u(symWlProxyDestroy, C.uintptr_t(registry))
 		return 0, 0
 	}
 	slog.Debug("software: wl_shm bound successfully", "shm", shm, "queue", "shmQueue")
@@ -603,67 +326,11 @@ func createShmQueue(display uintptr) uintptr {
 	if !waylandReady {
 		return 0
 	}
-	var queue uintptr
-	args := [1]unsafe.Pointer{unsafe.Pointer(&display)}
-	_, _ = ffi.CallFunction(&cifWlDisplayCreateQueue, symWlDisplayCreateQueue, unsafe.Pointer(&queue), args[:])
+	queue := uintptr(C.swl_call_u_u(symWlDisplayCreateQueue, C.uintptr_t(display)))
 	if queue == 0 {
 		slog.Warn("software: wl_display_create_queue failed for SHM buffers")
 	}
 	return queue
-}
-
-// registryGlobalCb: void(data, wl_registry, name, interface_name, version)
-func registryGlobalCb(data, registry, name, ifaceName, version uintptr) {
-	// Read interface name string.
-	if ifaceName == 0 {
-		return
-	}
-	nameStr := cString(ifaceName)
-	if nameStr == "wl_shm" {
-		pendingShmBindMu.Lock()
-		pendingShmBindName = uint32(name)
-		pendingShmBindMu.Unlock()
-	}
-}
-
-// registryGlobalRemoveCb: void(data, wl_registry, name)
-func registryGlobalRemoveCb(_, _, _ uintptr) {}
-
-// bufferReleaseCb is called by the compositor when it no longer needs the
-// wl_buffer contents. Matches Qt6 qwaylandbuffer.cpp:30-37 pattern.
-// Signature: void(data, wl_buffer)
-func bufferReleaseCb(_, wlBuffer uintptr) {
-	bufferBusyMu.Lock()
-	if buf, ok := bufferBusyMap[wlBuffer]; ok {
-		buf.busy = false
-	}
-	bufferBusyMu.Unlock()
-}
-
-// cString reads a null-terminated C string from a uintptr (C char*).
-// Uses unsafe.Pointer conversion required for FFI interop with libwayland.
-//
-//go:nosplit
-//go:nocheckptr
-func cString(ptr uintptr) string {
-	if ptr == 0 {
-		return ""
-	}
-	p := *(*unsafe.Pointer)(unsafe.Pointer(&ptr))
-	bp := (*byte)(p)
-	length := 0
-	for i := 0; i < 256; i++ {
-		b := unsafe.Slice(bp, i+1)
-		if b[i] == 0 {
-			length = i
-			break
-		}
-	}
-	if length == 0 {
-		return ""
-	}
-	result := unsafe.Slice(bp, length)
-	return string(result)
 }
 
 // waylandCreateShmBuffer creates a new SHM buffer for the given dimensions.
@@ -693,44 +360,9 @@ func waylandCreateShmBuffer(shm uintptr, width, height int32) *waylandShmBuffer 
 		return nil
 	}
 
-	// wl_shm_create_pool: wl_proxy_marshal_constructor(shm, 0, &wl_shm_pool_interface, NULL, fd, size)
-	// opcode 0 = create_pool, signature "nhi" → new_id, fd, size
-	// The fd is passed as the first variadic arg (wl_argument.h = fd).
-	var poolOpcode uint32
-	shmPoolIfacePtr := uintptr(wlShmPoolInterface)
-	fdVal := uintptr(uint32(fd))
-	sizeVal := uintptr(uint32(size))
-
-	// wl_proxy_marshal_constructor for create_pool: proxy, opcode, interface, NULL_id, fd, size
-	// Variadic: nfixedargs=3 (proxy, opcode, interface), rest variadic.
-	var cifCreatePool types.CallInterface
-	if err := ffi.PrepareVariadicCallInterface(&cifCreatePool, types.DefaultCall,
-		3, // nfixedargs: proxy, opcode, interface are fixed
-		types.PointerTypeDescriptor,
-		[]*types.TypeDescriptor{
-			types.PointerTypeDescriptor, // proxy (shm)
-			types.UInt32TypeDescriptor,  // opcode
-			types.PointerTypeDescriptor, // interface
-			types.PointerTypeDescriptor, // new_id (variadic, NULL placeholder)
-			types.PointerTypeDescriptor, // fd (variadic)
-			types.PointerTypeDescriptor, // size (variadic)
-		}); err != nil {
-		_ = unix.Munmap(data)
-		_ = unix.Close(fd)
-		return nil
-	}
-
-	var null uintptr
-	poolArgs := [6]unsafe.Pointer{
-		unsafe.Pointer(&shm),
-		unsafe.Pointer(&poolOpcode),
-		unsafe.Pointer(&shmPoolIfacePtr),
-		unsafe.Pointer(&null),
-		unsafe.Pointer(&fdVal),
-		unsafe.Pointer(&sizeVal),
-	}
-	var pool uintptr
-	_, _ = ffi.CallFunction(&cifCreatePool, symWlProxyMarshalConstructor, unsafe.Pointer(&pool), poolArgs[:])
+	// wl_shm_create_pool(shm, fd, size): the fd goes over the socket, the
+	// pool keeps its own reference to the memory.
+	pool := uintptr(C.swl_create_pool(symWlProxyMarshalConstructor, C.uintptr_t(shm), wlShmPoolInterface, C.int32_t(fd), C.int32_t(size)))
 	if pool == 0 {
 		_ = unix.Munmap(data)
 		_ = unix.Close(fd)
@@ -738,50 +370,8 @@ func waylandCreateShmBuffer(shm uintptr, width, height int32) *waylandShmBuffer 
 		return nil
 	}
 
-	// wl_shm_pool::create_buffer: opcode 0, signature "niiiiu"
-	// create_buffer(new_id, offset=0, width, height, stride, format=0(ARGB8888))
-	bufIfacePtr := uintptr(wlBufferInterface)
-	var bufOpcode uint32
-	var offset uintptr
-	widthArg := uintptr(uint32(width))
-	heightArg := uintptr(uint32(height))
-	strideArg := uintptr(uint32(stride))
-	var format uintptr // 0 = ARGB8888
-
-	// Variadic: nfixedargs=3 (proxy, opcode, interface), rest variadic.
-	var cifCreateBuffer types.CallInterface
-	if err := ffi.PrepareVariadicCallInterface(&cifCreateBuffer, types.DefaultCall,
-		3, // nfixedargs: proxy, opcode, interface are fixed
-		types.PointerTypeDescriptor,
-		[]*types.TypeDescriptor{
-			types.PointerTypeDescriptor, // proxy (pool)
-			types.UInt32TypeDescriptor,  // opcode
-			types.PointerTypeDescriptor, // interface
-			types.PointerTypeDescriptor, // new_id (variadic, NULL placeholder)
-			types.PointerTypeDescriptor, // offset (variadic)
-			types.PointerTypeDescriptor, // width (variadic)
-			types.PointerTypeDescriptor, // height (variadic)
-			types.PointerTypeDescriptor, // stride (variadic)
-			types.PointerTypeDescriptor, // format (variadic)
-		}); err != nil {
-		_ = unix.Munmap(data)
-		_ = unix.Close(fd)
-		return nil
-	}
-
-	bufArgs := [9]unsafe.Pointer{
-		unsafe.Pointer(&pool),
-		unsafe.Pointer(&bufOpcode),
-		unsafe.Pointer(&bufIfacePtr),
-		unsafe.Pointer(&null),
-		unsafe.Pointer(&offset),
-		unsafe.Pointer(&widthArg),
-		unsafe.Pointer(&heightArg),
-		unsafe.Pointer(&strideArg),
-		unsafe.Pointer(&format),
-	}
-	var buffer uintptr
-	_, _ = ffi.CallFunction(&cifCreateBuffer, symWlProxyMarshalConstructor, unsafe.Pointer(&buffer), bufArgs[:])
+	// wl_shm_pool::create_buffer(offset 0, width, height, stride, ARGB8888)
+	buffer := uintptr(C.swl_create_buffer(symWlProxyMarshalConstructor, C.uintptr_t(pool), wlBufferInterface, 0, C.int32_t(width), C.int32_t(height), C.int32_t(stride), 0))
 	if buffer == 0 {
 		// Destroy pool: opcode 1
 		destroyPool(pool)
@@ -806,24 +396,10 @@ func waylandCreateShmBuffer(shm uintptr, width, height int32) *waylandShmBuffer 
 	}
 
 	// Register wl_buffer.release listener (Qt6 qwaylandbuffer.cpp pattern).
-	// wl_buffer has one event: release (opcode 0). The listener array has 1 slot.
-	bufferListenerOnce.Do(func() {
-		bufferListenerFuncs[0] = ffi.NewCallback(bufferReleaseCb)
-	})
-
 	// NOTE: do NOT register in bufferBusyMap here — the caller does
 	// *buf = *newBuf (value copy into wl.buffers[idx]). The map must point
 	// to &wl.buffers[idx], not to this local buf. Caller registers after copy.
-
-	listenerPtr := uintptr(unsafe.Pointer(&bufferListenerFuncs[0]))
-	var listenerData uintptr
-	addArgs := [3]unsafe.Pointer{
-		unsafe.Pointer(&buffer),
-		unsafe.Pointer(&listenerPtr),
-		unsafe.Pointer(&listenerData),
-	}
-	var addResult int32
-	_, _ = ffi.CallFunction(&cifWlProxyAddListener, symWlProxyAddListener, unsafe.Pointer(&addResult), addArgs[:])
+	C.swl_add_buffer_listener(symWlProxyAddListener, C.uintptr_t(buffer))
 
 	// Buffer proxy inherits shmQueue from wl_shm (via pool) through the
 	// display wrapper pattern (BUG-SW-WAYLAND-002). No wl_proxy_set_queue
@@ -835,15 +411,8 @@ func waylandCreateShmBuffer(shm uintptr, width, height int32) *waylandShmBuffer 
 
 // destroyPool calls wl_shm_pool::destroy (opcode 1) then wl_proxy_destroy.
 func destroyPool(pool uintptr) {
-	var destroyOpcode uint32 = 1
-	args := [2]unsafe.Pointer{
-		unsafe.Pointer(&pool),
-		unsafe.Pointer(&destroyOpcode),
-	}
-	_, _ = ffi.CallFunction(&cifMarshal2, symWlProxyMarshal, nil, args[:])
-
-	destroyArgs := [1]unsafe.Pointer{unsafe.Pointer(&pool)}
-	_, _ = ffi.CallFunction(&cifWlProxyDestroy, symWlProxyDestroy, nil, destroyArgs[:])
+	C.swl_marshal0(symWlProxyMarshal, C.uintptr_t(pool), 1)
+	C.swl_call_v_u(symWlProxyDestroy, C.uintptr_t(pool))
 }
 
 // waylandDestroyShmBuffer releases all resources associated with a SHM buffer.
@@ -857,16 +426,8 @@ func waylandDestroyShmBuffer(buf *waylandShmBuffer) {
 		delete(bufferBusyMap, buf.buffer)
 		bufferBusyMu.Unlock()
 
-		// wl_buffer::destroy opcode = 0
-		var destroyOpcode uint32
-		marshalArgs := [2]unsafe.Pointer{
-			unsafe.Pointer(&buf.buffer),
-			unsafe.Pointer(&destroyOpcode),
-		}
-		_, _ = ffi.CallFunction(&cifMarshal2, symWlProxyMarshal, nil, marshalArgs[:])
-
-		destroyArgs := [1]unsafe.Pointer{unsafe.Pointer(&buf.buffer)}
-		_, _ = ffi.CallFunction(&cifWlProxyDestroy, symWlProxyDestroy, nil, destroyArgs[:])
+		C.swl_marshal0(symWlProxyMarshal, C.uintptr_t(buf.buffer), 0) // wl_buffer::destroy
+		C.swl_call_v_u(symWlProxyDestroy, C.uintptr_t(buf.buffer))
 		buf.buffer = 0
 	}
 	if buf.data != nil {
@@ -932,11 +493,8 @@ func (s *Surface) waylandPresent(data []byte, width, height int32) {
 	// wl_display_flush sends the commit to the compositor.
 	// Returns bytes sent or -1 with errno. EAGAIN = compositor backpressure
 	// (Qt6 polls POLLOUT and retries), EPIPE = compositor dead.
-	flushArgs := [1]unsafe.Pointer{unsafe.Pointer(&s.displayHandle)}
-	var flushResult int32
-	flushErrno, _ := ffi.CallFunction(&cifWlDisplayFlush, symWlDisplayFlush, unsafe.Pointer(&flushResult), flushArgs[:])
-	if flushResult < 0 && flushErrno != syscall.EAGAIN {
-		slog.Warn("software: wl_display_flush failed", "errno", flushErrno, "errstr", flushErrno.Error())
+	if r, err := C.swl_call_i_u(symWlDisplayFlush, C.uintptr_t(s.displayHandle)); r < 0 && err != syscall.EAGAIN {
+		slog.Warn("software: wl_display_flush failed", "error", err)
 	}
 
 	waylandDispatchShmQueue(s.displayHandle, wl.shmQueue)
@@ -1004,11 +562,8 @@ func (s *Surface) waylandPresentDamage(data []byte, width, height int32, rects [
 
 	buf.busy = true
 
-	flushArgs := [1]unsafe.Pointer{unsafe.Pointer(&s.displayHandle)}
-	var flushResult int32
-	flushErrno, _ := ffi.CallFunction(&cifWlDisplayFlush, symWlDisplayFlush, unsafe.Pointer(&flushResult), flushArgs[:])
-	if flushResult < 0 && flushErrno != syscall.EAGAIN {
-		slog.Warn("software: wl_display_flush failed (damage)", "errno", flushErrno, "errstr", flushErrno.Error())
+	if r, err := C.swl_call_i_u(symWlDisplayFlush, C.uintptr_t(s.displayHandle)); r < 0 && err != syscall.EAGAIN {
+		slog.Warn("software: wl_display_flush failed (damage)", "error", err)
 	}
 
 	// Dispatch pending release events on the SHM queue.
@@ -1056,41 +611,19 @@ func waylandCopyPixels(buf *waylandShmBuffer, data []byte, width, height int32, 
 
 // waylandSurfaceCommit calls wl_surface_commit (opcode 6).
 func waylandSurfaceCommit(surface uintptr) {
-	var opcode uint32 = 6
-	args := [2]unsafe.Pointer{
-		unsafe.Pointer(&surface),
-		unsafe.Pointer(&opcode),
-	}
-	_, _ = ffi.CallFunction(&cifMarshal2, symWlProxyMarshal, nil, args[:])
+	C.swl_marshal0(symWlProxyMarshal, C.uintptr_t(surface), 6)
 }
 
 // waylandSurfaceAttach calls wl_surface_attach(surface, buffer, x, y) — opcode 1.
 func waylandSurfaceAttach(surface, buffer uintptr, x, y int32) {
-	var opcode uint32 = 1
-	args := [5]unsafe.Pointer{
-		unsafe.Pointer(&surface),
-		unsafe.Pointer(&opcode),
-		unsafe.Pointer(&buffer),
-		unsafe.Pointer(&x),
-		unsafe.Pointer(&y),
-	}
-	_, _ = ffi.CallFunction(&cifSurfaceAttach, symWlProxyMarshal, nil, args[:])
+	C.swl_surface_attach(symWlProxyMarshal, C.uintptr_t(surface), C.uintptr_t(buffer), C.int32_t(x), C.int32_t(y))
 }
 
 // waylandSurfaceDamageBuffer calls wl_surface_damage_buffer(surface, x, y, w, h) — opcode 9.
 // Preferred over deprecated wl_surface_damage (opcode 2) since wl_surface v4 (Wayland 1.10, 2016).
 // Uses buffer coordinates instead of surface coordinates — correct on HiDPI.
 func waylandSurfaceDamageBuffer(surface uintptr, x, y, w, h int32) {
-	var opcode uint32 = 9
-	args := [6]unsafe.Pointer{
-		unsafe.Pointer(&surface),
-		unsafe.Pointer(&opcode),
-		unsafe.Pointer(&x),
-		unsafe.Pointer(&y),
-		unsafe.Pointer(&w),
-		unsafe.Pointer(&h),
-	}
-	_, _ = ffi.CallFunction(&cifSurfaceDamageBuffer, symWlProxyMarshal, nil, args[:])
+	C.swl_surface_damage_buffer(symWlProxyMarshal, C.uintptr_t(surface), C.int32_t(x), C.int32_t(y), C.int32_t(w), C.int32_t(h))
 }
 
 // waylandDispatchShmQueue reads and dispatches events on the SHM queue.
@@ -1107,14 +640,8 @@ func waylandDispatchShmQueue(display, queue uintptr) {
 	if queue == 0 {
 		return
 	}
-	args := [2]unsafe.Pointer{
-		unsafe.Pointer(&display),
-		unsafe.Pointer(&queue),
-	}
-	var result int32
-	rtErrno, _ := ffi.CallFunction(&cifWlDisplayRoundtripQueue, symWlDisplayRoundtripQueue, unsafe.Pointer(&result), args[:])
-	if result < 0 {
-		slog.Warn("software: wl_display_roundtrip_queue failed (dispatch)", "errno", rtErrno, "errstr", rtErrno.Error())
+	if rt, err := C.swl_call_i_uu(symWlDisplayRoundtripQueue, C.uintptr_t(display), C.uintptr_t(queue)); rt < 0 {
+		slog.Warn("software: wl_display_roundtrip_queue failed (dispatch)", "error", err)
 	}
 }
 
@@ -1129,21 +656,18 @@ func (s *Surface) destroyWaylandBlitState() {
 	}
 	// Destroy wl_shm proxy (was leaked before BUG-SW-WAYLAND-002 fix).
 	if wl.wlShm != 0 {
-		args := [1]unsafe.Pointer{unsafe.Pointer(&wl.wlShm)}
-		_, _ = ffi.CallFunction(&cifWlProxyDestroy, symWlProxyDestroy, nil, args[:])
+		C.swl_call_v_u(symWlProxyDestroy, C.uintptr_t(wl.wlShm))
 		wl.wlShm = 0
 	}
 	// Destroy registry proxy (was leaked before BUG-SW-WAYLAND-002 fix).
 	if wl.registry != 0 {
-		args := [1]unsafe.Pointer{unsafe.Pointer(&wl.registry)}
-		_, _ = ffi.CallFunction(&cifWlProxyDestroy, symWlProxyDestroy, nil, args[:])
+		C.swl_call_v_u(symWlProxyDestroy, C.uintptr_t(wl.registry))
 		wl.registry = 0
 	}
 	// Destroy the SHM event queue LAST — all proxies assigned to it
 	// must be destroyed first (wl_event_queue_destroy asserts this).
 	if wl.shmQueue != 0 {
-		args := [1]unsafe.Pointer{unsafe.Pointer(&wl.shmQueue)}
-		_, _ = ffi.CallFunction(&cifWlEventQueueDestroy, symWlEventQueueDestroy, nil, args[:])
+		C.swl_call_v_u(symWlEventQueueDestroy, C.uintptr_t(wl.shmQueue))
 		wl.shmQueue = 0
 	}
 }
