@@ -211,21 +211,12 @@ func (p *RenderPassEncoder) validateDrawState(method string) bool {
 	return true
 }
 
-// Draw draws primitives.
+// Draw draws primitives. A non-zero FirstInstance needs no feature: WebGPU
+// only gates it for indirect draws (indirect-first-instance), and every
+// registered backend passes it to the native draw.
 func (p *RenderPassEncoder) Draw(args gputypes.DrawArgs) {
 	if !p.validateDrawState("Draw") {
 		return
-	}
-	// VAL-C3: firstInstance != 0 requires FeatureIndirectFirstInstance.
-	if args.FirstInstance != 0 {
-		if err := core.RequireFeature(
-			p.encoder.device.Features(),
-			gputypes.FeatureIndirectFirstInstance,
-			"Draw",
-		); err != nil {
-			p.encoder.setError(err)
-			return
-		}
 	}
 	p.core.Draw(args)
 }
@@ -247,17 +238,6 @@ func (p *RenderPassEncoder) DrawIndexed(args gputypes.DrawIndexedArgs) {
 			"wgpu: RenderPass.DrawIndexed: index buffer format %v does not match pipeline strip index format %v: %w",
 			p.indexBufferFormat, *p.currentStripIndexFormat, ErrDrawIndexFormatMismatch))
 		return
-	}
-	// VAL-C3: firstInstance != 0 requires FeatureIndirectFirstInstance.
-	if args.FirstInstance != 0 {
-		if err := core.RequireFeature(
-			p.encoder.device.Features(),
-			gputypes.FeatureIndirectFirstInstance,
-			"DrawIndexed",
-		); err != nil {
-			p.encoder.setError(err)
-			return
-		}
 	}
 	p.core.DrawIndexed(args)
 }

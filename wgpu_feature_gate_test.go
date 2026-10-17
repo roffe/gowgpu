@@ -297,7 +297,7 @@ func TestFeatureGate_MultiDrawIndirectCount_WithFeature(t *testing.T) {
 	}
 }
 
-func TestFeatureGate_IndirectFirstInstance_NoFeature(t *testing.T) {
+func TestFeatureGate_DirectFirstInstance_NoFeature(t *testing.T) {
 	_, _, device := newDeviceWithoutFeatures(t)
 	defer device.Release()
 	requireHAL(t, device)
@@ -307,18 +307,13 @@ func TestFeatureGate_IndirectFirstInstance_NoFeature(t *testing.T) {
 	pipeline.SetTestRequiredVertexBuffers(0)
 	pass.SetPipeline(pipeline)
 
+	// Direct draws take any firstInstance; only indirect ones need the feature.
 	pass.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1, FirstInstance: 1})
-	_ = pass.End()
-	_, finishErr := encoder.Finish()
-	if finishErr == nil {
-		t.Fatal("Finish() should fail without FeatureIndirectFirstInstance")
+	if err := pass.End(); err != nil {
+		t.Fatalf("End: %v", err)
 	}
-	var fe *core.FeatureError
-	if !errors.As(finishErr, &fe) {
-		t.Fatalf("error = %T (%v), want *core.FeatureError", finishErr, finishErr)
-	}
-	if fe.Feature != gputypes.FeatureIndirectFirstInstance.String() {
-		t.Errorf("Feature = %q, want %q", fe.Feature, gputypes.FeatureIndirectFirstInstance.String())
+	if _, err := encoder.Finish(); err != nil {
+		t.Fatalf("Finish() unexpected error: %v", err)
 	}
 }
 
@@ -342,7 +337,7 @@ func TestFeatureGate_IndirectFirstInstance_WithFeature(t *testing.T) {
 	}
 }
 
-func TestFeatureGate_IndirectFirstInstance_DrawIndexed_NoFeature(t *testing.T) {
+func TestFeatureGate_DirectFirstInstance_DrawIndexed_NoFeature(t *testing.T) {
 	_, _, device := newDeviceWithoutFeatures(t)
 	defer device.Release()
 	requireHAL(t, device)
@@ -363,14 +358,11 @@ func TestFeatureGate_IndirectFirstInstance_DrawIndexed_NoFeature(t *testing.T) {
 	pass.SetIndexBuffer(indexBuf, gputypes.IndexFormatUint32, 0)
 
 	pass.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: 3, InstanceCount: 1, FirstInstance: 1})
-	_ = pass.End()
-	_, finishErr := encoder.Finish()
-	if finishErr == nil {
-		t.Fatal("Finish() should fail without FeatureIndirectFirstInstance")
+	if err := pass.End(); err != nil {
+		t.Fatalf("End: %v", err)
 	}
-	var fe *core.FeatureError
-	if !errors.As(finishErr, &fe) {
-		t.Fatalf("error = %T (%v), want *core.FeatureError", finishErr, finishErr)
+	if _, err := encoder.Finish(); err != nil {
+		t.Fatalf("Finish() unexpected error: %v", err)
 	}
 }
 
