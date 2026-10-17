@@ -4,14 +4,12 @@ package wgpu
 
 import (
 	"errors"
-	"runtime"
 	"testing"
 
 	"github.com/gogpu/gputypes"
 	"github.com/roffe/gowgpu/core"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/noop"
-	"github.com/roffe/gowgpu/hal/software"
 )
 
 type surfaceCreateTestInstance struct {
@@ -45,35 +43,6 @@ type surfaceDestroyCounter struct {
 
 func (s *surfaceDestroyCounter) Destroy() {
 	s.destroys++
-}
-
-func newSoftwareSurfaceTestInstance(t *testing.T) *Instance {
-	t.Helper()
-	hal.RegisterBackend(software.NewBackend())
-	instance, err := CreateInstance(&InstanceDescriptor{Backends: BackendsAll})
-	if err != nil {
-		t.Fatalf("CreateInstance: %v", err)
-	}
-	t.Cleanup(instance.Release)
-	if instance.core.HALInstanceForBackend(gputypes.BackendEmpty) == nil {
-		t.Fatal("software HAL instance was not registered")
-	}
-	return instance
-}
-
-func currentPlatformSurfaceTarget(t *testing.T) SurfaceTargetUnsafe {
-	t.Helper()
-	switch runtime.GOOS {
-	case platformWindows:
-		return SurfaceTargetFromWindowsHWND(1, 2)
-	case platformDarwin:
-		return SurfaceTargetFromMetalLayer(2)
-	case platformLinux:
-		return SurfaceTargetFromXlibWindow(1, 2)
-	default:
-		t.Skipf("no software window target for %s", runtime.GOOS)
-		return SurfaceTargetUnsafe{}
-	}
 }
 
 func TestCreateHALSurfacesTriesEveryBackendAndSucceedsIfAny(t *testing.T) {
@@ -272,92 +241,6 @@ func TestSurfaceTargetFromLegacyHandlesForPlatform(t *testing.T) {
 	}
 }
 
-func TestTypedSurfaceCreationPathsUseBackendMap(t *testing.T) {
-	instance := newSoftwareSurfaceTestInstance(t)
-	target := currentPlatformSurfaceTarget(t)
-
-	legacy, err := instance.CreateSurface(target.displayHandle, target.windowHandle)
-	if err != nil {
-		t.Fatalf("CreateSurface: %v", err)
-	}
-	if legacy.HAL() == nil {
-		t.Fatal("legacy surface has no HAL surface")
-	}
-	legacy.Release()
-
-	unsafeSurface, err := instance.CreateSurfaceUnsafe(target)
-	if err != nil {
-		t.Fatalf("CreateSurfaceUnsafe: %v", err)
-	}
-	if unsafeSurface.targetSource != nil {
-		t.Fatal("unsafe surface retained an ownership source")
-	}
-	unsafeSurface.Release()
-
-	provider := &surfaceTargetTestProvider{target: target}
-	safeSurface, err := instance.CreateSurfaceFromTarget(provider)
-	if err != nil {
-		t.Fatalf("CreateSurfaceFromTarget: %v", err)
-	}
-	if provider.calls != 1 {
-		t.Fatalf("provider calls = %d, want 1", provider.calls)
-	}
-	if safeSurface.targetSource != provider {
-		t.Fatal("safe surface did not retain its provider")
-	}
-	if safeSurface.halSurfaces[gputypes.BackendEmpty] == nil {
-		t.Fatal("safe surface did not retain the software backend surface")
-	}
-
-	adapter, err := instance.RequestAdapter(&RequestAdapterOptions{CompatibleSurface: safeSurface})
-	if err != nil {
-		t.Fatalf("RequestAdapter(compatible surface): %v", err)
-	}
-	if capabilities := adapter.GetSurfaceCapabilities(safeSurface); capabilities == nil {
-		t.Fatal("compatible software adapter returned no surface capabilities")
-	}
-	adapter.Release()
-
-	safeSurface.Release()
-	if safeSurface.targetSource != nil {
-		t.Fatal("released safe surface retained its provider")
-	}
-}
-
-func TestCreateSurfaceReportsBoundaryFailures(t *testing.T) {
-	target := currentPlatformSurfaceTarget(t)
-
-	empty := &Instance{core: core.NewInstanceWithMock(nil)}
-	t.Cleanup(empty.core.Destroy)
-	if surface, err := empty.CreateSurfaceUnsafe(target); surface != nil || err == nil {
-		t.Fatalf("CreateSurfaceUnsafe without HAL = (%v, %v), want nil error result", surface, err)
-	}
-
-	instance := newSoftwareSurfaceTestInstance(t)
-	if surface, err := instance.createSurface(SurfaceTargetFromWebCanvasID(1), nil); surface != nil ||
-		!errors.Is(err, ErrUnsupportedSurfaceTarget) {
-		t.Fatalf("native web target = (%v, %v), want ErrUnsupportedSurfaceTarget", surface, err)
-	}
-
-	if runtime.GOOS != platformAndroid {
-		surface, err := instance.CreateSurfaceUnsafe(SurfaceTargetFromAndroidNativeWindow(1))
-		if surface != nil {
-			surface.Release()
-			t.Fatal("desktop software backend accepted Android target")
-		}
-		if !errors.Is(err, ErrUnsupportedSurfaceTarget) {
-			t.Fatalf("Android target error = %v, want ErrUnsupportedSurfaceTarget", err)
-		}
-	}
-
-	released := newSoftwareSurfaceTestInstance(t)
-	released.Release()
-	if surface, err := released.CreateSurface(target.displayHandle, target.windowHandle); surface != nil ||
-		!errors.Is(err, ErrReleased) {
-		t.Fatalf("CreateSurface after release = (%v, %v), want ErrReleased", surface, err)
-	}
-}
-
 func TestAdoptCreatedSurfaceDestroysEverySurfaceOnReleaseRace(t *testing.T) {
 	instance := &Instance{core: core.NewInstanceWithMock(nil), released: true}
 	t.Cleanup(instance.core.Destroy)
@@ -434,51 +317,6 @@ func TestCreateHALSurfaceForTargetMapsBackendFailures(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestCreateAndEnsureHALSurfaceCoverDeferredPaths(t *testing.T) {
-	instance := newSoftwareSurfaceTestInstance(t)
-	target := currentPlatformSurfaceTarget(t)
-
-	surface := &Surface{
-		core:     core.NewSurface(&noop.Surface{}, "deferred-create"),
-		instance: instance,
-		target:   target,
-	}
-	if _, err := surface.createHALSurface(gputypes.Backend(255)); err == nil {
-		t.Fatal("createHALSurface succeeded without a matching HAL instance")
-	}
-	surface.target = SurfaceTargetFromWebCanvasID(1)
-	if _, err := surface.createHALSurface(gputypes.BackendEmpty); !errors.Is(err, ErrUnsupportedSurfaceTarget) {
-		t.Fatalf("createHALSurface(web target) = %v, want ErrUnsupportedSurfaceTarget", err)
-	}
-	surface.target = target
-	raw, err := surface.createHALSurface(gputypes.BackendEmpty)
-	if err != nil {
-		t.Fatalf("createHALSurface(software): %v", err)
-	}
-	raw.Destroy()
-
-	if err := surface.ensureHALSurface(gputypes.BackendEmpty); err != nil {
-		t.Fatalf("ensureHALSurface(software): %v", err)
-	}
-	if surface.halSurfaces[gputypes.BackendEmpty] == nil {
-		t.Fatal("ensureHALSurface did not retain the lazily created surface")
-	}
-	if surface.currentBackend != gputypes.BackendEmpty || !surface.surfaceCreated {
-		t.Fatalf("active surface = (%v, %v), want software/created", surface.currentBackend, surface.surfaceCreated)
-	}
-	surface.Release()
-
-	failing := &Surface{
-		core:     core.NewSurface(&noop.Surface{}, "deferred-failure"),
-		instance: instance,
-		target:   target,
-	}
-	if err := failing.ensureHALSurface(gputypes.Backend(255)); err == nil {
-		t.Fatal("ensureHALSurface succeeded without a matching HAL instance")
-	}
-	failing.Release()
 }
 
 func TestEnsureHALSurfaceUnconfiguresBeforeSwitch(t *testing.T) {

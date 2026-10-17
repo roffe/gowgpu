@@ -255,29 +255,6 @@ linters:
           - funlen
           - dupl
 
-      # Software backend platform blit — struct has real GDI fields on Windows,
-      # empty on other platforms. The `unused` linter on Linux sees it as unused.
-      # macOS software blit — self-contained ObjC/CoreGraphics/Metal bindings
-      # (contributor @k-chimi, PR #187). Same exclusion pattern as DX12 COM bindings.
-      - path: hal/software/blit_darwin\.go
-        linters:
-          - errcheck
-          - govet
-          - nestif
-          - revive
-          - staticcheck
-          - unconvert
-          - unused
-
-      - path: hal/software/blit_other\.go
-        linters:
-          - unused
-        text: "platformBlit"
-      - path: hal/software/resource\.go
-        linters:
-          - unused
-        text: "platformBlit"
-
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
