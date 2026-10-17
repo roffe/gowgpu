@@ -316,10 +316,15 @@ func (a *qualifiedAdapter) TextureFormatCapabilities(format gputypes.TextureForm
 
 func (a *qualifiedAdapter) SurfaceCapabilities(surface hal.Surface) *hal.SurfaceCapabilities {
 	vkSurface, ok := surface.(*Surface)
-	if !ok || vkSurface != a.surface {
+	if !ok {
 		return nil
 	}
-	return cloneSurfaceCapabilities(a.snapshot.public)
+	if vkSurface == a.surface {
+		return cloneSurfaceCapabilities(a.snapshot.public)
+	}
+	// A later surface on the same device: a second window, or the new window
+	// Android hands an app that comes back to the foreground.
+	return a.base.SurfaceCapabilities(surface)
 }
 
 // Destroy is intentionally a no-op. The cached physical adapter owns no
