@@ -1839,7 +1839,7 @@ func (d *Device) CreateBindGroup(desc *hal.BindGroupDescriptor) (hal.BindGroup, 
 	for _, entry := range desc.Entries {
 		switch res := entry.Resource.(type) {
 		case gputypes.SamplerBinding:
-			sampler := (*Sampler)(unsafe.Pointer(res.Sampler)) //nolint:govet // intentional: HAL handle → concrete type
+			sampler := fromHandle[Sampler](res.Sampler)
 			samplerPoolIndices = append(samplerPoolIndices, sampler.samplerPoolSlot)
 		default: // BufferBinding, TextureViewBinding
 			viewEntries = append(viewEntries, entry)
@@ -1857,7 +1857,7 @@ func (d *Device) CreateBindGroup(desc *hal.BindGroupDescriptor) (hal.BindGroup, 
 			switch layoutEntry.Type {
 			case BindingTypeUniformBuffer, BindingTypeStorageBuffer, BindingTypeReadOnlyStorageBuffer:
 				if bufBinding, ok := bgEntry.Resource.(gputypes.BufferBinding); ok && bufBinding.Buffer != 0 {
-					buf := (*Buffer)(unsafe.Pointer(bufBinding.Buffer)) //nolint:govet // intentional: HAL handle -> concrete type
+					buf := fromHandle[Buffer](bufBinding.Buffer)
 					switch layoutEntry.Type {
 					case BindingTypeUniformBuffer:
 						bg.uniformBuffers = append(bg.uniformBuffers, buf)
@@ -1869,7 +1869,7 @@ func (d *Device) CreateBindGroup(desc *hal.BindGroupDescriptor) (hal.BindGroup, 
 				}
 			case BindingTypeSampledTexture, BindingTypeStorageTexture:
 				if textureBinding, ok := bgEntry.Resource.(gputypes.TextureViewBinding); ok && textureBinding.TextureView != 0 {
-					view := (*TextureView)(unsafe.Pointer(textureBinding.TextureView)) //nolint:govet // intentional: HAL handle -> concrete type
+					view := fromHandle[TextureView](textureBinding.TextureView)
 					if layoutEntry.Type == BindingTypeSampledTexture {
 						bg.sampledTextures = append(bg.sampledTextures, view)
 					} else {
@@ -2015,7 +2015,7 @@ func (d *Device) writeViewDescriptorsBatched(cpuStart d3d12.D3D12_CPU_DESCRIPTOR
 
 		switch res := entry.Resource.(type) {
 		case gputypes.BufferBinding:
-			buf := (*Buffer)(unsafe.Pointer(res.Buffer)) //nolint:govet // intentional: HAL handle → concrete type
+			buf := fromHandle[Buffer](res.Buffer)
 			size := res.Size
 			if size == 0 {
 				size = buf.size - res.Offset
@@ -2028,7 +2028,7 @@ func (d *Device) writeViewDescriptorsBatched(cpuStart d3d12.D3D12_CPU_DESCRIPTOR
 			}, dest)
 
 		case gputypes.TextureViewBinding:
-			view := (*TextureView)(unsafe.Pointer(res.TextureView)) //nolint:govet // intentional: HAL handle → concrete type
+			view := fromHandle[TextureView](res.TextureView)
 			if !view.hasSRV {
 				return fmt.Errorf("dx12: texture view has no SRV for binding %d", entry.Binding)
 			}
