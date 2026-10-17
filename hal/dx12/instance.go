@@ -190,9 +190,12 @@ func (i *Instance) CreateSurface(target hal.SurfaceTarget) (hal.Surface, error) 
 
 // EnumerateAdapters enumerates available physical GPUs.
 // Adapters are sorted by preference: discrete GPUs first, then integrated,
-// then others. Software adapters (WARP) are excluded unless explicitly requested.
+// then others. Software adapters (WARP) only come in when no hardware adapter
+// works, as a CPU adapter: a VM or remote session without a GPU still renders,
+// and nobody else pays for creating a WARP device to probe it.
 func (i *Instance) EnumerateAdapters(surfaceHint hal.Surface) []hal.ExposedAdapter {
 	var adapters []hal.ExposedAdapter
+	var software []*Adapter
 
 	// Enumerate adapters by GPU preference (high performance first)
 	for idx := uint32(0); ; idx++ {
@@ -214,16 +217,14 @@ func (i *Instance) EnumerateAdapters(surfaceHint hal.Surface) []hal.ExposedAdapt
 			continue
 		}
 
-		// Skip software adapters unless debugging
-		if desc.Flags&dxgi.DXGI_ADAPTER_FLAG_SOFTWARE != 0 {
-			raw.Release()
-			continue
-		}
-
 		adapter := &Adapter{
 			raw:      raw,
 			desc:     desc,
 			instance: i,
+		}
+		if desc.Flags&dxgi.DXGI_ADAPTER_FLAG_SOFTWARE != 0 {
+			software = append(software, adapter)
+			continue
 		}
 
 		// Probe adapter capabilities by creating a temporary device
@@ -243,6 +244,16 @@ func (i *Instance) EnumerateAdapters(surfaceHint hal.Surface) []hal.ExposedAdapt
 		adapters = append(adapters, exposed)
 	}
 
+	for _, adapter := range software {
+		if len(adapters) > 0 || adapter.probeCapabilities() != nil {
+			adapter.raw.Release()
+			continue
+		}
+		exposed := adapter.toExposedAdapter()
+		hal.Logger().Info("dx12: no hardware adapter, using WARP", "name", exposed.Info.Name)
+		adapters = append(adapters, exposed)
+	}
+
 	return adapters
 }
 
@@ -255,6 +266,7 @@ func (i *Instance) enumerateAdaptersLegacy(surfaceHint hal.Surface) []hal.Expose
 	var discreteAdapters []hal.ExposedAdapter
 	var integratedAdapters []hal.ExposedAdapter
 	var otherAdapters []hal.ExposedAdapter
+	var software []*AdapterLegacy
 
 	for idx := uint32(0); ; idx++ {
 		raw, err := i.factory.EnumAdapters1(idx)
@@ -268,16 +280,14 @@ func (i *Instance) enumerateAdaptersLegacy(surfaceHint hal.Surface) []hal.Expose
 			continue
 		}
 
-		// Skip software adapters
-		if desc.Flags&dxgi.DXGI_ADAPTER_FLAG_SOFTWARE != 0 {
-			raw.Release()
-			continue
-		}
-
 		adapter := &AdapterLegacy{
 			raw:      raw,
 			desc:     desc,
 			instance: i,
+		}
+		if desc.Flags&dxgi.DXGI_ADAPTER_FLAG_SOFTWARE != 0 {
+			software = append(software, adapter) // WARP, see EnumerateAdapters
+			continue
 		}
 
 		if err := adapter.probeCapabilities(); err != nil {
@@ -308,6 +318,16 @@ func (i *Instance) enumerateAdaptersLegacy(surfaceHint hal.Surface) []hal.Expose
 	adapters = append(adapters, discreteAdapters...)
 	adapters = append(adapters, integratedAdapters...)
 	adapters = append(adapters, otherAdapters...)
+
+	for _, adapter := range software {
+		if len(adapters) > 0 || adapter.probeCapabilities() != nil {
+			adapter.raw.Release()
+			continue
+		}
+		exposed := adapter.toExposedAdapter()
+		hal.Logger().Info("dx12: no hardware adapter, using WARP (legacy)", "name", exposed.Info.Name)
+		adapters = append(adapters, exposed)
+	}
 
 	return adapters
 }
