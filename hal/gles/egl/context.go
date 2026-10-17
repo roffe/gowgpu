@@ -96,7 +96,7 @@ func NewContext(config ContextConfig) (*Context, error) {
 	}
 
 	// Choose EGL frame buffer configuration
-	eglConfig, err := chooseEGLConfig(display, config)
+	eglConfig, err := chooseEGLConfig(display, config, windowKind)
 	if err != nil {
 		Terminate(display)
 		closeOwner()
@@ -152,7 +152,7 @@ func selectWindowKind(requested *WindowKind, detect func() WindowKind) WindowKin
 }
 
 // chooseEGLConfig selects an appropriate EGL frame buffer configuration.
-func chooseEGLConfig(display EGLDisplay, config ContextConfig) (EGLConfig, error) {
+func chooseEGLConfig(display EGLDisplay, config ContextConfig, windowKind WindowKind) (EGLConfig, error) {
 	// Determine renderable type
 	var renderableType EGLInt
 	if config.GLES {
@@ -178,12 +178,22 @@ func chooseEGLConfig(display EGLDisplay, config ContextConfig) (EGLConfig, error
 		PbufferBit,             // Tier 0: surfaceless/CI fallback
 	}
 
+	// An X11 window surface needs a config whose visual matches the
+	// window's, and NVIDIA rejects a 32-bit ARGB config for a default 24-bit
+	// visual window (EGL_BAD_CONFIG). Without an alpha request EGL sorts the
+	// smaller, 24-bit configs first. The present blit never needs window alpha.
+	// ponytail: assumes a default-depth window; a transparent (32-bit visual)
+	// one would need its visual ID matched against EGL_NATIVE_VISUAL_ID.
+	alpha := EGLInt(8)
+	if windowKind == WindowKindX11 {
+		alpha = 0
+	}
 	baseAttribs := []EGLInt{
 		RenderableType, renderableType,
 		RedSize, 8,
 		GreenSize, 8,
 		BlueSize, 8,
-		AlphaSize, 8,
+		AlphaSize, alpha,
 		DepthSize, 24,
 		StencilSize, 8,
 	}
