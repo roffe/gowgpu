@@ -110,7 +110,7 @@ func TestEGLContext(t *testing.T) {
 	t.Log("Context destroyed")
 }
 
-// TestGLObjectCreation verifies that GL object creation works through goffi.
+// TestGLObjectCreation verifies that GL object creation works through the cgo trampolines.
 // This catches the fundamental FFI pointer convention bug found by @lkmavi
 // (PR #210): pointer-type args must use unsafe.Pointer(&ptr), not unsafe.Pointer(&value).
 // Without this test, the bug went undetected because CI only tested EGL init.

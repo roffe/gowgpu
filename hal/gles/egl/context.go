@@ -325,8 +325,6 @@ func (c *Context) WindowKind() WindowKind {
 
 // GetGLProcAddress returns the address of an OpenGL function.
 // It uses eglGetProcAddress to load both core and extension functions.
-// Returns unsafe.Pointer for compatibility with goffi-based GL context.
 func GetGLProcAddress(name string) unsafe.Pointer {
-	//nolint:govet // Converting uintptr (function address) to unsafe.Pointer is required for FFI
-	return unsafe.Pointer(GetProcAddress(name))
+	return GetProcAddress(name)
 }

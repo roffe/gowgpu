@@ -5,21 +5,23 @@
 
 package egl
 
+// #include "trampolines_linux.h"
+import "C"
+
 import (
 	"fmt"
 	"os"
 	"strings"
 	"unsafe"
 
-	"github.com/go-webgpu/goffi/ffi"
-	"github.com/go-webgpu/goffi/types"
+	"github.com/roffe/gowgpu/internal/dl"
 )
 
 var (
-	// x11Lib is the handle to the loaded libX11.so library.
-	x11Lib unsafe.Pointer
-	// waylandClientLib is the handle to the loaded libwayland-client.so library.
-	waylandClientLib unsafe.Pointer
+	// x11Lib is the loaded libX11.so library.
+	x11Lib dl.Lib
+	// waylandClientLib is the loaded libwayland-client.so library.
+	waylandClientLib dl.Lib
 
 	// X11 function symbols
 	symXOpenDisplay  unsafe.Pointer
@@ -28,12 +30,6 @@ var (
 	// Wayland function symbols
 	symWlDisplayConnect    unsafe.Pointer
 	symWlDisplayDisconnect unsafe.Pointer
-
-	// CallInterfaces
-	cifXOpenDisplay        types.CallInterface
-	cifXCloseDisplay       types.CallInterface
-	cifWlDisplayConnect    types.CallInterface
-	cifWlDisplayDisconnect types.CallInterface
 )
 
 // DisplayOwner manages the lifetime of a native display connection.
@@ -41,7 +37,7 @@ var (
 type DisplayOwner struct {
 	kind    WindowKind
 	display uintptr
-	lib     unsafe.Pointer
+	lib     dl.Lib
 }
 
 // OpenX11Display opens an X11 display connection.
@@ -49,47 +45,22 @@ type DisplayOwner struct {
 func OpenX11Display() *DisplayOwner {
 	var err error
 
-	// Try loading libX11.so.6 first, then libX11.so
-	x11Lib, err = ffi.LoadLibrary("libX11.so.6")
-	if err != nil {
-		x11Lib, err = ffi.LoadLibrary("libX11.so")
-		if err != nil {
-			return nil
-		}
-	}
-
-	// Load symbols
-	symXOpenDisplay, err = ffi.GetSymbol(x11Lib, "XOpenDisplay")
-	if err != nil {
+	if x11Lib, err = dl.Open("libX11.so.6", "libX11.so"); err != nil {
 		return nil
 	}
-	symXCloseDisplay, err = ffi.GetSymbol(x11Lib, "XCloseDisplay")
-	if err != nil {
-		return nil
-	}
-
-	// Prepare CallInterfaces
 	// Display* XOpenDisplay(char* display_name)
-	err = ffi.PrepareCallInterface(&cifXOpenDisplay, types.DefaultCall,
-		types.PointerTypeDescriptor,
-		[]*types.TypeDescriptor{types.PointerTypeDescriptor})
-	if err != nil {
+	if symXOpenDisplay, err = x11Lib.Sym("XOpenDisplay"); err != nil {
 		return nil
 	}
-
 	// int XCloseDisplay(Display* display)
-	err = ffi.PrepareCallInterface(&cifXCloseDisplay, types.DefaultCall,
-		types.UInt32TypeDescriptor,
-		[]*types.TypeDescriptor{types.PointerTypeDescriptor})
-	if err != nil {
+	if symXCloseDisplay, err = x11Lib.Sym("XCloseDisplay"); err != nil {
 		return nil
 	}
 
 	// Open default display (NULL = use DISPLAY environment variable)
 	var display uintptr
 	var displayName uintptr // NULL pointer for default display
-	args := [1]unsafe.Pointer{unsafe.Pointer(&displayName)}
-	_, _ = ffi.CallFunction(&cifXOpenDisplay, symXOpenDisplay, unsafe.Pointer(&display), args[:])
+	display = uintptr(C.egl_u_u(C.uintptr_t(uintptr(symXOpenDisplay)), C.uintptr_t(displayName)))
 	if display == 0 {
 		return nil
 	}
@@ -107,54 +78,28 @@ func OpenX11Display() *DisplayOwner {
 func TestWaylandDisplay() *DisplayOwner {
 	var err error
 
-	// Try loading libwayland-client.so.0 first, then libwayland-client.so
-	waylandClientLib, err = ffi.LoadLibrary("libwayland-client.so.0")
-	if err != nil {
-		waylandClientLib, err = ffi.LoadLibrary("libwayland-client.so")
-		if err != nil {
-			return nil
-		}
-	}
-
-	// Load symbols
-	symWlDisplayConnect, err = ffi.GetSymbol(waylandClientLib, "wl_display_connect")
-	if err != nil {
+	if waylandClientLib, err = dl.Open("libwayland-client.so.0", "libwayland-client.so"); err != nil {
 		return nil
 	}
-	symWlDisplayDisconnect, err = ffi.GetSymbol(waylandClientLib, "wl_display_disconnect")
-	if err != nil {
-		return nil
-	}
-
-	// Prepare CallInterfaces
 	// wl_display* wl_display_connect(const char* name)
-	err = ffi.PrepareCallInterface(&cifWlDisplayConnect, types.DefaultCall,
-		types.PointerTypeDescriptor,
-		[]*types.TypeDescriptor{types.PointerTypeDescriptor})
-	if err != nil {
+	if symWlDisplayConnect, err = waylandClientLib.Sym("wl_display_connect"); err != nil {
 		return nil
 	}
-
 	// void wl_display_disconnect(wl_display* display)
-	err = ffi.PrepareCallInterface(&cifWlDisplayDisconnect, types.DefaultCall,
-		types.VoidTypeDescriptor,
-		[]*types.TypeDescriptor{types.PointerTypeDescriptor})
-	if err != nil {
+	if symWlDisplayDisconnect, err = waylandClientLib.Sym("wl_display_disconnect"); err != nil {
 		return nil
 	}
 
 	// Test connection (NULL = use WAYLAND_DISPLAY environment variable)
 	var display uintptr
 	var displayName uintptr // NULL pointer for default display
-	args := [1]unsafe.Pointer{unsafe.Pointer(&displayName)}
-	_, _ = ffi.CallFunction(&cifWlDisplayConnect, symWlDisplayConnect, unsafe.Pointer(&display), args[:])
+	display = uintptr(C.egl_u_u(C.uintptr_t(uintptr(symWlDisplayConnect)), C.uintptr_t(displayName)))
 	if display == 0 {
 		return nil
 	}
 
 	// Immediately disconnect - we just wanted to test availability
-	argsDisconnect := [1]unsafe.Pointer{unsafe.Pointer(&display)}
-	_, _ = ffi.CallFunction(&cifWlDisplayDisconnect, symWlDisplayDisconnect, nil, argsDisconnect[:])
+	C.egl_v_u(C.uintptr_t(uintptr(symWlDisplayDisconnect)), C.uintptr_t(display))
 
 	return &DisplayOwner{
 		kind:    WindowKindWayland,
@@ -326,11 +271,7 @@ func (d *DisplayOwner) Close() {
 	switch d.kind {
 	case WindowKindX11:
 		if symXCloseDisplay != nil {
-			var result int32
-			// goffi API requires pointer TO pointer value (avalue is slice of pointers to argument values)
-			displayPtr := d.display
-			args := [1]unsafe.Pointer{unsafe.Pointer(&displayPtr)}
-			_, _ = ffi.CallFunction(&cifXCloseDisplay, symXCloseDisplay, unsafe.Pointer(&result), args[:])
+			C.egl_i_u(C.uintptr_t(uintptr(symXCloseDisplay)), C.uintptr_t(d.display))
 		}
 	case WindowKindWayland:
 		// Wayland display is managed by the window system

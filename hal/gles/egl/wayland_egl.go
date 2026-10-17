@@ -13,97 +13,50 @@
 // SDL3 SDL_waylandwindow.c:2978.
 package egl
 
+// #include "trampolines_linux.h"
+import "C"
+
 import (
 	"log/slog"
 	"sync"
 	"unsafe"
 
-	"github.com/go-webgpu/goffi/ffi"
-	"github.com/go-webgpu/goffi/types"
+	"github.com/roffe/gowgpu/internal/dl"
 )
 
 var (
 	waylandEGLOnce  sync.Once
 	waylandEGLReady bool
 
-	waylandEGLLib unsafe.Pointer
+	waylandEGLLib dl.Lib
 
 	symWlEGLWindowCreate  unsafe.Pointer
 	symWlEGLWindowDestroy unsafe.Pointer
 	symWlEGLWindowResize  unsafe.Pointer
-
-	// wl_egl_window* wl_egl_window_create(wl_surface*, int width, int height)
-	cifWlEGLWindowCreate types.CallInterface
-	// void wl_egl_window_destroy(wl_egl_window*)
-	cifWlEGLWindowDestroy types.CallInterface
-	// void wl_egl_window_resize(wl_egl_window*, int width, int height, int dx, int dy)
-	cifWlEGLWindowResize types.CallInterface
 )
 
-// InitWaylandEGL loads libwayland-egl.so and prepares CIFs.
+// InitWaylandEGL loads libwayland-egl.so.
 // Safe to call multiple times; only the first call does work.
 func InitWaylandEGL() bool {
 	waylandEGLOnce.Do(func() {
 		var err error
-
-		waylandEGLLib, err = ffi.LoadLibrary("libwayland-egl.so.1")
-		if err != nil {
-			waylandEGLLib, err = ffi.LoadLibrary("libwayland-egl.so")
-			if err != nil {
-				slog.Debug("egl: libwayland-egl unavailable", "error", err)
-				return
-			}
-		}
-
-		symWlEGLWindowCreate, err = ffi.GetSymbol(waylandEGLLib, "wl_egl_window_create")
-		if err != nil {
-			slog.Debug("egl: wl_egl_window_create not found", "error", err)
+		if waylandEGLLib, err = dl.Open("libwayland-egl.so.1", "libwayland-egl.so"); err != nil {
+			slog.Debug("egl: libwayland-egl unavailable", "error", err)
 			return
 		}
-		symWlEGLWindowDestroy, err = ffi.GetSymbol(waylandEGLLib, "wl_egl_window_destroy")
-		if err != nil {
-			slog.Debug("egl: wl_egl_window_destroy not found", "error", err)
-			return
-		}
-		symWlEGLWindowResize, err = ffi.GetSymbol(waylandEGLLib, "wl_egl_window_resize")
-		if err != nil {
-			slog.Debug("egl: wl_egl_window_resize not found", "error", err)
-			return
-		}
-
 		// wl_egl_window* wl_egl_window_create(wl_surface*, int width, int height)
-		if err = ffi.PrepareCallInterface(&cifWlEGLWindowCreate, types.DefaultCall,
-			types.PointerTypeDescriptor,
-			[]*types.TypeDescriptor{
-				types.PointerTypeDescriptor, // wl_surface*
-				types.SInt32TypeDescriptor,  // width
-				types.SInt32TypeDescriptor,  // height
-			}); err != nil {
-			slog.Debug("egl: failed to prepare wl_egl_window_create CIF", "error", err)
+		if symWlEGLWindowCreate, err = waylandEGLLib.Sym("wl_egl_window_create"); err != nil {
+			slog.Debug("egl: libwayland-egl incomplete", "error", err)
 			return
 		}
-
 		// void wl_egl_window_destroy(wl_egl_window*)
-		if err = ffi.PrepareCallInterface(&cifWlEGLWindowDestroy, types.DefaultCall,
-			types.VoidTypeDescriptor,
-			[]*types.TypeDescriptor{
-				types.PointerTypeDescriptor,
-			}); err != nil {
-			slog.Debug("egl: failed to prepare wl_egl_window_destroy CIF", "error", err)
+		if symWlEGLWindowDestroy, err = waylandEGLLib.Sym("wl_egl_window_destroy"); err != nil {
+			slog.Debug("egl: libwayland-egl incomplete", "error", err)
 			return
 		}
-
 		// void wl_egl_window_resize(wl_egl_window*, int width, int height, int dx, int dy)
-		if err = ffi.PrepareCallInterface(&cifWlEGLWindowResize, types.DefaultCall,
-			types.VoidTypeDescriptor,
-			[]*types.TypeDescriptor{
-				types.PointerTypeDescriptor, // wl_egl_window*
-				types.SInt32TypeDescriptor,  // width
-				types.SInt32TypeDescriptor,  // height
-				types.SInt32TypeDescriptor,  // dx
-				types.SInt32TypeDescriptor,  // dy
-			}); err != nil {
-			slog.Debug("egl: failed to prepare wl_egl_window_resize CIF", "error", err)
+		if symWlEGLWindowResize, err = waylandEGLLib.Sym("wl_egl_window_resize"); err != nil {
+			slog.Debug("egl: libwayland-egl incomplete", "error", err)
 			return
 		}
 
@@ -125,12 +78,7 @@ func WlEGLWindowCreate(wlSurface uintptr, width, height int32) uintptr {
 		return 0
 	}
 	var result uintptr
-	args := [3]unsafe.Pointer{
-		unsafe.Pointer(&wlSurface),
-		unsafe.Pointer(&width),
-		unsafe.Pointer(&height),
-	}
-	_, _ = ffi.CallFunction(&cifWlEGLWindowCreate, symWlEGLWindowCreate, unsafe.Pointer(&result), args[:])
+	result = uintptr(C.egl_u_uii(C.uintptr_t(uintptr(symWlEGLWindowCreate)), C.uintptr_t(wlSurface), C.uint32_t(width), C.uint32_t(height)))
 	return result
 }
 
@@ -139,10 +87,7 @@ func WlEGLWindowDestroy(eglWindow uintptr) {
 	if !waylandEGLReady || eglWindow == 0 {
 		return
 	}
-	args := [1]unsafe.Pointer{
-		unsafe.Pointer(&eglWindow),
-	}
-	_, _ = ffi.CallFunction(&cifWlEGLWindowDestroy, symWlEGLWindowDestroy, nil, args[:])
+	C.egl_v_u(C.uintptr_t(uintptr(symWlEGLWindowDestroy)), C.uintptr_t(eglWindow))
 }
 
 // WlEGLWindowResize resizes a wl_egl_window.
@@ -150,12 +95,5 @@ func WlEGLWindowResize(eglWindow uintptr, width, height, dx, dy int32) {
 	if !waylandEGLReady || eglWindow == 0 {
 		return
 	}
-	args := [5]unsafe.Pointer{
-		unsafe.Pointer(&eglWindow),
-		unsafe.Pointer(&width),
-		unsafe.Pointer(&height),
-		unsafe.Pointer(&dx),
-		unsafe.Pointer(&dy),
-	}
-	_, _ = ffi.CallFunction(&cifWlEGLWindowResize, symWlEGLWindowResize, nil, args[:])
+	C.egl_v_uiiii(C.uintptr_t(uintptr(symWlEGLWindowResize)), C.uintptr_t(eglWindow), C.uint32_t(width), C.uint32_t(height), C.uint32_t(dx), C.uint32_t(dy))
 }

@@ -10,6 +10,7 @@
 //   - Wayland displays (via EGL_PLATFORM_WAYLAND_KHR)
 //   - Surfaceless contexts (via EGL_PLATFORM_SURFACELESS_MESA)
 //
-// This implementation uses github.com/go-webgpu/goffi for Pure Go FFI
-// without requiring CGO.
+// libEGL, libX11 and libwayland-egl are opened at run time with dlopen and
+// called through the cgo trampolines in trampolines_linux.h, so building it
+// needs none of them, nor their headers.
 package egl
