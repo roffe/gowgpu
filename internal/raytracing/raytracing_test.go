@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/hal"
 )
 
 // --- CompactionState tests ---

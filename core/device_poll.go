@@ -9,7 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/hal"
 )
 
 // FEAT-WGPU-MAPPING-001 — per-Device pending-map triage.

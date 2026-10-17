@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/core/track"
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/core/track"
+	"github.com/roffe/gowgpu/hal"
 )
 
 type delayedCompletionQueue struct {

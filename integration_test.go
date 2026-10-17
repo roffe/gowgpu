@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu"
+	"github.com/roffe/gowgpu"
 
 	// Import the software backend so it registers with HAL.
 	// Note: The core Instance currently skips BackendEmpty during adapter
@@ -18,7 +18,7 @@ import (
 	// these tests exercise the full HAL integration path. Otherwise, the
 	// tests skip gracefully. Future architecture changes may allow the
 	// software backend to be selected directly.
-	_ "github.com/roffe/wgpu/hal/software"
+	_ "github.com/roffe/gowgpu/hal/software"
 )
 
 // createTestDevice creates an Instance, Adapter, and Device for integration testing.

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/roffe/wgpu"
+	"github.com/roffe/gowgpu"
 )
 
 // =============================================================================

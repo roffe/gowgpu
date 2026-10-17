@@ -10,7 +10,7 @@ import (
 	"runtime"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/hal"
 )
 
 // Surface implements hal.Surface for Metal using CAMetalLayer.

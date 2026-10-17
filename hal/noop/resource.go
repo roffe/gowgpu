@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/hal"
 )
 
 // Resource is a placeholder implementation for most HAL resource types.

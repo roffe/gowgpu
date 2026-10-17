@@ -5,7 +5,7 @@ package wgpu
 import (
 	"log/slog"
 
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/hal"
 )
 
 // SetLogger configures the logger for the entire wgpu stack (public API,

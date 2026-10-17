@@ -20,11 +20,11 @@ import (
 	"github.com/gogpu/naga/dxil"
 	"github.com/gogpu/naga/hlsl"
 	"github.com/gogpu/naga/ir"
-	"github.com/roffe/wgpu/hal"
-	"github.com/roffe/wgpu/hal/dx12/d3d12"
-	"github.com/roffe/wgpu/hal/dx12/d3dcompile"
-	"github.com/roffe/wgpu/hal/dx12/dxgi"
-	"github.com/roffe/wgpu/internal/pipelinecache"
+	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/gowgpu/hal/dx12/d3d12"
+	"github.com/roffe/gowgpu/hal/dx12/d3dcompile"
+	"github.com/roffe/gowgpu/hal/dx12/dxgi"
+	"github.com/roffe/gowgpu/internal/pipelinecache"
 	"golang.org/x/sys/windows"
 )
 

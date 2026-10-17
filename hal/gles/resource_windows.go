@@ -9,8 +9,8 @@ import (
 	"fmt"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal"
-	"github.com/roffe/wgpu/hal/gles/wgl"
+	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/gowgpu/hal/gles/wgl"
 )
 
 // Surface implements hal.Surface for OpenGL on Windows.

@@ -10,7 +10,7 @@ import (
 
 	"github.com/gogpu/gputypes"
 	"github.com/gogpu/naga/ir"
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/hal"
 )
 
 // Buffer implements hal.Buffer for Metal.

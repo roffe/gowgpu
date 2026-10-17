@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/hal"
 )
 
 // TextureUses represents internal texture usage states for tracking.

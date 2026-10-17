@@ -8,8 +8,8 @@ package gles
 import (
 	"testing"
 
-	"github.com/roffe/wgpu/hal"
-	"github.com/roffe/wgpu/hal/gles/gl"
+	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/gowgpu/hal/gles/gl"
 )
 
 // TestGLESComputeConstants verifies that all GL compute shader constants

@@ -13,7 +13,7 @@ import (
 
 	"github.com/go-webgpu/goffi/ffi"
 	"github.com/go-webgpu/goffi/types"
-	"github.com/roffe/wgpu/hal/vulkan/vk"
+	"github.com/roffe/gowgpu/hal/vulkan/vk"
 )
 
 // DirectCreatePipeline tests direct FFI call to vkCreateGraphicsPipelines

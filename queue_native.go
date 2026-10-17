@@ -7,9 +7,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/roffe/wgpu/core"
-	"github.com/roffe/wgpu/core/track"
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/core"
+	"github.com/roffe/gowgpu/core/track"
+	"github.com/roffe/gowgpu/hal"
 )
 
 // Queue handles command submission and data transfers.

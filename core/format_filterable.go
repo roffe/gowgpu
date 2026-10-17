@@ -4,7 +4,7 @@ package core
 
 import (
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/hal"
 )
 
 // isUnfilterable32BitFloatFormat reports 32-bit float formats that require

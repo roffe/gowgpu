@@ -8,7 +8,7 @@ package vulkan
 import (
 	"testing"
 
-	"github.com/roffe/wgpu/hal/vulkan/vk"
+	"github.com/roffe/gowgpu/hal/vulkan/vk"
 )
 
 // TestPresentSemaphorePoolOrderingContract verifies the ADR-060 invariant:

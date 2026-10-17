@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu"
-	"github.com/roffe/wgpu/core"
+	"github.com/roffe/gowgpu"
+	"github.com/roffe/gowgpu/core"
 
-	_ "github.com/roffe/wgpu/hal/noop"
+	_ "github.com/roffe/gowgpu/hal/noop"
 )
 
 // =============================================================================

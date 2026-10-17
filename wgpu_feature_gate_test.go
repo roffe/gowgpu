@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu"
-	"github.com/roffe/wgpu/core"
+	"github.com/roffe/gowgpu"
+	"github.com/roffe/gowgpu/core"
 )
 
 func newDeviceWithoutFeatures(t *testing.T) (*wgpu.Instance, *wgpu.Adapter, *wgpu.Device) {

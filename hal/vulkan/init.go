@@ -5,7 +5,7 @@
 
 package vulkan
 
-import "github.com/roffe/wgpu/hal"
+import "github.com/roffe/gowgpu/hal"
 
 // init registers the Vulkan backend with the HAL registry.
 // This is called automatically on package import.

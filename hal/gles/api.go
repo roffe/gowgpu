@@ -9,9 +9,9 @@ import (
 	"fmt"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal"
-	"github.com/roffe/wgpu/hal/gles/gl"
-	"github.com/roffe/wgpu/hal/gles/wgl"
+	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/gowgpu/hal/gles/gl"
+	"github.com/roffe/gowgpu/hal/gles/wgl"
 )
 
 // Backend implements hal.Backend for OpenGL ES / OpenGL 3.3+.

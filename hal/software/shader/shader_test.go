@@ -6,7 +6,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/roffe/wgpu/hal/software/raster"
+	"github.com/roffe/gowgpu/hal/software/raster"
 )
 
 // =============================================================================

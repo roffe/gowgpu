@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/core/track"
+	"github.com/roffe/gowgpu/core/track"
 )
 
 func TestCoreCommandEncoderTextureUsageGuards(t *testing.T) {

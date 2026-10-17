@@ -11,9 +11,9 @@ import (
 	"os"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu"
-	"github.com/roffe/wgpu/hal"
-	_ "github.com/roffe/wgpu/hal/software"
+	"github.com/roffe/gowgpu"
+	"github.com/roffe/gowgpu/hal"
+	_ "github.com/roffe/gowgpu/hal/software"
 )
 
 const wgslShader = `

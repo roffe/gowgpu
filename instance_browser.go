@@ -6,7 +6,7 @@ import (
 	"syscall/js"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/internal/browser"
+	"github.com/roffe/gowgpu/internal/browser"
 )
 
 // InstanceDescriptor configures instance creation.

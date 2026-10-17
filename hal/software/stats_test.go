@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/hal"
 )
 
 func TestRenderPassStats_ScissorAndDrawCount(t *testing.T) {

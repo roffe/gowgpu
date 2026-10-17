@@ -5,7 +5,7 @@ package wgpu
 import (
 	"testing"
 
-	"github.com/roffe/wgpu/hal/noop"
+	"github.com/roffe/gowgpu/hal/noop"
 )
 
 func createTestBelt(t *testing.T, chunkSize uint64) *stagingBelt {

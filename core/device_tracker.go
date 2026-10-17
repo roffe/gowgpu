@@ -3,8 +3,8 @@
 package core
 
 import (
-	"github.com/roffe/wgpu/core/track"
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/core/track"
+	"github.com/roffe/gowgpu/hal"
 )
 
 // DeviceTracker holds device-level resource usage trackers.

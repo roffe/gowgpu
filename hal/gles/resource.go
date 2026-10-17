@@ -12,8 +12,8 @@ import (
 
 	"github.com/gogpu/gputypes"
 	"github.com/gogpu/naga/glsl"
-	"github.com/roffe/wgpu/hal"
-	"github.com/roffe/wgpu/hal/gles/gl"
+	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/gowgpu/hal/gles/gl"
 )
 
 // Surface and SurfaceTexture are defined in platform-specific files (resource_windows.go, resource_linux.go)

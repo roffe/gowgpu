@@ -14,9 +14,9 @@ import (
 
 	"github.com/gogpu/gputypes"
 	"github.com/gogpu/naga"
-	"github.com/roffe/wgpu/hal"
-	"github.com/roffe/wgpu/hal/vulkan/memory"
-	"github.com/roffe/wgpu/hal/vulkan/vk"
+	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/gowgpu/hal/vulkan/memory"
+	"github.com/roffe/gowgpu/hal/vulkan/vk"
 )
 
 // commandAllocator holds a recycled VkCommandPool.

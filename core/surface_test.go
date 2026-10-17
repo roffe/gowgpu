@@ -10,8 +10,8 @@ import (
 	"testing"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal"
-	"github.com/roffe/wgpu/hal/noop"
+	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/gowgpu/hal/noop"
 )
 
 // newTestSurface creates a test Surface with a noop HAL backend.

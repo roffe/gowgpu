@@ -7,7 +7,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/roffe/wgpu"
+	"github.com/roffe/gowgpu"
 )
 
 // =============================================================================

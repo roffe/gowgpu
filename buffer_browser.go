@@ -7,7 +7,7 @@ import (
 	"fmt"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/internal/browser"
+	"github.com/roffe/gowgpu/internal/browser"
 )
 
 // Buffer represents a GPU buffer.

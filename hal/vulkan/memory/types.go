@@ -3,7 +3,7 @@
 package memory
 
 import (
-	"github.com/roffe/wgpu/hal/vulkan/vk"
+	"github.com/roffe/gowgpu/hal/vulkan/vk"
 )
 
 // UsageFlags specifies intended memory usage.

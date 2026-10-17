@@ -11,8 +11,8 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/roffe/wgpu/hal/gles/gl"
-	"github.com/roffe/wgpu/hal/gles/wgl"
+	"github.com/roffe/gowgpu/hal/gles/gl"
+	"github.com/roffe/gowgpu/hal/gles/wgl"
 )
 
 // AdapterContext wraps a GL context with mutex-protected MakeCurrent switching.

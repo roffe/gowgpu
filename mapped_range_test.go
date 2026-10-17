@@ -5,7 +5,7 @@ package wgpu_test
 import (
 	"testing"
 
-	"github.com/roffe/wgpu"
+	"github.com/roffe/gowgpu"
 )
 
 func TestMappedRangeBytesMutAndFlush(t *testing.T) {

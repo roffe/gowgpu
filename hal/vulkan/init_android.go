@@ -5,7 +5,7 @@
 
 package vulkan
 
-import "github.com/roffe/wgpu/hal"
+import "github.com/roffe/gowgpu/hal"
 
 func init() {
 	hal.RegisterBackend(Backend{})

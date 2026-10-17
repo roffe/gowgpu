@@ -5,8 +5,8 @@ package wgpu
 import (
 	"fmt"
 
-	"github.com/roffe/wgpu/core"
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/core"
+	"github.com/roffe/gowgpu/hal"
 )
 
 // QuerySet represents a set of GPU queries (occlusion, timestamp, etc.).

@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal/vulkan/vk"
+	"github.com/roffe/gowgpu/hal/vulkan/vk"
 )
 
 func TestSelectPresentGraphicsQueueFamilyRejectsSplitQueues(t *testing.T) {

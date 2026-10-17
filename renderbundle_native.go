@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/hal"
 )
 
 // RenderBundleEncoder records reusable render commands.

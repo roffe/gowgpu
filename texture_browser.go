@@ -4,7 +4,7 @@ package wgpu
 
 import (
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/internal/browser"
+	"github.com/roffe/gowgpu/internal/browser"
 )
 
 // Texture represents a GPU texture.

@@ -8,10 +8,10 @@ import (
 	"testing"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/core"
-	"github.com/roffe/wgpu/hal"
-	"github.com/roffe/wgpu/hal/noop"
-	"github.com/roffe/wgpu/hal/software"
+	"github.com/roffe/gowgpu/core"
+	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/gowgpu/hal/noop"
+	"github.com/roffe/gowgpu/hal/software"
 )
 
 type surfaceCreateTestInstance struct {

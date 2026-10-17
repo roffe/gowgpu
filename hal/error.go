@@ -72,7 +72,7 @@ var (
 	//   - Use a different backend (e.g., DX12 instead of Vulkan)
 	//   - Use software rendering backend
 	//
-	// See: https://github.com/roffe/wgpu/issues/24
+	// See: https://github.com/roffe/gowgpu/issues/24
 	ErrDriverBug = errors.New("hal: driver bug detected (API spec violation)")
 
 	// ErrInvalidMapRange indicates MapBuffer was called with an offset+size

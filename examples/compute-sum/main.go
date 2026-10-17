@@ -17,10 +17,10 @@ import (
 	"time"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu"
+	"github.com/roffe/gowgpu"
 
 	// Register all available GPU backends (Vulkan, DX12, GLES, Metal, etc.)
-	_ "github.com/roffe/wgpu/hal/allbackends"
+	_ "github.com/roffe/gowgpu/hal/allbackends"
 )
 
 // sumShaderWGSL performs pairwise addition: output[i] = input[2*i] + input[2*i+1].

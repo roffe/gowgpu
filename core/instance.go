@@ -8,7 +8,7 @@ import (
 	"unsafe"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/hal"
 )
 
 // instanceEnumerateMu serializes HAL backend probing during NewInstance.

@@ -4,8 +4,8 @@ package wgpu
 
 import (
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/internal/browser"
-	"github.com/roffe/wgpu/internal/indirect"
+	"github.com/roffe/gowgpu/internal/browser"
+	"github.com/roffe/gowgpu/internal/indirect"
 )
 
 // RenderPassEncoder records draw commands within a render pass.

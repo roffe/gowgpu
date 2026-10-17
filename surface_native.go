@@ -10,8 +10,8 @@ import (
 	"runtime"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/core"
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/core"
+	"github.com/roffe/gowgpu/hal"
 )
 
 // Compile-time assertion: Surface must implement all public API methods (ADR-047).

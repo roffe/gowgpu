@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu"
+	"github.com/roffe/gowgpu"
 
 	// Register the Vulkan HAL backend. Without a real backend registered only
 	// the noop/software backends are available, and neither encodes a Vulkan
@@ -20,7 +20,7 @@ import (
 	//
 	// This import is why the file sits behind the integration tag: registering
 	// a real backend changes adapter selection for every test in the package.
-	_ "github.com/roffe/wgpu/hal/vulkan"
+	_ "github.com/roffe/gowgpu/hal/vulkan"
 )
 
 const (

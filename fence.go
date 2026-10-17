@@ -2,7 +2,7 @@
 
 package wgpu
 
-import "github.com/roffe/wgpu/hal"
+import "github.com/roffe/gowgpu/hal"
 
 // Fence is a GPU synchronization primitive.
 // Fences allow CPU-GPU synchronization by signaling when submitted work completes.

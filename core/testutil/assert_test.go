@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/core"
-	"github.com/roffe/wgpu/core/testutil"
+	"github.com/roffe/gowgpu/core"
+	"github.com/roffe/gowgpu/core/testutil"
 )
 
 func TestAssertNoError(t *testing.T) {

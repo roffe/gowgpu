@@ -6,9 +6,9 @@ import (
 	"fmt"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/core"
-	"github.com/roffe/wgpu/core/track"
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/core"
+	"github.com/roffe/gowgpu/core/track"
+	"github.com/roffe/gowgpu/hal"
 )
 
 // CommandEncoder records GPU commands for later submission.

@@ -29,9 +29,9 @@ import (
 	"golang.org/x/sys/windows"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal"
-	"github.com/roffe/wgpu/hal/dx12/d3d12"
-	"github.com/roffe/wgpu/hal/dx12/dxgi"
+	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/gowgpu/hal/dx12/d3d12"
+	"github.com/roffe/gowgpu/hal/dx12/dxgi"
 )
 
 // Backend implements hal.Backend for DirectX 12.

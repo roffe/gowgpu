@@ -10,9 +10,9 @@ import (
 	"runtime"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal"
-	"github.com/roffe/wgpu/hal/vulkan/vk"
-	"github.com/roffe/wgpu/internal/indirect"
+	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/gowgpu/hal/vulkan/vk"
+	"github.com/roffe/gowgpu/internal/indirect"
 )
 
 // CommandBuffer holds a recorded Vulkan command buffer.

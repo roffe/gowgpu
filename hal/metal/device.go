@@ -17,8 +17,8 @@ import (
 	"github.com/gogpu/naga"
 	"github.com/gogpu/naga/ir"
 	"github.com/gogpu/naga/msl"
-	"github.com/roffe/wgpu/hal"
-	"github.com/roffe/wgpu/hal/metal/mslmap"
+	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/gowgpu/hal/metal/mslmap"
 )
 
 // Vertex buffer indices are assigned from the end of the range and count down.

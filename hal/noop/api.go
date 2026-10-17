@@ -4,7 +4,7 @@ package noop
 
 import (
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/hal"
 )
 
 // API implements hal.Backend for the noop backend.

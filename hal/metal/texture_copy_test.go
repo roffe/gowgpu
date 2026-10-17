@@ -11,7 +11,7 @@ import (
 	"unsafe"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/hal"
 )
 
 func TestMetalTextureDataCopyLayoutValidatesCompleteSourceRange(t *testing.T) {

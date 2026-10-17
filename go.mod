@@ -1,4 +1,4 @@
-module github.com/roffe/wgpu
+module github.com/roffe/gowgpu
 
 go 1.25.0
 

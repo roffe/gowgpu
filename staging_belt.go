@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/hal"
 )
 
 // stagingBelt manages reusable staging buffer chunks for zero-allocation

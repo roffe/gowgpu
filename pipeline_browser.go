@@ -2,7 +2,7 @@
 
 package wgpu
 
-import "github.com/roffe/wgpu/internal/browser"
+import "github.com/roffe/gowgpu/internal/browser"
 
 // LateSizedBufferGroup holds the shader-required minimum buffer sizes for
 // bind group entries whose layout specifies MinBindingSize == 0.

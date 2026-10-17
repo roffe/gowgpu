@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/hal"
 )
 
 // validTextureDesc returns a valid 2D texture descriptor for tests.

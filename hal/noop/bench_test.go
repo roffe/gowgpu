@@ -12,8 +12,8 @@ import (
 	"unsafe"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal"
-	"github.com/roffe/wgpu/hal/noop"
+	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/gowgpu/hal/noop"
 )
 
 // benchResult prevents the compiler from optimizing away benchmark results.

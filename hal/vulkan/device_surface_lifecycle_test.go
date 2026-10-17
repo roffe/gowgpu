@@ -9,7 +9,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/hal"
 )
 
 func TestDeviceOwnsConfiguredSurfacesUntilDestroyBegins(t *testing.T) {

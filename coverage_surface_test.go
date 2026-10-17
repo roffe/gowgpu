@@ -5,8 +5,8 @@ package wgpu_test
 import (
 	"testing"
 
-	"github.com/roffe/wgpu"
-	"github.com/roffe/wgpu/hal/noop"
+	"github.com/roffe/gowgpu"
+	"github.com/roffe/gowgpu/hal/noop"
 )
 
 // =============================================================================

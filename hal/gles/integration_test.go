@@ -10,9 +10,9 @@ import (
 	"testing"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal"
-	"github.com/roffe/wgpu/hal/gles/egl"
-	"github.com/roffe/wgpu/hal/gles/gl"
+	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/gowgpu/hal/gles/egl"
+	"github.com/roffe/gowgpu/hal/gles/gl"
 )
 
 // TestEGLInit tests basic EGL initialization.

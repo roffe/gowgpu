@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal"
-	"github.com/roffe/wgpu/hal/noop"
+	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/gowgpu/hal/noop"
 )
 
 // benchBatchingQueue is a zero-allocation mock for benchmarks.

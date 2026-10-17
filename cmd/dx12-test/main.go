@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/roffe/wgpu/hal"
-	"github.com/roffe/wgpu/hal/dx12"
+	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/gowgpu/hal/dx12"
 )
 
 func main() {

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/roffe/wgpu/hal/vulkan/vk"
+	"github.com/roffe/gowgpu/hal/vulkan/vk"
 )
 
 // AllocatorConfig configures the GPU memory allocator.

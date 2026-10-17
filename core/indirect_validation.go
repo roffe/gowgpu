@@ -7,7 +7,7 @@ import (
 	"log/slog"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/hal"
 )
 
 // validationShaderEntryPoint is the entry point name for the indirect dispatch

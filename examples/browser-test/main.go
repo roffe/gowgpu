@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"syscall/js"
 
-	"github.com/roffe/wgpu"
+	"github.com/roffe/gowgpu"
 )
 
 func main() {

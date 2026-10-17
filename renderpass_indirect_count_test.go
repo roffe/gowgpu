@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/core"
+	"github.com/roffe/gowgpu/core"
 )
 
 func TestValidateIndirectCountBuffers(t *testing.T) {

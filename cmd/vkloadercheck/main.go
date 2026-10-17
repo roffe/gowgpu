@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/roffe/wgpu/hal/vulkan/vk"
+	"github.com/roffe/gowgpu/hal/vulkan/vk"
 )
 
 func main() {

@@ -5,8 +5,8 @@ package wgpu
 import (
 	"errors"
 
-	"github.com/roffe/wgpu/core"
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/core"
+	"github.com/roffe/gowgpu/hal"
 )
 
 // Sentinel errors re-exported from HAL.

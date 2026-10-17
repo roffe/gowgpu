@@ -21,9 +21,9 @@ import (
 	"time"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu"
+	"github.com/roffe/gowgpu"
 
-	_ "github.com/roffe/wgpu/hal/allbackends"
+	_ "github.com/roffe/gowgpu/hal/allbackends"
 )
 
 const numParticles = 1024

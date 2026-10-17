@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal"
-	"github.com/roffe/wgpu/hal/software/shader"
+	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/gowgpu/hal/software/shader"
 )
 
 // =============================================================================

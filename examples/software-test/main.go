@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu"
-	_ "github.com/roffe/wgpu/hal/software"
+	"github.com/roffe/gowgpu"
+	_ "github.com/roffe/gowgpu/hal/software"
 )
 
 func main() {

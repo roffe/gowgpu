@@ -4,7 +4,7 @@ package wgpu
 
 import (
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/hal"
 )
 
 // Extent3D is a 3D size.

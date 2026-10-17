@@ -7,8 +7,8 @@ package vulkan
 
 import (
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal/vulkan/memory"
-	"github.com/roffe/wgpu/hal/vulkan/vk"
+	"github.com/roffe/gowgpu/hal/vulkan/memory"
+	"github.com/roffe/gowgpu/hal/vulkan/vk"
 )
 
 // Buffer implements hal.Buffer for Vulkan.

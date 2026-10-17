@@ -8,7 +8,7 @@
 
 package core
 
-import "github.com/roffe/wgpu/core/track"
+import "github.com/roffe/gowgpu/core/track"
 
 // TrackerIndexAllocators manages tracker indices per resource type.
 //

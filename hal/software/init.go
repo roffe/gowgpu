@@ -2,7 +2,7 @@
 
 package software
 
-import "github.com/roffe/wgpu/hal"
+import "github.com/roffe/gowgpu/hal"
 
 // init registers the software backend with the HAL registry.
 func init() {

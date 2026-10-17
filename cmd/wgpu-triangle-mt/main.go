@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu"
-	_ "github.com/roffe/wgpu/hal/vulkan"
-	"github.com/roffe/wgpu/internal/thread"
+	"github.com/roffe/gowgpu"
+	_ "github.com/roffe/gowgpu/hal/vulkan"
+	"github.com/roffe/gowgpu/internal/thread"
 )
 
 const (

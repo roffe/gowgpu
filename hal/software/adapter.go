@@ -4,7 +4,7 @@ package software
 
 import (
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/hal"
 )
 
 // Adapter implements hal.Adapter for the software backend.

@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/core/testutil"
+	"github.com/roffe/gowgpu/core/testutil"
 )
 
 func TestValidationEnv_AllHelpers(t *testing.T) {

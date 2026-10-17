@@ -8,9 +8,9 @@ import (
 	"math"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal"
-	"github.com/roffe/wgpu/hal/software/raster"
-	"github.com/roffe/wgpu/hal/software/shader"
+	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/gowgpu/hal/software/raster"
+	"github.com/roffe/gowgpu/hal/software/shader"
 )
 
 // executeDraw is the core draw implementation.

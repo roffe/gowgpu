@@ -9,12 +9,12 @@ import (
 	"testing"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/core"
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/core"
+	"github.com/roffe/gowgpu/hal"
 
 	// Import all backends for side-effect registration.
 	// This enables real GPU adapter enumeration.
-	_ "github.com/roffe/wgpu/hal/allbackends"
+	_ "github.com/roffe/gowgpu/hal/allbackends"
 )
 
 // TestCoreHALIntegration verifies that Core properly integrates with HAL backends.

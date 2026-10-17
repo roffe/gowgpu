@@ -4,7 +4,7 @@ package wgpu
 
 import (
 	"github.com/gogpu/naga/ir"
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/hal"
 )
 
 // ShaderModule represents a compiled shader module.

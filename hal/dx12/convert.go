@@ -7,8 +7,8 @@ package dx12
 
 import (
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal"
-	"github.com/roffe/wgpu/hal/dx12/d3d12"
+	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/gowgpu/hal/dx12/d3d12"
 )
 
 // textureFormatToD3D12 converts a WebGPU texture format to D3D12 DXGI format.

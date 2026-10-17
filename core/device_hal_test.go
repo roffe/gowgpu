@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/hal"
 )
 
 // Mock HAL types to satisfy interfaces without returning nil, nil.

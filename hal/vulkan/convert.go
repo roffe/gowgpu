@@ -7,8 +7,8 @@ package vulkan
 
 import (
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal"
-	"github.com/roffe/wgpu/hal/vulkan/vk"
+	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/gowgpu/hal/vulkan/vk"
 )
 
 // bufferUsageToVk converts WebGPU buffer usage flags to Vulkan buffer usage flags.

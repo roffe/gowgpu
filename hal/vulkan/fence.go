@@ -10,8 +10,8 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	"github.com/roffe/wgpu/hal"
-	"github.com/roffe/wgpu/hal/vulkan/vk"
+	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/gowgpu/hal/vulkan/vk"
 )
 
 // deviceFence abstracts GPU synchronization using either a VK_KHR_timeline_semaphore

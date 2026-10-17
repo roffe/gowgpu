@@ -7,7 +7,7 @@ package metal
 
 import (
 	"github.com/gogpu/gputypes"
-	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/gowgpu/hal"
 )
 
 func renderPipelineICBCandidate(desc *hal.RenderPipelineDescriptor) bool {
