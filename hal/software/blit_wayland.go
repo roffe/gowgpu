@@ -30,7 +30,7 @@ uintptr_t swl_create_pool(void *fn, uintptr_t shm, const void *pool_iface, int32
 uintptr_t swl_create_buffer(void *fn, uintptr_t pool, const void *buffer_iface, int32_t offset, int32_t width, int32_t height, int32_t stride, uint32_t format);
 void swl_marshal0(void *fn, uintptr_t proxy, uint32_t opcode);
 void swl_surface_attach(void *fn, uintptr_t surface, uintptr_t buffer, int32_t x, int32_t y);
-void swl_surface_damage_buffer(void *fn, uintptr_t surface, int32_t x, int32_t y, int32_t w, int32_t h);
+void swl_surface_damage_buffer(void *fn, void *get_version, uintptr_t surface, int32_t x, int32_t y, int32_t w, int32_t h);
 int swl_add_registry_listener(void *fn, uintptr_t registry);
 int swl_add_buffer_listener(void *fn, uintptr_t buffer);
 
@@ -121,6 +121,7 @@ var (
 	symWlProxyAddListener                 unsafe.Pointer
 	symWlProxyMarshal                     unsafe.Pointer
 	symWlProxyDestroy                     unsafe.Pointer
+	symWlProxyGetVersion                  unsafe.Pointer // wl_proxy_get_version(proxy) -> uint32
 	symWlProxySetQueue                    unsafe.Pointer // wl_proxy_set_queue(proxy, queue) -> void
 	symWlProxyCreateWrapper               unsafe.Pointer // wl_proxy_create_wrapper(proxy) -> wrapper*
 	symWlProxyWrapperDestroy              unsafe.Pointer // wl_proxy_wrapper_destroy(wrapper) -> void
@@ -215,6 +216,7 @@ func initWayland() {
 		{"wl_proxy_add_listener", &symWlProxyAddListener},
 		{"wl_proxy_marshal", &symWlProxyMarshal},
 		{"wl_proxy_destroy", &symWlProxyDestroy},
+		{"wl_proxy_get_version", &symWlProxyGetVersion},
 		{"wl_proxy_set_queue", &symWlProxySetQueue},
 		{"wl_proxy_create_wrapper", &symWlProxyCreateWrapper},
 		{"wl_proxy_wrapper_destroy", &symWlProxyWrapperDestroy},
@@ -622,8 +624,9 @@ func waylandSurfaceAttach(surface, buffer uintptr, x, y int32) {
 // waylandSurfaceDamageBuffer calls wl_surface_damage_buffer(surface, x, y, w, h) — opcode 9.
 // Preferred over deprecated wl_surface_damage (opcode 2) since wl_surface v4 (Wayland 1.10, 2016).
 // Uses buffer coordinates instead of surface coordinates — correct on HiDPI.
+// A surface older than v4 has the whole of it damaged instead.
 func waylandSurfaceDamageBuffer(surface uintptr, x, y, w, h int32) {
-	C.swl_surface_damage_buffer(symWlProxyMarshal, C.uintptr_t(surface), C.int32_t(x), C.int32_t(y), C.int32_t(w), C.int32_t(h))
+	C.swl_surface_damage_buffer(symWlProxyMarshal, symWlProxyGetVersion, C.uintptr_t(surface), C.int32_t(x), C.int32_t(y), C.int32_t(w), C.int32_t(h))
 }
 
 // waylandDispatchShmQueue reads and dispatches events on the SHM queue.

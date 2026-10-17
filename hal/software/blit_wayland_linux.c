@@ -54,8 +54,16 @@ void swl_surface_attach(void *fn, uintptr_t surface, uintptr_t buffer, int32_t x
 	((swl_marshal_fn)fn)((void *)surface, 1, (void *)buffer, x, y);
 }
 
-// wl_surface.damage_buffer: opcode 9, signature "iiii".
-void swl_surface_damage_buffer(void *fn, uintptr_t surface, int32_t x, int32_t y, int32_t w, int32_t h) {
+// wl_surface.damage_buffer: opcode 9, signature "iiii", since version 4. An
+// older surface (glfw binds wl_compositor at 3) only has wl_surface.damage,
+// opcode 2, in surface coordinates: it gets all of itself damaged, which is
+// right at any buffer scale. Sending damage_buffer to it is a fatal protocol
+// error that closes the app's display connection.
+void swl_surface_damage_buffer(void *fn, void *get_version, uintptr_t surface, int32_t x, int32_t y, int32_t w, int32_t h) {
+	if (((uint32_t (*)(void *))get_version)((void *)surface) < 4) {
+		((swl_marshal_fn)fn)((void *)surface, 2, 0, 0, INT32_MAX, INT32_MAX);
+		return;
+	}
 	((swl_marshal_fn)fn)((void *)surface, 9, x, y, w, h);
 }
 
