@@ -8,7 +8,7 @@ package metal
 import (
 	"sync"
 
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/hal"
 )
 
 var (

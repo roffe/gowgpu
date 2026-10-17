@@ -7,7 +7,7 @@ import (
 	"image"
 	"log/slog"
 
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/hal"
 )
 
 // Queue implements hal.Queue for the software backend.

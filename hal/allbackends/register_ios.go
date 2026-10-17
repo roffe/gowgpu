@@ -7,5 +7,5 @@ package allbackends
 
 import (
 	// iOS has Metal only: there is no Vulkan loader to open.
-	_ "github.com/gogpu/wgpu/hal/metal"
+	_ "github.com/roffe/wgpu/hal/metal"
 )

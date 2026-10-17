@@ -9,7 +9,7 @@ import (
 	"fmt"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/hal"
 )
 
 // Backend implements hal.Backend for Metal.

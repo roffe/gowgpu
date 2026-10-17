@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/internal/browser"
+	"github.com/roffe/wgpu/internal/browser"
 )
 
 // Device represents a logical GPU device.

@@ -13,8 +13,8 @@ import (
 	"unsafe"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/hal"
-	"github.com/gogpu/wgpu/internal/indirect"
+	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/wgpu/internal/indirect"
 )
 
 // CommandEncoder implements hal.CommandEncoder for Metal.

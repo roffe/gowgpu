@@ -9,9 +9,9 @@ import (
 	"fmt"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/hal"
-	"github.com/gogpu/wgpu/hal/dx12/d3d12"
-	"github.com/gogpu/wgpu/internal/indirect"
+	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/wgpu/hal/dx12/d3d12"
+	"github.com/roffe/wgpu/internal/indirect"
 )
 
 // CommandAllocator wraps a D3D12 command allocator.

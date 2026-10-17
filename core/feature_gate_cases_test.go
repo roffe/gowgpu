@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/core/testutil"
+	"github.com/roffe/wgpu/core/testutil"
 )
 
 type featureGateCase struct {

@@ -36,7 +36,7 @@
 //
 // Example:
 //
-//	import _ "github.com/gogpu/wgpu/hal/software"
+//	import _ "github.com/roffe/wgpu/hal/software"
 //
 //	// Software backend is registered automatically
 //	// Adapter name: "Software Renderer"

@@ -1,6 +1,6 @@
 package wgpu
 
-import "github.com/gogpu/wgpu/internal/indirect"
+import "github.com/roffe/wgpu/internal/indirect"
 
 const (
 	drawIndirectRecordSize        = uint64(16)

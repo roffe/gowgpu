@@ -10,7 +10,7 @@ import (
 
 	"github.com/gogpu/naga"
 	"github.com/gogpu/naga/msl"
-	"github.com/gogpu/wgpu/hal/metal/mslmap"
+	"github.com/roffe/wgpu/hal/metal/mslmap"
 )
 
 // wgslRuntimeArray calls arrayLength() on a runtime-sized storage array and

@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/core"
-	"github.com/gogpu/wgpu/hal"
-	"github.com/gogpu/wgpu/hal/noop"
+	"github.com/roffe/wgpu/core"
+	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/wgpu/hal/noop"
 )
 
 type instanceLifecycleDevice struct {

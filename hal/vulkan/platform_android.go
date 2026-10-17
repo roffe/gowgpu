@@ -26,7 +26,7 @@ import "C"
 import (
 	"fmt"
 
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/hal"
 )
 
 type platformInstanceState struct {

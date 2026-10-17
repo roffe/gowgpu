@@ -10,8 +10,8 @@ import (
 	"github.com/gogpu/gputypes"
 	naga "github.com/gogpu/naga"
 	"github.com/gogpu/naga/ir"
-	"github.com/gogpu/wgpu/core"
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/core"
+	"github.com/roffe/wgpu/hal"
 )
 
 // Device represents a logical GPU device.

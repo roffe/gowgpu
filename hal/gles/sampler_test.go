@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/hal/gles/gl"
+	"github.com/roffe/wgpu/hal/gles/gl"
 )
 
 func TestMapFilterMode(t *testing.T) {

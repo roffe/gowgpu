@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/hal"
 )
 
 func TestCreateRenderPipelineRejectsImplicitLayoutBeforeFFI(t *testing.T) {

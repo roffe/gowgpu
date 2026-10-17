@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"syscall"
 
-	"github.com/gogpu/wgpu/hal"
-	"github.com/gogpu/wgpu/hal/vulkan/vk"
+	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/wgpu/hal/vulkan/vk"
 )
 
 var (

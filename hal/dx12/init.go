@@ -2,7 +2,7 @@
 
 package dx12
 
-import "github.com/gogpu/wgpu/hal"
+import "github.com/roffe/wgpu/hal"
 
 // init registers the DX12 backend with the HAL registry.
 func init() {

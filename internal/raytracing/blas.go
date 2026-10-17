@@ -2,7 +2,7 @@ package raytracing
 
 import (
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/hal"
 )
 
 // Blas represents a bottom-level acceleration structure.

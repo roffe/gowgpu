@@ -11,8 +11,8 @@ import (
 	"runtime"
 	"unsafe"
 
-	"github.com/gogpu/wgpu/hal/dx12/d3d12"
-	"github.com/gogpu/wgpu/internal/pipelinecache"
+	"github.com/roffe/wgpu/hal/dx12/d3d12"
+	"github.com/roffe/wgpu/internal/pipelinecache"
 )
 
 // PSOBlobStore persists driver-compiled PSO blobs keyed by descriptor hash.

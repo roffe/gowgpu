@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gogpu/wgpu"
+	"github.com/roffe/wgpu"
 )
 
 // =============================================================================

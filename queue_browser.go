@@ -5,7 +5,7 @@ package wgpu
 import (
 	"syscall/js"
 
-	"github.com/gogpu/wgpu/internal/browser"
+	"github.com/roffe/wgpu/internal/browser"
 )
 
 // Queue handles command submission and data transfers.

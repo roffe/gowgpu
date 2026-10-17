@@ -12,7 +12,7 @@ import (
 
 	"github.com/gogpu/gputypes"
 	naga "github.com/gogpu/naga"
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/hal"
 )
 
 // ErrComputeRequiresSPIRV indicates that a compute pipeline requires a shader

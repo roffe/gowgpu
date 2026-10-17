@@ -2,7 +2,7 @@
 
 package wgpu
 
-import "github.com/gogpu/wgpu/internal/browser"
+import "github.com/roffe/wgpu/internal/browser"
 
 // Sampler represents a texture sampler.
 type Sampler struct {

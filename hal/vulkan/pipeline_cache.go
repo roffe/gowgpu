@@ -9,9 +9,9 @@ import (
 	"runtime"
 	"unsafe"
 
-	"github.com/gogpu/wgpu/hal"
-	"github.com/gogpu/wgpu/hal/vulkan/vk"
-	"github.com/gogpu/wgpu/internal/pipelinecache"
+	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/wgpu/hal/vulkan/vk"
+	"github.com/roffe/wgpu/internal/pipelinecache"
 )
 
 const vulkanPipelineCacheFile = "pipeline.cache"

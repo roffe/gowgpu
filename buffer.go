@@ -10,8 +10,8 @@ import (
 	"unsafe"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/core"
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/core"
+	"github.com/roffe/wgpu/hal"
 )
 
 // bufferCleanupRef holds the data needed to destroy a buffer's HAL resources

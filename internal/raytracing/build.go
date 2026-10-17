@@ -3,7 +3,7 @@ package raytracing
 import (
 	"math"
 
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/hal"
 )
 
 // BlasBuildEntry pairs a BLAS with the geometry data for building.

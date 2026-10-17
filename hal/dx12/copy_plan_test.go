@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/hal"
 )
 
 func testTexture(format gputypes.TextureFormat, dimension gputypes.TextureDimension, width, height, depth, mips uint32) *Texture {

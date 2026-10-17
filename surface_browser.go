@@ -9,7 +9,7 @@ import (
 	"syscall/js"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/internal/browser"
+	"github.com/roffe/wgpu/internal/browser"
 )
 
 // Compile-time assertion: Surface must implement all public API methods (ADR-047).

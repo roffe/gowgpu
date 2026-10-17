@@ -11,9 +11,9 @@ import (
 	"unsafe"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/hal"
-	"github.com/gogpu/wgpu/hal/gles/gl"
-	"github.com/gogpu/wgpu/hal/gles/wgl"
+	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/wgpu/hal/gles/gl"
+	"github.com/roffe/wgpu/hal/gles/wgl"
 )
 
 // Queue implements hal.Queue for OpenGL.

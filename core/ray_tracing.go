@@ -4,8 +4,8 @@ package core
 
 import (
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/hal"
-	"github.com/gogpu/wgpu/internal/raytracing"
+	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/wgpu/internal/raytracing"
 )
 
 // deviceRTContext adapts core.Device to the raytracing.DeviceContext interface.

@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/hal"
 )
 
 func TestValidateShaderModuleFeatures_EmptySource(t *testing.T) {

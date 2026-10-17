@@ -9,7 +9,7 @@ import (
 	"github.com/gogpu/gputypes"
 	"github.com/gogpu/naga"
 	nagair "github.com/gogpu/naga/ir"
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/hal"
 )
 
 func validateShaderModuleFeatures(desc *hal.ShaderModuleDescriptor, features gputypes.Features) error {

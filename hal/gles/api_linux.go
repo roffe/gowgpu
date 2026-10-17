@@ -9,9 +9,9 @@ import (
 	"fmt"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/hal"
-	"github.com/gogpu/wgpu/hal/gles/egl"
-	"github.com/gogpu/wgpu/hal/gles/gl"
+	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/wgpu/hal/gles/egl"
+	"github.com/roffe/wgpu/hal/gles/gl"
 )
 
 // vendorUnknown is the placeholder vendor name used when the actual GPU vendor

@@ -12,8 +12,8 @@ import (
 
 	"github.com/gogpu/gputypes"
 	"github.com/gogpu/naga/glsl"
-	"github.com/gogpu/wgpu/hal"
-	"github.com/gogpu/wgpu/hal/gles/gl"
+	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/wgpu/hal/gles/gl"
 )
 
 // Device implements hal.Device for OpenGL.

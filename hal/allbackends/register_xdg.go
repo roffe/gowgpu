@@ -9,6 +9,6 @@ import (
 	// Linux-specific HAL backend imports.
 
 	// Vulkan backend - primary backend on Linux.
-	_ "github.com/gogpu/wgpu/hal/vulkan"
+	_ "github.com/roffe/wgpu/hal/vulkan"
 
 )

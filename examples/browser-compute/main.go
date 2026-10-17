@@ -9,7 +9,7 @@ import (
 	"syscall/js"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu"
+	"github.com/roffe/wgpu"
 )
 
 const computeShader = `

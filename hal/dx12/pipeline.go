@@ -13,8 +13,8 @@ import (
 
 	"github.com/gogpu/gputypes"
 	"github.com/gogpu/naga/hlsl"
-	"github.com/gogpu/wgpu/hal"
-	"github.com/gogpu/wgpu/hal/dx12/d3d12"
+	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/wgpu/hal/dx12/d3d12"
 )
 
 // -----------------------------------------------------------------------------

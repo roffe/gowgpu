@@ -144,7 +144,7 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/hal"
 )
 
 // selectorCache caches registered selectors for performance.

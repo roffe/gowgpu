@@ -13,10 +13,10 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/gogpu/wgpu/hal"
-	"github.com/gogpu/wgpu/hal/gles"
-	"github.com/gogpu/wgpu/hal/gles/gl"
-	"github.com/gogpu/wgpu/hal/gles/wgl"
+	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/wgpu/hal/gles"
+	"github.com/roffe/wgpu/hal/gles/gl"
+	"github.com/roffe/wgpu/hal/gles/wgl"
 )
 
 var (

@@ -7,7 +7,7 @@ import (
 	"syscall/js"
 	"testing"
 
-	"github.com/gogpu/wgpu/internal/browser"
+	"github.com/roffe/wgpu/internal/browser"
 )
 
 func TestBrowserDrawIndexedIndirectInvalidSpanDelegatesOneFailingCall(t *testing.T) {

@@ -8,7 +8,7 @@ package wgpu
 import (
 	"errors"
 
-	"github.com/gogpu/wgpu/core"
+	"github.com/roffe/wgpu/core"
 )
 
 // FEAT-WGPU-MAPPING-001 — public WebGPU-compliant Buffer mapping API.

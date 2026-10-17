@@ -6,7 +6,7 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/hal"
 )
 
 func TestMRTStructSizes(t *testing.T) {

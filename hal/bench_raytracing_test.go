@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/hal"
 )
 
 // benchRTSink prevents the compiler from optimizing away benchmark results.

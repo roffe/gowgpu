@@ -9,8 +9,8 @@ import (
 	"unsafe"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/core/track"
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/core/track"
+	"github.com/roffe/wgpu/hal"
 )
 
 // Core WebGPU resource types with full HAL integration.

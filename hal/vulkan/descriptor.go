@@ -11,7 +11,7 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/gogpu/wgpu/hal/vulkan/vk"
+	"github.com/roffe/wgpu/hal/vulkan/vk"
 )
 
 // DescriptorCounts tracks the number of descriptors by type.

@@ -13,8 +13,8 @@ import (
 	"github.com/gogpu/gputypes"
 	"github.com/gogpu/naga"
 	"github.com/gogpu/naga/glsl"
-	"github.com/gogpu/wgpu/hal"
-	"github.com/gogpu/wgpu/hal/gles/gl"
+	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/wgpu/hal/gles/gl"
 )
 
 // compileWGSLToGLSL compiles a WGSL shader source to GLSL for the given entry point.

@@ -27,9 +27,9 @@ import (
 	"time"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu"
+	"github.com/roffe/wgpu"
 
-	_ "github.com/gogpu/wgpu/hal/allbackends"
+	_ "github.com/roffe/wgpu/hal/allbackends"
 )
 
 // Shader bisection table.

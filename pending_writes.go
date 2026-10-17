@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/hal"
 )
 
 // pendingWrites accumulates WriteBuffer operations into a

@@ -11,7 +11,7 @@ import (
 	"unsafe"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/internal/indirect"
+	"github.com/roffe/wgpu/internal/indirect"
 )
 
 const (

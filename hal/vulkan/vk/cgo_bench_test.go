@@ -3,8 +3,8 @@ package vk_test
 import (
 	"testing"
 
-	"github.com/gogpu/wgpu/hal/vulkan/vk"
-	"github.com/gogpu/wgpu/hal/vulkan/vk/vknoop"
+	"github.com/roffe/wgpu/hal/vulkan/vk"
+	"github.com/roffe/wgpu/hal/vulkan/vk/vknoop"
 )
 
 func cmds() *vk.Commands {

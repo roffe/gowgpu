@@ -11,7 +11,7 @@ import (
 	"unsafe"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/hal"
 )
 
 // FEAT-WGPU-MAPPING-001 — WebGPU-compliant Buffer mapping state machine.

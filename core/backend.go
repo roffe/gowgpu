@@ -9,7 +9,7 @@ import (
 	"sync"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/hal"
 )
 
 // BackendProvider bridges the Core API to HAL backend implementations.

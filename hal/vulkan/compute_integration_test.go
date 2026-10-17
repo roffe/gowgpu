@@ -12,8 +12,8 @@ import (
 	"unsafe"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/hal"
-	"github.com/gogpu/wgpu/hal/vulkan/vk"
+	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/wgpu/hal/vulkan/vk"
 )
 
 // sdfShaderWGSL is a compute shader that computes signed distance field

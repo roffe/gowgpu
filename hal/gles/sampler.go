@@ -7,8 +7,8 @@ package gles
 
 import (
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/hal"
-	"github.com/gogpu/wgpu/hal/gles/gl"
+	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/wgpu/hal/gles/gl"
 )
 
 // configureSampler allocates a GL sampler object and sets its parameters from the descriptor.

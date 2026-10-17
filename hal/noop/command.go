@@ -4,7 +4,7 @@ package noop
 
 import (
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/hal"
 )
 
 // CommandEncoder implements hal.CommandEncoder for the noop backend.

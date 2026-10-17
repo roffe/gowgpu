@@ -9,8 +9,8 @@ import (
 	"unsafe"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/core/track"
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/core/track"
+	"github.com/roffe/wgpu/hal"
 )
 
 // ComputePassDescriptor describes how to create a compute pass.

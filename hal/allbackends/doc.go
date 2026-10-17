@@ -8,7 +8,7 @@
 // Import this package for side effects to register all available backends:
 //
 //	import (
-//		_ "github.com/gogpu/wgpu/hal/allbackends"
+//		_ "github.com/roffe/wgpu/hal/allbackends"
 //	)
 //
 // This will register:
@@ -25,13 +25,13 @@
 //   - Android/arm64: Vulkan only
 //
 // The no-op provider is not registered by this package. Import
-// github.com/gogpu/wgpu/hal/noop explicitly when it is required for tests.
+// github.com/roffe/wgpu/hal/noop explicitly when it is required for tests.
 //
 // Example usage:
 //
 //	import (
-//		_ "github.com/gogpu/wgpu/hal/allbackends"
-//		"github.com/gogpu/wgpu/core"
+//		_ "github.com/roffe/wgpu/hal/allbackends"
+//		"github.com/roffe/wgpu/core"
 //	)
 //
 //	func main() {

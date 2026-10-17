@@ -9,7 +9,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/gogpu/wgpu/core"
+	"github.com/roffe/wgpu/core"
 )
 
 // MapPending is a zero-allocation handle to an in-flight Buffer.MapAsync.

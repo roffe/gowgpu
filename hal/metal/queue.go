@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"unsafe"
 
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/hal"
 )
 
 // maxFramesInFlight is the maximum number of frames the CPU can get ahead of

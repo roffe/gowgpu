@@ -21,7 +21,7 @@ import (
 
 	"github.com/go-webgpu/goffi/ffi"
 	"github.com/go-webgpu/goffi/types"
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/hal"
 )
 
 // X11 constants (from X.h / Xlib.h).

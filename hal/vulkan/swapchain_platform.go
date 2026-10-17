@@ -8,8 +8,8 @@ package vulkan
 import (
 	"fmt"
 
-	"github.com/gogpu/wgpu/hal"
-	"github.com/gogpu/wgpu/hal/vulkan/vk"
+	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/wgpu/hal/vulkan/vk"
 )
 
 // swapchainPlatformPolicy isolates the few WSI choices that differ on

@@ -18,10 +18,10 @@ import (
 	"time"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu"
+	"github.com/roffe/wgpu"
 
 	// Register all available GPU backends (Vulkan, DX12, GLES, Metal, etc.)
-	_ "github.com/gogpu/wgpu/hal/allbackends"
+	_ "github.com/roffe/wgpu/hal/allbackends"
 )
 
 // copyShaderWGSL copies elements from source to destination with a scale factor.

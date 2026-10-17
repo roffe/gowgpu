@@ -2,7 +2,7 @@
 
 package core
 
-import "github.com/gogpu/wgpu/hal"
+import "github.com/roffe/wgpu/hal"
 
 // indirectCountInactive reports whether an indirect-count draw should be skipped.
 func (p *CoreRenderPassEncoder) indirectCountInactive(maxDrawCount uint32) bool {

@@ -11,8 +11,8 @@ import (
 	"unsafe"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/hal"
-	"github.com/gogpu/wgpu/hal/vulkan/vk"
+	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/wgpu/hal/vulkan/vk"
 )
 
 const defaultEntryPoint = "main"
@@ -340,7 +340,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 
 	// Defensive check: Intel Vulkan drivers may return VK_SUCCESS but write VK_NULL_HANDLE.
 	// This is a Vulkan spec violation, but we must handle it to prevent undefined behavior.
-	// See: https://github.com/gogpu/wgpu/issues/24
+	// See: https://github.com/roffe/wgpu/issues/24
 	if pipeline == 0 {
 		return nil, hal.ErrDriverBug
 	}
@@ -440,7 +440,7 @@ func (d *Device) CreateComputePipeline(desc *hal.ComputePipelineDescriptor) (hal
 
 	// Defensive check: Intel Vulkan drivers may return VK_SUCCESS but write VK_NULL_HANDLE.
 	// This is a Vulkan spec violation, but we must handle it to prevent undefined behavior.
-	// See: https://github.com/gogpu/wgpu/issues/24
+	// See: https://github.com/roffe/wgpu/issues/24
 	if pipeline == 0 {
 		return nil, hal.ErrDriverBug
 	}

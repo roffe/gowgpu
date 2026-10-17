@@ -22,7 +22,7 @@ import (
 	"encoding/binary"
 	"math"
 
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/hal"
 )
 
 // maxLeafTriangles is the maximum number of triangles in a BVH leaf node.

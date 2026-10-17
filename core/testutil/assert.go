@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/core"
+	"github.com/roffe/wgpu/core"
 )
 
 // AssertFeatureError asserts err is a *core.FeatureError for the given feature and resource.

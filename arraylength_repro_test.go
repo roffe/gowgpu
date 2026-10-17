@@ -11,14 +11,14 @@ import (
 	"testing"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu"
+	"github.com/roffe/wgpu"
 
 	// Register the Metal HAL backend. Without a real backend registered only
 	// the noop/software backends are available, and neither executes compute.
 	//
 	// This import is why the file sits behind the integration tag: registering
 	// a real backend changes adapter selection for every test in the package.
-	_ "github.com/gogpu/wgpu/hal/metal"
+	_ "github.com/roffe/wgpu/hal/metal"
 )
 
 // arrayLengthShader writes arrayLength(&out) into the first element of a

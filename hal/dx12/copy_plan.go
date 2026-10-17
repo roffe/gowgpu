@@ -9,7 +9,7 @@ import (
 	"math"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/hal"
 )
 
 const d3d12TexturePlacementAlignment = 512

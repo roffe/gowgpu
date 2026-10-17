@@ -9,9 +9,9 @@ import (
 	// Windows-specific HAL backend imports.
 
 	// Vulkan backend - primary backend on Windows.
-	_ "github.com/gogpu/wgpu/hal/vulkan"
+	_ "github.com/roffe/wgpu/hal/vulkan"
 
 	// DX12 backend - alternative high-performance backend.
-	_ "github.com/gogpu/wgpu/hal/dx12"
+	_ "github.com/roffe/wgpu/hal/dx12"
 
 )

@@ -8,8 +8,8 @@ import (
 	"fmt"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/core"
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/core"
+	"github.com/roffe/wgpu/hal"
 )
 
 // ComputePassEncoder records compute dispatch commands.

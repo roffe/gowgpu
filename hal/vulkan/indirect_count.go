@@ -5,9 +5,9 @@ package vulkan
 import (
 	"unsafe"
 
-	"github.com/gogpu/wgpu/hal"
-	"github.com/gogpu/wgpu/hal/vulkan/vk"
-	"github.com/gogpu/wgpu/internal/indirect"
+	"github.com/roffe/wgpu/hal"
+	"github.com/roffe/wgpu/hal/vulkan/vk"
+	"github.com/roffe/wgpu/internal/indirect"
 )
 
 type pfnCmdDrawIndirectCount func(

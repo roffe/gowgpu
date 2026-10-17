@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu"
-	_ "github.com/gogpu/wgpu/hal/vulkan"
+	"github.com/roffe/wgpu"
+	_ "github.com/roffe/wgpu/hal/vulkan"
 )
 
 func init() {

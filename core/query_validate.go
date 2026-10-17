@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/hal"
 )
 
 // ValidateQuerySetDescriptor validates query set creation against enabled features.

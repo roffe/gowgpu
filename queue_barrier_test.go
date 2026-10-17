@@ -5,9 +5,9 @@ package wgpu
 import (
 	"testing"
 
-	"github.com/gogpu/wgpu/core/track"
+	"github.com/roffe/wgpu/core/track"
 
-	_ "github.com/gogpu/wgpu/hal/noop"
+	_ "github.com/roffe/wgpu/hal/noop"
 )
 
 // =============================================================================

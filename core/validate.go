@@ -8,7 +8,7 @@ import (
 	"math/bits"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/hal"
 )
 
 // ValidateTextureDescriptor validates a texture descriptor against device limits and features.

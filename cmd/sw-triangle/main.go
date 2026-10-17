@@ -14,9 +14,9 @@ import (
 	"time"
 
 	"github.com/gogpu/gputypes"
-	"github.com/gogpu/wgpu"
+	"github.com/roffe/wgpu"
 
-	_ "github.com/gogpu/wgpu/hal/allbackends" // register all backends
+	_ "github.com/roffe/wgpu/hal/allbackends" // register all backends
 )
 
 func init() {

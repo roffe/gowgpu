@@ -12,7 +12,7 @@ package shader
 import (
 	"math"
 
-	"github.com/gogpu/wgpu/hal"
+	"github.com/roffe/wgpu/hal"
 )
 
 // GLSL.std.450 instruction numbers.
