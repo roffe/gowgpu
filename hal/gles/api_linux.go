@@ -7,6 +7,7 @@ package gles
 
 import (
 	"fmt"
+	"runtime"
 
 	"github.com/gogpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
@@ -56,6 +57,11 @@ func (Backend) CreateInstance(_ *hal.InstanceDescriptor) (hal.Instance, error) {
 
 	config := egl.DefaultContextConfig()
 	config.GLES = false
+	if runtime.GOOS == "android" {
+		// GLES 3.0 only. The context lives on the Instance, so what the
+		// device made survives the window Android replaces on every resume.
+		config.GLES, config.GLVersionMajor, config.GLVersionMinor, config.CoreProfile = true, 3, 0, false
+	}
 	eglCtx, err := egl.NewContext(config)
 	if err != nil {
 		hal.Logger().Info("gles: instance context unavailable (expected on Wayland)", "err", err)
@@ -69,7 +75,7 @@ func (Backend) CreateInstance(_ *hal.InstanceDescriptor) (hal.Instance, error) {
 	}
 
 	glCtx := &gl.Context{}
-	if err := glCtx.Load(egl.GetGLProcAddress); err != nil {
+	if err := glCtx.Load(egl.GetGLProcAddress, config.GLES); err != nil {
 		eglCtx.Destroy()
 		hal.Logger().Warn("gles: instance GL load failed", "err", err)
 		return &Instance{}, nil
@@ -110,8 +116,10 @@ func (i *Instance) CreateSurface(target hal.SurfaceTarget) (hal.Surface, error) 
 		targetWindowKind = egl.WindowKindX11
 	case hal.SurfaceTargetWaylandSurface:
 		targetWindowKind = egl.WindowKindWayland
+	case hal.SurfaceTargetAndroidNativeWindow:
+		targetWindowKind = egl.WindowKindAndroid
 	default:
-		return nil, fmt.Errorf("gles: %w: got %s, backend requires Xlib window or Wayland surface", hal.ErrUnsupportedSurfaceTarget, target.Kind)
+		return nil, fmt.Errorf("gles: %w: got %s, backend requires Xlib window, Wayland surface or Android native window", hal.ErrUnsupportedSurfaceTarget, target.Kind)
 	}
 	displayHandle, windowHandle := target.DisplayHandle, target.WindowHandle
 

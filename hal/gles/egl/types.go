@@ -229,6 +229,9 @@ const (
 	WindowKindSurfaceless
 	// WindowKindUnknown represents unknown window system.
 	WindowKindUnknown
+	// WindowKindAndroid represents an Android ANativeWindow on EGL's default
+	// display.
+	WindowKindAndroid
 )
 
 // String returns the string representation of WindowKind.
@@ -240,6 +243,8 @@ func (w WindowKind) String() string {
 		return "Wayland"
 	case WindowKindSurfaceless:
 		return "Surfaceless"
+	case WindowKindAndroid:
+		return "Android"
 	default:
 		return "Unknown"
 	}

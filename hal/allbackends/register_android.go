@@ -6,7 +6,9 @@
 package allbackends
 
 import (
-	// Android intentionally registers Vulkan only. GLES and software fallback
-	// are outside the Android/arm64 preview contract.
 	_ "github.com/roffe/gowgpu/hal/vulkan"
+
+	// OpenGL ES (EGL) - not in the default instance, for devices without
+	// Vulkan.
+	_ "github.com/roffe/gowgpu/hal/gles"
 )

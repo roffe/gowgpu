@@ -11,6 +11,7 @@ import "C"
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 	"unsafe"
 
@@ -128,6 +129,9 @@ func HasSurfacelessSupport() bool {
 //  3. X11 (if DISPLAY is set and works)
 //  4. Surfaceless (final fallback)
 func DetectWindowKind() WindowKind {
+	if runtime.GOOS == "android" {
+		return WindowKindAndroid
+	}
 	displayEnv := os.Getenv("DISPLAY")
 	waylandEnv := os.Getenv("WAYLAND_DISPLAY")
 
@@ -232,6 +236,14 @@ func getEGLDisplayForKind(nativeDisplay uintptr, windowKind WindowKind) (EGLDisp
 			return NoDisplay, WindowKindUnknown, nil, fmt.Errorf("eglGetDisplay failed for Wayland")
 		}
 		return display, WindowKindWayland, nil, nil
+
+	case WindowKindAndroid:
+		// Android has one display, and every ANativeWindow belongs to it.
+		display := GetDisplay(DefaultDisplay)
+		if display == NoDisplay {
+			return NoDisplay, WindowKindUnknown, nil, fmt.Errorf("eglGetDisplay failed for Android")
+		}
+		return display, WindowKindAndroid, nil, nil
 
 	case WindowKindSurfaceless:
 		// Surfaceless rendering (headless)

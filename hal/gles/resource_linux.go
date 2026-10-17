@@ -164,7 +164,7 @@ func (s *Surface) createEGLWindowSurface(width, height uint32) error {
 	if s.isWayland {
 		return s.createWaylandEGLSurface(width, height)
 	}
-	return s.createX11EGLSurface()
+	return s.createX11EGLSurface() // an ANativeWindow* goes the same way
 }
 
 // createWaylandEGLSurface creates a wl_egl_window then an EGL window surface.
@@ -211,7 +211,7 @@ func (s *Surface) createX11EGLSurface() error {
 	attribs := []egl.EGLInt{egl.None}
 	eglSurface := egl.CreateWindowSurface(s.eglDisplay, s.ctx.EGL().Config(), egl.EGLNativeWindowType(s.windowHandle), &attribs[0])
 	if eglSurface == egl.NoSurface {
-		return fmt.Errorf("eglCreateWindowSurface failed for X11 window 0x%x: error 0x%x", s.windowHandle, egl.GetError())
+		return fmt.Errorf("eglCreateWindowSurface failed for window 0x%x: error 0x%x", s.windowHandle, egl.GetError())
 	}
 	s.eglSurface = eglSurface
 
