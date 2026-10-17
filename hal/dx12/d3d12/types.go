@@ -115,8 +115,10 @@ type D3D12_RESOURCE_BARRIER struct {
 	Flags D3D12_RESOURCE_BARRIER_FLAGS
 	// This is a union in C. We use a fixed-size array and interpret based on Type.
 	// Transition: 24 bytes, Aliasing: 16 bytes, UAV: 8 bytes
-	// We use 24 bytes to accommodate the largest variant.
-	Union [24]byte
+	// We use 24 bytes to accommodate the largest variant, as uint64s: every
+	// variant starts with a pointer, and checkptr (on under -race) rejects
+	// casting a byte array that may sit on a 4-byte boundary to one.
+	Union [3]uint64
 }
 
 // D3D12_RESOURCE_TRANSITION_BARRIER describes a resource transition barrier.
@@ -296,7 +298,7 @@ type D3D12_TEXTURE_COPY_LOCATION struct {
 	Resource *ID3D12Resource
 	Type     D3D12_TEXTURE_COPY_TYPE
 	_        uint32   // C ABI padding: aligns Union to offset 16
-	Union    [32]byte // PlacedFootprint (32 bytes) or SubresourceIndex (4 bytes)
+	Union    [4]uint64 // PlacedFootprint (32 bytes) or SubresourceIndex (4 bytes); 8-aligned like Offset
 }
 
 // D3D12_TEXTURE_COPY_TYPE specifies texture copy type.

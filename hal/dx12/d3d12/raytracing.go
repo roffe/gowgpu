@@ -124,8 +124,8 @@ type D3D12_RAYTRACING_GEOMETRY_DESC struct {
 	Type  D3D12_RAYTRACING_GEOMETRY_TYPE
 	Flags D3D12_RAYTRACING_GEOMETRY_FLAGS
 	// Union: either D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC (64 bytes)
-	// or D3D12_RAYTRACING_GEOMETRY_AABBS_DESC (24 bytes).
-	Union [64]byte
+	// or D3D12_RAYTRACING_GEOMETRY_AABBS_DESC (24 bytes), 8-aligned as both are.
+	Union [8]uint64
 }
 
 // SetTriangles writes a triangles descriptor into the union.
