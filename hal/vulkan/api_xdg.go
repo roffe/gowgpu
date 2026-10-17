@@ -1,4 +1,4 @@
-//go:build linux && !android && !(js && wasm)
+//go:build ((linux && !android) || freebsd || openbsd || netbsd) && !(js && wasm)
 
 // Copyright 2025 The GoGPU Authors
 // SPDX-License-Identifier: MIT

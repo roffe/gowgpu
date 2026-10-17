@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"unsafe"
 
-	"github.com/go-webgpu/goffi/ffi"
 	"github.com/gogpu/gputypes"
 	"github.com/gogpu/wgpu/hal"
 	"github.com/gogpu/wgpu/hal/vulkan/vk"
@@ -64,10 +63,10 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 	hasIncrementalPresent := false
 	{
 		var extCount uint32
-		a.instance.cmds.EnumerateDeviceExtensionProperties(a.physicalDevice, 0, &extCount, nil)
+		a.instance.cmds.EnumerateDeviceExtensionProperties(a.physicalDevice, nil, &extCount, nil)
 		if extCount > 0 {
 			extProps := make([]vk.ExtensionProperties, extCount)
-			a.instance.cmds.EnumerateDeviceExtensionProperties(a.physicalDevice, 0, &extCount, &extProps[0])
+			a.instance.cmds.EnumerateDeviceExtensionProperties(a.physicalDevice, nil, &extCount, &extProps[0])
 			for i := range extProps {
 				name := cStringToGo(extProps[i].ExtensionName[:])
 				if name == "VK_KHR_incremental_present" {
@@ -88,9 +87,9 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 	if hasIncrementalPresent {
 		extensions = append(extensions, "VK_KHR_incremental_present\x00")
 	}
-	extensionPtrs := make([]uintptr, len(extensions))
+	extensionPtrs := make([]*byte, len(extensions))
 	for i, ext := range extensions {
-		extensionPtrs[i] = uintptr(unsafe.Pointer(unsafe.StringData(ext)))
+		extensionPtrs[i] = unsafe.StringData(ext)
 	}
 
 	// Detect timeline semaphore support (VK-IMPL-001).
@@ -114,7 +113,7 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 		QueueCreateInfoCount:    1,
 		PQueueCreateInfos:       &queueCreateInfo,
 		EnabledExtensionCount:   uint32(len(extensions)),
-		PpEnabledExtensionNames: uintptr(unsafe.Pointer(&extensionPtrs[0])),
+		PpEnabledExtensionNames: &extensionPtrs[0],
 		PEnabledFeatures:        &a.features,
 	}
 
@@ -583,13 +582,5 @@ func vkDestroyDevice(device vk.Device, allocator *vk.AllocationCallbacks) { //no
 	// Get vkDestroyDevice function pointer directly since device commands
 	// may not be available when destroying the device
 	proc := vk.GetDeviceProcAddr(device, "vkDestroyDevice")
-	if proc == nil {
-		return
-	}
-	// Call vkDestroyDevice(VkDevice, VkAllocationCallbacks*) via goffi
-	args := [2]unsafe.Pointer{
-		unsafe.Pointer(&device),
-		unsafe.Pointer(&allocator),
-	}
-	_, _ = ffi.CallFunction(&vk.SigVoidHandlePtr, proc, nil, args[:])
+	vk.DestroyDevice(proc, device, allocator)
 }

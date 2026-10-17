@@ -1,16 +1,31 @@
-//go:build android && arm64
+//go:build android && (arm64 || amd64)
 
 // Copyright 2026 The GoGPU Authors
 // SPDX-License-Identifier: MIT
 
 package vulkan
 
+/*
+#include <stdint.h>
+extern int atoi(const char *);
+
+// <sys/system_properties.h>, declared by hand: available at every API level,
+// unlike android_get_device_api_level (API 29+).
+extern int __system_property_get(const char *, char *);
+
+static int gvk_android_sdk(void) {
+	char value[92] = {0}; // PROP_VALUE_MAX
+	if (__system_property_get("ro.build.version.sdk", value) <= 0) {
+		return -1;
+	}
+	return atoi(value);
+}
+*/
+import "C"
+
 import (
 	"fmt"
-	"unsafe"
 
-	"github.com/go-webgpu/goffi/ffi"
-	"github.com/go-webgpu/goffi/types"
 	"github.com/gogpu/wgpu/hal"
 )
 
@@ -37,27 +52,9 @@ func newPlatformInstanceState(desc *hal.InstanceDescriptor) (platformInstanceSta
 }
 
 func loadAndroidSDKVersion() (uint32, error) {
-	handle, err := ffi.LoadLibrary("libc.so")
-	if err != nil {
-		return 0, err
-	}
-	defer func() { _ = ffi.FreeLibrary(handle) }()
-
-	fn, err := ffi.GetSymbol(handle, "android_get_device_api_level")
-	if err != nil {
-		return 0, err
-	}
-	var call types.CallInterface
-	if err := ffi.PrepareCallInterface(&call, types.DefaultCall, types.SInt32TypeDescriptor, nil); err != nil {
-		return 0, err
-	}
-
-	var sdk int32
-	if _, err := ffi.CallFunction(&call, fn, unsafe.Pointer(&sdk), nil); err != nil {
-		return 0, err
-	}
+	sdk := int32(C.gvk_android_sdk())
 	if sdk < 0 {
-		return 0, fmt.Errorf("invalid negative SDK version %d", sdk)
+		return 0, fmt.Errorf("invalid SDK version %d", sdk)
 	}
 	return uint32(sdk), nil
 }

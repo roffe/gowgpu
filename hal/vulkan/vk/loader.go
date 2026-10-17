@@ -3,29 +3,12 @@
 // Copyright 2025 The GoGPU Authors
 // SPDX-License-Identifier: MIT
 
-// Package vk provides Pure Go Vulkan bindings using goffi for FFI calls.
-//
-// # goffi Calling Convention
-//
-// CRITICAL: goffi expects args[] to contain pointers to WHERE argument values are stored,
-// NOT the values themselves. This applies to ALL argument types, including pointers.
-//
-// For scalar types (uint32, uint64, etc.):
-//
-//	var value uint64 = 42
-//	args[i] = unsafe.Pointer(&value)  // ✓ Correct: pointer to value storage
-//
-// For pointer types (const char*, void*, etc.):
-//
-//	ptr := unsafe.Pointer(&data[0])   // This IS the pointer value
-//	args[i] = unsafe.Pointer(&ptr)    // ✓ Correct: pointer TO the pointer
-//
-//	// WRONG: args[i] = unsafe.Pointer(&data[0])
-//	// This passes the data address, but goffi reads it AS IF it contains a pointer,
-//	// interpreting the data bytes as a memory address → crash!
-//
-// This pattern is required because goffi uses ffi_call() internally, which reads
-// argument values FROM the addresses provided in the args array.
+// Package vk provides Vulkan bindings through cgo, without Vulkan headers:
+// the loader library is opened at run time, every command is called through
+// the pointer vkGet*ProcAddr returns, by one C trampoline per C signature
+// (trampolines.h). Pointers cross as const uint8_t *, a pointee with no
+// pointers as far as cgo can tell, so cgocheck never walks the Go memory a
+// create info points at; noescape keeps stack pointees on the stack.
 //
 // # Intel Driver Compatibility
 //
@@ -37,22 +20,26 @@
 // See: https://github.com/gogpu/wgpu/issues/24
 package vk
 
+/*
+#include "trampolines.h"
+#cgo noescape gvk_q_hp
+#cgo nocallback gvk_q_hp
+#cgo noescape gvk_v_hp
+#cgo nocallback gvk_v_hp
+*/
+import "C"
+
 import (
 	"fmt"
 	"runtime"
 	"sync"
 	"unsafe"
-
-	"github.com/go-webgpu/goffi/ffi"
-	"github.com/go-webgpu/goffi/types"
 )
 
 var (
-	vulkanLib              unsafe.Pointer
-	vkGetInstanceProcAddr  unsafe.Pointer
-	vkGetDeviceProcAddr    unsafe.Pointer
-	cifGetInstanceProcAddr types.CallInterface
-	cifGetDeviceProcAddr   types.CallInterface
+	vulkanLib             uintptr
+	vkGetInstanceProcAddr unsafe.Pointer
+	vkGetDeviceProcAddr   unsafe.Pointer
 
 	initOnce sync.Once
 	errInit  error
@@ -67,7 +54,7 @@ func vulkanLibraryNameFor(goos string) string {
 	switch goos {
 	case "windows":
 		return "vulkan-1.dll"
-	case "darwin":
+	case "darwin", "ios":
 		return "libvulkan.dylib" // MoltenVK
 	case "android":
 		return "libvulkan.so"
@@ -76,8 +63,8 @@ func vulkanLibraryNameFor(goos string) string {
 	}
 }
 
-// Init loads the Vulkan library and initializes signatures.
-// Safe to call multiple times - only first call does actual work.
+// Init loads the Vulkan library. Safe to call multiple times - only first
+// call does actual work.
 func Init() error {
 	initOnce.Do(func() {
 		errInit = doInit()
@@ -87,74 +74,37 @@ func Init() error {
 
 func doInit() error {
 	var err error
-
-	// Load Vulkan library
-	vulkanLib, err = ffi.LoadLibrary(vulkanLibraryName())
+	vulkanLib, err = openLibrary(vulkanLibraryName())
 	if err != nil {
 		return fmt.Errorf("failed to load Vulkan library %s: %w", vulkanLibraryName(), err)
 	}
-
-	// Get vkGetInstanceProcAddr
-	vkGetInstanceProcAddr, err = ffi.GetSymbol(vulkanLib, "vkGetInstanceProcAddr")
+	vkGetInstanceProcAddr, err = librarySymbol(vulkanLib, "vkGetInstanceProcAddr")
 	if err != nil {
 		return fmt.Errorf("vkGetInstanceProcAddr not found: %w", err)
 	}
-
-	// Prepare CallInterface for vkGetInstanceProcAddr
-	// PFN_vkVoidFunction vkGetInstanceProcAddr(VkInstance instance, const char* pName)
-	err = ffi.PrepareCallInterface(&cifGetInstanceProcAddr, types.DefaultCall,
-		types.PointerTypeDescriptor, // returns function pointer
-		[]*types.TypeDescriptor{
-			types.UInt64TypeDescriptor,  // VkInstance (handle, can be 0)
-			types.PointerTypeDescriptor, // const char* pName
-		})
-	if err != nil {
-		return fmt.Errorf("failed to prepare GetInstanceProcAddr interface: %w", err)
-	}
-
-	// Prepare CallInterface for vkGetDeviceProcAddr
-	// PFN_vkVoidFunction vkGetDeviceProcAddr(VkDevice device, const char* pName)
-	err = ffi.PrepareCallInterface(&cifGetDeviceProcAddr, types.DefaultCall,
-		types.PointerTypeDescriptor,
-		[]*types.TypeDescriptor{
-			types.UInt64TypeDescriptor,  // VkDevice
-			types.PointerTypeDescriptor, // const char* pName
-		})
-	if err != nil {
-		return fmt.Errorf("failed to prepare GetDeviceProcAddr interface: %w", err)
-	}
-
-	// Initialize signature templates
-	if err := InitSignatures(); err != nil {
-		return fmt.Errorf("failed to initialize signatures: %w", err)
-	}
-
 	return nil
+}
+
+// procAddr calls PFN_vkVoidFunction fn(handle, name).
+func procAddr(fn unsafe.Pointer, handle uintptr, name string) unsafe.Pointer {
+	if fn == nil {
+		return nil
+	}
+	cname := make([]byte, len(name)+1)
+	copy(cname, name)
+	r := C.gvk_q_hp(C.uintptr_t(uintptr(fn)), C.uint64_t(handle), (*C.uint8_t)(unsafe.Pointer(&cname[0])))
+	return cPointer(uintptr(r))
+}
+
+// cPointer turns an address C returned (never Go memory) into a pointer.
+func cPointer(p uintptr) unsafe.Pointer {
+	return *(*unsafe.Pointer)(unsafe.Pointer(&p))
 }
 
 // GetInstanceProcAddr returns function pointer for Vulkan instance function.
 // Pass instance=0 for global functions (vkCreateInstance, vkEnumerateInstance*).
 func GetInstanceProcAddr(instance Instance, name string) unsafe.Pointer {
-	if vkGetInstanceProcAddr == nil {
-		return nil
-	}
-
-	// Convert name to null-terminated C string
-	cname := make([]byte, len(name)+1)
-	copy(cname, name)
-
-	var result unsafe.Pointer
-	// goffi expects args[] to contain pointers to WHERE values are stored.
-	// For pointer arguments, we need pointer-to-pointer: store the pointer
-	// in a variable, then pass &variable.
-	namePtr := unsafe.Pointer(&cname[0])
-	args := [2]unsafe.Pointer{
-		unsafe.Pointer(&instance),
-		unsafe.Pointer(&namePtr), // pointer TO the pointer
-	}
-
-	_, _ = ffi.CallFunction(&cifGetInstanceProcAddr, vkGetInstanceProcAddr, unsafe.Pointer(&result), args[:])
-	return result
+	return procAddr(vkGetInstanceProcAddr, uintptr(instance), name)
 }
 
 // SetDeviceProcAddr sets the vkGetDeviceProcAddr function pointer.
@@ -175,29 +125,23 @@ func GetDeviceProcAddr(device Device, name string) unsafe.Pointer {
 			return nil
 		}
 	}
+	return procAddr(vkGetDeviceProcAddr, uintptr(device), name)
+}
 
-	// Convert name to null-terminated C string
-	cname := make([]byte, len(name)+1)
-	copy(cname, name)
-
-	var result unsafe.Pointer
-	// goffi expects args[] to contain pointers to WHERE values are stored.
-	// For pointer arguments, we need pointer-to-pointer.
-	namePtr := unsafe.Pointer(&cname[0])
-	args := [2]unsafe.Pointer{
-		unsafe.Pointer(&device),
-		unsafe.Pointer(&namePtr), // pointer TO the pointer
+// DestroyDevice calls vkDestroyDevice through proc, a pointer from
+// GetDeviceProcAddr, for when the device's Commands are already gone.
+func DestroyDevice(proc unsafe.Pointer, device Device, allocator *AllocationCallbacks) {
+	if proc == nil {
+		return
 	}
-
-	_, _ = ffi.CallFunction(&cifGetDeviceProcAddr, vkGetDeviceProcAddr, unsafe.Pointer(&result), args[:])
-	return result
+	C.gvk_v_hp(C.uintptr_t(uintptr(proc)), C.uint64_t(device), (*C.uint8_t)(unsafe.Pointer(allocator)))
 }
 
 // Close releases the Vulkan library.
 func Close() error {
-	if vulkanLib != nil {
-		err := ffi.FreeLibrary(vulkanLib)
-		vulkanLib = nil
+	if vulkanLib != 0 {
+		err := closeLibrary(vulkanLib)
+		vulkanLib = 0
 		vkGetInstanceProcAddr = nil
 		vkGetDeviceProcAddr = nil
 		return err

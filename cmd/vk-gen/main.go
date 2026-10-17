@@ -1323,12 +1323,21 @@ func vkToGoFieldType(vkType string, rawXML string, enumSize string) string {
 
 	baseType := vkToGoBaseType(vkType)
 
+	// Pointers stay typed Go pointers all the way to the C call: a pointer
+	// hidden in a uintptr is neither kept alive nor fixed up when a stack
+	// copy moves what it points at.
 	if isDoublePointer {
-		return "uintptr" // char**, void**, etc.
+		switch {
+		case vkType == "char":
+			return "**byte" // const char* const*: string arrays
+		case vkType == "void":
+			return "*unsafe.Pointer" // void**: mapped memory and such
+		}
+		return "**" + baseType
 	}
 	if isPointer {
 		if baseType == "byte" || vkType == "char" {
-			return "uintptr" // char* as uintptr for strings
+			return "*byte" // NUL-terminated string
 		}
 		return "*" + baseType
 	}

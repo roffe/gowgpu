@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
-	"unsafe"
 
 	"github.com/gogpu/gputypes"
 	"github.com/gogpu/wgpu/hal"
@@ -359,7 +358,7 @@ func (c *RenderPassCache) setObjectName(objectType vk.ObjectType, handle uint64,
 		SType:        vk.StructureTypeDebugUtilsObjectNameInfoExt,
 		ObjectType:   objectType,
 		ObjectHandle: handle,
-		PObjectName:  uintptr(unsafe.Pointer(&nameBytes[0])),
+		PObjectName:  &nameBytes[0],
 	}
 	_ = c.cmds.SetDebugUtilsObjectNameEXT(c.device, &nameInfo)
 	runtime.KeepAlive(nameBytes)

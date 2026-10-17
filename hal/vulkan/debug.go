@@ -5,51 +5,126 @@
 
 package vulkan
 
+/*
+#include <stdint.h>
+#if defined(__arm__)
+#define VKAPI_PTR __attribute__((pcs("aapcs-vfp")))
+#else
+#define VKAPI_PTR
+#endif
+
+// The validation layer calls the messenger from inside the Vulkan call that
+// tripped it. Calling back into Go from there would break the nocallback
+// promise every vk trampoline makes, so the callback stays in C: it copies
+// the message into a ring that Go drains.
+
+// The leading fields of VkDebugUtilsMessengerCallbackDataEXT.
+typedef struct {
+	uint32_t sType;
+	const void *pNext;
+	uint32_t flags;
+	const char *pMessageIdName;
+	int32_t messageIdNumber;
+	const char *pMessage;
+} gvk_debug_data;
+
+enum { GVK_DEBUG_SLOTS = 32, GVK_DEBUG_ID = 128, GVK_DEBUG_MSG = 1024 };
+
+typedef struct {
+	uint32_t severity, types;
+	char id[GVK_DEBUG_ID];
+	char msg[GVK_DEBUG_MSG];
+} gvk_debug_entry;
+
+static gvk_debug_entry gvk_debug_ring[GVK_DEBUG_SLOTS];
+static uint32_t gvk_debug_head, gvk_debug_tail, gvk_debug_dropped;
+static int gvk_debug_lock;
+
+static void gvk_debug_acquire(void) { while (__atomic_exchange_n(&gvk_debug_lock, 1, __ATOMIC_ACQUIRE)) {} }
+static void gvk_debug_release(void) { __atomic_store_n(&gvk_debug_lock, 0, __ATOMIC_RELEASE); }
+
+static void gvk_debug_copy(char *dst, const char *src, int n) {
+	int i = 0;
+	if (src) {
+		for (; i < n - 1 && src[i]; i++) {
+			dst[i] = src[i];
+		}
+	}
+	dst[i] = 0;
+}
+
+// PFN_vkDebugUtilsMessengerCallbackEXT
+static uint32_t VKAPI_PTR gvk_debug_callback(uint32_t severity, uint32_t types, const void *data, void *user) {
+	const gvk_debug_data *d = (const gvk_debug_data *)data;
+	gvk_debug_acquire();
+	if (gvk_debug_head - gvk_debug_tail < GVK_DEBUG_SLOTS) {
+		gvk_debug_entry *e = &gvk_debug_ring[gvk_debug_head % GVK_DEBUG_SLOTS];
+		e->severity = severity;
+		e->types = types;
+		gvk_debug_copy(e->id, d ? d->pMessageIdName : 0, GVK_DEBUG_ID);
+		gvk_debug_copy(e->msg, d ? d->pMessage : 0, GVK_DEBUG_MSG);
+		gvk_debug_head++;
+	} else {
+		gvk_debug_dropped++;
+	}
+	gvk_debug_release();
+	return 0; // VK_FALSE: never abort the call
+}
+
+static uintptr_t gvk_debug_callback_ptr(void) { return (uintptr_t)&gvk_debug_callback; }
+
+// gvk_debug_pop moves the oldest message to out, returning 0 when there is none.
+static int gvk_debug_pop(gvk_debug_entry *out) {
+	int ok = 0;
+	gvk_debug_acquire();
+	if (gvk_debug_tail != gvk_debug_head) {
+		*out = gvk_debug_ring[gvk_debug_tail % GVK_DEBUG_SLOTS];
+		gvk_debug_tail++;
+		ok = 1;
+	}
+	gvk_debug_release();
+	return ok;
+}
+*/
+import "C"
+
 import (
 	"context"
 	"log/slog"
 	"runtime"
-	"unsafe"
+	"sync"
+	"time"
 
-	"github.com/go-webgpu/goffi/ffi"
 	"github.com/gogpu/wgpu/hal"
 	"github.com/gogpu/wgpu/hal/vulkan/vk"
 )
+
+var drainOnce sync.Once
+
+// drainDebugMessages logs what the C messenger collected, every 50ms, for as
+// long as the process runs; only debug instances start it.
+func drainDebugMessages() {
+	drainOnce.Do(func() {
+		go func() {
+			var e C.gvk_debug_entry
+			for range time.Tick(50 * time.Millisecond) {
+				for C.gvk_debug_pop(&e) != 0 {
+					logDebugMessage(uint32(e.severity), uint32(e.types),
+						C.GoString(&e.id[0]), C.GoString(&e.msg[0]))
+				}
+			}
+		}()
+	})
+}
 
 // debugCallbackPtr holds the callback function pointer to prevent GC collection.
 // Once created, the callback lives for the process lifetime (Vulkan requirement).
 var debugCallbackPtr uintptr
 
-// vulkanDebugCallback is the Go function registered as the Vulkan debug messenger callback.
-// The Vulkan spec defines the callback signature as:
-//
-//	VkBool32 callback(
-//	    VkDebugUtilsMessageSeverityFlagBitsEXT severity,
-//	    VkDebugUtilsMessageTypeFlagsEXT types,
-//	    const VkDebugUtilsMessengerCallbackDataEXT* callbackData,
-//	    void* userData)
-//
-// All parameters are uintptr-sized for compatibility with ffi.NewCallback.
-func vulkanDebugCallback(severity, types, callbackData, userData uintptr) uintptr {
-	if callbackData == 0 {
-		return vk.False
-	}
-
-	// Read callback data struct to extract the message.
-	// The pointer arrives as a uintptr from the Vulkan driver (not GC-managed).
-	// Use double-indirection pattern to satisfy go vet (same as ptrFromUintptr).
-	data := *(**vk.DebugUtilsMessengerCallbackDataEXT)(unsafe.Pointer(&callbackData))
-
-	// Extract the null-terminated C string from PMessage.
-	msg := "(no message)"
-	if data.PMessage != 0 {
-		msg = cStringFromPtr(data.PMessage)
-	}
-
-	// Extract message ID name (e.g., "VUID-vkCmdDraw-None-02699").
-	msgID := ""
-	if data.PMessageIdName != 0 {
-		msgID = cStringFromPtr(data.PMessageIdName)
+// logDebugMessage logs one validation message the C messenger collected.
+func logDebugMessage(severity, types uint32, msgID, msg string) {
+	if msg == "" {
+		msg = "(no message)"
 	}
 
 	// Map Vulkan severity to slog level.
@@ -85,38 +160,17 @@ func vulkanDebugCallback(severity, types, callbackData, userData uintptr) uintpt
 		attrs = append(attrs, slog.String("id", msgID))
 	}
 	hal.Logger().LogAttrs(context.Background(), level, "vulkan: "+msg, attrs...)
-
-	// Returning VK_FALSE (0) means the Vulkan call that triggered the callback
-	// should NOT be aborted. Returning VK_TRUE would abort the call.
-	return vk.False
-}
-
-// cStringFromPtr reads a null-terminated C string from a uintptr.
-func cStringFromPtr(ptr uintptr) string {
-	if ptr == 0 {
-		return ""
-	}
-	// Use ptrFromUintptr (defined in unsafe.go) to convert safely.
-	p := ptrFromUintptr(ptr)
-	// Read bytes until null terminator, with a reasonable limit.
-	const maxLen = 4096
-	buf := unsafe.Slice(p, maxLen)
-	for i, b := range buf {
-		if b == 0 {
-			return string(buf[:i])
-		}
-	}
-	return string(buf)
 }
 
 // createDebugMessenger creates a Vulkan debug utils messenger for the instance.
-// It registers vulkanDebugCallback to receive validation layer messages.
+// Its callback is C (gvk_debug_callback); drainDebugMessages logs what it collects.
 // Returns the messenger handle, or 0 if creation fails (non-fatal).
 func createDebugMessenger(instance *Instance) vk.DebugUtilsMessengerEXT {
 	// Create callback pointer once (safe for concurrent use after initialization).
 	if debugCallbackPtr == 0 {
-		debugCallbackPtr = ffi.NewCallback(vulkanDebugCallback)
+		debugCallbackPtr = uintptr(C.gvk_debug_callback_ptr())
 	}
+	drainDebugMessages()
 
 	severityFlags := vk.DebugUtilsMessageSeverityFlagsEXT(
 		vk.DebugUtilsMessageSeverityWarningBitExt |
@@ -187,7 +241,7 @@ func (d *Device) setObjectName(objectType vk.ObjectType, handle uint64, name str
 		SType:        vk.StructureTypeDebugUtilsObjectNameInfoExt,
 		ObjectType:   objectType,
 		ObjectHandle: handle,
-		PObjectName:  uintptr(unsafe.Pointer(&d.debugNameBuf[0])),
+		PObjectName:  &d.debugNameBuf[0],
 	}
 
 	_ = d.cmds.SetDebugUtilsObjectNameEXT(d.handle, &nameInfo)

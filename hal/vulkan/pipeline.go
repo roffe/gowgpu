@@ -66,7 +66,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		SType:  vk.StructureTypePipelineShaderStageCreateInfo,
 		Stage:  vk.ShaderStageVertexBit,
 		Module: vertexModule.handle,
-		PName:  uintptr(unsafe.Pointer(&vertexEntryBytes[0])),
+		PName:  &vertexEntryBytes[0],
 	})
 
 	// Fragment shader (optional)
@@ -88,7 +88,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 			SType:  vk.StructureTypePipelineShaderStageCreateInfo,
 			Stage:  vk.ShaderStageFragmentBit,
 			Module: fragmentModule.handle,
-			PName:  uintptr(unsafe.Pointer(&fragmentEntryBytes[0])),
+			PName:  &fragmentEntryBytes[0],
 		})
 	}
 
@@ -423,7 +423,7 @@ func (d *Device) CreateComputePipeline(desc *hal.ComputePipelineDescriptor) (hal
 		SType:  vk.StructureTypePipelineShaderStageCreateInfo,
 		Stage:  vk.ShaderStageComputeBit,
 		Module: computeModule.handle,
-		PName:  uintptr(unsafe.Pointer(&entryPointBytes[0])),
+		PName:  &entryPointBytes[0],
 	}
 
 	createInfo := vk.ComputePipelineCreateInfo{

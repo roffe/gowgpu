@@ -282,7 +282,7 @@ func (a *DescriptorAllocator) setObjectName(objectType vk.ObjectType, handle uin
 		SType:        vk.StructureTypeDebugUtilsObjectNameInfoExt,
 		ObjectType:   objectType,
 		ObjectHandle: handle,
-		PObjectName:  uintptr(unsafe.Pointer(&nameBytes[0])),
+		PObjectName:  &nameBytes[0],
 	}
 	_ = a.cmds.SetDebugUtilsObjectNameEXT(a.device, &nameInfo)
 	runtime.KeepAlive(nameBytes)

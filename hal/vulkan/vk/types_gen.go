@@ -538,9 +538,9 @@ type LayerProperties struct {
 type ApplicationInfo struct {
 	SType              StructureType
 	PNext              *uintptr
-	PApplicationName   uintptr
+	PApplicationName   *byte
 	ApplicationVersion uint32
-	PEngineName        uintptr
+	PEngineName        *byte
 	EngineVersion      uint32
 	ApiVersion         uint32
 }
@@ -573,9 +573,9 @@ type DeviceCreateInfo struct {
 	QueueCreateInfoCount    uint32
 	PQueueCreateInfos       *DeviceQueueCreateInfo
 	EnabledLayerCount       uint32
-	PpEnabledLayerNames     uintptr
+	PpEnabledLayerNames     **byte
 	EnabledExtensionCount   uint32
-	PpEnabledExtensionNames uintptr
+	PpEnabledExtensionNames **byte
 	PEnabledFeatures        *PhysicalDeviceFeatures
 }
 
@@ -586,9 +586,9 @@ type InstanceCreateInfo struct {
 	Flags                   InstanceCreateFlags
 	PApplicationInfo        *ApplicationInfo
 	EnabledLayerCount       uint32
-	PpEnabledLayerNames     uintptr
+	PpEnabledLayerNames     **byte
 	EnabledExtensionCount   uint32
-	PpEnabledExtensionNames uintptr
+	PpEnabledExtensionNames **byte
 }
 
 // VkQueueFamilyProperties
@@ -1064,7 +1064,7 @@ type PipelineShaderStageCreateInfo struct {
 	Flags               PipelineShaderStageCreateFlags
 	Stage               ShaderStageFlagBits
 	Module              ShaderModule
-	PName               uintptr
+	PName               *byte
 	PSpecializationInfo *SpecializationInfo
 }
 
@@ -1815,7 +1815,7 @@ type SubmitInfo struct {
 // VkDisplayPropertiesKHR
 type DisplayPropertiesKHR struct {
 	Display              DisplayKHR
-	DisplayName          uintptr
+	DisplayName          *byte
 	PhysicalDimensions   Extent2D
 	PhysicalResolution   Extent2D
 	SupportedTransforms  SurfaceTransformFlagsKHR
@@ -2069,8 +2069,8 @@ type LayerSettingsCreateInfoEXT struct {
 
 // VkLayerSettingEXT
 type LayerSettingEXT struct {
-	PLayerName   uintptr
-	PSettingName uintptr
+	PLayerName   *byte
+	PSettingName *byte
 	Type         LayerSettingTypeEXT
 	ValueCount   uint32
 	PValues      *uintptr
@@ -2099,7 +2099,7 @@ type DebugMarkerObjectNameInfoEXT struct {
 	PNext       *uintptr
 	ObjectType  DebugReportObjectTypeEXT
 	Object      uint64
-	PObjectName uintptr
+	PObjectName *byte
 }
 
 // VkDebugMarkerObjectTagInfoEXT
@@ -2117,7 +2117,7 @@ type DebugMarkerObjectTagInfoEXT struct {
 type DebugMarkerMarkerInfoEXT struct {
 	SType       StructureType
 	PNext       *uintptr
-	PMarkerName uintptr
+	PMarkerName *byte
 	Color       [4]float32
 }
 
@@ -4486,7 +4486,7 @@ type DebugUtilsObjectNameInfoEXT struct {
 	PNext        *uintptr
 	ObjectType   ObjectType
 	ObjectHandle uint64
-	PObjectName  uintptr
+	PObjectName  *byte
 }
 
 // VkDebugUtilsObjectTagInfoEXT
@@ -4504,7 +4504,7 @@ type DebugUtilsObjectTagInfoEXT struct {
 type DebugUtilsLabelEXT struct {
 	SType      StructureType
 	PNext      *uintptr
-	PLabelName uintptr
+	PLabelName *byte
 	Color      [4]float32
 }
 
@@ -4524,9 +4524,9 @@ type DebugUtilsMessengerCallbackDataEXT struct {
 	SType            StructureType
 	PNext            *uintptr
 	Flags            DebugUtilsMessengerCallbackDataFlagsEXT
-	PMessageIdName   uintptr
+	PMessageIdName   *byte
 	MessageIdNumber  int32
-	PMessage         uintptr
+	PMessage         *byte
 	QueueLabelCount  uint32
 	PQueueLabels     *DebugUtilsLabelEXT
 	CmdBufLabelCount uint32
@@ -6872,7 +6872,7 @@ type AccelerationStructureBuildGeometryInfoKHR struct {
 	DstAccelerationStructure AccelerationStructureKHR
 	GeometryCount            uint32
 	PGeometries              *AccelerationStructureGeometryKHR
-	PpGeometries             uintptr
+	PpGeometries             **AccelerationStructureGeometryKHR
 	ScratchData              DeviceOrHostAddressKHR
 }
 
@@ -9443,7 +9443,7 @@ type CuFunctionCreateInfoNVX struct {
 	SType  StructureType
 	PNext  *uintptr
 	Module CuModuleNVX
-	PName  uintptr
+	PName  *byte
 }
 
 // VkCuLaunchInfoNVX
@@ -9878,7 +9878,7 @@ type CudaFunctionCreateInfoNV struct {
 	SType  StructureType
 	PNext  *uintptr
 	Module CudaModuleNV
-	PName  uintptr
+	PName  *byte
 }
 
 // VkCudaLaunchInfoNV
@@ -10284,7 +10284,7 @@ type MicromapBuildInfoEXT struct {
 	DstMicromap         MicromapEXT
 	UsageCountsCount    uint32
 	PUsageCounts        *MicromapUsageEXT
-	PpUsageCounts       uintptr
+	PpUsageCounts       **MicromapUsageEXT
 	Data                DeviceOrHostAddressConstKHR
 	ScratchData         DeviceOrHostAddressKHR
 	TriangleArray       DeviceOrHostAddressConstKHR
@@ -10387,7 +10387,7 @@ type AccelerationStructureTrianglesOpacityMicromapEXT struct {
 	BaseTriangle     uint32
 	UsageCountsCount uint32
 	PUsageCounts     *MicromapUsageEXT
-	PpUsageCounts    uintptr
+	PpUsageCounts    **MicromapUsageEXT
 	Micromap         MicromapEXT
 }
 
@@ -10423,7 +10423,7 @@ type AccelerationStructureTrianglesDisplacementMicromapNV struct {
 	BaseTriangle                          uint32
 	UsageCountsCount                      uint32
 	PUsageCounts                          *MicromapUsageEXT
-	PpUsageCounts                         uintptr
+	PpUsageCounts                         **MicromapUsageEXT
 	Micromap                              MicromapEXT
 }
 
@@ -11160,7 +11160,7 @@ type ShaderCreateInfoEXT struct {
 	CodeType               ShaderCodeTypeEXT
 	CodeSize               uintptr
 	PCode                  *uintptr
-	PName                  uintptr
+	PName                  *byte
 	SetLayoutCount         uint32
 	PSetLayouts            *DescriptorSetLayout
 	PushConstantRangeCount uint32
@@ -11298,7 +11298,7 @@ type ExecutionGraphPipelineCreateInfoAMDX struct {
 type PipelineShaderStageNodeCreateInfoAMDX struct {
 	SType StructureType
 	PNext *uintptr
-	PName uintptr
+	PName *byte
 	Index uint32
 }
 
@@ -12425,7 +12425,7 @@ type DataGraphPipelineResourceInfoARM struct {
 type DataGraphPipelineCompilerControlCreateInfoARM struct {
 	SType          StructureType
 	PNext          *uintptr
-	PVendorOptions uintptr
+	PVendorOptions *byte
 }
 
 // VkDataGraphPipelineCreateInfoARM
@@ -12443,7 +12443,7 @@ type DataGraphPipelineShaderModuleCreateInfoARM struct {
 	SType               StructureType
 	PNext               *uintptr
 	Module              ShaderModule
-	PName               uintptr
+	PName               *byte
 	PSpecializationInfo *SpecializationInfo
 	ConstantCount       uint32
 	PConstants          *DataGraphPipelineConstantARM

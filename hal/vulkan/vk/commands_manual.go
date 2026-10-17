@@ -9,11 +9,28 @@
 
 package vk
 
-import (
-	"unsafe"
+/*
+#include "trampolines.h"
+#cgo noescape gvk_q_hp
+#cgo nocallback gvk_q_hp
+#cgo noescape gvk_r_hpq
+#cgo nocallback gvk_r_hpq
+#cgo noescape gvk_v_hhiihqqi
+#cgo nocallback gvk_v_hhiihqqi
+#cgo noescape gvk_v_hihi
+#cgo nocallback gvk_v_hihi
+#cgo noescape gvk_v_hipihi
+#cgo nocallback gvk_v_hipihi
+#cgo noescape gvk_v_hipp
+#cgo nocallback gvk_v_hipp
+#cgo noescape gvk_v_hippp
+#cgo nocallback gvk_v_hippp
+*/
+import "C"
 
-	"github.com/go-webgpu/goffi/ffi"
-)
+import "unsafe"
+
+var _ = unsafe.Pointer(nil)
 
 // CmdWriteTimestamp wraps vkCmdWriteTimestamp.
 // Manual: generator cannot handle mixed handle+u32+handle+u32 signature.
@@ -21,13 +38,7 @@ func (c *Commands) CmdWriteTimestamp(commandBuffer CommandBuffer, pipelineStage 
 	if c.cmdWriteTimestamp == nil {
 		return
 	}
-	args := [4]unsafe.Pointer{
-		unsafe.Pointer(&commandBuffer),
-		unsafe.Pointer(&pipelineStage),
-		unsafe.Pointer(&queryPool),
-		unsafe.Pointer(&query),
-	}
-	_, _ = ffi.CallFunction(&SigVoidHandleU32HandleU32, c.cmdWriteTimestamp, nil, args[:])
+	C.gvk_v_hihi(C.uintptr_t(uintptr(c.cmdWriteTimestamp)), C.uint64_t(commandBuffer), C.uint32_t(pipelineStage), C.uint64_t(queryPool), C.uint32_t(query))
 }
 
 // CmdCopyQueryPoolResults wraps vkCmdCopyQueryPoolResults.
@@ -36,35 +47,18 @@ func (c *Commands) CmdCopyQueryPoolResults(commandBuffer CommandBuffer, queryPoo
 	if c.cmdCopyQueryPoolResults == nil {
 		return
 	}
-	args := [8]unsafe.Pointer{
-		unsafe.Pointer(&commandBuffer),
-		unsafe.Pointer(&queryPool),
-		unsafe.Pointer(&firstQuery),
-		unsafe.Pointer(&queryCount),
-		unsafe.Pointer(&dstBuffer),
-		unsafe.Pointer(&dstOffset),
-		unsafe.Pointer(&stride),
-		unsafe.Pointer(&flags),
-	}
-	_, _ = ffi.CallFunction(&SigVoidCmdCopyQueryPoolResults, c.cmdCopyQueryPoolResults, nil, args[:])
+	C.gvk_v_hhiihqqi(C.uintptr_t(uintptr(c.cmdCopyQueryPoolResults)), C.uint64_t(commandBuffer), C.uint64_t(queryPool), C.uint32_t(firstQuery), C.uint32_t(queryCount), C.uint64_t(dstBuffer), C.uint64_t(dstOffset), C.uint64_t(stride), C.uint32_t(flags))
 }
 
 // WaitSemaphores wraps vkWaitSemaphores (VK_KHR_timeline_semaphore / Vulkan 1.2).
 // Manual: generator cannot handle handle+ptr+u64 signature.
 func (c *Commands) WaitSemaphores(device Device, pWaitInfo *SemaphoreWaitInfo, timeout uint64) Result {
-	var result int32
-	args := [3]unsafe.Pointer{
-		unsafe.Pointer(&device),
-		unsafe.Pointer(&pWaitInfo),
-		unsafe.Pointer(&timeout),
-	}
-	if _, err := ffi.CallFunction(&SigResultHandlePtrU64, c.waitSemaphores, unsafe.Pointer(&result), args[:]); err != nil {
+	if c.waitSemaphores == nil {
 		return ErrorInitializationFailed
 	}
-	return Result(result)
+	r := C.gvk_r_hpq(C.uintptr_t(uintptr(c.waitSemaphores)), C.uint64_t(device), (*C.uint8_t)(unsafe.Pointer(pWaitInfo)), C.uint64_t(timeout))
+	return Result(r)
 }
-
-// === Ray tracing manual wrappers (VK_KHR_acceleration_structure) ===
 
 // GetBufferDeviceAddress wraps vkGetBufferDeviceAddress (Vulkan 1.2 core).
 // Manual: returns VkDeviceAddress (uint64), not VkResult — unsupported by generator.
@@ -72,13 +66,8 @@ func (c *Commands) GetBufferDeviceAddress(device Device, pInfo *BufferDeviceAddr
 	if c.getBufferDeviceAddress == nil {
 		return 0
 	}
-	var result uint64
-	args := [2]unsafe.Pointer{
-		unsafe.Pointer(&device),
-		unsafe.Pointer(&pInfo),
-	}
-	_, _ = ffi.CallFunction(&SigU64HandlePtr, c.getBufferDeviceAddress, unsafe.Pointer(&result), args[:])
-	return DeviceAddress(result)
+	r := C.gvk_q_hp(C.uintptr_t(uintptr(c.getBufferDeviceAddress)), C.uint64_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	return DeviceAddress(r)
 }
 
 // GetAccelerationStructureDeviceAddressKHR wraps vkGetAccelerationStructureDeviceAddressKHR.
@@ -87,13 +76,8 @@ func (c *Commands) GetAccelerationStructureDeviceAddressKHR(device Device, pInfo
 	if c.getAccelerationStructureDeviceAddressKHR == nil {
 		return 0
 	}
-	var result uint64
-	args := [2]unsafe.Pointer{
-		unsafe.Pointer(&device),
-		unsafe.Pointer(&pInfo),
-	}
-	_, _ = ffi.CallFunction(&SigU64HandlePtr, c.getAccelerationStructureDeviceAddressKHR, unsafe.Pointer(&result), args[:])
-	return DeviceAddress(result)
+	r := C.gvk_q_hp(C.uintptr_t(uintptr(c.getAccelerationStructureDeviceAddressKHR)), C.uint64_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	return DeviceAddress(r)
 }
 
 // CmdBuildAccelerationStructuresKHR wraps vkCmdBuildAccelerationStructuresKHR.
@@ -107,13 +91,7 @@ func (c *Commands) CmdBuildAccelerationStructuresKHR(
 	if c.cmdBuildAccelerationStructuresKHR == nil {
 		return
 	}
-	args := [4]unsafe.Pointer{
-		unsafe.Pointer(&commandBuffer),
-		unsafe.Pointer(&infoCount),
-		unsafe.Pointer(&pInfos),
-		unsafe.Pointer(&ppBuildRangeInfos),
-	}
-	_, _ = ffi.CallFunction(&SigVoidCmdBuildAccelerationStructures, c.cmdBuildAccelerationStructuresKHR, nil, args[:])
+	C.gvk_v_hipp(C.uintptr_t(uintptr(c.cmdBuildAccelerationStructuresKHR)), C.uint64_t(commandBuffer), C.uint32_t(infoCount), (*C.uint8_t)(unsafe.Pointer(pInfos)), (*C.uint8_t)(unsafe.Pointer(ppBuildRangeInfos)))
 }
 
 // CmdWriteAccelerationStructuresPropertiesKHR wraps vkCmdWriteAccelerationStructuresPropertiesKHR.
@@ -129,15 +107,7 @@ func (c *Commands) CmdWriteAccelerationStructuresPropertiesKHR(
 	if c.cmdWriteAccelerationStructuresPropertiesKHR == nil {
 		return
 	}
-	args := [6]unsafe.Pointer{
-		unsafe.Pointer(&commandBuffer),
-		unsafe.Pointer(&accelerationStructureCount),
-		unsafe.Pointer(&pAccelerationStructures),
-		unsafe.Pointer(&queryType),
-		unsafe.Pointer(&queryPool),
-		unsafe.Pointer(&firstQuery),
-	}
-	_, _ = ffi.CallFunction(&SigVoidCmdWriteASProperties, c.cmdWriteAccelerationStructuresPropertiesKHR, nil, args[:])
+	C.gvk_v_hipihi(C.uintptr_t(uintptr(c.cmdWriteAccelerationStructuresPropertiesKHR)), C.uint64_t(commandBuffer), C.uint32_t(accelerationStructureCount), (*C.uint8_t)(unsafe.Pointer(pAccelerationStructures)), C.uint32_t(queryType), C.uint64_t(queryPool), C.uint32_t(firstQuery))
 }
 
 // GetAccelerationStructureBuildSizesKHR wraps vkGetAccelerationStructureBuildSizesKHR.
@@ -152,12 +122,5 @@ func (c *Commands) GetAccelerationStructureBuildSizesKHR(
 	if c.getAccelerationStructureBuildSizesKHR == nil {
 		return
 	}
-	args := [5]unsafe.Pointer{
-		unsafe.Pointer(&device),
-		unsafe.Pointer(&buildType),
-		unsafe.Pointer(&pBuildInfo),
-		unsafe.Pointer(&pMaxPrimitiveCounts),
-		unsafe.Pointer(&pSizeInfo),
-	}
-	_, _ = ffi.CallFunction(&SigVoidHandleHandlePtrPtrPtr, c.getAccelerationStructureBuildSizesKHR, nil, args[:])
+	C.gvk_v_hippp(C.uintptr_t(uintptr(c.getAccelerationStructureBuildSizesKHR)), C.uint64_t(device), C.uint32_t(buildType), (*C.uint8_t)(unsafe.Pointer(pBuildInfo)), (*C.uint8_t)(unsafe.Pointer(pMaxPrimitiveCounts)), (*C.uint8_t)(unsafe.Pointer(pSizeInfo)))
 }

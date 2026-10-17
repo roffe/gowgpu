@@ -411,9 +411,10 @@ func (d *Device) ensureMemoryMapped(block *memory.MemoryBlock) error {
 	}
 	basePtr, alreadyMapped := d.mappedMemory[block.Memory]
 	if !alreadyMapped {
-		var mappedPtr uintptr
+		var mapped unsafe.Pointer
 		result := d.cmds.MapMemory(d.handle, block.Memory, 0,
-			vk.DeviceSize(vk.WholeSize), 0, uintptr(unsafe.Pointer(&mappedPtr)))
+			vk.DeviceSize(vk.WholeSize), 0, &mapped)
+		mappedPtr := uintptr(mapped)
 		if result != vk.Success {
 			return fmt.Errorf("vulkan: vkMapMemory failed: %d", result)
 		}

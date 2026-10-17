@@ -56,9 +56,9 @@ func (Backend) CreateInstance(desc *hal.InstanceDescriptor) (hal.Instance, error
 
 	appInfo := vk.ApplicationInfo{
 		SType:              vk.StructureTypeApplicationInfo,
-		PApplicationName:   uintptr(unsafe.Pointer(&appName[0])),
+		PApplicationName:   &appName[0],
 		ApplicationVersion: vkMakeVersion(1, 0, 0),
-		PEngineName:        uintptr(unsafe.Pointer(&engineName[0])),
+		PEngineName:        &engineName[0],
 		EngineVersion:      vkMakeVersion(0, 1, 0),
 		ApiVersion:         vkMakeVersion(1, 2, 0), // Vulkan 1.2
 	}
@@ -90,14 +90,14 @@ func (Backend) CreateInstance(desc *hal.InstanceDescriptor) (hal.Instance, error
 	}
 
 	// Convert to C strings
-	extensionPtrs := make([]uintptr, len(extensions))
+	extensionPtrs := make([]*byte, len(extensions))
 	for i, ext := range extensions {
-		extensionPtrs[i] = uintptr(unsafe.Pointer(unsafe.StringData(ext)))
+		extensionPtrs[i] = unsafe.StringData(ext)
 	}
 
-	layerPtrs := make([]uintptr, len(layers))
+	layerPtrs := make([]*byte, len(layers))
 	for i, layer := range layers {
-		layerPtrs[i] = uintptr(unsafe.Pointer(unsafe.StringData(layer)))
+		layerPtrs[i] = unsafe.StringData(layer)
 	}
 
 	// Create instance
@@ -109,10 +109,10 @@ func (Backend) CreateInstance(desc *hal.InstanceDescriptor) (hal.Instance, error
 	}
 
 	if len(extensionPtrs) > 0 {
-		createInfo.PpEnabledExtensionNames = uintptr(unsafe.Pointer(&extensionPtrs[0]))
+		createInfo.PpEnabledExtensionNames = &extensionPtrs[0]
 	}
 	if len(layerPtrs) > 0 {
-		createInfo.PpEnabledLayerNames = uintptr(unsafe.Pointer(&layerPtrs[0]))
+		createInfo.PpEnabledLayerNames = &layerPtrs[0]
 	}
 
 	var instance vk.Instance
@@ -707,7 +707,7 @@ func isLayerAvailable(cmds *vk.Commands, layerName string) bool {
 func enumerateInstanceExtensions(cmds *vk.Commands) (map[string]struct{}, error) {
 	for range 3 {
 		var count uint32
-		result := cmds.EnumerateInstanceExtensionProperties(0, &count, nil)
+		result := cmds.EnumerateInstanceExtensionProperties(nil, &count, nil)
 		if result != vk.Success && result != vk.Incomplete {
 			return nil, fmt.Errorf("vkEnumerateInstanceExtensionProperties(count) failed: %d", result)
 		}
@@ -716,7 +716,7 @@ func enumerateInstanceExtensions(cmds *vk.Commands) (map[string]struct{}, error)
 		}
 
 		properties := make([]vk.ExtensionProperties, count)
-		result = cmds.EnumerateInstanceExtensionProperties(0, &count, &properties[0])
+		result = cmds.EnumerateInstanceExtensionProperties(nil, &count, &properties[0])
 		if result == vk.Incomplete {
 			continue
 		}
