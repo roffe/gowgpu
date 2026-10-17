@@ -10,9 +10,9 @@
 //
 // # Architecture
 //
-// The Metal backend uses Pure Go FFI via github.com/go-webgpu/goffi
-// to call into Apple's Metal.framework and Objective-C runtime without
-// requiring CGO. This enables zero-CGO cross-compilation for macOS/iOS.
+// The Metal backend calls Apple's Metal.framework and the Objective-C runtime
+// through cgo: objc_msgSend is cast per argument shape in small C functions
+// (objc.go), so building it needs no SDK headers.
 //
 // # Key Components
 //
