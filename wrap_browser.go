@@ -5,7 +5,7 @@ package wgpu
 import (
 	"fmt"
 
-	"github.com/gogpu/gputypes"
+	"github.com/roffe/gowgpu/gputypes"
 )
 
 // NewDeviceFromHAL is not supported in the browser.

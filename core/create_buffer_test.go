@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gogpu/gputypes"
+	"github.com/roffe/gowgpu/gputypes"
 )
 
 func TestDevice_CreateBuffer_Success(t *testing.T) {

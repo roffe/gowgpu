@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gogpu/gputypes"
 	"github.com/roffe/gowgpu"
+	"github.com/roffe/gowgpu/gputypes"
 
 	// Real backends: without a GPU (or a CPU driver such as lavapipe) the
 	// tests skip.

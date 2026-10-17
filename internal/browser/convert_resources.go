@@ -5,7 +5,7 @@ package browser
 import (
 	"syscall/js"
 
-	"github.com/gogpu/gputypes"
+	"github.com/roffe/gowgpu/gputypes"
 )
 
 // newJSObject creates a new empty JavaScript object.

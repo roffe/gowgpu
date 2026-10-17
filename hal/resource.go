@@ -5,7 +5,7 @@ package hal
 import (
 	"image"
 
-	"github.com/gogpu/gputypes"
+	"github.com/roffe/gowgpu/gputypes"
 )
 
 // Resource is the base interface for all GPU resources.

@@ -15,8 +15,8 @@ package gles
 import (
 	"strings"
 
-	"github.com/gogpu/gputypes"
 	"github.com/gogpu/naga/glsl"
+	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/gles/gl"
 )

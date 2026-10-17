@@ -1,6 +1,6 @@
 package raytracing
 
-import "github.com/gogpu/gputypes"
+import "github.com/roffe/gowgpu/gputypes"
 
 // RequestCompaction marks a BLAS for compaction query.
 //

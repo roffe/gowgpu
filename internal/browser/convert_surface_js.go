@@ -5,7 +5,7 @@ package browser
 import (
 	"syscall/js"
 
-	"github.com/gogpu/gputypes"
+	"github.com/roffe/gowgpu/gputypes"
 )
 
 // BuildSurfaceConfiguration constructs a JS GPUCanvasConfiguration object.

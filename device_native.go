@@ -7,10 +7,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gogpu/gputypes"
 	naga "github.com/gogpu/naga"
 	"github.com/gogpu/naga/ir"
 	"github.com/roffe/gowgpu/core"
+	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 )
 

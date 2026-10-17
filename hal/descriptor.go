@@ -2,7 +2,7 @@
 
 package hal
 
-import "github.com/gogpu/gputypes"
+import "github.com/roffe/gowgpu/gputypes"
 
 // MaxColorAttachments is the WebGPU specification limit for the number of
 // color attachments per render pass. Matches Rust wgpu MAX_COLOR_ATTACHMENTS.

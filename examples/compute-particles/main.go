@@ -20,8 +20,8 @@ import (
 	"math/rand/v2"
 	"time"
 
-	"github.com/gogpu/gputypes"
 	"github.com/roffe/gowgpu"
+	"github.com/roffe/gowgpu/gputypes"
 
 	_ "github.com/roffe/gowgpu/hal/allbackends"
 )

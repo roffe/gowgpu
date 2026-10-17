@@ -13,10 +13,10 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/gogpu/gputypes"
 	"github.com/gogpu/naga"
 	"github.com/gogpu/naga/ir"
 	"github.com/gogpu/naga/msl"
+	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/metal/mslmap"
 )

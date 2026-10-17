@@ -10,7 +10,7 @@ import (
 	"image"
 	"unsafe"
 
-	"github.com/gogpu/gputypes"
+	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/gles/egl"
 	"github.com/roffe/gowgpu/hal/gles/gl"

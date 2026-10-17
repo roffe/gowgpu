@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/gogpu/gputypes"
 	"github.com/roffe/gowgpu/core"
+	"github.com/roffe/gowgpu/gputypes"
 )
 
 // RenderPassEncoder records draw commands within a render pass.

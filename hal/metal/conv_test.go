@@ -8,7 +8,7 @@ package metal
 import (
 	"testing"
 
-	"github.com/gogpu/gputypes"
+	"github.com/roffe/gowgpu/gputypes"
 )
 
 // TestTextureFormatToMTL tests texture format conversions to Metal pixel formats.

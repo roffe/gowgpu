@@ -2,7 +2,7 @@
 
 package hal
 
-import "github.com/gogpu/gputypes"
+import "github.com/roffe/gowgpu/gputypes"
 
 // CommandEncoder records GPU commands.
 //

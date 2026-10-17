@@ -2,7 +2,7 @@
 
 package hal
 
-import "github.com/gogpu/gputypes"
+import "github.com/roffe/gowgpu/gputypes"
 
 // AccelerationStructure represents a GPU acceleration structure (BLAS or TLAS).
 // Matches Rust wgpu-hal's AccelerationStructure trait.

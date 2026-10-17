@@ -12,8 +12,8 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/gogpu/gputypes"
 	"github.com/gogpu/naga"
+	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/vulkan/memory"
 	"github.com/roffe/gowgpu/hal/vulkan/vk"

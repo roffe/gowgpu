@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gogpu/gputypes"
 	"github.com/gogpu/naga"
 	nagair "github.com/gogpu/naga/ir"
+	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 )
 

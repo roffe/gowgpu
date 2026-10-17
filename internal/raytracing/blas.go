@@ -1,7 +1,7 @@
 package raytracing
 
 import (
-	"github.com/gogpu/gputypes"
+	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 )
 

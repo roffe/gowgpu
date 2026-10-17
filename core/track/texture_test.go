@@ -6,7 +6,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/gogpu/gputypes"
+	"github.com/roffe/gowgpu/gputypes"
 )
 
 func TestTextureUses_IsReadOnly(t *testing.T) {

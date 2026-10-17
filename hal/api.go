@@ -7,7 +7,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/gogpu/gputypes"
+	"github.com/roffe/gowgpu/gputypes"
 )
 
 // BufferMapping describes a CPU-visible mapping of a GPU buffer.

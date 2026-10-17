@@ -5,7 +5,7 @@ package hal_test
 import (
 	"testing"
 
-	"github.com/gogpu/gputypes"
+	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	_ "github.com/roffe/gowgpu/hal/noop" // Import for side effect of registering noop backend
 )

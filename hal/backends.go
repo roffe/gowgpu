@@ -5,7 +5,7 @@
 
 package hal
 
-import "github.com/gogpu/gputypes"
+import "github.com/roffe/gowgpu/gputypes"
 
 // Backend Implementation Guide
 //

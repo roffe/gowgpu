@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gogpu/gputypes"
 	"github.com/roffe/gowgpu"
+	"github.com/roffe/gowgpu/gputypes"
 
 	// Import noop backend. The noop backend is intentionally ignored during real
 	// adapter enumeration; tests that require HAL integration use an explicitly

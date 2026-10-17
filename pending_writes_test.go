@@ -6,8 +6,8 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/gogpu/gputypes"
 	"github.com/roffe/gowgpu/core"
+	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/noop"
 )

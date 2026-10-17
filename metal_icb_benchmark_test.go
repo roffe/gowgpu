@@ -7,8 +7,8 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/gogpu/gputypes"
 	"github.com/roffe/gowgpu"
+	"github.com/roffe/gowgpu/gputypes"
 	_ "github.com/roffe/gowgpu/hal/metal"
 )
 

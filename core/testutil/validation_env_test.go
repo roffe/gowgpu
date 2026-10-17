@@ -5,8 +5,8 @@ package testutil_test
 import (
 	"testing"
 
-	"github.com/gogpu/gputypes"
 	"github.com/roffe/gowgpu/core/testutil"
+	"github.com/roffe/gowgpu/gputypes"
 )
 
 func TestValidationEnv_AllHelpers(t *testing.T) {

@@ -16,8 +16,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/gogpu/gputypes"
 	"github.com/roffe/gowgpu"
+	"github.com/roffe/gowgpu/gputypes"
 
 	// Register all available GPU backends (Vulkan, DX12, GLES, Metal, etc.)
 	_ "github.com/roffe/gowgpu/hal/allbackends"

@@ -1,6 +1,6 @@
 package wgpu
 
-import "github.com/gogpu/gputypes"
+import "github.com/roffe/gowgpu/gputypes"
 
 // MinBindGroups is the minimum guaranteed number of bind groups per WebGPU spec.
 // All compliant devices support at least 4 bind groups. Portable code should

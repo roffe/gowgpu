@@ -5,8 +5,8 @@ package core
 import (
 	"testing"
 
-	"github.com/gogpu/gputypes"
 	"github.com/roffe/gowgpu/core/track"
+	"github.com/roffe/gowgpu/gputypes"
 )
 
 func TestCoreCommandEncoderRecordTextureUsage(t *testing.T) {

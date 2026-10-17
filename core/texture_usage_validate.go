@@ -3,7 +3,7 @@
 package core
 
 import (
-	"github.com/gogpu/gputypes"
+	"github.com/roffe/gowgpu/gputypes"
 )
 
 // ValidateTextureUsageFlags validates texture usage flag combinations at creation time.

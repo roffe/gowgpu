@@ -15,11 +15,11 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/gogpu/gputypes"
 	"github.com/gogpu/naga"
 	"github.com/gogpu/naga/dxil"
 	"github.com/gogpu/naga/hlsl"
 	"github.com/gogpu/naga/ir"
+	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/dx12/d3d12"
 	"github.com/roffe/gowgpu/hal/dx12/d3dcompile"

@@ -11,7 +11,7 @@ import (
 	"math"
 	"unsafe"
 
-	"github.com/gogpu/gputypes"
+	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/vulkan/memory"
 	"github.com/roffe/gowgpu/hal/vulkan/vk"

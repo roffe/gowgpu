@@ -5,8 +5,8 @@ package wgpu_test
 import (
 	"testing"
 
-	"github.com/gogpu/gputypes"
 	"github.com/roffe/gowgpu"
+	"github.com/roffe/gowgpu/gputypes"
 )
 
 // =============================================================================

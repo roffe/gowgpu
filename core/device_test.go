@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/gogpu/gputypes"
+	"github.com/roffe/gowgpu/gputypes"
 )
 
 // verifyDeviceCreation verifies that a device was created correctly

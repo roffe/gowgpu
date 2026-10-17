@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/gogpu/gputypes"
+	"github.com/roffe/gowgpu/gputypes"
 )
 
 func TestBuffer_NewBuffer(t *testing.T) {

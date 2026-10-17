@@ -5,9 +5,9 @@ package testutil_test
 import (
 	"testing"
 
-	"github.com/gogpu/gputypes"
 	"github.com/roffe/gowgpu/core"
 	"github.com/roffe/gowgpu/core/testutil"
+	"github.com/roffe/gowgpu/gputypes"
 )
 
 func TestAssertNoError(t *testing.T) {

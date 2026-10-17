@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/gogpu/gputypes"
+	"github.com/roffe/gowgpu/gputypes"
 )
 
 // createTestShaderModule creates a shader module for testing

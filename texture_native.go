@@ -3,8 +3,8 @@
 package wgpu
 
 import (
-	"github.com/gogpu/gputypes"
 	"github.com/roffe/gowgpu/core"
+	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 )
 

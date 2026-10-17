@@ -3,7 +3,7 @@
 package core
 
 import (
-	"github.com/gogpu/gputypes"
+	"github.com/roffe/gowgpu/gputypes"
 )
 
 // FeatureRequirement documents where a WebGPU feature must be validated at usage time.

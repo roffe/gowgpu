@@ -297,7 +297,7 @@ type D3D12_BOX struct {
 type D3D12_TEXTURE_COPY_LOCATION struct {
 	Resource *ID3D12Resource
 	Type     D3D12_TEXTURE_COPY_TYPE
-	_        uint32   // C ABI padding: aligns Union to offset 16
+	_        uint32    // C ABI padding: aligns Union to offset 16
 	Union    [4]uint64 // PlacedFootprint (32 bytes) or SubresourceIndex (4 bytes); 8-aligned like Offset
 }
 

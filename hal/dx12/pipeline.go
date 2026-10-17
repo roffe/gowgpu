@@ -11,8 +11,8 @@ import (
 	"os"
 	"unsafe"
 
-	"github.com/gogpu/gputypes"
 	"github.com/gogpu/naga/hlsl"
+	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/dx12/d3d12"
 )

@@ -10,8 +10,8 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"github.com/gogpu/gputypes"
 	"github.com/roffe/gowgpu"
+	"github.com/roffe/gowgpu/gputypes"
 
 	// Register the Metal HAL backend. Without a real backend registered only
 	// the noop/software backends are available, and neither executes compute.

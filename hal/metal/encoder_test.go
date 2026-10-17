@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/gogpu/gputypes"
 	"github.com/gogpu/naga/ir"
+	"github.com/roffe/gowgpu/gputypes"
 )
 
 func TestCommandEncoderRecordingErrorKeepsFirstFailure(t *testing.T) {

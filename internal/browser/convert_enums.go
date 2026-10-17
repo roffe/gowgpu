@@ -1,6 +1,6 @@
 package browser
 
-import "github.com/gogpu/gputypes"
+import "github.com/roffe/gowgpu/gputypes"
 
 // TextureFormatToJS converts a gputypes.TextureFormat to the WebGPU JS string.
 // Returns "" for TextureFormatUndefined.

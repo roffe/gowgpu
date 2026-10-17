@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gogpu/gputypes"
 	"github.com/roffe/gowgpu"
+	"github.com/roffe/gowgpu/gputypes"
 
 	// Register the Vulkan HAL backend. Without a real backend registered only
 	// the noop/software backends are available, and neither encodes a Vulkan

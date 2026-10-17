@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gogpu/gputypes"
 	"github.com/roffe/gowgpu"
 	"github.com/roffe/gowgpu/core"
+	"github.com/roffe/gowgpu/gputypes"
 
 	_ "github.com/roffe/gowgpu/hal/noop"
 )

@@ -8,8 +8,8 @@ package metal
 import (
 	"unsafe"
 
-	"github.com/gogpu/gputypes"
 	"github.com/gogpu/naga/ir"
+	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 )
 

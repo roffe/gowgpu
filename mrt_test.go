@@ -6,8 +6,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/gogpu/gputypes"
 	"github.com/roffe/gowgpu"
+	"github.com/roffe/gowgpu/gputypes"
 )
 
 // mrtShader writes distinct colors to two render targets.
