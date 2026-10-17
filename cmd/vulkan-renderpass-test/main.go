@@ -61,14 +61,14 @@ func run() error {
 	fmt.Print("3. Creating instance... ")
 	appInfo := vk.ApplicationInfo{
 		SType:            vk.StructureTypeApplicationInfo,
-		PApplicationName: uintptr(unsafe.Pointer(&[]byte("RenderPassTest\x00")[0])),
+		PApplicationName: &[]byte("RenderPassTest\x00")[0],
 		ApiVersion:       makeVersion(1, 0, 0), // Vulkan 1.0 for compatibility
 	}
 
 	extensions := []string{"VK_KHR_surface\x00", "VK_KHR_win32_surface\x00"}
-	extensionPtrs := make([]uintptr, len(extensions))
+	extensionPtrs := make([]*byte, len(extensions))
 	for i, ext := range extensions {
-		extensionPtrs[i] = uintptr(unsafe.Pointer(unsafe.StringData(ext)))
+		extensionPtrs[i] = unsafe.StringData(ext)
 	}
 
 	createInfo := vk.InstanceCreateInfo{
@@ -77,7 +77,7 @@ func run() error {
 		EnabledExtensionCount: uint32(len(extensions)),
 	}
 	if len(extensionPtrs) > 0 {
-		createInfo.PpEnabledExtensionNames = uintptr(unsafe.Pointer(&extensionPtrs[0]))
+		createInfo.PpEnabledExtensionNames = &extensionPtrs[0]
 	}
 
 	var instance vk.Instance
@@ -141,14 +141,14 @@ func run() error {
 	}
 
 	swapchainExt := "VK_KHR_swapchain\x00"
-	deviceExtensions := []uintptr{uintptr(unsafe.Pointer(unsafe.StringData(swapchainExt)))}
+	deviceExtensions := []*byte{unsafe.StringData(swapchainExt)}
 
 	deviceCreateInfo := vk.DeviceCreateInfo{
 		SType:                   vk.StructureTypeDeviceCreateInfo,
 		QueueCreateInfoCount:    1,
 		PQueueCreateInfos:       &queueCreateInfo,
 		EnabledExtensionCount:   uint32(len(deviceExtensions)),
-		PpEnabledExtensionNames: uintptr(unsafe.Pointer(&deviceExtensions[0])),
+		PpEnabledExtensionNames: &deviceExtensions[0],
 	}
 
 	var device vk.Device
@@ -272,13 +272,13 @@ func run() error {
 			SType:  vk.StructureTypePipelineShaderStageCreateInfo,
 			Stage:  vk.ShaderStageVertexBit,
 			Module: vertShader,
-			PName:  uintptr(unsafe.Pointer(&mainEntry[0])),
+			PName:  &mainEntry[0],
 		},
 		{
 			SType:  vk.StructureTypePipelineShaderStageCreateInfo,
 			Stage:  vk.ShaderStageFragmentBit,
 			Module: fragShader,
-			PName:  uintptr(unsafe.Pointer(&mainEntry[0])),
+			PName:  &mainEntry[0],
 		},
 	}
 
