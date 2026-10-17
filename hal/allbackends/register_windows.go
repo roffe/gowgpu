@@ -13,5 +13,4 @@ import (
 
 	// DX12 backend - alternative high-performance backend.
 	_ "github.com/roffe/wgpu/hal/dx12"
-
 )
