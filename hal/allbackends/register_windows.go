@@ -13,4 +13,8 @@ import (
 
 	// DX12 backend - alternative high-performance backend.
 	_ "github.com/roffe/gowgpu/hal/dx12"
+
+	// OpenGL backend (WGL) - not in the default instance, for machines
+	// without Vulkan or DX12.
+	_ "github.com/roffe/gowgpu/hal/gles"
 )

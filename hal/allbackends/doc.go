@@ -12,17 +12,17 @@
 //	)
 //
 // This will register:
-//   - Vulkan backend (Windows, Linux, macOS; Android/arm64 preview)
+//   - Vulkan backend (Windows, Linux, the BSDs, macOS via MoltenVK, Android)
 //   - Metal backend (macOS, iOS)
 //   - DX12 backend (Windows)
-//   - OpenGL ES backend (Windows, Linux)
-//   - Software backend (all supported native platforms)
+//   - OpenGL backend (Windows, Linux)
+//
+// OpenGL is registered but outside the default instance's backends: ask for
+// gputypes.BackendsGL to use it, for example when nothing else is available.
 //
 // After importing, use hal.GetBackend or hal.SelectBestBackend to access backends.
 //
-// Build tags control which backends are available:
-//   - Desktop: platform GPU backends plus software fallback
-//   - Android/arm64: Vulkan only
+// Android registers Vulkan only.
 //
 // The no-op provider is not registered by this package. Import
 // github.com/roffe/gowgpu/hal/noop explicitly when it is required for tests.
