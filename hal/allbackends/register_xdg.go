@@ -1,7 +1,7 @@
 // Copyright 2025 The GoGPU Authors
 // SPDX-License-Identifier: MIT
 
-//go:build linux && !android && !(js && wasm)
+//go:build ((linux && !android) || freebsd || openbsd || netbsd) && !(js && wasm)
 
 package allbackends
 
@@ -11,6 +11,4 @@ import (
 	// Vulkan backend - primary backend on Linux.
 	_ "github.com/gogpu/wgpu/hal/vulkan"
 
-	// OpenGL ES backend - fallback for systems without Vulkan.
-	_ "github.com/gogpu/wgpu/hal/gles"
 )

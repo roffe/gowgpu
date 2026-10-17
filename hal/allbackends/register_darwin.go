@@ -1,7 +1,7 @@
 // Copyright 2025 The GoGPU Authors
 // SPDX-License-Identifier: MIT
 
-//go:build darwin && !(js && wasm)
+//go:build darwin && !ios && !(js && wasm)
 
 package allbackends
 
