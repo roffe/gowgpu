@@ -356,21 +356,13 @@ func run() error {
 	fmt.Printf("    createInfo.Layout: 0x%X\n", pipelineCreateInfo.Layout)
 	fmt.Printf("    createInfo.StageCount: %d\n", pipelineCreateInfo.StageCount)
 
-	// Try syscall directly (bypassing goffi entirely)
+	// Try syscall directly (bypassing the vk wrappers)
 	fmt.Println("    Trying syscall directly...")
 	syscallPipeline, syscallResult, syscallErr := SyscallCreatePipeline(cmds, device, &pipelineCreateInfo)
 	if syscallErr != nil {
 		return fmt.Errorf("syscall error: %w", syscallErr)
 	}
 	fmt.Printf("    Syscall result: %d, pipeline: 0x%X\n", syscallResult, syscallPipeline)
-
-	// Try direct FFI call
-	fmt.Println("    Trying direct FFI call...")
-	directPipeline, directResult, directErr := DirectCreatePipeline(cmds, device, &pipelineCreateInfo)
-	if directErr != nil {
-		return fmt.Errorf("direct FFI call error: %w", directErr)
-	}
-	fmt.Printf("    Direct FFI result: %d, pipeline: 0x%X\n", directResult, directPipeline)
 
 	// Now try wrapper call
 	fmt.Println("    Trying wrapper call...")
