@@ -5,186 +5,170 @@
 
 package metal
 
+/*
+#cgo CFLAGS: -fblocks
+#cgo noescape gm1p
+#cgo nocallback gm1p
+#cgo noescape gm3p
+#cgo nocallback gm3p
+#cgo noescape gm2e
+#cgo nocallback gm2e
+#cgo noescape gm3e
+#cgo nocallback gm3e
+#cgo noescape gm_v_6upppbpp
+#cgo nocallback gm_v_6upppbpp
+#cgo noescape gm_class
+#cgo nocallback gm_class
+#cgo noescape gm_sel
+#cgo nocallback gm_sel
+#cgo LDFLAGS: -lobjc -framework Foundation -framework Metal -framework QuartzCore
+#include <stdint.h>
+
+// <objc/message.h>, <objc/runtime.h>, <dlfcn.h>, <stdlib.h> and Block.h,
+// declared by hand: compiling needs no SDK headers (linking does, as always).
+extern void objc_msgSend(void);
+#if defined(__x86_64__)
+extern void objc_msgSend_stret(void);
+#endif
+extern void *objc_getClass(const char *);
+extern void *sel_registerName(const char *);
+extern void *objc_autoreleasePoolPush(void);
+extern void objc_autoreleasePoolPop(void *);
+extern void *MTLCreateSystemDefaultDevice(void);
+extern void *dlsym(void *, const char *);
+
+typedef uintptr_t U;
+typedef struct { double a, b; } G2d;                // CGSize
+typedef struct { double a, b, c, d; } G4d;          // MTLClearColor
+typedef struct { double a, b, c, d, e, f; } G6d;    // MTLViewport
+typedef struct { U a, b; } G2u;                     // NSRange
+typedef struct { U a, b, c; } G3u;                  // MTLOrigin, MTLSize, MTLAccelerationStructureSizes
+typedef struct { U a, b, c, d; } G4u;               // MTLScissorRect
+typedef struct { U a, b, c, d, e, f; } G6u;         // MTLRegion
+
+// Integer sends by arity: ids, NSUIntegers, pointers and BOOLs all travel in
+// integer registers (or 8-byte stack slots) on arm64 and x86_64.
+static U gm0(U o, U s) { return ((U (*)(U, U))objc_msgSend)(o, s); }
+static U gm1(U o, U s, U a) { return ((U (*)(U, U, U))objc_msgSend)(o, s, a); }
+static U gm2(U o, U s, U a, U b) { return ((U (*)(U, U, U, U))objc_msgSend)(o, s, a, b); }
+static U gm3(U o, U s, U a, U b, U c) { return ((U (*)(U, U, U, U, U))objc_msgSend)(o, s, a, b, c); }
+static U gm4(U o, U s, U a, U b, U c, U d) { return ((U (*)(U, U, U, U, U, U))objc_msgSend)(o, s, a, b, c, d); }
+static U gm5(U o, U s, U a, U b, U c, U d, U e) { return ((U (*)(U, U, U, U, U, U, U))objc_msgSend)(o, s, a, b, c, d, e); }
+static U gm6(U o, U s, U a, U b, U c, U d, U e, U f) { return ((U (*)(U, U, U, U, U, U, U, U))objc_msgSend)(o, s, a, b, c, d, e, f); }
+static U gm7(U o, U s, U a, U b, U c, U d, U e, U f, U g) { return ((U (*)(U, U, U, U, U, U, U, U, U))objc_msgSend)(o, s, a, b, c, d, e, f, g); }
+static U gm8(U o, U s, U a, U b, U c, U d, U e, U f, U g, U h) { return ((U (*)(U, U, U, U, U, U, U, U, U, U))objc_msgSend)(o, s, a, b, c, d, e, f, g, h); }
+static U gm9(U o, U s, U a, U b, U c, U d, U e, U f, U g, U h, U i) { return ((U (*)(U, U, U, U, U, U, U, U, U, U, U))objc_msgSend)(o, s, a, b, c, d, e, f, g, h, i); }
+static U gm10(U o, U s, U a, U b, U c, U d, U e, U f, U g, U h, U i, U j) { return ((U (*)(U, U, U, U, U, U, U, U, U, U, U, U))objc_msgSend)(o, s, a, b, c, d, e, f, g, h, i, j); }
+
+// The sends that take floats or structs by value: the compiler applies the
+// HFA, stack and indirect rules of each ABI.
+static void gm_v_f(U o, U s, float a) { ((void (*)(U, U, float))objc_msgSend)(o, s, a); }
+static void gm_v_d(U o, U s, double a) { ((void (*)(U, U, double))objc_msgSend)(o, s, a); }
+static void gm_v_fff(U o, U s, float a, float b, float c) { ((void (*)(U, U, float, float, float))objc_msgSend)(o, s, a, b, c); }
+static void gm_v_ffff(U o, U s, float a, float b, float c, float d) { ((void (*)(U, U, float, float, float, float))objc_msgSend)(o, s, a, b, c, d); }
+static void gm_v_2d(U o, U s, G2d a) { ((void (*)(U, U, G2d))objc_msgSend)(o, s, a); }
+static void gm_v_4d(U o, U s, G4d a) { ((void (*)(U, U, G4d))objc_msgSend)(o, s, a); }
+static void gm_v_6d(U o, U s, G6d a) { ((void (*)(U, U, G6d))objc_msgSend)(o, s, a); }
+static void gm_v_2u(U o, U s, G2u a) { ((void (*)(U, U, G2u))objc_msgSend)(o, s, a); }
+static void gm_v_4u(U o, U s, G4u a) { ((void (*)(U, U, G4u))objc_msgSend)(o, s, a); }
+static void gm_v_p2u(U o, U s, U a, G2u b) { ((void (*)(U, U, U, G2u))objc_msgSend)(o, s, a, b); }
+static void gm_v_3u3u(U o, U s, G3u a, G3u b) { ((void (*)(U, U, G3u, G3u))objc_msgSend)(o, s, a, b); }
+static void gm_v_pp3u(U o, U s, U a, U b, G3u c) { ((void (*)(U, U, U, U, G3u))objc_msgSend)(o, s, a, b, c); }
+static void gm_v_pppp3uppp3u(U o, U s, U a, U b, U c, U d, G3u e, U f, U g, U h, G3u i) {
+	((void (*)(U, U, U, U, U, U, G3u, U, U, U, G3u))objc_msgSend)(o, s, a, b, c, d, e, f, g, h, i);
+}
+static void gm_v_ppp3u3uppp3u(U o, U s, U a, U b, U c, G3u d, G3u e, U f, U g, U h, G3u i) {
+	((void (*)(U, U, U, U, U, G3u, G3u, U, U, U, G3u))objc_msgSend)(o, s, a, b, c, d, e, f, g, h, i);
+}
+static void gm_v_ppp3u3upppp(U o, U s, U a, U b, U c, G3u d, G3u e, U f, U g, U h, U i) {
+	((void (*)(U, U, U, U, U, G3u, G3u, U, U, U, U))objc_msgSend)(o, s, a, b, c, d, e, f, g, h, i);
+}
+static void gm_v_6uppppp(U o, U s, G6u a, U b, U c, U d, U e, U f) {
+	((void (*)(U, U, G6u, U, U, U, U, U))objc_msgSend)(o, s, a, b, c, d, e, f);
+}
+static U gm_pp2u2u(U o, U s, U a, U b, G2u c, G2u d) { return ((U (*)(U, U, U, U, G2u, G2u))objc_msgSend)(o, s, a, b, c, d); }
+
+// A struct return over 16 bytes goes through objc_msgSend_stret on x86_64 only.
+static G3u gm_3u_p(U o, U s, U a) {
+#if defined(__x86_64__)
+	return ((G3u (*)(U, U, U))objc_msgSend_stret)(o, s, a);
+#else
+	return ((G3u (*)(U, U, U))objc_msgSend)(o, s, a);
+#endif
+}
+
+// Sends that hand Metal Go memory take it as a pointer to bytes, which cgo
+// passes without a cgocheck walk and keeps adjustable by stack copying.
+typedef const uint8_t *P;
+static U gm1p(U o, U s, P a) { return ((U (*)(U, U, P))objc_msgSend)(o, s, a); }
+static U gm3p(U o, U s, P bytes, U b, U c) { return ((U (*)(U, U, P, U, U))objc_msgSend)(o, s, bytes, b, c); }
+static U gm2e(U o, U s, U a, uint8_t *err) { return ((U (*)(U, U, U, uint8_t *))objc_msgSend)(o, s, a, err); }
+static U gm3e(U o, U s, U a, U b, uint8_t *err) { return ((U (*)(U, U, U, U, uint8_t *))objc_msgSend)(o, s, a, b, err); }
+static void gm_v_6upppbpp(U o, U s, G6u a, U b, U c, P bytes, U e, U f) {
+	((void (*)(U, U, G6u, U, U, P, U, U))objc_msgSend)(o, s, a, b, c, bytes, e, f);
+}
+static U gm_class(P name) { return (U)objc_getClass((const char *)name); }
+static U gm_sel(P name) { return (U)sel_registerName((const char *)name); }
+static U gm_pool_push(void) { return (U)objc_autoreleasePoolPush(); }
+static void gm_pool_pop(U p) { objc_autoreleasePoolPop((void *)p); }
+static U gm_default_device(void) { return (U)MTLCreateSystemDefaultDevice(); }
+
+// MTLCopyAllDevices only exists on macOS: look it up instead of linking it.
+static U gm_copy_all_devices(void) {
+	// (void *)-2 is RTLD_DEFAULT.
+	U (*fn)(void) = (U (*)(void))dlsym((void *)-2, "MTLCopyAllDevices");
+	return fn ? fn() : 0;
+}
+
+// Completion blocks: real heap blocks (clang -fblocks, plain C) that call
+// gogpuMetalBlock(kind, id). Metal copies a block it keeps, so the creator
+// releases its own reference right after handing it over.
+extern void *_Block_copy(const void *);
+extern void _Block_release(const void *);
+extern void gogpuMetalBlock(uint32_t kind, uint64_t id);
+// void (^)(id<MTLCommandBuffer>)
+static U gm_new_block1(uint32_t kind, uint64_t id) {
+	return (U)_Block_copy(^(U cmdbuf) { gogpuMetalBlock(kind, id); });
+}
+// void (^)(id<MTLSharedEvent>, uint64_t)
+static U gm_new_block2(uint32_t kind, uint64_t id) {
+	return (U)_Block_copy(^(U event, uint64_t value) { gogpuMetalBlock(kind, id); });
+}
+static void gm_release_block(U b) { _Block_release((const void *)b); }
+*/
+import "C"
+
 import (
-	"fmt"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"unsafe"
 
-	"github.com/go-webgpu/goffi/ffi"
-	"github.com/go-webgpu/goffi/types"
 	"github.com/gogpu/wgpu/hal"
-)
-
-// Objective-C runtime library handle and function symbols.
-var (
-	objcLib unsafe.Pointer
-
-	symObjcMsgSend      unsafe.Pointer
-	symObjcMsgSendFpret unsafe.Pointer
-	symObjcMsgSendStret unsafe.Pointer
-	symObjcGetClass     unsafe.Pointer
-	symSelRegisterName  unsafe.Pointer
-
-	cifGetClass    types.CallInterface
-	cifSelRegister types.CallInterface
-	cifSetBytes    types.CallInterface
 )
 
 // selectorCache caches registered selectors for performance.
 var selectorCache sync.Map
 
-type objcArg struct {
-	typ       *types.TypeDescriptor
-	ptr       unsafe.Pointer
-	keepAlive any
+// cPointer turns an address C returned (never Go memory) into a pointer.
+func cPointer(p uintptr) unsafe.Pointer {
+	return *(*unsafe.Pointer)(unsafe.Pointer(&p))
 }
 
-var (
-	cgSizeType = &types.TypeDescriptor{
-		Kind: types.StructType,
-		Members: []*types.TypeDescriptor{
-			types.DoubleTypeDescriptor,
-			types.DoubleTypeDescriptor,
-		},
-	}
-	mtlClearColorType = &types.TypeDescriptor{
-		Kind: types.StructType,
-		Members: []*types.TypeDescriptor{
-			types.DoubleTypeDescriptor,
-			types.DoubleTypeDescriptor,
-			types.DoubleTypeDescriptor,
-			types.DoubleTypeDescriptor,
-		},
-	}
-	mtlViewportType = &types.TypeDescriptor{
-		Kind: types.StructType,
-		Members: []*types.TypeDescriptor{
-			types.DoubleTypeDescriptor,
-			types.DoubleTypeDescriptor,
-			types.DoubleTypeDescriptor,
-			types.DoubleTypeDescriptor,
-			types.DoubleTypeDescriptor,
-			types.DoubleTypeDescriptor,
-		},
-	}
-	mtlScissorRectType = &types.TypeDescriptor{
-		Kind: types.StructType,
-		Members: []*types.TypeDescriptor{
-			types.UInt64TypeDescriptor,
-			types.UInt64TypeDescriptor,
-			types.UInt64TypeDescriptor,
-			types.UInt64TypeDescriptor,
-		},
-	}
-	mtlOriginType = &types.TypeDescriptor{
-		Kind: types.StructType,
-		Members: []*types.TypeDescriptor{
-			types.UInt64TypeDescriptor,
-			types.UInt64TypeDescriptor,
-			types.UInt64TypeDescriptor,
-		},
-	}
-	mtlSizeType = &types.TypeDescriptor{
-		Kind: types.StructType,
-		Members: []*types.TypeDescriptor{
-			types.UInt64TypeDescriptor,
-			types.UInt64TypeDescriptor,
-			types.UInt64TypeDescriptor,
-		},
-	}
-	nsRangeType = &types.TypeDescriptor{
-		Kind: types.StructType,
-		Members: []*types.TypeDescriptor{
-			types.UInt64TypeDescriptor,
-			types.UInt64TypeDescriptor,
-		},
-	}
-	// mtlRegionType encodes MTLRegion = { MTLOrigin{X,Y,Z}, MTLSize{W,H,D} }.
-	mtlRegionType = &types.TypeDescriptor{
-		Kind: types.StructType,
-		Members: []*types.TypeDescriptor{
-			types.UInt64TypeDescriptor,
-			types.UInt64TypeDescriptor,
-			types.UInt64TypeDescriptor,
-			types.UInt64TypeDescriptor,
-			types.UInt64TypeDescriptor,
-			types.UInt64TypeDescriptor,
-		},
-	}
-)
-
-// initObjCRuntime initializes the Objective-C runtime.
-func initObjCRuntime() error {
-	var err error
-
-	objcLib, err = ffi.LoadLibrary("/usr/lib/libobjc.A.dylib")
-	if err != nil {
-		return fmt.Errorf("metal: failed to load libobjc: %w", err)
-	}
-
-	if symObjcMsgSend, err = ffi.GetSymbol(objcLib, "objc_msgSend"); err != nil {
-		return fmt.Errorf("metal: objc_msgSend not found: %w", err)
-	}
-	if symObjcMsgSendFpret, err = ffi.GetSymbol(objcLib, "objc_msgSend_fpret"); err != nil {
-		symObjcMsgSendFpret = nil
-	}
-	if symObjcMsgSendStret, err = ffi.GetSymbol(objcLib, "objc_msgSend_stret"); err != nil {
-		symObjcMsgSendStret = nil
-	}
-	if symObjcGetClass, err = ffi.GetSymbol(objcLib, "objc_getClass"); err != nil {
-		return fmt.Errorf("metal: objc_getClass not found: %w", err)
-	}
-	if symSelRegisterName, err = ffi.GetSymbol(objcLib, "sel_registerName"); err != nil {
-		return fmt.Errorf("metal: sel_registerName not found: %w", err)
-	}
-
-	return prepareObjCCallInterfaces()
+func cString(s string) []byte {
+	b := make([]byte, len(s)+1)
+	copy(b, s)
+	return b
 }
 
-func prepareObjCCallInterfaces() error {
-	var err error
-
-	err = ffi.PrepareCallInterface(&cifGetClass, types.DefaultCall,
-		types.PointerTypeDescriptor,
-		[]*types.TypeDescriptor{types.PointerTypeDescriptor})
-	if err != nil {
-		return fmt.Errorf("metal: failed to prepare objc_getClass: %w", err)
-	}
-
-	err = ffi.PrepareCallInterface(&cifSelRegister, types.DefaultCall,
-		types.PointerTypeDescriptor,
-		[]*types.TypeDescriptor{types.PointerTypeDescriptor})
-	if err != nil {
-		return fmt.Errorf("metal: failed to prepare sel_registerName: %w", err)
-	}
-
-	err = ffi.PrepareCallInterface(&cifSetBytes, types.DefaultCall,
-		types.VoidTypeDescriptor,
-		[]*types.TypeDescriptor{
-			types.PointerTypeDescriptor,
-			types.PointerTypeDescriptor,
-			types.PointerTypeDescriptor,
-			types.UInt64TypeDescriptor,
-			types.UInt64TypeDescriptor,
-		})
-	if err != nil {
-		return fmt.Errorf("metal: failed to prepare setBytes:length:atIndex: call: %w", err)
-	}
-
-	return nil
-}
+// initObjCRuntime has nothing left to load: libobjc and the frameworks are
+// linked. It stays for Init's sake.
+func initObjCRuntime() error { return nil }
 
 // GetClass returns the Class for a given name.
 func GetClass(name string) Class {
-	cname := append([]byte(name), 0)
-	// goffi API requires pointer TO pointer value (avalue is slice of pointers to argument values)
-	ptr := uintptr(unsafe.Pointer(&cname[0]))
-	var result Class
-	args := [1]unsafe.Pointer{unsafe.Pointer(&ptr)}
-	_, _ = ffi.CallFunction(&cifGetClass, symObjcGetClass, unsafe.Pointer(&result), args[:])
-	return result
+	b := cString(name)
+	return Class(C.gm_class((*C.uint8_t)(&b[0])))
 }
 
 // RegisterSelector registers and returns a selector for the given name.
@@ -192,16 +176,10 @@ func RegisterSelector(name string) SEL {
 	if cached, ok := selectorCache.Load(name); ok {
 		return cached.(SEL)
 	}
-
-	cname := append([]byte(name), 0)
-	// goffi API requires pointer TO pointer value (avalue is slice of pointers to argument values)
-	ptr := uintptr(unsafe.Pointer(&cname[0]))
-	var result SEL
-	args := [1]unsafe.Pointer{unsafe.Pointer(&ptr)}
-	_, _ = ffi.CallFunction(&cifSelRegister, symSelRegisterName, unsafe.Pointer(&result), args[:])
-
-	selectorCache.Store(name, result)
-	return result
+	b := cString(name)
+	sel := SEL(C.gm_sel((*C.uint8_t)(&b[0])))
+	selectorCache.Store(name, sel)
+	return sel
 }
 
 // Sel is a convenience alias for RegisterSelector.
@@ -209,216 +187,289 @@ func Sel(name string) SEL {
 	return RegisterSelector(name)
 }
 
-func argPointer(val uintptr) objcArg {
-	v := val
-	return objcArg{typ: types.PointerTypeDescriptor, ptr: unsafe.Pointer(&v), keepAlive: &v}
+// structType names the by-value C struct an objcArg carries, or for a
+// result, what msgSend returns.
+type structType byte
+
+const (
+	retVoid structType = 1
+	retInt  structType = 2
+	retBool structType = 3
+
+	// Each struct's shape letter (see shape) is '0'+its value: '4' to ':'.
+	cgSizeType         structType = 4  // CGSize: 2 doubles
+	mtlClearColorType  structType = 5  // 4 doubles
+	mtlViewportType    structType = 6  // 6 doubles
+	nsRangeType        structType = 7  // 2 NSUInteger
+	mtlOriginType      structType = 8  // 3 NSUInteger
+	mtlScissorRectType structType = 9  // 4 NSUInteger
+	mtlRegionType      structType = 10 // 6 NSUInteger
+)
+
+// mtlSizeType has MTLOrigin's layout.
+const mtlSizeType = mtlOriginType
+
+var structSize = [...]uintptr{cgSizeType: 16, mtlClearColorType: 32, mtlViewportType: 48, nsRangeType: 16, mtlOriginType: 24, mtlScissorRectType: 32, mtlRegionType: 48}
+
+// Argument kinds, as shape letters.
+const (
+	kindInt    = 'p' // id, pointer, NSUInteger, uint64
+	kindBool   = 'B'
+	kindFloat  = 'f'
+	kindDouble = 'd'
+	kindBytes  = 'b' // a pointer into Go memory, see argBytes
+)
+
+// objcArg is one message argument, held inline so building it allocates
+// nothing.
+type objcArg struct {
+	kind byte
+	w    [6]uint64
+	ptr  unsafe.Pointer // Go memory, for kindBytes
 }
 
-func argUint64(val uint64) objcArg {
-	v := val
-	return objcArg{typ: types.UInt64TypeDescriptor, ptr: unsafe.Pointer(&v), keepAlive: &v}
-}
+func argPointer(val uintptr) objcArg { return objcArg{kind: kindInt, w: [6]uint64{uint64(val)}} }
+
+func argUint64(val uint64) objcArg { return objcArg{kind: kindInt, w: [6]uint64{val}} }
+
+// argBytes passes Go memory: it stays a pointer all the way to C, so a
+// stack copy in between cannot leave C with a stale address.
+func argBytes(p unsafe.Pointer) objcArg { return objcArg{kind: kindBytes, ptr: p} }
 
 func argBool(val bool) objcArg {
-	var v uint8
+	a := objcArg{kind: kindBool}
 	if val {
-		v = 1
+		a.w[0] = 1
 	}
-	return objcArg{typ: types.UInt8TypeDescriptor, ptr: unsafe.Pointer(&v), keepAlive: &v}
+	return a
 }
 
 func argFloat32(val float32) objcArg {
-	v := val
-	return objcArg{typ: types.FloatTypeDescriptor, ptr: unsafe.Pointer(&v), keepAlive: &v}
+	a := objcArg{kind: kindFloat}
+	*(*float32)(unsafe.Pointer(&a.w[0])) = val
+	return a
 }
 
 func argFloat64(val float64) objcArg {
-	v := val
-	return objcArg{typ: types.DoubleTypeDescriptor, ptr: unsafe.Pointer(&v), keepAlive: &v}
+	a := objcArg{kind: kindDouble}
+	*(*float64)(unsafe.Pointer(&a.w[0])) = val
+	return a
 }
 
-func argStruct[T any](val T, td *types.TypeDescriptor) objcArg {
-	v := val
-	return objcArg{typ: td, ptr: unsafe.Pointer(&v), keepAlive: &v}
-}
-
-func pointerArgs(args []uintptr) []objcArg {
-	out := make([]objcArg, len(args))
-	for i, arg := range args {
-		out[i] = argPointer(arg)
+func argStruct[T any](val T, td structType) objcArg {
+	if unsafe.Sizeof(val) != structSize[td] {
+		panic("metal: struct argument does not match its C type")
 	}
-	return out
+	a := objcArg{kind: '0' + byte(td)}
+	*(*T)(unsafe.Pointer(&a.w)) = val
+	return a
 }
 
-func msgSend(obj ID, sel SEL, retType *types.TypeDescriptor, retPtr unsafe.Pointer, args ...objcArg) error {
+func (a *objcArg) word() C.U { return C.U(a.w[0]) }
+
+func (a *objcArg) f32() C.float  { return C.float(*(*float32)(unsafe.Pointer(&a.w[0]))) }
+func (a *objcArg) f64() C.double { return C.double(*(*float64)(unsafe.Pointer(&a.w[0]))) }
+func (a *objcArg) s2d() C.G2d    { return *(*C.G2d)(unsafe.Pointer(&a.w)) }
+func (a *objcArg) s4d() C.G4d    { return *(*C.G4d)(unsafe.Pointer(&a.w)) }
+func (a *objcArg) s6d() C.G6d    { return *(*C.G6d)(unsafe.Pointer(&a.w)) }
+func (a *objcArg) s2u() C.G2u    { return *(*C.G2u)(unsafe.Pointer(&a.w)) }
+func (a *objcArg) s3u() C.G3u    { return *(*C.G3u)(unsafe.Pointer(&a.w)) }
+func (a *objcArg) s4u() C.G4u    { return *(*C.G4u)(unsafe.Pointer(&a.w)) }
+func (a *objcArg) s6u() C.G6u    { return *(*C.G6u)(unsafe.Pointer(&a.w)) }
+
+// msgInt sends a message whose arguments all travel as integers.
+func msgInt(obj ID, sel SEL, a []uintptr) uintptr {
+	o, s := C.U(obj), C.U(sel)
+	u := func(i int) C.U { return C.U(a[i]) }
+	switch len(a) {
+	case 0:
+		return uintptr(C.gm0(o, s))
+	case 1:
+		return uintptr(C.gm1(o, s, u(0)))
+	case 2:
+		return uintptr(C.gm2(o, s, u(0), u(1)))
+	case 3:
+		return uintptr(C.gm3(o, s, u(0), u(1), u(2)))
+	case 4:
+		return uintptr(C.gm4(o, s, u(0), u(1), u(2), u(3)))
+	case 5:
+		return uintptr(C.gm5(o, s, u(0), u(1), u(2), u(3), u(4)))
+	case 6:
+		return uintptr(C.gm6(o, s, u(0), u(1), u(2), u(3), u(4), u(5)))
+	case 7:
+		return uintptr(C.gm7(o, s, u(0), u(1), u(2), u(3), u(4), u(5), u(6)))
+	case 8:
+		return uintptr(C.gm8(o, s, u(0), u(1), u(2), u(3), u(4), u(5), u(6), u(7)))
+	case 9:
+		return uintptr(C.gm9(o, s, u(0), u(1), u(2), u(3), u(4), u(5), u(6), u(7), u(8)))
+	case 10:
+		return uintptr(C.gm10(o, s, u(0), u(1), u(2), u(3), u(4), u(5), u(6), u(7), u(8), u(9)))
+	}
+	panic("metal: objc_msgSend with more than 10 arguments")
+}
+
+// shape spells out an argument list: one letter per argument, digits for
+// structs ('0'+structType).
+func shape(args []objcArg) (key [12]byte, n int, integer bool) {
+	integer = true
+	for _, a := range args {
+		key[n] = a.kind
+		n++
+		if a.kind != kindInt && a.kind != kindBool {
+			integer = false
+		}
+	}
+	return key, n, integer
+}
+
+// msgSend sends sel to obj with typed arguments, storing an integer or
+// struct result at retPtr.
+func msgSend(obj ID, sel SEL, retType structType, retPtr unsafe.Pointer, args ...objcArg) error {
 	if obj == 0 || sel == 0 {
 		return nil
 	}
-
-	argTypes := make([]*types.TypeDescriptor, 2+len(args))
-	argTypes[0] = types.PointerTypeDescriptor
-	argTypes[1] = types.PointerTypeDescriptor
-	for i, arg := range args {
-		argTypes[2+i] = arg.typ
+	key, n, integer := shape(args)
+	o, s := C.U(obj), C.U(sel)
+	if integer && retType <= retBool {
+		var w [10]uintptr
+		for i := range args {
+			w[i] = uintptr(args[i].w[0])
+		}
+		r := msgInt(obj, sel, w[:len(args)])
+		switch retType {
+		case retInt:
+			*(*uintptr)(retPtr) = r
+		case retBool:
+			*(*uint8)(retPtr) = uint8(r)
+		}
+		return nil
 	}
-
-	cif := &types.CallInterface{}
-	if err := ffi.PrepareCallInterface(cif, types.DefaultCall, retType, argTypes); err != nil {
-		return err
+	a := args
+	switch k := string(key[:n]); k {
+	case "f":
+		C.gm_v_f(o, s, a[0].f32())
+	case "d":
+		C.gm_v_d(o, s, a[0].f64())
+	case "fff":
+		C.gm_v_fff(o, s, a[0].f32(), a[1].f32(), a[2].f32())
+	case "ffff":
+		C.gm_v_ffff(o, s, a[0].f32(), a[1].f32(), a[2].f32(), a[3].f32())
+	case "4": // CGSize
+		C.gm_v_2d(o, s, a[0].s2d())
+	case "5": // MTLClearColor
+		C.gm_v_4d(o, s, a[0].s4d())
+	case "6": // MTLViewport
+		C.gm_v_6d(o, s, a[0].s6d())
+	case "7": // NSRange
+		C.gm_v_2u(o, s, a[0].s2u())
+	case "9": // MTLScissorRect
+		C.gm_v_4u(o, s, a[0].s4u())
+	case "p7":
+		C.gm_v_p2u(o, s, a[0].word(), a[1].s2u())
+	case "88":
+		C.gm_v_3u3u(o, s, a[0].s3u(), a[1].s3u())
+	case "pp8":
+		C.gm_v_pp3u(o, s, a[0].word(), a[1].word(), a[2].s3u())
+	case "pppp8ppp8":
+		C.gm_v_pppp3uppp3u(o, s, a[0].word(), a[1].word(), a[2].word(), a[3].word(), a[4].s3u(), a[5].word(), a[6].word(), a[7].word(), a[8].s3u())
+	case "ppp88ppp8":
+		C.gm_v_ppp3u3uppp3u(o, s, a[0].word(), a[1].word(), a[2].word(), a[3].s3u(), a[4].s3u(), a[5].word(), a[6].word(), a[7].word(), a[8].s3u())
+	case "ppp88pppp":
+		C.gm_v_ppp3u3upppp(o, s, a[0].word(), a[1].word(), a[2].word(), a[3].s3u(), a[4].s3u(), a[5].word(), a[6].word(), a[7].word(), a[8].word())
+	case ":ppppp": // MTLRegion, then integers
+		C.gm_v_6uppppp(o, s, a[0].s6u(), a[1].word(), a[2].word(), a[3].word(), a[4].word(), a[5].word())
+	case ":ppbpp": // replaceRegion:mipmapLevel:slice:withBytes:bytesPerRow:bytesPerImage:
+		C.gm_v_6upppbpp(o, s, a[0].s6u(), a[1].word(), a[2].word(), (*C.uint8_t)(a[3].ptr), a[4].word(), a[5].word())
+	case "pp77":
+		r := uintptr(C.gm_pp2u2u(o, s, a[0].word(), a[1].word(), a[2].s2u(), a[3].s2u()))
+		if retPtr != nil {
+			*(*uintptr)(retPtr) = r
+		}
+	case "p":
+		if retType != mtlOriginType {
+			panic("metal: unexpected struct result")
+		}
+		*(*C.G3u)(retPtr) = C.gm_3u_p(o, s, a[0].word())
+	default:
+		panic("metal: no objc_msgSend trampoline for argument shape " + k)
 	}
-
-	self := uintptr(obj)
-	cmd := uintptr(sel)
-	argPtrs := make([]unsafe.Pointer, 2+len(args))
-	argPtrs[0] = unsafe.Pointer(&self)
-	argPtrs[1] = unsafe.Pointer(&cmd)
-	for i, arg := range args {
-		argPtrs[2+i] = arg.ptr
-	}
-
-	fn := objcMsgSendSymbol(retType)
-	_, err := ffi.CallFunction(cif, fn, retPtr, argPtrs)
-	runtime.KeepAlive(args)
-	return err
+	return nil
 }
 
 func msgSendVoid(obj ID, sel SEL, args ...objcArg) {
-	_ = msgSend(obj, sel, types.VoidTypeDescriptor, nil, args...)
+	_ = msgSend(obj, sel, retVoid, nil, args...)
 }
 
 func msgSendSetBytes(obj ID, sel SEL, bytes unsafe.Pointer, length, index NSUInteger) error {
+	_ = msgSendBytes(obj, sel, bytes, uintptr(length), uintptr(index))
+	return nil
+}
+
+// msgSendBytes sends sel with Go memory and two integers:
+// setBytes:length:atIndex:, newBufferWithBytes:length:options:.
+func msgSendBytes(obj ID, sel SEL, bytes unsafe.Pointer, a, b uintptr) ID {
 	if obj == 0 || sel == 0 {
-		return nil
+		return 0
 	}
+	return ID(C.gm3p(C.U(obj), C.U(sel), (*C.uint8_t)(bytes), C.U(a), C.U(b)))
+}
 
-	self := uintptr(obj)
-	cmd := uintptr(sel)
-	lengthValue := uint64(length)
-	indexValue := uint64(index)
-	args := [5]unsafe.Pointer{
-		unsafe.Pointer(&self),
-		unsafe.Pointer(&cmd),
-		unsafe.Pointer(&bytes),
-		unsafe.Pointer(&lengthValue),
-		unsafe.Pointer(&indexValue),
+// msgSendErr sends sel with integer arguments and a trailing NSError **,
+// which may point at the caller's stack.
+func msgSendErr(obj ID, sel SEL, errOut *ID, args ...uintptr) ID {
+	if obj == 0 || sel == 0 {
+		return 0
 	}
-
-	// Use a per-call copy because goffi requires separate CallInterface
-	// instances for concurrent calls. The prepared type data is immutable.
-	cif := cifSetBytes
-	_, err := ffi.CallFunction(&cif, symObjcMsgSend, nil, args[:])
-	runtime.KeepAlive(bytes)
-	return err
+	e := (*C.uint8_t)(unsafe.Pointer(errOut))
+	switch len(args) {
+	case 1:
+		return ID(C.gm2e(C.U(obj), C.U(sel), C.U(args[0]), e))
+	case 2:
+		return ID(C.gm3e(C.U(obj), C.U(sel), C.U(args[0]), C.U(args[1]), e))
+	}
+	panic("metal: msgSendErr arity")
 }
 
 func msgSendID(obj ID, sel SEL, args ...objcArg) ID {
 	var result ID
-	_ = msgSend(obj, sel, types.PointerTypeDescriptor, unsafe.Pointer(&result), args...)
+	_ = msgSend(obj, sel, retInt, unsafe.Pointer(&result), args...)
 	return result
 }
 
 func msgSendUint(obj ID, sel SEL, args ...objcArg) uint {
-	var result uint64
-	_ = msgSend(obj, sel, types.UInt64TypeDescriptor, unsafe.Pointer(&result), args...)
-	return uint(result)
+	var result uint
+	_ = msgSend(obj, sel, retInt, unsafe.Pointer(&result), args...)
+	return result
 }
 
 func msgSendBool(obj ID, sel SEL, args ...objcArg) bool {
 	var result uint8
-	_ = msgSend(obj, sel, types.UInt8TypeDescriptor, unsafe.Pointer(&result), args...)
+	_ = msgSend(obj, sel, retBool, unsafe.Pointer(&result), args...)
 	return result != 0
 }
 
-func objcMsgSendSymbol(retType *types.TypeDescriptor) unsafe.Pointer {
-	if retType != nil && retType.Kind == types.StructType && runtime.GOARCH == "amd64" {
-		if symObjcMsgSendStret != nil && typeSize(retType) > 16 {
-			return symObjcMsgSendStret
-		}
-	}
-	if retType != nil && (retType.Kind == types.FloatType || retType.Kind == types.DoubleType) && runtime.GOARCH == "amd64" {
-		if symObjcMsgSendFpret != nil {
-			return symObjcMsgSendFpret
-		}
-	}
-	return symObjcMsgSend
-}
-
-func typeSize(td *types.TypeDescriptor) uintptr {
-	if td == nil {
-		return 0
-	}
-	if td.Size != 0 {
-		return td.Size
-	}
-	if td.Kind != types.StructType {
-		return 0
-	}
-	var size uintptr
-	var maxAlign uintptr
-	for _, member := range td.Members {
-		align := typeAlign(member)
-		size = alignUp(size, align)
-		size += typeSize(member)
-		if align > maxAlign {
-			maxAlign = align
-		}
-	}
-	return alignUp(size, maxAlign)
-}
-
-func typeAlign(td *types.TypeDescriptor) uintptr {
-	if td == nil {
-		return 1
-	}
-	if td.Alignment != 0 {
-		return td.Alignment
-	}
-	if td.Kind != types.StructType {
-		return 1
-	}
-	var maxAlign uintptr
-	for _, member := range td.Members {
-		if align := typeAlign(member); align > maxAlign {
-			maxAlign = align
-		}
-	}
-	if maxAlign == 0 {
-		return 1
-	}
-	return maxAlign
-}
-
-func alignUp(val, align uintptr) uintptr {
-	if align == 0 {
-		return val
-	}
-	rem := val % align
-	if rem == 0 {
-		return val
-	}
-	return val + (align - rem)
-}
-
-// MsgSend calls an Objective-C method on an object and returns the result as ID.
+// MsgSend calls an Objective-C method whose arguments are all integers,
+// ids or pointers and returns the result as ID.
 //
 // For void-returning ObjC methods (setters like setTextureType:, setLabel:,
 // commit, waitUntilCompleted), the return value is meaningless — objc_msgSend
 // always returns a register-sized value regardless of the method's actual return
-// type. Callers discard with `_ = MsgSend(...)`. This is the standard pattern
-// for Go↔ObjC bridges without CGO; Rust wgpu-hal/metal uses the same approach
-// via the objc crate's msg_send! macro which also ignores void returns.
+// type. Callers discard with `_ = MsgSend(...)`.
 func MsgSend(obj ID, sel SEL, args ...uintptr) ID {
-	return msgSendID(obj, sel, pointerArgs(args)...)
+	if obj == 0 || sel == 0 {
+		return 0
+	}
+	return ID(msgInt(obj, sel, args))
 }
 
 // MsgSendUint calls a method and returns a uint result.
 func MsgSendUint(obj ID, sel SEL, args ...uintptr) uint {
-	return msgSendUint(obj, sel, pointerArgs(args)...)
+	return uint(MsgSend(obj, sel, args...))
 }
 
 // MsgSendBool calls a method and returns a bool result.
 func MsgSendBool(obj ID, sel SEL, args ...uintptr) bool {
-	return msgSendBool(obj, sel, pointerArgs(args)...)
+	return uint8(MsgSend(obj, sel, args...)) != 0
 }
 
 // Retain increments the reference count of an object.
@@ -492,14 +543,8 @@ func NewAutoreleasePool() *AutoreleasePool {
 	return newAutoreleasePoolWithCallbacks(autoreleasePoolCallbacks{
 		lock:   runtime.LockOSThread,
 		unlock: runtime.UnlockOSThread,
-		create: func() ID {
-			poolClass := GetClass("NSAutoreleasePool")
-			pool := MsgSend(ID(poolClass), Sel("alloc"))
-			return MsgSend(pool, Sel("init"))
-		},
-		drain: func(pool ID) {
-			_ = MsgSend(pool, Sel("drain"))
-		},
+		create: func() ID { return ID(C.gm_pool_push()) },
+		drain:  func(pool ID) { C.gm_pool_pop(C.U(pool)) },
 	})
 }
 
@@ -532,13 +577,9 @@ func NSString(s string) ID {
 		obj := MsgSend(nsStringClass, Sel("alloc"))
 		return MsgSend(obj, Sel("init"))
 	}
-	cstr := append([]byte(s), 0)
+	cstr := cString(s)
 	obj := MsgSend(nsStringClass, Sel("alloc"))
-	return MsgSend(
-		obj,
-		Sel("initWithUTF8String:"),
-		uintptr(unsafe.Pointer(&cstr[0])),
-	)
+	return ID(C.gm1p(C.U(obj), C.U(Sel("initWithUTF8String:")), (*C.uint8_t)(&cstr[0])))
 }
 
 // GoString converts an NSString to a Go string.
@@ -558,7 +599,7 @@ func goStringFromCStr(cstr uintptr) string {
 		return ""
 	}
 	length := 0
-	ptr := (*byte)(unsafe.Pointer(cstr)) //nolint:govet // Required for FFI
+	ptr := (*byte)(cPointer(cstr))
 	for i := 0; i < 4096; i++ {
 		b := unsafe.Slice(ptr, i+1)
 		if b[i] == 0 {
@@ -574,527 +615,164 @@ func goStringFromCStr(cstr uintptr) string {
 }
 
 // --------------------------------------------------------------------------
-// ObjC Block ABI — Pure Go implementation
+// Completion blocks
 // --------------------------------------------------------------------------
 //
-// Objective-C blocks (closures) follow a documented ABI layout:
-//
-//	struct Block_literal {
-//	    void *isa;           // &_NSConcreteStackBlock or &_NSConcreteGlobalBlock
-//	    int  flags;          // Block flags (see blockHasCopyDispose, etc.)
-//	    int  reserved;       // Always 0
-//	    void *invoke;        // Function pointer: (block_ptr, args...) -> ret
-//	    struct Block_descriptor *descriptor;
-//	    // Captured variables follow (we embed a block ID here)
-//	    uint64 blockID;      // Index into blockRegistry for Go-side state
-//	};
-//
-// The invoke function receives the block pointer as its first argument,
-// allowing us to read blockID and look up the associated Go channel.
-//
-// Reference: https://clang.llvm.org/docs/Block-ABI-Apple.html
+// newBlock makes a heap block whose invoke calls gogpuMetalBlock(kind, id).
+// Each kind keeps its Go-side state in a registry keyed by id, as before.
 
-// blockLiteral is the Go representation of an ObjC Block_literal struct.
-// It matches the C ABI layout expected by the Objective-C runtime.
-type blockLiteral struct {
-	isa        uintptr // Class pointer: _NSConcreteStackBlock
-	flags      int32   // Block flags
-	reserved   int32   // Reserved, always 0
-	invoke     uintptr // C function pointer for the block body
-	descriptor uintptr // Pointer to blockDescriptor
-	blockID    uint64  // Index into blockRegistry
-}
+const (
+	blockSharedEvent uint32 = iota + 1
+	blockStaging
+	blockFrame
+	blockGPU
+)
 
-// blockDescriptor is the descriptor referenced by blockLiteral.
-type blockDescriptor struct {
-	reserved uint64 // Always 0
-	size     uint64 // sizeof(blockLiteral)
-}
-
-// blockRegistryEntry holds Go-side state for an active ObjC block.
+// blockRegistryEntry holds Go-side state for an active shared event block.
 type blockRegistryEntry struct {
 	done chan struct{} // Signaled when the block is invoked
 }
 
-// blockRegistry maps block IDs to their Go-side state.
-// Entries are added when a block is created and removed after it fires or times out.
-var blockRegistry sync.Map // map[uint64]*blockRegistryEntry
-
-// blockPinRegistry keeps *blockLiteral alive until the callback fires.
-// With _NSConcreteGlobalBlock, Block_copy() is a no-op — Metal holds the
-// exact same pointer to our Go-heap block. Without this registry, GC could
-// collect the block before Metal invokes the callback.
-var blockPinRegistry sync.Map // map[uint64]*blockLiteral
-
-// blockPtrToID maps block pointer (uintptr) → blockID (uint64).
-// Reverse lookup used by callbacks to recover the blockID without converting
-// the uintptr to unsafe.Pointer — avoids checkptr violation under -race.
-// Follows purego pattern: block pointer used as opaque integer key only.
-// See issue #293.
-var blockPtrToID sync.Map // map[uintptr]uint64
-
-// blockIDCounter is the next block ID to assign. Atomically incremented.
-var blockIDCounter uint64
-
-// blockIsGlobal is the BLOCK_IS_GLOBAL flag (1 << 28).
-// When set, Block_copy() is a no-op (returns same pointer) and Block_release()
-// is also a no-op. This avoids PAC re-signing issues on ARM64e (Apple Silicon).
-const blockIsGlobal = 1 << 28
-
-// symNSConcreteGlobalBlock is the address of _NSConcreteGlobalBlock from libobjc.
-// Global blocks make Block_copy() a no-op, avoiding PAC pointer re-signing
-// that causes SIGBUS on Apple Silicon when using _NSConcreteStackBlock.
-// See: gogpu/wgpu#89
-var symNSConcreteGlobalBlock uintptr
-
-// sharedEventBlockInvoke is the ffi.NewCallback trampoline for
-// the MTLSharedEvent notification block.
-// Signature: void(^)(id<MTLSharedEvent> event, uint64_t value)
-// Block invoke: void(block_ptr, event, value)
-//
-// Initialized lazily via sync.Once to avoid calling ffi.NewCallback at init time.
 var (
-	sharedEventBlockInvokeOnce sync.Once
-	sharedEventBlockInvokePtr  uintptr
+	blockRegistry            sync.Map // map[uint64]*blockRegistryEntry
+	completedHandlerRegistry sync.Map // map[uint64]ID
+	frameCompletionRegistry  sync.Map // map[uint64]chan<- struct{}
+	gpuCompletionRegistry    sync.Map // map[uint64]*gpuCompletionEntry
+	blockIDCounter           uint64
 )
 
-// sharedEventBlockDescriptor is allocated once and shared by all notification blocks.
-var sharedEventBlockDescriptor *blockDescriptor
-
-func initBlockSupport() {
-	// Load _NSConcreteGlobalBlock symbol from libobjc.
-	// Global blocks make Block_copy() a no-op — no memmove, no PAC re-signing.
-	// This is critical for Apple Silicon where Block_copy() on stack blocks
-	// re-signs the invoke pointer via PAC, causing SIGBUS with unsigned
-	// function pointers from ffi.NewCallback. See: gogpu/wgpu#89
-	if objcLib != nil {
-		sym, err := ffi.GetSymbol(objcLib, "_NSConcreteGlobalBlock")
-		if err == nil && sym != nil {
-			symNSConcreteGlobalBlock = *(*uintptr)(sym)
-		}
-	}
-
-	// Create shared descriptor
-	sharedEventBlockDescriptor = &blockDescriptor{
-		reserved: 0,
-		size:     uint64(unsafe.Sizeof(blockLiteral{})),
-	}
-}
-
-// getSharedEventBlockInvoke returns the C function pointer for notification block invocations.
-// The function is created once via ffi.NewCallback and reused for all blocks.
-func getSharedEventBlockInvoke() uintptr {
-	sharedEventBlockInvokeOnce.Do(func() {
-		// Block invoke signature: void (block_ptr uintptr, event uintptr, value uint64)
-		// On arm64 macOS, the block pointer is the first argument (x0),
-		// event is x1, value is x2.
-		sharedEventBlockInvokePtr = ffi.NewCallback(func(blockPtr, event uintptr, value uint64) {
-			if blockPtr == 0 {
-				return
-			}
-			// Look up blockID via reverse map — no unsafe.Pointer conversion.
-			// Avoids checkptr violation under -race (purego pattern, #293).
-			val, ok := blockPtrToID.Load(blockPtr)
-			if !ok {
-				return
-			}
-			blockID := val.(uint64)
-
-			hal.Logger().Debug("metal: shared event notification fired", "blockID", blockID)
-
-			if entry, ok := blockRegistry.Load(blockID); ok {
-				e := entry.(*blockRegistryEntry)
-				select {
-				case e.done <- struct{}{}:
-				default:
-					// Channel already has a value or is closed
-				}
-			}
-		})
-	})
-	return sharedEventBlockInvokePtr
-}
-
-// newSharedEventNotificationBlock creates an ObjC block for MTLSharedEvent notifications.
-// The block signals the returned channel when invoked by the GPU event system.
-//
-// The caller must call releaseBlock(id) when the block is no longer needed
-// (either after the channel is signaled or after a timeout).
-//
-// Returns (block pointer, block ID, done channel) or (0, 0, nil) on failure.
-func newSharedEventNotificationBlock() (uintptr, uint64, chan struct{}) {
-	if symNSConcreteGlobalBlock == 0 {
-		return 0, 0, nil
-	}
-
-	invokePtr := getSharedEventBlockInvoke()
-	if invokePtr == 0 {
-		return 0, 0, nil
-	}
-
-	// Allocate block ID and registry entry
-	id := nextBlockID()
-	done := make(chan struct{}, 1)
-	blockRegistry.Store(id, &blockRegistryEntry{done: done})
-
-	// Allocate block as global — Block_copy() is a no-op (no PAC re-signing).
-	block := &blockLiteral{
-		isa:        symNSConcreteGlobalBlock,
-		flags:      blockIsGlobal,
-		reserved:   0,
-		invoke:     invokePtr,
-		descriptor: uintptr(unsafe.Pointer(sharedEventBlockDescriptor)),
-		blockID:    id,
-	}
-
-	// Pin the block so GC doesn't collect it before the callback fires.
-	blockPtr := uintptr(unsafe.Pointer(block))
-	blockPinRegistry.Store(id, block)
-	blockPtrToID.Store(blockPtr, id)
-
-	return blockPtr, id, done
-}
-
-// releaseBlock removes the block entry from the registry and unpins the block.
-// Must be called after the block fires or times out to prevent memory leaks.
-func releaseBlock(id uint64) {
-	if pinned, ok := blockPinRegistry.Load(id); ok {
-		block := pinned.(*blockLiteral)
-		blockPtrToID.Delete(uintptr(unsafe.Pointer(block)))
-	}
-	blockRegistry.Delete(id)
-	blockPinRegistry.Delete(id)
-}
-
-// nextBlockID atomically increments the block ID counter and returns the new value.
-func nextBlockID() uint64 {
-	return atomic.AddUint64(&blockIDCounter, 1)
-}
-
-// --------------------------------------------------------------------------
-// Completed Handler Block — async staging buffer release for WriteTexture
-// --------------------------------------------------------------------------
-//
-// addCompletedHandler: expects a block with signature:
-//   void (^)(id<MTLCommandBuffer> commandBuffer)
-// Block invoke: void(block_ptr, cmdBuffer) — 2 pointer-sized args.
-//
-// When the GPU finishes executing the command buffer, Metal invokes the
-// block. We look up the block ID and release the associated staging buffer.
-
-// completedHandlerRegistry maps block IDs to staging buffer IDs that
-// should be released when the completion handler fires.
-var completedHandlerRegistry sync.Map // map[uint64]ID
-
-// completedHandlerBlockInvoke is the ffi.NewCallback trampoline for
-// MTLCommandBuffer completion handler blocks.
-// Initialized lazily via sync.Once.
-var (
-	completedHandlerBlockInvokeOnce sync.Once
-	completedHandlerBlockInvokePtr  uintptr
-)
-
-// getCompletedHandlerBlockInvoke returns the C function pointer for completion
-// handler block invocations. Created once via ffi.NewCallback and reused.
-func getCompletedHandlerBlockInvoke() uintptr {
-	completedHandlerBlockInvokeOnce.Do(func() {
-		// Block invoke signature: void (block_ptr uintptr, cmdBuffer uintptr)
-		// On arm64: block_ptr in x0, cmdBuffer in x1.
-		// ffi.NewCallback requires uintptr return.
-		completedHandlerBlockInvokePtr = ffi.NewCallback(func(blockPtr, _ uintptr) uintptr {
-			if blockPtr == 0 {
-				return 0
-			}
-			// Look up blockID via reverse map — no unsafe.Pointer conversion.
-			// Avoids checkptr violation under -race (purego pattern, #293).
-			val, ok := blockPtrToID.Load(blockPtr)
-			if !ok {
-				return 0
-			}
-			blockID := val.(uint64)
-
-			hal.Logger().Debug("metal: completion handler fired", "blockID", blockID)
-
-			blockPinRegistry.Delete(blockID)
-			if val, ok := completedHandlerRegistry.LoadAndDelete(blockID); ok {
-				stagingBuf := val.(ID)
-				if stagingBuf != 0 {
-					Release(stagingBuf)
-				}
-			}
-			return 0
-		})
-	})
-	return completedHandlerBlockInvokePtr
-}
-
-// newCompletedHandlerBlock creates an ObjC block for MTLCommandBuffer
-// completion handler that releases the given staging buffer when invoked.
-//
-// The block is suitable for passing to [MTLCommandBuffer addCompletedHandler:].
-// It uses the same blockLiteral layout and blockID mechanism as the shared
-// event notification blocks.
-//
-// Returns a block pointer suitable for passing to addCompletedHandler:,
-// or 0 if block support is unavailable.
-// The caller must keep the returned block pointer alive (via runtime.KeepAlive)
-// until after addCompletedHandler: and commit have been called.
-func newCompletedHandlerBlock(stagingBuffer ID) uintptr {
-	if symNSConcreteGlobalBlock == 0 {
-		return 0
-	}
-
-	invokePtr := getCompletedHandlerBlockInvoke()
-	if invokePtr == 0 {
-		return 0
-	}
-
-	// Allocate block ID and register the staging buffer
-	id := nextBlockID()
-	completedHandlerRegistry.Store(id, stagingBuffer)
-
-	// Allocate block as global — Block_copy() is a no-op (no PAC re-signing).
-	block := &blockLiteral{
-		isa:        symNSConcreteGlobalBlock,
-		flags:      blockIsGlobal,
-		reserved:   0,
-		invoke:     invokePtr,
-		descriptor: uintptr(unsafe.Pointer(sharedEventBlockDescriptor)),
-		blockID:    id,
-	}
-
-	// Pin the block so GC doesn't collect it before the callback fires.
-	blockPtr := uintptr(unsafe.Pointer(block))
-	blockPinRegistry.Store(id, block)
-	blockPtrToID.Store(blockPtr, id)
-
-	return blockPtr
-}
-
-// --------------------------------------------------------------------------
-// Frame Completion Block — frame semaphore signaling for Submit throttling
-// --------------------------------------------------------------------------
-//
-// addCompletedHandler: expects a block with signature:
-//
-//	void (^)(id<MTLCommandBuffer> commandBuffer)
-//
-// Block invoke: void(block_ptr, cmdBuffer) — 2 pointer-sized args.
-//
-// When the GPU finishes executing the last command buffer of a Submit batch,
-// Metal invokes the block. We look up the block ID and signal the frame
-// semaphore channel, releasing a slot for the next frame.
-
-// frameCompletionRegistry maps block IDs to frame semaphore channels.
-// Entries are added in newFrameCompletionBlock and removed when the GPU
-// invokes the completion handler.
-var frameCompletionRegistry sync.Map // map[uint64]chan<- struct{}
-
-// frameCompletionBlockInvoke is the ffi.NewCallback trampoline for
-// frame completion handler blocks.
-// Initialized lazily via sync.Once.
-var (
-	frameCompletionBlockInvokeOnce sync.Once
-	frameCompletionBlockInvokePtr  uintptr
-)
-
-// getFrameCompletionBlockInvoke returns the C function pointer for frame
-// completion handler block invocations. Created once and reused.
-func getFrameCompletionBlockInvoke() uintptr {
-	frameCompletionBlockInvokeOnce.Do(func() {
-		// Block invoke signature: void (block_ptr uintptr, cmdBuffer uintptr)
-		frameCompletionBlockInvokePtr = ffi.NewCallback(func(blockPtr, _ uintptr) uintptr {
-			if blockPtr == 0 {
-				return 0
-			}
-			// Look up blockID via reverse map — no unsafe.Pointer conversion.
-			// Avoids checkptr violation under -race (purego pattern, #293).
-			val, ok := blockPtrToID.Load(blockPtr)
-			if !ok {
-				return 0
-			}
-			blockID := val.(uint64)
-
-			hal.Logger().Debug("metal: frame completion fired", "blockID", blockID)
-
-			blockPinRegistry.Delete(blockID)
-			if val, ok := frameCompletionRegistry.LoadAndDelete(blockID); ok {
-				ch := val.(chan<- struct{})
-				if ch != nil {
-					// Signal that the GPU finished this frame — release a semaphore slot.
-					ch <- struct{}{}
-				}
-			}
-			return 0
-		})
-	})
-	return frameCompletionBlockInvokePtr
-}
-
-// newFrameCompletionBlock creates an ObjC block for MTLCommandBuffer
-// addCompletedHandler: that signals the given frame semaphore channel
-// when the GPU finishes executing the command buffer.
-//
-// Returns a block pointer suitable for passing to addCompletedHandler:,
-// or 0 if block support is unavailable.
-//
-// The caller must keep the returned pointer alive (via runtime.KeepAlive)
-// until after addCompletedHandler: has been called. Metal copies the block
-// internally, so the Go-side literal can be collected after that point.
-func newFrameCompletionBlock(frameSemaphore chan struct{}) uintptr {
-	if symNSConcreteGlobalBlock == 0 || frameSemaphore == nil {
-		return 0
-	}
-
-	invokePtr := getFrameCompletionBlockInvoke()
-	if invokePtr == 0 {
-		return 0
-	}
-
-	// Allocate block ID and register the semaphore channel.
-	id := nextBlockID()
-	// Store as chan<- struct{} (send-only) to match the registry type.
-	var sendOnly chan<- struct{} = frameSemaphore
-	frameCompletionRegistry.Store(id, sendOnly)
-
-	// Allocate block as global — Block_copy() is a no-op (no PAC re-signing).
-	block := &blockLiteral{
-		isa:        symNSConcreteGlobalBlock,
-		flags:      blockIsGlobal,
-		reserved:   0,
-		invoke:     invokePtr,
-		descriptor: uintptr(unsafe.Pointer(sharedEventBlockDescriptor)),
-		blockID:    id,
-	}
-
-	// Pin the block so GC doesn't collect it before the callback fires.
-	blockPtr := uintptr(unsafe.Pointer(block))
-	blockPinRegistry.Store(id, block)
-	blockPtrToID.Store(blockPtr, id)
-
-	return blockPtr
-}
-
-// --------------------------------------------------------------------------
-// GPU Completion Tracking Block — actual GPU completion index for PollCompleted
-// --------------------------------------------------------------------------
-//
-// addCompletedHandler: expects a block with signature:
-//
-//	void (^)(id<MTLCommandBuffer> commandBuffer)
-//
-// Block invoke: void(block_ptr, cmdBuffer) — 2 pointer-sized args.
-//
-// When the GPU finishes executing the last command buffer of a Submit batch,
-// Metal invokes the block. We look up the block ID in the registry, retrieve
-// the captured submission index, and atomically store it in the target counter.
-// This provides actual GPU completion tracking for PollCompleted(), matching
-// the Rust wgpu-hal Metal backend pattern (Fence.completed_value: Arc<AtomicU64>
-// updated via addCompletedHandler in Queue::submit).
-
-// gpuCompletionEntry holds the target atomic counter and the submission index
-// value to store when the GPU finishes the associated command buffer.
 type gpuCompletionEntry struct {
 	target *atomic.Uint64
 	value  uint64
 }
 
-// gpuCompletionRegistry maps block IDs to their completion tracking state.
-// Entries are added in newGPUCompletionBlock and removed when the GPU
-// invokes the completion handler.
-var gpuCompletionRegistry sync.Map // map[uint64]*gpuCompletionEntry
+func initBlockSupport() {}
 
-// gpuCompletionBlockInvoke is the ffi.NewCallback trampoline for
-// GPU completion tracking handler blocks.
-// Initialized lazily via sync.Once.
-var (
-	gpuCompletionBlockInvokeOnce sync.Once
-	gpuCompletionBlockInvokePtr  uintptr
-)
+func nextBlockID() uint64 {
+	return atomic.AddUint64(&blockIDCounter, 1)
+}
 
-// getGPUCompletionBlockInvoke returns the C function pointer for GPU
-// completion tracking block invocations. Created once and reused.
-func getGPUCompletionBlockInvoke() uintptr {
-	gpuCompletionBlockInvokeOnce.Do(func() {
-		// Block invoke signature: void (block_ptr uintptr, cmdBuffer uintptr)
-		gpuCompletionBlockInvokePtr = ffi.NewCallback(func(blockPtr, _ uintptr) uintptr {
-			if blockPtr == 0 {
-				return 0
+func newBlock(kind uint32, id uint64) uintptr {
+	if kind == blockSharedEvent {
+		return uintptr(C.gm_new_block2(C.uint32_t(kind), C.uint64_t(id)))
+	}
+	return uintptr(C.gm_new_block1(C.uint32_t(kind), C.uint64_t(id)))
+}
+
+// releaseBlockRef drops the creator's reference to a block, once the method
+// that keeps it (addCompletedHandler:, notifyListener:atValue:block:) has
+// copied it.
+func releaseBlockRef(block uintptr) {
+	if block != 0 {
+		C.gm_release_block(C.U(block))
+	}
+}
+
+//export gogpuMetalBlock
+func gogpuMetalBlock(kind C.uint32_t, cid C.uint64_t) {
+	id := uint64(cid)
+	switch uint32(kind) {
+	case blockSharedEvent:
+		hal.Logger().Debug("metal: shared event notification fired", "blockID", id)
+		if entry, ok := blockRegistry.Load(id); ok {
+			select {
+			case entry.(*blockRegistryEntry).done <- struct{}{}:
+			default:
 			}
-			// Look up blockID via reverse map — no unsafe.Pointer conversion.
-			// Avoids checkptr violation under -race (purego pattern, #293).
-			val, ok := blockPtrToID.Load(blockPtr)
-			if !ok {
-				return 0
+		}
+	case blockStaging:
+		hal.Logger().Debug("metal: completion handler fired", "blockID", id)
+		if val, ok := completedHandlerRegistry.LoadAndDelete(id); ok {
+			if staging := val.(ID); staging != 0 {
+				Release(staging)
 			}
-			blockID := val.(uint64)
-
-			hal.Logger().Debug("metal: GPU completion tracking fired", "blockID", blockID)
-
-			blockPinRegistry.Delete(blockID)
-			if val, ok := gpuCompletionRegistry.LoadAndDelete(blockID); ok {
-				entry := val.(*gpuCompletionEntry)
-				// Atomically store the submission index. This runs on a Metal-owned
-				// thread, so atomic.Uint64 provides the necessary thread safety.
-				// Only advance the completed index forward — out-of-order completion
-				// handlers must not regress the value.
-				for {
-					current := entry.target.Load()
-					if entry.value <= current {
-						break // Already at or past this value
-					}
-					if entry.target.CompareAndSwap(current, entry.value) {
-						break
-					}
+		}
+	case blockFrame:
+		hal.Logger().Debug("metal: frame completion fired", "blockID", id)
+		if val, ok := frameCompletionRegistry.LoadAndDelete(id); ok {
+			if ch := val.(chan<- struct{}); ch != nil {
+				ch <- struct{}{}
+			}
+		}
+	case blockGPU:
+		hal.Logger().Debug("metal: GPU completion tracking fired", "blockID", id)
+		if val, ok := gpuCompletionRegistry.LoadAndDelete(id); ok {
+			entry := val.(*gpuCompletionEntry)
+			for {
+				current := entry.target.Load()
+				if entry.value <= current || entry.target.CompareAndSwap(current, entry.value) {
+					break
 				}
 			}
-			return 0
-		})
-	})
-	return gpuCompletionBlockInvokePtr
+		}
+	}
 }
 
-// newGPUCompletionBlock creates an ObjC block for MTLCommandBuffer
-// addCompletedHandler: that atomically stores the given submission index
-// into the target counter when the GPU finishes executing the command buffer.
-//
-// This provides actual GPU completion tracking for PollCompleted(), replacing
-// the conservative heuristic (submissionIndex - maxFramesInFlight) with
-// precise completion information from the GPU.
-//
-// Returns a block pointer suitable for passing to addCompletedHandler:,
-// or 0 if block support is unavailable.
-func newGPUCompletionBlock(target *atomic.Uint64, submissionIndex uint64) uintptr {
-	if symNSConcreteGlobalBlock == 0 || target == nil {
-		return 0
-	}
-
-	invokePtr := getGPUCompletionBlockInvoke()
-	if invokePtr == 0 {
-		return 0
-	}
-
-	// Allocate block ID and register the completion tracking entry.
+// newSharedEventNotificationBlock creates the block for
+// notifyListener:atValue:block:. The caller releases its block reference
+// once the listener has it, and calls releaseBlock(id) when it stops waiting.
+func newSharedEventNotificationBlock() (uintptr, uint64, chan struct{}) {
 	id := nextBlockID()
-	gpuCompletionRegistry.Store(id, &gpuCompletionEntry{
-		target: target,
-		value:  submissionIndex,
-	})
-
-	// Allocate block as global — Block_copy() is a no-op (no PAC re-signing).
-	block := &blockLiteral{
-		isa:        symNSConcreteGlobalBlock,
-		flags:      blockIsGlobal,
-		reserved:   0,
-		invoke:     invokePtr,
-		descriptor: uintptr(unsafe.Pointer(sharedEventBlockDescriptor)),
-		blockID:    id,
+	done := make(chan struct{}, 1)
+	blockRegistry.Store(id, &blockRegistryEntry{done: done})
+	b := newBlock(blockSharedEvent, id)
+	if b == 0 {
+		blockRegistry.Delete(id)
+		return 0, 0, nil
 	}
-
-	// Pin the block so GC doesn't collect it before the callback fires.
-	blockPtr := uintptr(unsafe.Pointer(block))
-	blockPinRegistry.Store(id, block)
-	blockPtrToID.Store(blockPtr, id)
-
-	return blockPtr
+	return b, id, done
 }
+
+func releaseBlock(id uint64) {
+	blockRegistry.Delete(id)
+}
+
+// newCompletedHandlerBlock creates an addCompletedHandler: block that
+// releases stagingBuffer once the GPU is done with it.
+func newCompletedHandlerBlock(stagingBuffer ID) uintptr {
+	id := nextBlockID()
+	completedHandlerRegistry.Store(id, stagingBuffer)
+	b := newBlock(blockStaging, id)
+	if b == 0 {
+		completedHandlerRegistry.Delete(id)
+	}
+	return b
+}
+
+// newFrameCompletionBlock creates an addCompletedHandler: block that
+// signals frameSemaphore.
+func newFrameCompletionBlock(frameSemaphore chan struct{}) uintptr {
+	if frameSemaphore == nil {
+		return 0
+	}
+	id := nextBlockID()
+	var sendOnly chan<- struct{} = frameSemaphore
+	frameCompletionRegistry.Store(id, sendOnly)
+	b := newBlock(blockFrame, id)
+	if b == 0 {
+		frameCompletionRegistry.Delete(id)
+	}
+	return b
+}
+
+// newGPUCompletionBlock creates an addCompletedHandler: block that raises
+// target to submissionIndex.
+func newGPUCompletionBlock(target *atomic.Uint64, submissionIndex uint64) uintptr {
+	if target == nil {
+		return 0
+	}
+	id := nextBlockID()
+	gpuCompletionRegistry.Store(id, &gpuCompletionEntry{target: target, value: submissionIndex})
+	b := newBlock(blockGPU, id)
+	if b == 0 {
+		gpuCompletionRegistry.Delete(id)
+	}
+	return b
+}
+
+func cDefaultDevice() ID  { return ID(C.gm_default_device()) }
+func cCopyAllDevices() ID { return ID(C.gm_copy_all_devices()) }
+
+// blockSupport is whether completion blocks can be made: always, now that
+// they are built in C.
+const blockSupport = true

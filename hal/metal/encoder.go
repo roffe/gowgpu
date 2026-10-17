@@ -670,7 +670,7 @@ func (e *RenderPassEncoder) applyPipeline(p *RenderPipeline) {
 	_ = MsgSend(e.raw, Sel("setFrontFacingWinding:"), uintptr(p.frontFace))
 	if p.depthStencil != 0 {
 		_ = MsgSend(e.raw, Sel("setDepthStencilState:"), uintptr(p.depthStencil))
-		_ = MsgSend(e.raw, Sel("setDepthBias:slopeScale:clamp:"), uintptr(p.depthBias), uintptr(p.depthSlopeScale), uintptr(p.depthClamp))
+		msgSendVoid(e.raw, Sel("setDepthBias:slopeScale:clamp:"), argFloat32(p.depthBias), argFloat32(p.depthSlopeScale), argFloat32(p.depthClamp))
 	}
 }
 
@@ -876,13 +876,21 @@ func (e *RenderPassEncoder) SetStencilReference(ref uint32) {
 	_ = MsgSend(e.raw, Sel("setStencilReferenceValue:"), uintptr(ref))
 }
 
+// primitive is what the current pipeline's topology assembles.
+func (e *RenderPassEncoder) primitive() MTLPrimitiveType {
+	if e.pipeline == nil {
+		return MTLPrimitiveTypeTriangle
+	}
+	return e.pipeline.primitive
+}
+
 // Draw draws primitives.
 func (e *RenderPassEncoder) Draw(args gputypes.DrawArgs) {
 	if !e.beginNative() {
 		return
 	}
 	_ = MsgSend(e.raw, Sel("drawPrimitives:vertexStart:vertexCount:instanceCount:baseInstance:"),
-		uintptr(MTLPrimitiveTypeTriangle), uintptr(args.FirstVertex), uintptr(args.VertexCount), uintptr(args.InstanceCount), uintptr(args.FirstInstance))
+		uintptr(e.primitive()), uintptr(args.FirstVertex), uintptr(args.VertexCount), uintptr(args.InstanceCount), uintptr(args.FirstInstance))
 }
 
 // DrawIndexed draws indexed primitives.
@@ -897,7 +905,7 @@ func (e *RenderPassEncoder) DrawIndexed(args gputypes.DrawIndexedArgs) {
 	}
 	offset := e.indexOffset + uint64(args.FirstIndex)*uint64(indexSize)
 	_ = MsgSend(e.raw, Sel("drawIndexedPrimitives:indexCount:indexType:indexBuffer:indexBufferOffset:instanceCount:baseVertex:baseInstance:"),
-		uintptr(MTLPrimitiveTypeTriangle), uintptr(args.IndexCount), uintptr(indexType),
+		uintptr(e.primitive()), uintptr(args.IndexCount), uintptr(indexType),
 		uintptr(e.indexBuffer.raw), uintptr(offset), uintptr(args.InstanceCount), uintptr(args.BaseVertex), uintptr(args.FirstInstance))
 }
 
@@ -919,7 +927,7 @@ func (e *RenderPassEncoder) DrawIndirect(buffer hal.Buffer, offset uint64, drawC
 	for i := uint32(0); i < drawCount; i++ {
 		recordOffset, _ := indirect.RecordOffset(offset, 16, i)
 		_ = MsgSend(e.raw, Sel("drawPrimitives:indirectBuffer:indirectBufferOffset:"),
-			uintptr(MTLPrimitiveTypeTriangle), uintptr(buf.raw), uintptr(recordOffset))
+			uintptr(e.primitive()), uintptr(buf.raw), uintptr(recordOffset))
 	}
 }
 
@@ -950,7 +958,7 @@ func (e *RenderPassEncoder) DrawIndexedIndirect(buffer hal.Buffer, offset uint64
 			return
 		}
 		_ = MsgSend(e.raw, Sel("drawIndexedPrimitives:indexType:indexBuffer:indexBufferOffset:indirectBuffer:indirectBufferOffset:"),
-			uintptr(MTLPrimitiveTypeTriangle), uintptr(indexType), uintptr(e.indexBuffer.raw), uintptr(e.indexOffset), uintptr(buf.raw), uintptr(recordOffset))
+			uintptr(e.primitive()), uintptr(indexType), uintptr(e.indexBuffer.raw), uintptr(e.indexOffset), uintptr(buf.raw), uintptr(recordOffset))
 	}
 }
 

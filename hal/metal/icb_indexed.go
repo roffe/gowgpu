@@ -182,7 +182,7 @@ kernel void wgpu_translate_indexed_icb(device const DrawIndexedArgs* args [[buff
 	str := NSString(source)
 	defer Release(str)
 	var errorPtr ID
-	library := MsgSend(d.raw, Sel("newLibraryWithSource:options:error:"), uintptr(str), 0, uintptr(unsafe.Pointer(&errorPtr)))
+	library := msgSendErr(d.raw, Sel("newLibraryWithSource:options:error:"), &errorPtr, uintptr(str), 0)
 	if library == 0 {
 		return indexedICBTranslator{}, fmt.Errorf("metal: indexed ICB translator compilation failed: %s", formatNSError(errorPtr))
 	}
@@ -193,7 +193,7 @@ kernel void wgpu_translate_indexed_icb(device const DrawIndexedArgs* args [[buff
 		Release(library)
 		return indexedICBTranslator{}, fmt.Errorf("metal: indexed ICB translator function missing")
 	}
-	pipeline := MsgSend(d.raw, Sel("newComputePipelineStateWithFunction:error:"), uintptr(function), uintptr(unsafe.Pointer(&errorPtr)))
+	pipeline := msgSendErr(d.raw, Sel("newComputePipelineStateWithFunction:error:"), &errorPtr, uintptr(function))
 	Release(function)
 	if pipeline == 0 {
 		Release(library)
@@ -331,7 +331,7 @@ func (e *RenderPassEncoder) prepareIndexedICB(arguments *Buffer, offset uint64, 
 	_ = MsgSend(compute, Sel("setBuffer:offset:atIndex:"), uintptr(arena.argumentBuffer), 0, 1)
 	_ = MsgSend(compute, Sel("setBuffer:offset:atIndex:"), uintptr(e.indexBuffer.raw), uintptr(e.indexOffset), 2)
 	params := indexedICBParams{count: count}
-	_ = MsgSend(compute, Sel("setBytes:length:atIndex:"), uintptr(unsafe.Pointer(&params)), unsafe.Sizeof(params), 3)
+	_ = msgSendBytes(compute, Sel("setBytes:length:atIndex:"), unsafe.Pointer(&params), unsafe.Sizeof(params), 3)
 	_ = MsgSend(compute, Sel("useResource:usage:"), uintptr(arguments.raw), 1)
 	_ = MsgSend(compute, Sel("useResource:usage:"), uintptr(arena.argumentBuffer), 1)
 	_ = MsgSend(compute, Sel("useResource:usage:"), uintptr(e.indexBuffer.raw), 1)

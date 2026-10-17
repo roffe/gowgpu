@@ -6,31 +6,18 @@
 package metal
 
 import (
-	"fmt"
 	"sync"
-	"unsafe"
 
-	"github.com/go-webgpu/goffi/ffi"
-	"github.com/go-webgpu/goffi/types"
 	"github.com/gogpu/wgpu/hal"
 )
 
 var (
-	metalLib unsafe.Pointer
-
-	// Metal framework functions
-	symMTLCreateSystemDefaultDevice unsafe.Pointer
-	symMTLCopyAllDevices            unsafe.Pointer
-
-	cifCreateDefaultDevice types.CallInterface
-	cifCopyAllDevices      types.CallInterface
-
 	initOnce sync.Once
 	errInit  error
 )
 
-// Init initializes the Metal framework.
-// Must be called before using any other Metal functions.
+// Init initializes the Metal backend. libobjc, Metal and QuartzCore are
+// linked, so all that is left is registering the common selectors.
 func Init() error {
 	initOnce.Do(func() {
 		errInit = doInit()
@@ -39,68 +26,15 @@ func Init() error {
 }
 
 func doInit() error {
-	// Initialize Objective-C runtime first
 	if err := initObjCRuntime(); err != nil {
 		return err
 	}
-
-	var err error
-
-	// Load Metal.framework
-	metalLib, err = ffi.LoadLibrary("/System/Library/Frameworks/Metal.framework/Metal")
-	if err != nil {
-		return fmt.Errorf("metal: failed to load Metal.framework: %w", err)
-	}
-
-	// Load QuartzCore.framework for CAMetalLayer
-	if _, err := ffi.LoadLibrary("/System/Library/Frameworks/QuartzCore.framework/QuartzCore"); err != nil {
-		return fmt.Errorf("metal: failed to load QuartzCore.framework: %w", err)
-	}
-
-	// Load Metal functions
-	if symMTLCreateSystemDefaultDevice, err = ffi.GetSymbol(metalLib, "MTLCreateSystemDefaultDevice"); err != nil {
-		return fmt.Errorf("metal: MTLCreateSystemDefaultDevice not found: %w", err)
-	}
-	symMTLCopyAllDevices, _ = ffi.GetSymbol(metalLib, "MTLCopyAllDevices") // Optional
-
-	// Prepare CallInterfaces
-	if err := prepareMetalCallInterfaces(); err != nil {
-		return err
-	}
-
-	// Pre-register common selectors for performance
 	preRegisterSelectors()
-
-	// Initialize ObjC block support for event-driven GPU synchronization
 	initBlockSupport()
-
 	hal.Logger().Info("metal: framework initialized")
 	return nil
 }
 
-func prepareMetalCallInterfaces() error {
-	var err error
-
-	// id<MTLDevice> MTLCreateSystemDefaultDevice(void)
-	err = ffi.PrepareCallInterface(&cifCreateDefaultDevice, types.DefaultCall,
-		types.PointerTypeDescriptor, []*types.TypeDescriptor{})
-	if err != nil {
-		return fmt.Errorf("metal: failed to prepare MTLCreateSystemDefaultDevice: %w", err)
-	}
-
-	// NSArray<id<MTLDevice>>* MTLCopyAllDevices(void)
-	if symMTLCopyAllDevices != nil {
-		err = ffi.PrepareCallInterface(&cifCopyAllDevices, types.DefaultCall,
-			types.PointerTypeDescriptor, []*types.TypeDescriptor{})
-		if err != nil {
-			return fmt.Errorf("metal: failed to prepare MTLCopyAllDevices: %w", err)
-		}
-	}
-
-	return nil
-}
-
-// preRegisterSelectors pre-registers commonly used selectors.
 func preRegisterSelectors() {
 	// Common selectors used throughout
 	commonSelectors := []string{
@@ -183,27 +117,20 @@ func preRegisterSelectors() {
 
 // CreateSystemDefaultDevice returns the default Metal device.
 func CreateSystemDefaultDevice() ID {
-	var result ID
-	_, _ = ffi.CallFunction(&cifCreateDefaultDevice, symMTLCreateSystemDefaultDevice, unsafe.Pointer(&result), nil)
-	return result
+	return cDefaultDevice()
 }
 
-// CopyAllDevices returns all available Metal devices.
-// Returns nil if the function is not available (iOS).
+// CopyAllDevices returns all Metal devices.
+// Returns the default device alone where MTLCopyAllDevices does not exist (iOS).
 func CopyAllDevices() []ID {
-	if symMTLCopyAllDevices == nil {
+	nsArray := cCopyAllDevices()
+	if nsArray == 0 {
 		// On iOS, only default device is available
 		device := CreateSystemDefaultDevice()
 		if device == 0 {
 			return nil
 		}
 		return []ID{device}
-	}
-
-	var nsArray ID
-	_, _ = ffi.CallFunction(&cifCopyAllDevices, symMTLCopyAllDevices, unsafe.Pointer(&nsArray), nil)
-	if nsArray == 0 {
-		return nil
 	}
 
 	count := MsgSendUint(nsArray, Sel("count"))

@@ -7,6 +7,7 @@ package metal
 
 import (
 	"fmt"
+	"runtime"
 
 	"github.com/gogpu/gputypes"
 	"github.com/gogpu/wgpu/hal"
@@ -49,7 +50,7 @@ func (s *Surface) Configure(device hal.Device, config *hal.SurfaceConfiguration)
 		s.format == config.Format && s.device == mtlDevice {
 		s.presentMode = config.PresentMode
 		vsync := config.PresentMode == hal.PresentModeFifo
-		msgSendVoid(s.layer, Sel("setDisplaySyncEnabled:"), argBool(vsync))
+		setDisplaySync(s.layer, vsync)
 		return nil
 	}
 
@@ -108,7 +109,7 @@ func (s *Surface) Configure(device hal.Device, config *hal.SurfaceConfiguration)
 	s.presentMode = config.PresentMode
 	// VSync is controlled by displaySyncEnabled (available since macOS 10.13)
 	vsync := config.PresentMode == hal.PresentModeFifo
-	msgSendVoid(s.layer, Sel("setDisplaySyncEnabled:"), argBool(vsync))
+	setDisplaySync(s.layer, vsync)
 
 	// presentsWithTransaction default is false: normal rendering presents via
 	// [commandBuffer presentDrawable:] from the render goroutine, and enabling
@@ -154,6 +155,15 @@ func (s *Surface) Configure(device hal.Device, config *hal.SurfaceConfiguration)
 
 	s.configured = true
 	return nil
+}
+
+// setDisplaySync sets CAMetalLayer.displaySyncEnabled, which only macOS
+// has: sending it on iOS raises an unrecognized selector exception.
+func setDisplaySync(layer ID, vsync bool) {
+	if runtime.GOOS == "ios" {
+		return
+	}
+	msgSendVoid(layer, Sel("setDisplaySyncEnabled:"), argBool(vsync))
 }
 
 // Unconfigure removes surface configuration.

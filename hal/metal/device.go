@@ -634,8 +634,8 @@ func (d *Device) compileLibrary(module *ShaderModule, layout *PipelineLayout, bi
 	// Create MTLLibrary from source
 	// MTLLibrary* newLibraryWithSource:options:error:
 	var errorPtr ID
-	library := MsgSend(d.raw, Sel("newLibraryWithSource:options:error:"),
-		uintptr(mslString), 0, uintptr(unsafe.Pointer(&errorPtr)))
+	library := msgSendErr(d.raw, Sel("newLibraryWithSource:options:error:"), &errorPtr,
+		uintptr(mslString), 0)
 
 	if library == 0 {
 		errMsg := unknownError
@@ -871,8 +871,8 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 			}
 			_ = MsgSend(pipelineDesc, Sel("setSupportIndirectCommandBuffers:"), enabled)
 		}
-		return MsgSend(d.raw, Sel("newRenderPipelineStateWithDescriptor:error:"),
-			uintptr(pipelineDesc), uintptr(unsafe.Pointer(&errorPtr)))
+		return msgSendErr(d.raw, Sel("newRenderPipelineStateWithDescriptor:error:"), &errorPtr,
+			uintptr(pipelineDesc))
 	})
 
 	if pipelineState == 0 {
@@ -899,6 +899,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		layout:        pipeLayout,
 		cullMode:      cullModeToMTL(desc.Primitive.CullMode),
 		frontFace:     frontFaceToMTL(desc.Primitive.FrontFace),
+		primitive:     primitiveTopologyToMTL(desc.Primitive.Topology),
 		icbCompatible: icbCompatible,
 
 		depthStencil:    depthStencilState,
@@ -1019,8 +1020,8 @@ func (d *Device) CreateComputePipeline(desc *hal.ComputePipelineDescriptor) (hal
 
 	// Create compute pipeline state
 	var errorPtr ID
-	pipelineState := MsgSend(d.raw, Sel("newComputePipelineStateWithFunction:error:"),
-		uintptr(computeFunc), uintptr(unsafe.Pointer(&errorPtr)))
+	pipelineState := msgSendErr(d.raw, Sel("newComputePipelineStateWithFunction:error:"), &errorPtr,
+		uintptr(computeFunc))
 
 	if pipelineState == 0 {
 		errMsg := unknownError
@@ -1211,6 +1212,7 @@ func (d *Device) waitEventDriven(mtlFence *Fence, value uint64, timeout time.Dur
 		argUint64(value),
 		argPointer(blockPtr),
 	)
+	releaseBlockRef(blockPtr)
 
 	// Block is pinned via blockPinRegistry until releaseBlock(blockID).
 	// No runtime.KeepAlive needed — the deferred releaseBlock above

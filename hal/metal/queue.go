@@ -127,6 +127,7 @@ func (q *Queue) registerSubmissionCompletionHandler(cmdBuffer ID, subIdx uint64)
 	}
 
 	_ = MsgSend(cmdBuffer, Sel("addCompletedHandler:"), blockPtr)
+	releaseBlockRef(blockPtr)
 	hal.Logger().Debug("metal: submission completion handler registered", "subIdx", subIdx)
 }
 
@@ -147,6 +148,7 @@ func (q *Queue) registerFrameCompletionHandler(cmdBuffer ID) {
 	// the same pointer. The block is pinned via blockPinRegistry until
 	// the completion callback fires and unpins it.
 	_ = MsgSend(cmdBuffer, Sel("addCompletedHandler:"), blockPtr)
+	releaseBlockRef(blockPtr)
 }
 
 // WriteBuffer writes data to a buffer immediately.
@@ -189,8 +191,8 @@ func (q *Queue) writeBufferStaged(buf *Buffer, offset uint64, data []byte) error
 	defer pool.Drain()
 
 	// Create temporary Shared staging buffer with the data.
-	staging := MsgSend(q.device.raw, Sel("newBufferWithBytes:length:options:"),
-		uintptr(unsafe.Pointer(&data[0])), uintptr(len(data)),
+	staging := msgSendBytes(q.device.raw, Sel("newBufferWithBytes:length:options:"),
+		unsafe.Pointer(&data[0]), uintptr(len(data)),
 		uintptr(MTLResourceStorageModeShared))
 	if staging == 0 {
 		return fmt.Errorf("metal: WriteBuffer: staging buffer creation failed (size=%d)", len(data))
@@ -225,6 +227,7 @@ func (q *Queue) writeBufferStaged(buf *Buffer, offset uint64, data []byte) error
 	blockPtr := newCompletedHandlerBlock(staging)
 	if blockPtr != 0 {
 		_ = MsgSend(cmdBuffer, Sel("addCompletedHandler:"), blockPtr)
+		releaseBlockRef(blockPtr)
 		_ = MsgSend(cmdBuffer, Sel("commit"))
 		Release(cmdBuffer)
 		// Block is pinned via blockPinRegistry until the completion callback
@@ -285,8 +288,8 @@ func (q *Queue) WriteTexture(dst *hal.ImageCopyTexture, data []byte, layout *hal
 	// Create a temporary staging buffer with Shared storage mode.
 	// newBufferWithBytes copies data[] into GPU-visible memory synchronously,
 	// so the caller's slice is consumed before this method returns.
-	stagingBuffer := MsgSend(q.device.raw, Sel("newBufferWithBytes:length:options:"),
-		uintptr(unsafe.Pointer(&data[0])), uintptr(len(data)), uintptr(MTLStorageModeShared))
+	stagingBuffer := msgSendBytes(q.device.raw, Sel("newBufferWithBytes:length:options:"),
+		unsafe.Pointer(&data[0]), uintptr(len(data)), uintptr(MTLStorageModeShared))
 	if stagingBuffer == 0 {
 		return fmt.Errorf("metal: WriteTexture: staging buffer creation failed (dataSize=%d)", len(data))
 	}
@@ -335,6 +338,7 @@ func (q *Queue) WriteTexture(dst *hal.ImageCopyTexture, data []byte, layout *hal
 		// Register completion handler BEFORE commit.
 		// addCompletedHandler: retains the command buffer internally.
 		_ = MsgSend(cmdBuffer, Sel("addCompletedHandler:"), blockPtr)
+		releaseBlockRef(blockPtr)
 
 		// Commit — GPU will execute the blit asynchronously.
 		_ = MsgSend(cmdBuffer, Sel("commit"))
@@ -388,7 +392,7 @@ func (q *Queue) writeTextureShared(tex *Texture, dst *hal.ImageCopyTexture, data
 			argStruct(region, mtlRegionType),
 			argUint64(uint64(dst.MipLevel)),
 			argUint64(uint64(destination.slice)),
-			argPointer(uintptr(unsafe.Pointer(&src[0]))),
+			argBytes(unsafe.Pointer(&src[0])),
 			argUint64(strides.bytesPerRow),
 			argUint64(strides.bytesPerImage),
 		)

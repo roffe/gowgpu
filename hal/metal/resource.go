@@ -218,6 +218,7 @@ type RenderPipeline struct {
 	layout        *PipelineLayout // for SetBindGroup slot offset lookup
 	cullMode      MTLCullMode
 	frontFace     MTLWinding
+	primitive     MTLPrimitiveType // what draws assemble, from the topology
 	icbCompatible bool
 
 	depthStencil    ID // id<MTLDepthStencilState>
