@@ -76,6 +76,13 @@ func destroySwapchainFBO(glCtx *gl.Context, fbo, colorRbo uint32) {
 	}
 }
 
+// defaultDrawBuffer is the window's back buffer. GL sets the default
+// framebuffer's draw buffer the first time a context is made current: one
+// first made current without a surface (surfaceless, or on Wayland before the
+// window surface exists) draws to GL_NONE, and keeps doing so once a window
+// surface is current. The present blit then silently draws nothing.
+var defaultDrawBuffer = []uint32{gl.BACK}
+
 // blitSwapchainToDefaultWith performs the present-time Y-flipping blit from
 // the Surface's swapchain FBO to the default framebuffer (FBO 0).
 // Must be called with GL context current on the user window DC.
@@ -93,6 +100,7 @@ func (s *Surface) blitSwapchainToDefaultWith(glCtx *gl.Context) {
 
 	glCtx.BindFramebuffer(gl.READ_FRAMEBUFFER, s.swapchainFBO)
 	glCtx.BindFramebuffer(gl.DRAW_FRAMEBUFFER, 0)
+	glCtx.DrawBuffers(defaultDrawBuffer)
 
 	w := int32(s.fboWidth)
 	h := int32(s.fboHeight)
