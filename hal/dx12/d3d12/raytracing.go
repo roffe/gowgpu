@@ -119,13 +119,14 @@ type D3D12_RAYTRACING_GEOMETRY_AABBS_DESC struct {
 // D3D12_RAYTRACING_GEOMETRY_DESC describes one geometry entry.
 // The Union field holds either a triangles or AABBs descriptor, interpreted
 // according to Type. Its size matches the larger of the two variants
-// (D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC = 64 bytes).
+// (D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC = 48 bytes), so the struct is
+// 56 bytes, the stride the driver walks an array of them with.
 type D3D12_RAYTRACING_GEOMETRY_DESC struct {
 	Type  D3D12_RAYTRACING_GEOMETRY_TYPE
 	Flags D3D12_RAYTRACING_GEOMETRY_FLAGS
-	// Union: either D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC (64 bytes)
+	// Union: either D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC (48 bytes)
 	// or D3D12_RAYTRACING_GEOMETRY_AABBS_DESC (24 bytes), 8-aligned as both are.
-	Union [8]uint64
+	Union [6]uint64
 }
 
 // SetTriangles writes a triangles descriptor into the union.
