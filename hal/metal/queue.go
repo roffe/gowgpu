@@ -435,8 +435,7 @@ func (q *Queue) Present(surface hal.Surface, texture hal.SurfaceTexture, _ []ima
 
 	cmdBuffer := MsgSend(q.commandQueue, Sel("commandBuffer"))
 	if cmdBuffer == 0 {
-		Release(st.drawable)
-		st.drawable = 0
+		st.releaseAcquired() // both retains, or the texture pins the IOSurface
 		return nil
 	}
 
