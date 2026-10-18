@@ -1701,13 +1701,13 @@ func (c *CopyBufferToTextureCommand) Execute(ctx *gl.Context) {
 	ctx.PixelStorei(gl.UNPACK_ALIGNMENT, 1)
 	ctx.PixelStorei(gl.UNPACK_ROW_LENGTH, 0) // use default (tightly packed)
 
-	// Upload from PBO. When a PBO is bound, the pixels pointer is interpreted
-	// as a byte offset into the bound buffer.
-	offset := unsafe.Pointer(uintptr(c.bufOffset))
-	ctx.TexSubImage2D(c.dstTex.target, 0,
+	// Upload from PBO. With a PBO bound, the pixels argument is a byte offset
+	// into it. Turned into an unsafe.Pointer, an offset under 4096 is a fatal
+	// "bad pointer" to checkptr (on under -race), so it goes as an integer.
+	ctx.TexSubImage2DOffset(c.dstTex.target, 0,
 		int32(c.origin[0]), int32(c.origin[1]),
 		width, height,
-		format, dataType, offset)
+		format, dataType, uintptr(c.bufOffset))
 
 	// Restore defaults.
 	ctx.PixelStorei(gl.UNPACK_ALIGNMENT, 4)

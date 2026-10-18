@@ -791,6 +791,13 @@ func (c *Context) TexSubImage2D(target uint32, level int32, xoffset, yoffset, wi
 	C.gl_v_iiiiiiiip(C.uintptr_t(uintptr(c.glTexSubImage2D)), C.uint32_t(target), C.uint32_t(level), C.uint32_t(xoffset), C.uint32_t(yoffset), C.uint32_t(width), C.uint32_t(height), C.uint32_t(format), C.uint32_t(typ), (*C.uint8_t)(pixelsPtr))
 }
 
+// TexSubImage2DOffset is glTexSubImage2D from the bound
+// GL_PIXEL_UNPACK_BUFFER: offset is a byte offset into that buffer, not a
+// pointer, so it crosses as an integer.
+func (c *Context) TexSubImage2DOffset(target uint32, level int32, xoffset, yoffset, width, height int32, format, typ uint32, offset uintptr) {
+	C.gl_v_iiiiiiiiu(C.uintptr_t(uintptr(c.glTexSubImage2D)), C.uint32_t(target), C.uint32_t(level), C.uint32_t(xoffset), C.uint32_t(yoffset), C.uint32_t(width), C.uint32_t(height), C.uint32_t(format), C.uint32_t(typ), C.uintptr_t(offset))
+}
+
 func (c *Context) GenerateMipmap(target uint32) {
 	C.gl_v_i(C.uintptr_t(uintptr(c.glGenerateMipmap)), C.uint32_t(target))
 }
