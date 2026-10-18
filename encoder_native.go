@@ -721,6 +721,14 @@ func (e *CommandEncoder) Finish() (*CommandBuffer, error) {
 			ref.Drop()
 		}
 		e.trackedRefs = nil
+		// An encoder in the error state never gets to EndEncoding, so the
+		// HAL encoder is still recording. Discard that like DiscardEncoding
+		// does before it goes back to the pool: otherwise Vulkan loses a
+		// command buffer every time, and Metal and DX12 hand out an encoder
+		// that is still recording, so each later BeginEncoding on it fails.
+		if raw := e.core.RawEncoder(); raw != nil {
+			raw.DiscardEncoding()
+		}
 		// Return the pooled encoder on error — it won't be submitted.
 		e.returnEncoderToPool()
 		return nil, err
