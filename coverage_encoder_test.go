@@ -3,9 +3,10 @@
 package wgpu_test
 
 import (
+	"strings"
 	"testing"
 
-	"github.com/roffe/gowgpu"
+	wgpu "github.com/roffe/gowgpu"
 	"github.com/roffe/gowgpu/gputypes"
 )
 
@@ -14,6 +15,45 @@ import (
 // Covers encoder_native.go CopyTextureToBuffer lines 178-205
 // (texture/buffer tracking + HAL call)
 // =============================================================================
+
+// A bytesPerRow that isn't a multiple of 256 fails Finish. WebGPU asks for it,
+// and DX12 can't copy any other pitch: it used to drop such a copy silently.
+func TestCopyTextureToBufferUnalignedRowPitch(t *testing.T) {
+	_, _, device := newDevice(t)
+	defer device.Release()
+	requireHAL(t, device)
+
+	tex, err := device.CreateTexture(&wgpu.TextureDescriptor{
+		Size:          wgpu.Extent3D{Width: 4, Height: 4, DepthOrArrayLayers: 1},
+		MipLevelCount: 1,
+		SampleCount:   1,
+		Dimension:     wgpu.TextureDimension2D,
+		Format:        gputypes.TextureFormatRGBA8Unorm,
+		Usage:         wgpu.TextureUsageCopySrc,
+	})
+	if err != nil {
+		t.Fatalf("CreateTexture: %v", err)
+	}
+	defer tex.Release()
+	buf, err := device.CreateBuffer(&wgpu.BufferDescriptor{Size: 1024, Usage: wgpu.BufferUsageCopyDst})
+	if err != nil {
+		t.Fatalf("CreateBuffer: %v", err)
+	}
+	defer buf.Release()
+
+	enc, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	enc.CopyTextureToBuffer(tex, buf, []wgpu.BufferTextureCopy{{
+		TextureBase:  wgpu.ImageCopyTexture{Texture: tex},
+		BufferLayout: wgpu.ImageDataLayout{BytesPerRow: 16, RowsPerImage: 4},
+		Size:         wgpu.Extent3D{Width: 4, Height: 4, DepthOrArrayLayers: 1},
+	}})
+	if _, err := enc.Finish(); err == nil || !strings.Contains(err.Error(), "not a multiple of 256") {
+		t.Fatalf("Finish = %v, want the bytesPerRow error", err)
+	}
+}
 
 func TestCopyTextureToBufferValid(t *testing.T) {
 	_, _, device := newDevice(t)
@@ -34,10 +74,10 @@ func TestCopyTextureToBufferValid(t *testing.T) {
 	}
 	defer tex.Release()
 
-	// RGBA8Unorm = 4 bytes per pixel, 4x4 = 64 bytes
+	// 4 rows of 16 bytes at WebGPU's 256-byte row pitch: 3*256 + 16 bytes.
 	buf, err := device.CreateBuffer(&wgpu.BufferDescriptor{
 		Label: "t2b-dst-buf",
-		Size:  256,
+		Size:  1024,
 		Usage: wgpu.BufferUsageCopyDst,
 	})
 	if err != nil {
@@ -55,7 +95,7 @@ func TestCopyTextureToBufferValid(t *testing.T) {
 			TextureBase: wgpu.ImageCopyTexture{Texture: tex},
 			BufferLayout: wgpu.ImageDataLayout{
 				Offset:       0,
-				BytesPerRow:  16,
+				BytesPerRow:  256,
 				RowsPerImage: 4,
 			},
 			Size: wgpu.Extent3D{Width: 4, Height: 4, DepthOrArrayLayers: 1},

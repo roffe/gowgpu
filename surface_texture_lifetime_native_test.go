@@ -448,7 +448,7 @@ func TestBufferCopyToSurfaceTextureHonorsAcquisitionLifetime(t *testing.T) {
 	defer buffer.Release()
 	texture := surfaceTexture.AsTexture()
 	region := []BufferTextureCopy{{
-		BufferLayout: ImageDataLayout{BytesPerRow: 4, RowsPerImage: 1},
+		BufferLayout: ImageDataLayout{RowsPerImage: 1}, // one row needs no bytesPerRow
 		TextureBase:  ImageCopyTexture{Texture: texture},
 		Size:         Extent3D{Width: 1, Height: 1, DepthOrArrayLayers: 1},
 	}}

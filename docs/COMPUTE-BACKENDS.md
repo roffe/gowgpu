@@ -118,4 +118,5 @@ The tick length is `hal.Queue.GetTimestampPeriod()` (Vulkan reads `timestampPeri
 | `Queue.WriteBuffer` | Offset and size multiples of 4 | Yes |
 | `Buffer.Map`, `Buffer.MappedRange` | Offset multiple of 8, size multiple of 4 | Yes |
 | `CommandEncoder.CopyBufferToBuffer` | Offsets and size multiples of 4 | No, keep to it yourself |
+| `CommandEncoder.CopyTextureToBuffer`, `CopyBufferToTexture` | `bytesPerRow` a multiple of 256 | Yes, `Finish` fails |
 | `DispatchIndirect` | Offset multiple of 4, 12 bytes from the offset | Yes |

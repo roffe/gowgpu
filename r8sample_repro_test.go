@@ -369,26 +369,30 @@ func TestDrawIndexedRenders(t *testing.T) {
 	rp.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: 6, InstanceCount: 1})
 	_ = rp.End()
 	enc.TransitionTextures([]wgpu.TextureBarrier{{Texture: outTex, Usage: wgpu.TextureUsageTransition{OldUsage: gputypes.TextureUsageRenderAttachment, NewUsage: gputypes.TextureUsageCopySrc}}})
-	staging, _ := device.CreateBuffer(&wgpu.BufferDescriptor{Size: W * H * 4, Usage: gputypes.BufferUsageMapRead | gputypes.BufferUsageCopyDst})
+	// Rows go out at WebGPU's 256-byte pitch, more than the 64 bytes a row
+	// holds. DX12 can't copy any other pitch.
+	const pitch = 256
+	staging, _ := device.CreateBuffer(&wgpu.BufferDescriptor{Size: pitch * H, Usage: gputypes.BufferUsageMapRead | gputypes.BufferUsageCopyDst})
 	defer staging.Release()
 	enc.CopyTextureToBuffer(outTex, staging, []wgpu.BufferTextureCopy{{
-		BufferLayout: wgpu.ImageDataLayout{Offset: 0, BytesPerRow: W * 4, RowsPerImage: H},
+		BufferLayout: wgpu.ImageDataLayout{Offset: 0, BytesPerRow: pitch, RowsPerImage: H},
 		TextureBase:  wgpu.ImageCopyTexture{Texture: outTex, MipLevel: 0},
 		Size:         wgpu.Extent3D{Width: W, Height: H, DepthOrArrayLayers: 1},
 	}})
 	cb, _ := enc.Finish()
 	q.Submit(cb)
-	if err := staging.Map(context.Background(), wgpu.MapModeRead, 0, W*H*4); err != nil {
+	if err := staging.Map(context.Background(), wgpu.MapModeRead, 0, pitch*H); err != nil {
 		t.Fatalf("Map: %v", err)
 	}
-	rng, _ := staging.MappedRange(0, W*H*4)
+	rng, _ := staging.MappedRange(0, pitch*H)
 	px := rng.Bytes()
 	// The full-screen quad fills over a black clear. A no-op DrawIndexed leaves
 	// the frame black. Count any non-black pixel (the software backend's default
 	// path fills white; backends that run the fragment shader fill green).
 	filled := 0
 	for i := 0; i < W*H; i++ {
-		if px[i*4] > 128 || px[i*4+1] > 128 || px[i*4+2] > 128 {
+		p := px[(i/W)*pitch+(i%W)*4:]
+		if p[0] > 128 || p[1] > 128 || p[2] > 128 {
 			filled++
 		}
 	}

@@ -534,6 +534,10 @@ func (e *CommandEncoder) CopyTextureToBuffer(src *Texture, dst *Buffer, regions 
 		e.setError(fmt.Errorf("wgpu: CommandEncoder.CopyTextureToBuffer: destination buffer is released: %w", ErrReleased))
 		return
 	}
+	if err := checkCopyRowPitch("CopyTextureToBuffer", regions); err != nil {
+		e.setError(err)
+		return
+	}
 	raw := e.core.RawEncoder()
 	if raw == nil {
 		return
@@ -645,6 +649,22 @@ func (e *CommandEncoder) TransitionTextures(barriers []TextureBarrier) {
 
 // CopyBufferToTexture copies data from a buffer to a texture.
 // WebGPU spec: GPUCommandEncoder.copyBufferToTexture.
+// copyBytesPerRowAlignment is what WebGPU asks of bytesPerRow on the buffer
+// side of a copy between a buffer and a texture in a command encoder.
+const copyBytesPerRowAlignment = 256
+
+// checkCopyRowPitch rejects a bytesPerRow that isn't a multiple of 256. DX12
+// can't copy any other pitch and used to drop such a copy without an error,
+// while the other backends took it.
+func checkCopyRowPitch(op string, regions []BufferTextureCopy) error {
+	for _, r := range regions {
+		if bpr := r.BufferLayout.BytesPerRow; bpr%copyBytesPerRowAlignment != 0 {
+			return fmt.Errorf("wgpu: CommandEncoder.%s: bytesPerRow %d is not a multiple of %d", op, bpr, copyBytesPerRowAlignment)
+		}
+	}
+	return nil
+}
+
 func (e *CommandEncoder) CopyBufferToTexture(src *Buffer, dst *Texture, regions []BufferTextureCopy) {
 	if e.released {
 		return
@@ -665,6 +685,10 @@ func (e *CommandEncoder) CopyBufferToTexture(src *Buffer, dst *Texture, regions 
 	halSrc := src.halBuffer()
 	if halSrc == nil {
 		e.setError(fmt.Errorf("wgpu: CommandEncoder.CopyBufferToTexture: source buffer is released: %w", ErrReleased))
+		return
+	}
+	if err := checkCopyRowPitch("CopyBufferToTexture", regions); err != nil {
+		e.setError(err)
 		return
 	}
 	raw := e.core.RawEncoder()
