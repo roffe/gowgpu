@@ -93,6 +93,40 @@ type pendingWrites struct {
 	// them first. A write or render pass that covers the whole texture takes
 	// it off without zeroing.
 	zero map[*Texture]struct{}
+
+	// Scratch reused under pw.mu, so a steady stream of flushes allocates
+	// nothing: flush's barrier list, maintain's one element command buffer
+	// list for ResetAll, and the destination lists of completed inflight
+	// submissions, emptied, for the next flushes to fill.
+	barriers         []hal.BufferBarrier
+	resetList        [1]hal.CommandBuffer
+	spareBufferLists [][]hal.Buffer
+	spareTexLists    [][]hal.Texture
+}
+
+// maxSpareDstLists caps how many emptied destination lists pendingWrites
+// keeps of each kind.
+const maxSpareDstLists = 4
+
+// takeSpare returns a kept emptied list, or nil.
+func takeSpare[T any](spares *[][]T) []T {
+	n := len(*spares)
+	if n == 0 {
+		return nil
+	}
+	l := (*spares)[n-1]
+	(*spares)[n-1] = nil
+	*spares = (*spares)[:n-1]
+	return l
+}
+
+// keepSpare clears a list nothing references any more and keeps it.
+func keepSpare[T any](spares *[][]T, l []T) {
+	if cap(l) == 0 || len(*spares) >= maxSpareDstLists {
+		return
+	}
+	clear(l)
+	*spares = append(*spares, l[:0])
 }
 
 // inflightSubmission tracks resources from a single submission that must
@@ -616,8 +650,7 @@ func (pw *pendingWrites) flush() (hal.CommandBuffer, hal.CommandEncoder, []hal.T
 	// We extract read-only flags (VERTEX|INDEX|UNIFORM|INDIRECT) from the creation
 	// usage to determine the target state.
 	if len(pw.dstBuffers) > 0 {
-		var stackBarriers [8]hal.BufferBarrier
-		barriers := stackBarriers[:0]
+		barriers := pw.barriers[:0]
 		for buf, usage := range pw.dstBuffers {
 			readUsage := bufferReadUsage(usage)
 			if readUsage != 0 {
@@ -633,6 +666,8 @@ func (pw *pendingWrites) flush() (hal.CommandBuffer, hal.CommandEncoder, []hal.T
 		if len(barriers) > 0 {
 			pw.encoder.TransitionBuffers(barriers)
 		}
+		clear(barriers)
+		pw.barriers = barriers[:0]
 	}
 
 	cmdBuf, err := pw.encoder.EndEncoding()
@@ -652,11 +687,19 @@ func (pw *pendingWrites) flush() (hal.CommandBuffer, hal.CommandEncoder, []hal.T
 		pw.belt.finish(0) // submissionIndex set by caller via setLastSubmissionIndex
 	}
 
+	// Both stay nil when empty: Submit treats a nil flushedDstTextures as
+	// nothing in flight.
 	var flushedDstTextures []hal.Texture
+	if len(pw.dstTextures) > 0 {
+		flushedDstTextures = takeSpare(&pw.spareTexLists)
+	}
 	for tex := range pw.dstTextures {
 		flushedDstTextures = append(flushedDstTextures, tex)
 	}
 	var flushedDstBuffers []hal.Buffer
+	if len(pw.dstBuffers) > 0 {
+		flushedDstBuffers = takeSpare(&pw.spareBufferLists)
+	}
 	for buf := range pw.dstBuffers {
 		flushedDstBuffers = append(flushedDstBuffers, buf)
 	}
@@ -748,15 +791,23 @@ func (pw *pendingWrites) maintain(completedIndex uint64) {
 		}
 		// Reset the encoder and return it to the pool.
 		if sub.encoder != nil && sub.cmdBuf != nil {
-			sub.encoder.ResetAll([]hal.CommandBuffer{sub.cmdBuf})
+			pw.resetList[0] = sub.cmdBuf
+			sub.encoder.ResetAll(pw.resetList[:])
+			pw.resetList[0] = nil
 			pw.pool.release(sub.encoder)
 		} else if sub.cmdBuf != nil {
 			pw.halDevice.FreeCommandBuffer(sub.cmdBuf)
 		}
+		keepSpare(&pw.spareTexLists, sub.dstTextures)
+		keepSpare(&pw.spareBufferLists, sub.dstBuffers)
 	}
 
 	if cutoff > 0 {
-		pw.inflight = pw.inflight[cutoff:]
+		// Compact in place, so the list does not creep along its backing
+		// array and reallocate every few submits.
+		n := copy(pw.inflight, pw.inflight[cutoff:])
+		clear(pw.inflight[n:])
+		pw.inflight = pw.inflight[:n]
 	}
 }
 
