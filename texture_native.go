@@ -3,6 +3,8 @@
 package wgpu
 
 import (
+	"sync"
+
 	"github.com/roffe/gowgpu/core"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
@@ -33,6 +35,29 @@ type Texture struct {
 
 	// mark is the last command encoder that tracked this texture.
 	mark encoderMark
+
+	// defaultView is the HAL view CreateTextureView hands out for a nil
+	// descriptor: one per texture, shared by every TextureView made that way
+	// and destroyed with the texture. A view a frame of the same texture is
+	// then no new HAL view, and on Vulkan no new framebuffer.
+	viewMu      sync.Mutex
+	defaultView hal.TextureView
+	viewDestroy viewDestroy
+}
+
+// sharedDefaultView returns the texture's default HAL view, making it the
+// first time. nil means it could not be made, and the caller makes its own.
+func (t *Texture) sharedDefaultView(dev hal.Device, raw hal.Texture) hal.TextureView {
+	t.viewMu.Lock()
+	defer t.viewMu.Unlock()
+	if t.defaultView == nil && !t.released {
+		v, err := dev.CreateTextureView(raw, &hal.TextureViewDescriptor{})
+		if err != nil {
+			return nil
+		}
+		t.defaultView = v
+	}
+	return t.defaultView
 }
 
 // resolveHAL is the single boundary from a public texture wrapper to HAL.
@@ -85,13 +110,26 @@ func (t *Texture) Release() {
 		return
 	}
 
+	t.viewMu.Lock()
+	defaultView := t.defaultView
+	t.defaultView = nil
+	t.viewMu.Unlock()
+
 	dq := t.device.destroyQueue()
 	if dq == nil {
+		if defaultView != nil {
+			halDevice.DestroyTextureView(defaultView)
+		}
 		halDevice.DestroyTexture(t.hal)
 		return
 	}
 
+	// The shared default view goes first, at the same submission.
 	subIdx := t.device.lastSubmissionIndex()
+	if defaultView != nil {
+		t.viewDestroy = viewDestroy{dev: halDevice, view: defaultView}
+		dq.DeferRelease(subIdx, "TextureView", &t.viewDestroy)
+	}
 	halTex := t.hal
 	dq.Defer(subIdx, "Texture", func() {
 		halDevice.DestroyTexture(halTex)
@@ -107,6 +145,9 @@ type TextureView struct {
 	surface      *core.Surface
 	surfaceLease uint64
 	destroy      viewDestroy // filled by Release
+	// shared is set on a view of the texture's default HAL view, which the
+	// texture owns: Release leaves it alone.
+	shared bool
 }
 
 // resolveHAL is the single boundary from a public texture-view wrapper to HAL.
@@ -145,7 +186,7 @@ func (v *TextureView) Release() {
 	}
 	v.released = true
 
-	if v.device == nil {
+	if v.device == nil || v.shared {
 		return
 	}
 

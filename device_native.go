@@ -173,6 +173,15 @@ func (d *Device) CreateTextureView(texture *Texture, desc *TextureViewDescriptor
 		return nil, ErrReleased
 	}
 
+	// A view without a descriptor is the texture's default view, which every
+	// such view shares (surface textures come and go every frame, so not
+	// theirs).
+	if desc == nil && texture.surface == nil {
+		if hv := texture.sharedDefaultView(halDevice, halTexture); hv != nil {
+			return &TextureView{hal: hv, device: d, texture: texture, shared: true}, nil
+		}
+	}
+
 	halDesc := &hal.TextureViewDescriptor{}
 	if desc != nil {
 		halDesc.Label = desc.Label
