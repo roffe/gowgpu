@@ -682,6 +682,7 @@ type D3D12_RENDER_PASS_BEGINNING_ACCESS struct {
 // D3D12_RENDER_PASS_ENDING_ACCESS describes render pass ending access.
 type D3D12_RENDER_PASS_ENDING_ACCESS struct {
 	Type D3D12_RENDER_PASS_ENDING_ACCESS_TYPE
+	_    uint32 // C ABI padding: the resolve parameters hold pointers, 8-aligned
 	// Union for Resolve (D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_PARAMETERS)
 	Union [48]byte
 }
