@@ -110,11 +110,17 @@ func (e *CommandEncoder) EndEncoding() (hal.CommandBuffer, error) {
 }
 
 // DiscardEncoding discards the encoder without creating a command buffer.
+// The closed list goes back on freeLists for BeginEncoding to reset, since
+// BeginEncoding overwrites cmdList without releasing what was there.
 func (e *CommandEncoder) DiscardEncoding() {
 	if e.isRecording {
 		// Close the command list even though we're discarding it
 		_ = e.cmdList.Close()
 		e.isRecording = false
+	}
+	if e.cmdList != nil {
+		e.freeLists = append(e.freeLists, e.cmdList)
+		e.cmdList = nil
 	}
 }
 
