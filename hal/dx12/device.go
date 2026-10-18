@@ -1909,6 +1909,7 @@ func (d *Device) CreateBindGroup(desc *hal.BindGroupDescriptor) (hal.BindGroup, 
 
 	// Allocate and populate CBV/SRV/UAV descriptors (including sampler index buffer SRV).
 	if err := d.populateBindGroupDescriptors(bg, totalViewDescs, viewEntries, samplerPoolIndices); err != nil {
+		bg.Destroy() // gives back the descriptor range it may already hold
 		return nil, err
 	}
 
