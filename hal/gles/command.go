@@ -23,11 +23,13 @@ type Command interface {
 // CommandBuffer holds recorded commands for later execution.
 type CommandBuffer struct {
 	commands []Command
+	arena    *cmdArena // storage of the pooled commands, see cmdArena
 }
 
 // Destroy releases the command buffer resources.
 func (c *CommandBuffer) Destroy() {
 	c.commands = nil
+	c.arena = nil
 }
 
 // CommandEncoder implements hal.CommandEncoder for OpenGL.
@@ -38,12 +40,22 @@ type CommandEncoder struct {
 	label           string
 	vao             uint32 // persistent VAO from Device for Core Profile
 	maxTextureUnits int32  // Hardware limit passed from Device
+
+	// arena holds the current recording's pooled commands. spareArena and
+	// spareCommands are what ResetAll took back from command buffers that
+	// have run, for the next recording to fill.
+	arena         *cmdArena
+	spareArena    *cmdArena
+	spareCommands []Command
 }
 
 // BeginEncoding begins command recording.
 func (e *CommandEncoder) BeginEncoding(label string) error {
 	e.label = label
-	e.commands = nil
+	if e.commands != nil || e.arena != nil {
+		e.DiscardEncoding() // a recording that never ended: no command buffer holds it
+	}
+	e.commands, e.spareCommands = e.spareCommands, nil
 	return nil
 }
 
@@ -51,19 +63,29 @@ func (e *CommandEncoder) BeginEncoding(label string) error {
 func (e *CommandEncoder) EndEncoding() (hal.CommandBuffer, error) {
 	cmdBuf := &CommandBuffer{
 		commands: e.commands,
+		arena:    e.arena,
 	}
 	e.commands = nil
+	e.arena = nil
 	return cmdBuf, nil
 }
 
-// DiscardEncoding discards the encoder.
+// DiscardEncoding discards the encoder. No command buffer holds the
+// recording, so its storage is kept for the next one.
 func (e *CommandEncoder) DiscardEncoding() {
+	e.reclaim(&CommandBuffer{commands: e.commands, arena: e.arena})
 	e.commands = nil
+	e.arena = nil
 }
 
-// ResetAll resets command buffers for reuse.
-func (e *CommandEncoder) ResetAll(_ []hal.CommandBuffer) {
-	// No-op for OpenGL
+// ResetAll takes back the storage of command buffers that have run, so the
+// next recording reuses it instead of allocating.
+func (e *CommandEncoder) ResetAll(commandBuffers []hal.CommandBuffer) {
+	for _, cb := range commandBuffers {
+		if c, ok := cb.(*CommandBuffer); ok && c != nil {
+			e.reclaim(c)
+		}
+	}
 }
 
 // Destroy is a no-op for OpenGL (no persistent GPU resources owned by encoder).
@@ -251,7 +273,7 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 	// vertex attribute or draw call. Re-binding at pass start ensures it is
 	// active even if external code (or a previous pass) unbound it.
 	if e.vao != 0 {
-		e.commands = append(e.commands, &BindVAOCommand{vao: e.vao})
+		e.commands = append(e.commands, e.store().vaos.put(BindVAOCommand{vao: e.vao}))
 	}
 
 	// Bind the correct framebuffer and set viewport.
@@ -263,9 +285,9 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 	// Set draw buffers for MRT. Matches Rust wgpu-hal GLES
 	// SetDrawColorBuffers (command.rs:643-646, queue.rs:1202-1207).
 	if len(desc.ColorAttachments) > 0 {
-		e.commands = append(e.commands, &SetDrawColorBuffersCommand{
+		e.commands = append(e.commands, e.store().drawBuffers.put(SetDrawColorBuffersCommand{
 			count: len(desc.ColorAttachments),
-		})
+		}))
 	}
 
 	// Record per-buffer clear commands. Uses glClearBufferfv for per-target
@@ -274,7 +296,7 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 	for i, ca := range desc.ColorAttachments {
 		if ca.LoadOp == gputypes.LoadOpClear {
 			clearColor := ca.ClearValue
-			e.commands = append(e.commands, &ClearColorBufferCommand{
+			e.commands = append(e.commands, e.store().clears.put(ClearColorBufferCommand{
 				drawBuffer: int32(i),
 				color: [4]float32{
 					float32(clearColor.R),
@@ -282,7 +304,7 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 					float32(clearColor.B),
 					float32(clearColor.A),
 				},
-			})
+			}))
 		}
 	}
 
@@ -345,15 +367,15 @@ func (e *CommandEncoder) setupColorAttachment(desc *hal.RenderPassDescriptor, rp
 func (e *CommandEncoder) setupSurfaceTarget(desc *hal.RenderPassDescriptor, tv *TextureView, rpe *RenderPassEncoder) {
 	if tv.surfaceTex != nil && tv.surfaceTex.surface != nil {
 		surf := tv.surfaceTex.surface
-		e.commands = append(e.commands, &BindSurfaceFramebufferCommand{surface: surf})
+		e.commands = append(e.commands, e.store().surfaceFBOs.put(BindSurfaceFramebufferCommand{surface: surf}))
 		if surf.config != nil {
 			cfg := surf.config
 			rpe.fbHeight = cfg.Height
-			e.commands = append(e.commands, &SetViewportCommand{
+			e.commands = append(e.commands, e.store().viewports.put(SetViewportCommand{
 				width:    float32(cfg.Width),
 				height:   float32(cfg.Height),
 				maxDepth: 1,
-			})
+			}))
 		}
 		// Attach depth/stencil to the swapchain FBO if requested.
 		// The swapchain FBO is a real GL FBO (not FBO 0), so glFramebufferTexture2D
@@ -370,7 +392,7 @@ func (e *CommandEncoder) setupSurfaceTarget(desc *hal.RenderPassDescriptor, tv *
 	}
 	// Fallback: no surface texture (shouldn't normally happen for isSurface=true
 	// views, but preserves prior behavior for tests / degenerate cases).
-	e.commands = append(e.commands, &BindFramebufferCommand{fbo: 0})
+	e.commands = append(e.commands, e.store().framebuffers.put(BindFramebufferCommand{fbo: 0}))
 }
 
 // setupOffscreenTarget configures an offscreen FBO with all color attachments,
@@ -382,7 +404,7 @@ func (e *CommandEncoder) setupOffscreenTarget(
 	tv *TextureView,
 	rpe *RenderPassEncoder,
 ) {
-	e.commands = append(e.commands, &EnsureOffscreenFBOCommand{texture: tv.texture})
+	e.commands = append(e.commands, e.store().offscreenFBOs.put(EnsureOffscreenFBOCommand{texture: tv.texture}))
 
 	// Attach additional color textures (attachments 1..N) to the FBO.
 	// Attachment 0 is already bound by EnsureOffscreenFBOCommand.
@@ -410,11 +432,11 @@ func (e *CommandEncoder) setupOffscreenTarget(
 	}
 
 	rpe.fbHeight = tv.texture.size.Height
-	e.commands = append(e.commands, &SetViewportCommand{
+	e.commands = append(e.commands, e.store().viewports.put(SetViewportCommand{
 		width:    float32(tv.texture.size.Width),
 		height:   float32(tv.texture.size.Height),
 		maxDepth: 1,
-	})
+	}))
 
 	// Record MSAA resolve target if present (attachment 0 only).
 	ca := desc.ColorAttachments[0]
@@ -542,7 +564,7 @@ func (e *RenderPassEncoder) End() {
 	if len(e.desc.ColorAttachments) > 0 {
 		if tv, ok := e.desc.ColorAttachments[0].View.(*TextureView); ok {
 			if !tv.isSurface && tv.texture != nil {
-				e.encoder.commands = append(e.encoder.commands, &BindFramebufferCommand{fbo: 0})
+				e.encoder.commands = append(e.encoder.commands, e.encoder.store().framebuffers.put(BindFramebufferCommand{fbo: 0}))
 			}
 		}
 	}
@@ -555,16 +577,17 @@ func (e *RenderPassEncoder) SetPipeline(pipeline hal.RenderPipeline) {
 		return
 	}
 	e.pipeline = p
+	st := e.encoder.store()
 	e.encoder.commands = append(e.encoder.commands,
-		&UseProgramCommand{programID: p.programID},
-		&SetPipelineStateCommand{
+		st.programs.put(UseProgramCommand{programID: p.programID}),
+		st.pipelineStates.put(SetPipelineStateCommand{
 			topology:     p.primitiveTopology,
 			cullMode:     p.cullMode,
 			frontFace:    p.frontFace,
 			depthStencil: p.depthStencil,
 			colorTargets: p.colorTargets,
 			stencilRef:   e.stencilRef,
-		},
+		}),
 	)
 }
 
@@ -582,14 +605,14 @@ func (e *RenderPassEncoder) SetBindGroup(index uint32, group hal.BindGroup, offs
 			groupInfos = e.pipeline.layout.groupInfos
 		}
 	}
-	e.encoder.commands = append(e.encoder.commands, &SetBindGroupCommand{
+	e.encoder.commands = append(e.encoder.commands, e.encoder.store().bindGroups.put(SetBindGroupCommand{
 		index:           index,
 		group:           bg,
 		dynamicOffsets:  offsets,
 		maxTextureUnits: e.encoder.maxTextureUnits,
 		groupInfos:      groupInfos,
 		samplerBindMap:  samplerMap,
-	})
+	}))
 }
 
 // SetVertexBuffer sets a vertex buffer and configures vertex attributes.
@@ -614,12 +637,12 @@ func (e *RenderPassEncoder) SetVertexBuffer(slot uint32, buffer hal.Buffer, offs
 		layout = &e.pipeline.vertexBuffers[slot]
 	}
 
-	e.encoder.commands = append(e.encoder.commands, &SetVertexBufferCommand{
+	e.encoder.commands = append(e.encoder.commands, e.encoder.store().vertexBuffers.put(SetVertexBufferCommand{
 		slot:   slot,
 		buffer: buf,
 		offset: offset,
 		layout: layout,
-	})
+	}))
 }
 
 // SetIndexBuffer sets the index buffer.
@@ -631,27 +654,27 @@ func (e *RenderPassEncoder) SetIndexBuffer(buffer hal.Buffer, format gputypes.In
 	e.indexBuffer = buf
 	e.indexFormat = format
 
-	e.encoder.commands = append(e.encoder.commands, &SetIndexBufferCommand{
+	e.encoder.commands = append(e.encoder.commands, e.encoder.store().indexBuffers.put(SetIndexBufferCommand{
 		buffer: buf,
 		format: format,
 		offset: offset,
-	})
+	}))
 }
 
 // SetViewport sets the viewport.
 func (e *RenderPassEncoder) SetViewport(vp gputypes.Viewport) {
-	e.encoder.commands = append(e.encoder.commands, &SetViewportCommand{
+	e.encoder.commands = append(e.encoder.commands, e.encoder.store().viewports.put(SetViewportCommand{
 		x: vp.X, y: vp.Y, width: vp.Width, height: vp.Height,
 		minDepth: vp.MinDepth, maxDepth: vp.MaxDepth,
-	})
+	}))
 }
 
 // SetScissorRect sets the scissor rectangle.
 // With ADJUST_COORDINATE_SPACE, no Y-flip is needed — coordinates pass through directly.
 func (e *RenderPassEncoder) SetScissorRect(rect gputypes.ScissorRect) {
-	e.encoder.commands = append(e.encoder.commands, &SetScissorCommand{
+	e.encoder.commands = append(e.encoder.commands, e.encoder.store().scissors.put(SetScissorCommand{
 		x: rect.X, y: rect.Y, width: rect.Width, height: rect.Height,
-	})
+	}))
 }
 
 // SetBlendConstant sets the blend constant.
@@ -683,13 +706,13 @@ func (e *RenderPassEncoder) Draw(args gputypes.DrawArgs) {
 	if e.pipeline != nil {
 		topology = e.pipeline.primitiveTopology
 	}
-	e.encoder.commands = append(e.encoder.commands, &DrawCommand{
+	e.encoder.commands = append(e.encoder.commands, e.encoder.store().draws.put(DrawCommand{
 		vertexCount:   args.VertexCount,
 		instanceCount: args.InstanceCount,
 		firstVertex:   args.FirstVertex,
 		firstInstance: args.FirstInstance,
 		topology:      topology,
-	})
+	}))
 }
 
 // DrawIndexed draws indexed primitives.
@@ -698,7 +721,7 @@ func (e *RenderPassEncoder) DrawIndexed(args gputypes.DrawIndexedArgs) {
 	if e.pipeline != nil {
 		topology = e.pipeline.primitiveTopology
 	}
-	e.encoder.commands = append(e.encoder.commands, &DrawIndexedCommand{
+	e.encoder.commands = append(e.encoder.commands, e.encoder.store().drawsIndexed.put(DrawIndexedCommand{
 		indexCount:    args.IndexCount,
 		instanceCount: args.InstanceCount,
 		firstIndex:    args.FirstIndex,
@@ -706,7 +729,7 @@ func (e *RenderPassEncoder) DrawIndexed(args gputypes.DrawIndexedArgs) {
 		firstInstance: args.FirstInstance,
 		indexFormat:   e.indexFormat,
 		topology:      topology,
-	})
+	}))
 }
 
 // DrawIndirect is not implemented by the GLES backend.
@@ -766,9 +789,9 @@ func (e *ComputePassEncoder) SetPipeline(pipeline hal.ComputePipeline) {
 		return
 	}
 	e.pipeline = p
-	e.encoder.commands = append(e.encoder.commands, &UseProgramCommand{
+	e.encoder.commands = append(e.encoder.commands, e.encoder.store().programs.put(UseProgramCommand{
 		programID: p.programID,
-	})
+	}))
 }
 
 // SetBindGroup sets a bind group.
@@ -781,20 +804,20 @@ func (e *ComputePassEncoder) SetBindGroup(index uint32, group hal.BindGroup, off
 	if e.pipeline != nil && e.pipeline.layout != nil {
 		groupInfos = e.pipeline.layout.groupInfos
 	}
-	e.encoder.commands = append(e.encoder.commands, &SetBindGroupCommand{
+	e.encoder.commands = append(e.encoder.commands, e.encoder.store().bindGroups.put(SetBindGroupCommand{
 		index:           index,
 		group:           bg,
 		dynamicOffsets:  offsets,
 		maxTextureUnits: e.encoder.maxTextureUnits,
 		groupInfos:      groupInfos,
-	})
+	}))
 }
 
 // Dispatch dispatches compute work.
 func (e *ComputePassEncoder) Dispatch(x, y, z uint32) {
-	e.encoder.commands = append(e.encoder.commands, &DispatchCommand{
+	e.encoder.commands = append(e.encoder.commands, e.encoder.store().dispatches.put(DispatchCommand{
 		x: x, y: y, z: z,
-	})
+	}))
 }
 
 // DispatchIndirect dispatches compute work with GPU-generated parameters.
