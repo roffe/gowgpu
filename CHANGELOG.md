@@ -57,6 +57,9 @@ gowgpu split off from gogpu/wgpu v0.34.5 on 2026-10-17. Everything from [0.34.5]
 - **New textures weren't zeroed.** WebGPU hands them out zeroed, the backends hand out whatever the memory held. A texture that was only partly written, or read before it was written, showed old memory: in fyne it made glyph edges change from frame to frame. Sampled color textures get zeroed now, unless a write or a clearing render pass covers all of them first.
 - **GL `CopyBufferToBuffer` copied nothing**: the `glCopyBufferSubData` call was missing.
 - **GL `SetBindGroup` kept the caller's dynamic offsets** until Submit, so a reused slice gave every draw its last offsets.
+- **Copies between buffers and textures in a command encoder check `bytesPerRow`**: it has to be a multiple of 256, as WebGPU says. DX12 can't copy any other pitch and dropped such a copy without an error, so the readback came back empty, while the other backends took it. Four tests used a smaller pitch, among them `TestDrawIndexedRenders`, which looked like an indexed draw bug on DX12.
+- **The compute workgroup limit tests** passed on Vulkan and DX12 only because those refuse a pipeline without a layout, and failed on Metal, where a device gets the adapter's limit of 1024. They ask for WebGPU's default limits now and check for the limit error itself.
+- **`go vet` on macOS** flagged Metal's buffer contents pointer. It's read like the DX12 and WGL ones now.
 - **`MapPending.Wait`** read the waiter from a goroutine after `Release` could have cleared it or handed it to the next map.
 - **Leaks:**
   - Vulkan kept the framebuffers of every swapchain view it destroyed on a reconfigure (98 after 93 resizes under the validation layer, 2 to 4 now).
