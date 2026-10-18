@@ -39,6 +39,13 @@ type Queue struct {
 	// with the ACTUAL submission index (not the stale lastSubmissionIndex).
 	barrierEncoder hal.CommandEncoder
 	barrierCB      hal.CommandBuffer
+
+	// Scratch for Submit, under mu: the HAL command buffer list and the
+	// tracker index resolvers for barrier injection. Cleared after each
+	// use so they pin nothing between submits.
+	submitBufs  []hal.CommandBuffer
+	texResolver map[track.TrackerIndex]hal.Texture
+	bufResolver map[track.TrackerIndex]hal.Buffer
 }
 
 // Submit submits command buffers for execution. Non-blocking.
@@ -83,13 +90,12 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (uint64, error) {
 		}
 	}
 
-	// Build combined command buffer list: pending first, then user buffers.
-	var allBuffers []hal.CommandBuffer
+	// Build combined command buffer list: barriers first (slot 0, filled
+	// below or dropped), then pending writes, then user buffers. The list
+	// lives in the queue's scratch, the HAL does not keep it.
+	q.submitBufs = append(q.submitBufs[:0], nil)
 	if pendingCmdBuf != nil {
-		allBuffers = make([]hal.CommandBuffer, 0, 1+len(commandBuffers))
-		allBuffers = append(allBuffers, pendingCmdBuf)
-	} else {
-		allBuffers = make([]hal.CommandBuffer, 0, len(commandBuffers))
+		q.submitBufs = append(q.submitBufs, pendingCmdBuf)
 	}
 
 	// Flatten multi-CB command buffers: each CommandBuffer may contain
@@ -99,8 +105,10 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (uint64, error) {
 	//
 	// Reference: Rust wgpu-core queue.rs submit — iterates encoder.list
 	for _, cb := range commandBuffers {
-		allBuffers = append(allBuffers, cb.halBufferList()...)
+		q.submitBufs = append(q.submitBufs, cb.halBufferList()...)
 	}
+	allBuffers := q.submitBufs
+	defer clear(allBuffers)
 
 	// ADR-060: Submit-time texture barrier injection via DeviceTracker.
 	// Merge each command buffer's textureScope into the device-level tracker.
@@ -109,10 +117,15 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (uint64, error) {
 	// preamble command buffer prepended before user CBs.
 	//
 	// Reference: wgpu-core device/queue.rs pre_submit_for_command_buffers
-	allBuffers, err := q.prependTextureBarriers(allBuffers, commandBuffers)
+	barrierCB, err := q.injectBarriers(commandBuffers)
 	if err != nil {
 		q.cancelSubmit(pendingCmdBuf, flushedEncoder, flushedDstTextures)
-		return 0, err
+		return 0, fmt.Errorf("wgpu: submit barrier injection: %w", err)
+	}
+	if barrierCB != nil {
+		allBuffers[0] = barrierCB
+	} else {
+		allBuffers = allBuffers[1:]
 	}
 
 	subIdx, err := q.hal.Submit(allBuffers)
@@ -521,19 +534,6 @@ func validateSubmitTexture(tex *Texture, index int) error {
 	return nil
 }
 
-// prependTextureBarriers creates a barrier command buffer (if needed) and
-// prepends it to allBuffers. Returns the updated buffer list.
-func (q *Queue) prependTextureBarriers(allBuffers []hal.CommandBuffer, commandBuffers []*CommandBuffer) ([]hal.CommandBuffer, error) {
-	barrierCB, err := q.injectBarriers(commandBuffers)
-	if err != nil {
-		return nil, fmt.Errorf("wgpu: submit barrier injection: %w", err)
-	}
-	if barrierCB != nil {
-		allBuffers = append([]hal.CommandBuffer{barrierCB}, allBuffers...)
-	}
-	return allBuffers, nil
-}
-
 // injectBarriers merges each command buffer's textureScope and bufferScope
 // into the device-level DeviceTracker and records any resulting transitions
 // into a new barrier command buffer. Returns the barrier CB (or nil if no
@@ -556,11 +556,6 @@ func (q *Queue) injectBarriers(commandBuffers []*CommandBuffer) (hal.CommandBuff
 		return nil, nil //nolint:nilnil // no tracker = no barriers needed
 	}
 
-	// Build resolvers that map TrackerIndex -> hal resource from all
-	// resources referenced by the submitted command buffers.
-	texResolver := buildTrackerIndexResolver(commandBuffers)
-	bufResolver := buildBufferTrackerIndexResolver(commandBuffers)
-
 	// Merge each command buffer's textureScope into the device tracker,
 	// accumulating all pending transitions.
 	texTransitions := mergeTextureScopes(tracker, commandBuffers)
@@ -577,14 +572,25 @@ func (q *Queue) injectBarriers(commandBuffers []*CommandBuffer) (hal.CommandBuff
 	if q.device.cmdEncoderPool == nil {
 		return nil, nil //nolint:nilnil // no pool = cannot create barrier CB
 	}
-	return q.recordAndTrackAllBarriers(texTransitions, bufTransitions, texResolver, bufResolver)
+
+	// Build resolvers that map TrackerIndex -> hal resource from all
+	// resources referenced by the submitted command buffers. Only now that
+	// there are barriers to record, and into maps the queue keeps.
+	if q.texResolver == nil {
+		q.texResolver = make(map[track.TrackerIndex]hal.Texture)
+		q.bufResolver = make(map[track.TrackerIndex]hal.Buffer)
+	}
+	defer clear(q.texResolver)
+	defer clear(q.bufResolver)
+	fillTextureResolver(q.texResolver, commandBuffers)
+	fillBufferResolver(q.bufResolver, commandBuffers)
+	return q.recordAndTrackAllBarriers(texTransitions, bufTransitions, q.texResolver, q.bufResolver)
 }
 
-// buildTrackerIndexResolver walks all textures referenced by the submitted
-// command buffers and builds a mapping from TrackerIndex to hal.Texture.
+// fillTextureResolver walks all textures referenced by the submitted
+// command buffers and maps their TrackerIndex to their hal.Texture.
 // Includes both directly used textures and those bound via bind groups.
-func buildTrackerIndexResolver(commandBuffers []*CommandBuffer) map[track.TrackerIndex]hal.Texture {
-	resolver := make(map[track.TrackerIndex]hal.Texture)
+func fillTextureResolver(resolver map[track.TrackerIndex]hal.Texture, commandBuffers []*CommandBuffer) {
 	for _, cb := range commandBuffers {
 		if cb == nil {
 			continue
@@ -597,7 +603,6 @@ func buildTrackerIndexResolver(commandBuffers []*CommandBuffer) map[track.Tracke
 			collectBoundTextureIndices(resolver, bg.boundTextures)
 		}
 	}
-	return resolver
 }
 
 // collectTextureIndices adds TrackerIndex -> hal.Texture entries from
@@ -670,11 +675,9 @@ func mergeBufferScopes(tracker *core.DeviceTracker, commandBuffers []*CommandBuf
 	return allTransitions
 }
 
-// buildBufferTrackerIndexResolver walks all buffers referenced by the
-// submitted command buffers and builds a mapping from TrackerIndex to
-// hal.Buffer.
-func buildBufferTrackerIndexResolver(commandBuffers []*CommandBuffer) map[track.TrackerIndex]hal.Buffer {
-	resolver := make(map[track.TrackerIndex]hal.Buffer)
+// fillBufferResolver walks all buffers referenced by the submitted command
+// buffers and maps their TrackerIndex to their hal.Buffer.
+func fillBufferResolver(resolver map[track.TrackerIndex]hal.Buffer, commandBuffers []*CommandBuffer) {
 	for _, cb := range commandBuffers {
 		if cb == nil {
 			continue
@@ -691,7 +694,6 @@ func buildBufferTrackerIndexResolver(commandBuffers []*CommandBuffer) map[track.
 			}
 		}
 	}
-	return resolver
 }
 
 // addTrackedBuffer adds a single buffer to the resolver if it has a

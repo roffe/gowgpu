@@ -636,6 +636,7 @@ func (e *CoreCommandEncoder) Finish() (*CoreCommandBuffer, error) {
 
 	return &CoreCommandBuffer{
 		raw:     halCmdBuffer,
+		rawList: [1]hal.CommandBuffer{halCmdBuffer},
 		device:  e.device,
 		mutable: e.mutable,
 		label:   e.label,
@@ -1519,6 +1520,10 @@ type CoreCommandBuffer struct {
 	// Reference: Rust wgpu-core InnerCommandEncoder.list (command/mod.rs:551)
 	halBuffers []hal.CommandBuffer
 
+	// rawList holds raw for single-CB recording, set by Finish, so that
+	// HalBufferList returns a one element list without allocating one.
+	rawList [1]hal.CommandBuffer
+
 	// device is the parent device.
 	device *Device
 
@@ -1550,6 +1555,9 @@ func (cb *CoreCommandBuffer) HalBufferList() []hal.CommandBuffer {
 	}
 	if cb.raw == nil {
 		return nil
+	}
+	if cb.rawList[0] != nil {
+		return cb.rawList[:]
 	}
 	return []hal.CommandBuffer{cb.raw}
 }
