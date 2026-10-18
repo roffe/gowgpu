@@ -35,6 +35,7 @@ gowgpu split off from gogpu/wgpu v0.34.5 on 2026-10-17. Everything from [0.34.5]
 - **Sampled and storage textures are tracked.** Binding a bind group records its textures' usage in the command buffer's scope, so a submit transitions a render target the next submit samples, and a copy destination that is sampled after. Within one command buffer a texture still has one usage, as for copies: an explicit `TransitionTextures` lets a later use replace it.
 - **New textures get CopyDst on the HAL side** when gowgpu zeroes them (see Fixed).
 - **CI builds with cgo** on Linux, Windows and macOS, cross builds for Android, iOS, Windows without cgo and the browser, checks that regenerating the Vulkan bindings changes nothing, and runs the tests on Mesa's lavapipe and llvmpipe, on WARP and on Metal, skipping the failures each one is known for. gogpu's workflow, with cgo off and the Rust backend, is gone.
+- **deps:** naga v0.19.0 → v0.20.3
 
 ### Added
 
