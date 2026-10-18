@@ -6,8 +6,10 @@
 package gles
 
 import (
+	"context"
 	"fmt"
 	"image"
+	"log/slog"
 	"unsafe"
 
 	"github.com/roffe/gowgpu/gputypes"
@@ -31,6 +33,11 @@ func (q *Queue) Submit(commandBuffers []hal.CommandBuffer) (uint64, error) {
 	glCtx := q.ctx.Lock()
 	defer q.ctx.Unlock()
 
+	// A GL error is only reported through the logger, so the per command
+	// glGetError runs only when a logger would show the warning. Otherwise
+	// one call at the end clears the error flag, as the check after the last
+	// command did, so it does not reach whatever checks glGetError next.
+	checkEach := hal.Logger().Enabled(context.Background(), slog.LevelWarn)
 	for _, cb := range commandBuffers {
 		cmdBuf, ok := cb.(*CommandBuffer)
 		if !ok {
@@ -39,10 +46,16 @@ func (q *Queue) Submit(commandBuffers []hal.CommandBuffer) (uint64, error) {
 
 		for i, cmd := range cmdBuf.commands {
 			cmd.Execute(glCtx)
+			if !checkEach {
+				continue
+			}
 			if glErr := glCtx.GetError(); glErr != 0 {
 				hal.Logger().Warn("gles: GL error after command", "error", fmt.Sprintf("0x%x", glErr), "index", i, "command", fmt.Sprintf("%T", cmd))
 			}
 		}
+	}
+	if !checkEach {
+		_ = glCtx.GetError()
 	}
 
 	q.submissionIndex++
