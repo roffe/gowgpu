@@ -5,26 +5,26 @@ package noop
 import (
 	"fmt"
 	"image"
+	"sync/atomic"
 
 	"github.com/roffe/gowgpu/hal"
 )
 
 // Queue implements hal.Queue for the noop backend.
 type Queue struct {
-	submissionIndex uint64
+	submissionIndex atomic.Uint64 // Submit can be called from several goroutines
 }
 
 // Submit simulates command buffer submission.
 // Returns a monotonically increasing submission index.
 func (q *Queue) Submit(_ []hal.CommandBuffer) (uint64, error) {
-	q.submissionIndex++
-	return q.submissionIndex, nil
+	return q.submissionIndex.Add(1), nil
 }
 
 // PollCompleted returns the highest submission index known to be completed.
 // Noop backend is synchronous — all submissions are immediately complete.
 func (q *Queue) PollCompleted() uint64 {
-	return q.submissionIndex
+	return q.submissionIndex.Load()
 }
 
 // WriteBuffer simulates immediate buffer writes.
