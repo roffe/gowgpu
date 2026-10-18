@@ -94,6 +94,9 @@ type SwapchainTexture struct {
 	swapchain *Swapchain
 	format    gputypes.TextureFormat
 	size      Extent3D
+	// textureView wraps view, made the first time a view is asked for and
+	// shared after that: every view of a swapchain image is the swapchain's.
+	textureView *TextureView
 }
 
 // CurrentUsage returns 0 — Vulkan swapchain images are managed by the swapchain.

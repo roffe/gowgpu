@@ -714,21 +714,22 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 		if t == nil {
 			return nil, fmt.Errorf("vulkan: nil swapchain texture")
 		}
-		// For swapchain textures, reuse the pre-created view from the swapchain.
-		// Creating new views for swapchain images can cause rendering issues.
-		tv := &TextureView{
-			handle:      t.view,
-			texture:     nil,
-			device:      d,
-			size:        t.size,
-			image:       t.handle,
-			isSwapchain: true,
-			swapchain:   t.swapchain,
-			vkFormat:    textureFormatToVk(t.format),
+		// For swapchain textures, reuse the pre-created view from the swapchain,
+		// which was named when the swapchain made it. Creating new views for
+		// swapchain images can cause rendering issues. The wrapper is made
+		// once per image, so a frame allocates nothing for it.
+		if t.textureView == nil {
+			t.textureView = &TextureView{
+				handle:      t.view,
+				device:      d,
+				size:        t.size,
+				image:       t.handle,
+				isSwapchain: true,
+				swapchain:   t.swapchain,
+				vkFormat:    textureFormatToVk(t.format),
+			}
 		}
-		d.setObjectName(vk.ObjectTypeImageView, uint64(t.view),
-			fmt.Sprintf("SwapchainView(%d)", t.index))
-		return tv, nil
+		return t.textureView, nil
 	default:
 		return nil, fmt.Errorf("vulkan: invalid texture type %T", texture)
 	}
@@ -832,9 +833,9 @@ func (d *Device) DestroyTextureView(view hal.TextureView) {
 		return
 	}
 
-	// Don't destroy swapchain views - they're owned by the swapchain
+	// Don't destroy swapchain views - they're owned by the swapchain, and the
+	// wrapper is shared by every frame that draws to the image.
 	if vkView.isSwapchain {
-		vkView.device = nil
 		return
 	}
 
