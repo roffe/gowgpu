@@ -57,9 +57,9 @@ func (q *Queue) Submit(commandBuffers []hal.CommandBuffer) (uint64, error) {
 		<-q.frameSemaphore
 	}
 
-	hal.Logger().Debug("metal: Submit",
-		"buffers", len(commandBuffers),
-	)
+	if hal.DebugEnabled() {
+		hal.Logger().Debug("metal: Submit", "buffers", len(commandBuffers))
+	}
 
 	q.submissionIndex++
 	subIdx := q.submissionIndex
@@ -67,7 +67,15 @@ func (q *Queue) Submit(commandBuffers []hal.CommandBuffer) (uint64, error) {
 	pool := NewAutoreleasePool()
 	defer pool.Drain()
 
-	lastIdx := len(commandBuffers) - 1
+	// The completion handlers go on the last command buffer that is one of
+	// ours; on an entry that is skipped they would never be registered, and
+	// the frame slot never given back.
+	lastIdx := -1
+	for i, buf := range commandBuffers {
+		if cb, ok := buf.(*CommandBuffer); ok && cb != nil {
+			lastIdx = i
+		}
+	}
 	for i, buf := range commandBuffers {
 		cb, ok := buf.(*CommandBuffer)
 		if !ok || cb == nil {
@@ -128,7 +136,9 @@ func (q *Queue) registerSubmissionCompletionHandler(cmdBuffer ID, subIdx uint64)
 
 	_ = MsgSend(cmdBuffer, Sel("addCompletedHandler:"), blockPtr)
 	releaseBlockRef(blockPtr)
-	hal.Logger().Debug("metal: submission completion handler registered", "subIdx", subIdx)
+	if hal.DebugEnabled() {
+		hal.Logger().Debug("metal: submission completion handler registered", "subIdx", subIdx)
+	}
 }
 
 // registerFrameCompletionHandler attaches an addCompletedHandler: block to the
@@ -398,11 +408,13 @@ func (q *Queue) writeTextureShared(tex *Texture, dst *hal.ImageCopyTexture, data
 		)
 	}
 
-	hal.Logger().Debug("metal: WriteTexture (shared direct)",
-		"width", size.Width,
-		"height", size.Height,
-		"bytesPerRow", copyLayout.bytesPerRow,
-	)
+	if hal.DebugEnabled() {
+		hal.Logger().Debug("metal: WriteTexture (shared direct)",
+			"width", size.Width,
+			"height", size.Height,
+			"bytesPerRow", copyLayout.bytesPerRow,
+		)
+	}
 	return nil
 }
 

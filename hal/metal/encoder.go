@@ -63,7 +63,9 @@ func (e *CommandEncoder) BeginEncoding(label string) error {
 		_ = MsgSend(e.cmdBuffer, Sel("setLabel:"), uintptr(nsLabel))
 		Release(nsLabel)
 	}
-	hal.Logger().Debug("metal: encoding started", "label", label)
+	if hal.DebugEnabled() {
+		hal.Logger().Debug("metal: encoding started", "label", label)
+	}
 	return nil
 }
 
@@ -457,17 +459,20 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 		// Depth32FloatStencil8). Without this, the stencil load action
 		// defaults to MTLLoadActionDontCare, leaving stencil values
 		// undefined and causing progressive rendering artifacts on Apple
-		// Silicon TBDR GPUs.
+		// Silicon TBDR GPUs. A depth-only format gets no stencil attachment:
+		// the pipeline declares no stencil format for it (CreateRenderPipeline
+		// goes by HasStencil too), and Metal rejects a pass whose stencil
+		// attachment the pipeline does not match.
 		// Reference: Rust wgpu-hal metal/command.rs:705-727.
-		stencilAttachment := MsgSend(rpDesc, Sel("stencilAttachment"))
-		if tv, ok := dsa.View.(*TextureView); ok && tv != nil {
+		if tv, ok := dsa.View.(*TextureView); ok && tv != nil && tv.texture != nil && tv.texture.format.HasStencil() {
+			stencilAttachment := MsgSend(rpDesc, Sel("stencilAttachment"))
 			_ = MsgSend(stencilAttachment, Sel("setTexture:"), uintptr(tv.raw))
+			_ = MsgSend(stencilAttachment, Sel("setLoadAction:"), uintptr(loadOpToMTL(dsa.StencilLoadOp)))
+			if dsa.StencilLoadOp == gputypes.LoadOpClear {
+				_ = MsgSend(stencilAttachment, Sel("setClearStencil:"), uintptr(dsa.StencilClearValue))
+			}
+			_ = MsgSend(stencilAttachment, Sel("setStoreAction:"), uintptr(storeOpToMTL(dsa.StencilStoreOp)))
 		}
-		_ = MsgSend(stencilAttachment, Sel("setLoadAction:"), uintptr(loadOpToMTL(dsa.StencilLoadOp)))
-		if dsa.StencilLoadOp == gputypes.LoadOpClear {
-			_ = MsgSend(stencilAttachment, Sel("setClearStencil:"), uintptr(dsa.StencilClearValue))
-		}
-		_ = MsgSend(stencilAttachment, Sel("setStoreAction:"), uintptr(storeOpToMTL(dsa.StencilStoreOp)))
 	}
 	// Keep the descriptor alive but delay creation of the native render encoder
 	// until the first draw. Metal requires the ICB translator to run on a compute

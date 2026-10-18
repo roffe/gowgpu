@@ -480,3 +480,23 @@ func vertexStepModeToMTL(mode gputypes.VertexStepMode) MTLVertexStepFunction {
 		return MTLVertexStepFunctionPerVertex
 	}
 }
+
+// colorWriteMaskToMTL maps a WebGPU write mask onto Metal's, whose channels
+// are numbered the other way round: WebGPU has red as bit 0 and alpha as bit
+// 3, Metal alpha as bit 0 and red as bit 3.
+func colorWriteMaskToMTL(mask gputypes.ColorWriteMask) MTLColorWriteMask {
+	var m MTLColorWriteMask
+	if mask&gputypes.ColorWriteMaskRed != 0 {
+		m |= MTLColorWriteMaskRed
+	}
+	if mask&gputypes.ColorWriteMaskGreen != 0 {
+		m |= MTLColorWriteMaskGreen
+	}
+	if mask&gputypes.ColorWriteMaskBlue != 0 {
+		m |= MTLColorWriteMaskBlue
+	}
+	if mask&gputypes.ColorWriteMaskAlpha != 0 {
+		m |= MTLColorWriteMaskAlpha
+	}
+	return m
+}

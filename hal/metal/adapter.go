@@ -113,11 +113,12 @@ func (a *Adapter) SurfaceCapabilities(surface hal.Surface) *hal.SurfaceCapabilit
 	}
 
 	return &hal.SurfaceCapabilities{
+		// What CAMetalLayer takes as its pixelFormat: BGRA8, BGRA8 sRGB and
+		// RGBA16Float (and RGB10A2, not mapped). RGBA8 is not among them and
+		// setPixelFormat: raises on it.
 		Formats: []gputypes.TextureFormat{
 			gputypes.TextureFormatBGRA8Unorm,
 			gputypes.TextureFormatBGRA8UnormSrgb,
-			gputypes.TextureFormatRGBA8Unorm,
-			gputypes.TextureFormatRGBA8UnormSrgb,
 			gputypes.TextureFormatRGBA16Float,
 		},
 		PresentModes: []gputypes.PresentMode{

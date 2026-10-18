@@ -8,6 +8,7 @@ package metal
 import (
 	"fmt"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -464,7 +465,14 @@ func (d *Device) DestroyBindGroupLayout(layout hal.BindGroupLayout) {
 
 // CreateBindGroup creates a bind group.
 func (d *Device) CreateBindGroup(desc *hal.BindGroupDescriptor) (hal.BindGroup, error) {
-	return &BindGroup{layout: desc.Layout.(*BindGroupLayout), entries: desc.Entries, device: d}, nil
+	// naga numbers a group's buffers, textures and samplers by ascending
+	// binding, and SetBindGroup hands out slots in entry order, so the
+	// entries are kept sorted by binding: a group listed out of order bound
+	// its resources to each other's slots.
+	entries := make([]gputypes.BindGroupEntry, len(desc.Entries))
+	copy(entries, desc.Entries)
+	sort.SliceStable(entries, func(i, j int) bool { return entries[i].Binding < entries[j].Binding })
+	return &BindGroup{layout: desc.Layout.(*BindGroupLayout), entries: entries, device: d}, nil
 }
 
 // DestroyBindGroup destroys a bind group.
@@ -795,8 +803,10 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 			pixelFormat := d.adapter.mapTextureFormat(target.Format)
 			_ = MsgSend(attachment, Sel("setPixelFormat:"), uintptr(pixelFormat))
 
-			// Set write mask
-			_ = MsgSend(attachment, Sel("setWriteMask:"), uintptr(target.WriteMask))
+			// Set write mask. Metal numbers the channels the other way round
+			// from WebGPU (alpha is bit 0, red bit 3), so the bits are mapped,
+			// not passed through.
+			_ = MsgSend(attachment, Sel("setWriteMask:"), uintptr(colorWriteMaskToMTL(target.WriteMask)))
 
 			// Configure blending if present
 			if target.Blend != nil {
