@@ -1,7 +1,7 @@
 // Copyright 2025 The GoGPU Authors
 // SPDX-License-Identifier: MIT
 
-//go:build integration && darwin && !rust && !(js && wasm)
+//go:build integration && darwin && !(js && wasm)
 
 package wgpu_test
 

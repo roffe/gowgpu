@@ -1,4 +1,4 @@
-//go:build linux && !rust
+//go:build linux
 
 package wgpu
 

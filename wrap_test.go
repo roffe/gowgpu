@@ -1,4 +1,4 @@
-//go:build !rust && !(js && wasm)
+//go:build !(js && wasm)
 
 package wgpu_test
 
