@@ -243,15 +243,10 @@ func (q *Queue) postSubmit(subIdx uint64, commandBuffers []*CommandBuffer) {
 		if cb == nil || cb.halEncoder == nil {
 			continue
 		}
-		halEnc := cb.halEncoder
-		halCmdBufs := cb.halBufferList() // all CBs from this encoder
-		cb.halEncoder = nil              // ownership moves to deferred callback
-
-		pool := q.device.cmdEncoderPool
-		dq.Defer(subIdx, "CmdEncoder", func() {
-			halEnc.ResetAll(halCmdBufs)
-			pool.release(halEnc)
-		})
+		// All the HAL command buffers from this encoder go back with it.
+		cb.recycle = encoderRecycle{enc: cb.halEncoder, bufs: cb.halBufferList(), pool: q.device.cmdEncoderPool}
+		cb.halEncoder = nil // ownership moves to the recycle the queue runs
+		dq.DeferRelease(subIdx, "CmdEncoder", &cb.recycle)
 	}
 
 	// ADR-060: Defer barrier encoder recycling with the CURRENT submission index.

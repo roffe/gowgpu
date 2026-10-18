@@ -9,9 +9,26 @@ import (
 // DeferredDestroy represents a resource destruction that is deferred until the
 // GPU completes the submission that was active when the resource was released.
 type DeferredDestroy struct {
-	submissionIndex uint64 // GPU submission that must complete before destroy
-	destroyFn       func() // HAL destroy callback
-	label           string // debug label for logging
+	submissionIndex uint64   // GPU submission that must complete before destroy
+	destroyFn       func()   // HAL destroy callback
+	releaser        Releaser // or this, see DeferRelease
+	label           string   // debug label for logging
+}
+
+// Releaser is what DeferRelease releases once a submission completes. A
+// pointer to a field of an object that exists anyway goes into it without
+// allocating, where Defer's closure is an allocation every time.
+type Releaser interface {
+	ReleaseDeferred()
+}
+
+// run releases what d holds.
+func (d *DeferredDestroy) run() {
+	if d.releaser != nil {
+		d.releaser.ReleaseDeferred()
+		return
+	}
+	d.destroyFn()
 }
 
 // TrackedSubmission holds Clone'd ResourceRefs associated with a GPU submission.
@@ -54,7 +71,7 @@ type DestroyQueue struct {
 	// so that a steady stream of submissions allocates nothing here. A Triage
 	// takes the working lists out under the lock and puts them back after,
 	// so concurrent or nested calls just allocate their own.
-	completedFns  []func()
+	completedFns  []DeferredDestroy
 	completedSubs []TrackedSubmission
 	freeRefs      [][]*ResourceRef
 }
@@ -82,6 +99,17 @@ func (q *DestroyQueue) Defer(index uint64, label string, fn func()) {
 	q.pending = append(q.pending, DeferredDestroy{
 		submissionIndex: index,
 		destroyFn:       fn,
+		label:           label,
+	})
+}
+
+// DeferRelease is Defer for r.ReleaseDeferred, without a closure.
+func (q *DestroyQueue) DeferRelease(index uint64, label string, r Releaser) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.pending = append(q.pending, DeferredDestroy{
+		submissionIndex: index,
+		releaser:        r,
 		label:           label,
 	})
 }
@@ -152,7 +180,7 @@ func (q *DestroyQueue) Triage(completedIndex uint64) {
 	n := 0
 	for i := range q.pending {
 		if q.pending[i].submissionIndex <= completedIndex {
-			completedDestroys = append(completedDestroys, q.pending[i].destroyFn)
+			completedDestroys = append(completedDestroys, q.pending[i])
 		} else {
 			q.pending[n] = q.pending[i]
 			n++
@@ -182,8 +210,8 @@ func (q *DestroyQueue) Triage(completedIndex uint64) {
 	q.mu.Unlock()
 
 	// Execute Phase 1 destroy callbacks outside the lock.
-	for _, fn := range completedDestroys {
-		fn()
+	for i := range completedDestroys {
+		completedDestroys[i].run()
 	}
 
 	// Drop Phase 2 refs outside the lock.
@@ -231,7 +259,7 @@ func (q *DestroyQueue) FlushAll() {
 
 	// Execute Phase 1 destroy callbacks outside the lock.
 	for i := range destroys {
-		destroys[i].destroyFn()
+		destroys[i].run()
 	}
 
 	// Drop Phase 2 refs outside the lock.

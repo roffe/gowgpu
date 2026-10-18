@@ -106,6 +106,7 @@ type TextureView struct {
 	released     bool
 	surface      *core.Surface
 	surfaceLease uint64
+	destroy      viewDestroy // filled by Release
 }
 
 // resolveHAL is the single boundary from a public texture-view wrapper to HAL.
@@ -159,9 +160,20 @@ func (v *TextureView) Release() {
 		return
 	}
 
-	subIdx := v.device.lastSubmissionIndex()
-	halTV := v.hal
-	dq.Defer(subIdx, "TextureView", func() {
-		halDevice.DestroyTextureView(halTV)
-	})
+	v.destroy = viewDestroy{dev: halDevice, view: v.hal}
+	dq.DeferRelease(v.device.lastSubmissionIndex(), "TextureView", &v.destroy)
+}
+
+// viewDestroy destroys a released view's HAL view once the GPU is done with
+// it. It lives in the TextureView, so the destroy queue holds it without a
+// closure.
+type viewDestroy struct {
+	dev  hal.Device
+	view hal.TextureView
+}
+
+// ReleaseDeferred implements core.Releaser.
+func (d *viewDestroy) ReleaseDeferred() {
+	d.dev.DestroyTextureView(d.view)
+	*d = viewDestroy{}
 }

@@ -1051,6 +1051,26 @@ type CommandBuffer struct {
 	// Matches Rust wgpu-core's CommandBuffer::take_finished() which consumes
 	// the buffer, preventing reuse.
 	submitted bool
+
+	// recycle gives the HAL encoder back to the pool after the GPU is done
+	// with this command buffer; Submit fills it.
+	recycle encoderRecycle
+}
+
+// encoderRecycle resets a submitted command buffer's HAL encoder and gives it
+// back to the pool. It lives in the CommandBuffer, so the destroy queue holds
+// it without a closure.
+type encoderRecycle struct {
+	enc  hal.CommandEncoder
+	bufs []hal.CommandBuffer
+	pool *encoderPool
+}
+
+// ReleaseDeferred implements core.Releaser.
+func (r *encoderRecycle) ReleaseDeferred() {
+	r.enc.ResetAll(r.bufs)
+	r.pool.release(r.enc)
+	*r = encoderRecycle{}
 }
 
 // Release releases a CommandBuffer that will NOT be submitted to the GPU.
