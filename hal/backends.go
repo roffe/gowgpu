@@ -7,47 +7,19 @@ package hal
 
 import "github.com/roffe/gowgpu/gputypes"
 
-// Backend Implementation Guide
+// Backend notes
 //
-// This file documents the planned Pure Go backends and provides
-// utilities for backend development.
+// The backends are hal/vulkan, hal/metal, hal/dx12 and hal/gles, plus hal/noop
+// for tests. Each registers itself from init() with RegisterBackend, and
+// hal/allbackends imports the ones a platform has.
 //
-// # Planned Backends
+// Native calls go through cgo trampolines (Vulkan, Metal, EGL and GL) or
+// syscall (DX12, WGL), with the libraries opened at run time. See
+// docs/ARCHITECTURE.md.
 //
-//   - hal/noop/   - No-op backend for testing (done ✅)
-//   - hal/gles/     - OpenGL 3.3+ / OpenGL ES 3.0+ (planned)
-//   - hal/vulkan/     - Vulkan 1.0+ (planned)
-//   - hal/metal/    - Metal (macOS/iOS) (planned)
-//   - hal/dx12/   - DirectX 12 (Windows) (planned)
-//
-// # Implementation Priority
-//
-//  1. OpenGL - Most portable, easiest to implement
-//  2. Vulkan - Primary backend for Linux/Windows/Android
-//  3. Metal  - Required for Apple platforms
-//  4. DX12   - Windows high-performance
-//
-// # Reference Libraries
-//
-//   - go-gl/gl         - OpenGL bindings (study patterns)
-//   - vulkan-go/vulkan - Vulkan bindings (starting point)
-//   - Ebitengine       - purego patterns for Metal
-//   - Gio              - Vulkan/Metal/DX11 in Go
-//
-// # Pure Go Approach
-//
-// All backends must be implementable without CGO:
-//   - Use purego for dynamic library loading
-//   - Use syscall for Windows APIs
-//   - Avoid C header dependencies
-//
-// # Backend Compliance
-//
-// Each backend must:
-//  1. Implement all hal.Backend interface methods
-//  2. Pass hal/noop tests as baseline
-//  3. Support backend-specific feature detection
-//  4. Handle graceful degradation
+// A backend implements every hal.Backend method, reports what it can do
+// through its adapters' features, limits and downlevel flags, and refuses a
+// surface target kind it can't use before it touches a handle.
 
 // BackendInfo provides metadata about a backend implementation.
 type BackendInfo struct {

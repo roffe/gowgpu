@@ -76,7 +76,7 @@ type GpuAllocator struct {
 	mu sync.Mutex
 
 	device   vk.Device
-	cmds     *vk.Commands // goffi-based Vulkan commands
+	cmds     *vk.Commands // Vulkan commands
 	config   AllocatorConfig
 	selector *MemoryTypeSelector
 

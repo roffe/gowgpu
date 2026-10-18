@@ -17,7 +17,7 @@
 //   - Use SetDeviceProcAddr(instance) after vkCreateInstance
 //   - vkCreateGraphicsPipelines may return VK_SUCCESS with VK_NULL_HANDLE pipeline
 //
-// See: https://github.com/roffe/gowgpu/issues/24
+// See: https://github.com/gogpu/wgpu/issues/24
 package vk
 
 /*

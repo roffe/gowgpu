@@ -52,7 +52,7 @@ type Instance struct {
 
 	// halInstanceMap maps backend type to its HAL instance for backend-specific
 	// surface creation. When a device uses a different backend than the initially
-	// selected one (e.g., software adapter with ForceFallbackAdapter), the surface
+	// selected one (e.g., a CPU adapter with ForceFallbackAdapter), the surface
 	// must be re-created on the correct backend's HAL instance.
 	halInstanceMap map[gputypes.Backend]hal.Instance
 
@@ -158,9 +158,8 @@ func (i *Instance) enumerateRealAdapters(desc *gputypes.InstanceDescriptor) {
 
 	// Try each backend provider
 	for _, provider := range providers {
-		// Skip noop backend — it's for testing only, not real rendering.
-		// Software backend (also BackendEmpty variant) is allowed through
-		// because it provides real CPU-based rendering.
+		// Skip the noop backend, it's for testing only. Any other
+		// BackendEmpty provider is allowed through.
 		if provider.Variant() == gputypes.BackendEmpty {
 			halInst, err := provider.CreateInstance(halDesc)
 			if err != nil {
@@ -172,7 +171,7 @@ func (i *Instance) enumerateRealAdapters(desc *gputypes.InstanceDescriptor) {
 				halInst.Destroy()
 				continue
 			}
-			// Not noop (software backend) — destroy temp instance and fall through
+			// Not noop: destroy the probe instance and fall through
 			halInst.Destroy()
 		}
 
@@ -276,7 +275,7 @@ func (i *Instance) EnumerateAdapters() []AdapterID {
 //
 // Options control adapter selection:
 //   - PowerPreference: prefer low-power or high-performance adapters
-//   - ForceFallbackAdapter: use software rendering
+//   - ForceFallbackAdapter: use a CPU adapter (WARP, lavapipe)
 //   - CompatibleSurface: adapter must support the given surface
 //
 // If options is nil, the first available adapter is returned.
@@ -308,7 +307,7 @@ func selectAdapterIDs(options *gputypes.RequestAdapterOptions, adapterIDs []Adap
 
 	hub := GetGlobal().Hub()
 
-	// If no options specified, prefer non-CPU adapters (GPU > Software fallback).
+	// If no options specified, prefer non-CPU adapters over CPU ones.
 	if options == nil {
 		for _, adapterID := range adapterIDs {
 			adapter, err := hub.GetAdapter(adapterID)
@@ -319,7 +318,7 @@ func selectAdapterIDs(options *gputypes.RequestAdapterOptions, adapterIDs []Adap
 				return adapterID, nil
 			}
 		}
-		return adapterIDs[0], nil // fallback to first (Software)
+		return adapterIDs[0], nil // only CPU adapters, take the first
 	}
 
 	// ForceFallbackAdapter: return first CPU adapter directly.
@@ -333,7 +332,7 @@ func selectAdapterIDs(options *gputypes.RequestAdapterOptions, adapterIDs []Adap
 				return adapterID, nil
 			}
 		}
-		return AdapterID{}, fmt.Errorf("no software/fallback adapter available")
+		return AdapterID{}, fmt.Errorf("no CPU/fallback adapter available")
 	}
 
 	// Two-pass adapter selection matching WebGPU spec:
@@ -382,7 +381,7 @@ func selectAdapterIDs(options *gputypes.RequestAdapterOptions, adapterIDs []Adap
 		return gpuFallback, nil
 	}
 
-	// Pass 3: CPU fallback (software rasterizer).
+	// Pass 3: CPU fallback (WARP, lavapipe).
 	if hasCPUFallback {
 		return cpuFallback, nil
 	}

@@ -439,20 +439,13 @@ func (s *Surface) SetPresentsWithTransaction(enabled bool) {
 	}
 }
 
-// PresentPixels writes RGBA pixel data directly to the surface and presents it
-// in a single operation, bypassing the WebGPU render pass pipeline entirely.
+// PresentPixels writes RGBA pixel data straight to the surface and presents
+// it, without a render pass. damageRects limits the update (nil is the whole
+// surface).
 //
-// On the software backend this performs RGBA→BGRA swizzle into the DIB section
-// framebuffer and immediately BitBlt's to the window — the fastest path for
-// CPU-rendered content (1 copy vs 3 in the standard pipeline). No AcquireTexture,
-// render pass, or Present call is needed.
-//
-// damageRects restricts the window blit to specific regions (nil = full surface).
-// The surface must be configured. If a texture is currently acquired, it is
-// discarded automatically (stale texture cleanup).
-//
-// Returns an error if the backend does not support PresentPixels (only the
-// software backend implements this extension).
+// Deprecated: only gogpu's software backend implemented this, and it is gone.
+// Every backend now returns an error. It will be removed; render into the
+// surface texture instead.
 func (s *Surface) PresentPixels(data []byte, width, height uint32, damageRects []image.Rectangle) error {
 	if s.released {
 		return ErrReleased
@@ -463,13 +456,12 @@ func (s *Surface) PresentPixels(data []byte, width, height uint32, damageRects [
 	return s.core.PresentPixels(data, width, height, damageRects)
 }
 
-// WritePixels copies RGBA pixel data directly into the surface framebuffer,
-// bypassing render pass and texture upload. On software backend this is a
-// single-pass RGBA→BGRA swizzle+copy into the DIB section (1 copy vs 3).
-// On GPU backends, falls back to WriteTexture + present (no fast path).
+// WritePixels copies RGBA pixel data straight into the surface framebuffer,
+// between GetCurrentTexture and Present, without a render pass.
 //
-// Call between GetCurrentTexture() and Present(). No render pass needed.
-// Returns ErrReleased if the surface is not configured.
+// Deprecated: only gogpu's software backend implemented this, and it is gone.
+// Every backend now returns an error. It will be removed; use
+// Queue.WriteTexture on the surface texture instead.
 func (s *Surface) WritePixels(data []byte, width, height uint32) error {
 	if s == nil || s.released || s.core == nil {
 		return ErrReleased
@@ -487,9 +479,12 @@ func (s *Surface) WritePixels(data []byte, width, height uint32) error {
 // ReadPixels captures the current surface framebuffer as an owned, tightly
 // packed RGBA8 snapshot in top-left, row-major order.
 //
-// This is a non-WebGPU extension implemented by the Pure-Go software backend.
-// The surface must be configured, and any acquired texture must be presented
-// or discarded before capture.
+// The surface must be configured, and any acquired texture presented or
+// discarded first.
+//
+// Deprecated: only gogpu's software backend implemented this, and it is gone.
+// Every backend now returns an error. It will be removed; render into a
+// texture and read it back with CopyTextureToBuffer instead.
 func (s *Surface) ReadPixels() ([]byte, error) {
 	if s == nil || s.released || s.core == nil {
 		return nil, ErrReleased

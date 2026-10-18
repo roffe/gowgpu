@@ -53,13 +53,12 @@ type SurfaceTargetUnsafe struct {
 
 // HeadlessSurfaceTarget requests a surface without a native window.
 //
-// The Pure-Go software backend implements this Go-specific extension. It owns
-// no native handles, so the zero value is ready for use with
-// Instance.CreateSurfaceFromTarget. Rust and browser implementations reject
-// this target with ErrUnsupportedSurfaceTarget.
+// Deprecated: only gogpu's software backend took this target, and it is gone,
+// so every backend refuses it with ErrUnsupportedSurfaceTarget. It will be
+// removed. To render without a window, render into a texture.
 type HeadlessSurfaceTarget struct{}
 
-// SurfaceTarget returns the raw target used by the Pure-Go software backend.
+// SurfaceTarget returns the raw headless target.
 func (HeadlessSurfaceTarget) SurfaceTarget() (SurfaceTargetUnsafe, error) {
 	return SurfaceTargetUnsafe{kind: surfaceTargetHeadless}, nil
 }

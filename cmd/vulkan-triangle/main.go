@@ -3,10 +3,10 @@
 
 //go:build windows
 
-// Command vulkan-triangle is a full integration test for the Pure Go Vulkan backend.
+// Command vulkan-triangle is a full integration test for the Vulkan backend.
 // It renders a red triangle to validate the entire rendering pipeline.
 //
-// This demo uses enterprise-level multi-thread architecture (Ebiten pattern):
+// It splits the work over two threads, like Ebiten:
 // - Main thread: Window events (Win32 message pump)
 // - Render thread: All GPU operations (Vulkan calls)
 //
@@ -30,7 +30,7 @@ import (
 const (
 	windowWidth  = 800
 	windowHeight = 600
-	windowTitle  = "Vulkan Triangle - Pure Go (Multi-Thread)"
+	windowTitle  = "Vulkan Triangle (Multi-Thread)"
 )
 
 func init() {
@@ -101,7 +101,7 @@ func run() error {
 
 	fmt.Println()
 	fmt.Println("=== Starting Render Loop ===")
-	fmt.Println("Press ESC or close window to exit")
+	fmt.Println("Close the window to exit")
 	fmt.Println()
 
 	frameCount := 0
