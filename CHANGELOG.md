@@ -33,6 +33,7 @@ gowgpu split off from gogpu/wgpu v0.34.5 on 2026-10-17. Everything from [0.34.5]
 
 - **GL presented nothing**: a context first made current without a surface keeps the window's draw buffer at `GL_NONE`, so Present drew nowhere. It sets `GL_BACK` before the blit now.
 - **GL texture uploads ignored their origin, row pitch and offset**, so every write landed at (0,0).
+- **GL texture readback returned zeros** when rows were padded, as WebGPU callers pad them to 256 bytes: the rows went into a CPU copy that mapping ignored. They also ignored `bytesPerRow`, came back as BGRA whatever the texture was, and were flipped. They go into the buffer at WebGPU's layout now.
 - **GL on X11 with NVIDIA**: the EGL config asked for alpha, which is a 32-bit visual there, and `eglCreateWindowSurface` refused it for a default 24-bit window (`EGL_BAD_CONFIG`). X11 configs don't ask for alpha now.
 - **Vulkan surface formats for a second surface**: an adapter qualified for one surface returned no capabilities for any other, so the new window an Android app gets after a resume fell back to a format Mali doesn't offer.
 - **Metal**: triangle strips drew as triangle lists, depth bias floats were sent as integers, and iOS crashed on `setDisplaySyncEnabled:`, which only exists on macOS.

@@ -135,7 +135,6 @@ Not run yet: the browser backend, the BSDs, GL on Windows and real Apple hardwar
 ## Known issues
 
 - On Vulkan, pipelines need an explicit layout (there are no automatic layouts). And `Map` doesn't see a `WriteBuffer` until something is submitted, an empty `Queue.Submit()` is enough. 10 tests in the root package fail because of those two, same as on gogpu v0.34.5.
-- GL: reading a texture back swaps red and blue. Presenting is fine.
 - DX12 ignores dynamic bind group offsets, and takes the vertex stride from whatever pipeline was set when `SetVertexBuffer` ran.
 - naga keeps identifiers that start with `gl_` when it writes GLSL, and strict drivers like Mali refuse them. Don't name things `gl_*` in WGSL.
 - `HeadlessSurfaceTarget` and `Surface.ReadPixels` and `WritePixels` are still in the API, but nothing implements them since the software backend went. They'll go.

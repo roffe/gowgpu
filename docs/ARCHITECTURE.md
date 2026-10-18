@@ -129,7 +129,9 @@ Shaders go from WGSL to GLSL through naga, at the GLSL version the driver report
 
 Compute runs with `glDispatchCompute`, but only on GL 4.3 or GLES 3.1, or with `GL_ARB_compute_shader`. NVIDIA gives you exactly the 3.3 core context gowgpu asks for, and there the adapter reports no compute shaders: `CreateComputePipeline` returns `missing required downlevel flags: ComputeShaders`. Check `Adapter.DownlevelCapabilities()` first, see [DownlevelCapabilities](#downlevelcapabilities).
 
-Known issues: reading a texture back with `CopyTextureToBuffer` swaps R and B (presenting is fine). naga keeps GLSL identifiers that start with `gl_` and Mali refuses them, so don't name anything `gl_*` in WGSL.
+`CopyTextureToBuffer` reads the texture with `glReadPixels` and writes each row into the buffer's GL storage at WebGPU's row pitch. Textures are stored top row first, like WebGPU's; only the blit to the window flips.
+
+Known issue: naga keeps GLSL identifiers that start with `gl_` and Mali refuses them, so don't name anything `gl_*` in WGSL.
 
 ### noop
 
