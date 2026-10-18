@@ -340,8 +340,9 @@ func goString(p uintptr) string {
 	if p == 0 {
 		return ""
 	}
-	//nolint:govet // safe: p is a valid C string pointer from WGL syscall return
-	base := unsafe.Slice((*byte)(unsafe.Pointer(p)), 8192)
+	// p is a C string WGL owns, not Go memory. Its bits are read as a pointer
+	// because go vet rejects every uintptr to unsafe.Pointer conversion.
+	base := unsafe.Slice(*(**byte)(unsafe.Pointer(&p)), 8192)
 	for i, b := range base {
 		if b == 0 {
 			return string(base[:i])

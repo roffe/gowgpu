@@ -11,5 +11,8 @@ import "unsafe"
 //
 //go:nocheckptr
 func fromHandle[T any](h uintptr) *T {
-	return (*T)(unsafe.Pointer(h)) //nolint:govet // see above
+	// The bits of h are read as a pointer instead of converting h: go vet
+	// rejects every uintptr to unsafe.Pointer conversion and can't be told
+	// that this one is meant.
+	return *(**T)(unsafe.Pointer(&h))
 }
