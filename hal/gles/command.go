@@ -608,7 +608,7 @@ func (e *RenderPassEncoder) SetBindGroup(index uint32, group hal.BindGroup, offs
 	e.encoder.commands = append(e.encoder.commands, e.encoder.store().bindGroups.put(SetBindGroupCommand{
 		index:           index,
 		group:           bg,
-		dynamicOffsets:  offsets,
+		dynamicOffsets:  copyOffsets(offsets),
 		maxTextureUnits: e.encoder.maxTextureUnits,
 		groupInfos:      groupInfos,
 		samplerBindMap:  samplerMap,
@@ -807,7 +807,7 @@ func (e *ComputePassEncoder) SetBindGroup(index uint32, group hal.BindGroup, off
 	e.encoder.commands = append(e.encoder.commands, e.encoder.store().bindGroups.put(SetBindGroupCommand{
 		index:           index,
 		group:           bg,
-		dynamicOffsets:  offsets,
+		dynamicOffsets:  copyOffsets(offsets),
 		maxTextureUnits: e.encoder.maxTextureUnits,
 		groupInfos:      groupInfos,
 	}))
@@ -1571,6 +1571,15 @@ type CopyBufferCommand struct {
 	srcID, dstID         uint32
 	srcOffset, dstOffset uint64
 	size                 uint64
+}
+
+// copyOffsets copies a SetBindGroup call's dynamic offsets: the command runs
+// at Submit, and the caller may reuse its slice for the next call before that.
+func copyOffsets(offsets []uint32) []uint32 {
+	if len(offsets) == 0 {
+		return nil
+	}
+	return append([]uint32(nil), offsets...)
 }
 
 func (c *CopyBufferCommand) Execute(ctx *gl.Context) {
