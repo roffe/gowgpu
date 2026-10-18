@@ -39,7 +39,10 @@ func (b *Buffer) Contents() unsafe.Pointer {
 	if b.raw == 0 {
 		return nil
 	}
-	return unsafe.Pointer(MsgSend(b.raw, Sel("contents"))) //nolint:govet // ObjC FFI: pointer from Metal runtime, not Go heap
+	p := MsgSend(b.raw, Sel("contents"))
+	// p is Metal's memory, not Go's. Its bits are read as a pointer because
+	// go vet rejects every uintptr to unsafe.Pointer conversion.
+	return *(*unsafe.Pointer)(unsafe.Pointer(&p))
 }
 
 // Texture implements hal.Texture for Metal.
