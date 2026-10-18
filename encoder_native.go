@@ -1027,6 +1027,7 @@ func (cb *CommandBuffer) Release() {
 	}
 	cb.trackedRefs = nil
 	cb.dropUsedSets()
+	cb.core.ReleaseScopes()
 }
 
 // dropUsedSets releases the encode-time validation sets. usedBuffers,

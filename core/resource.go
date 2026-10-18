@@ -145,6 +145,10 @@ type Device struct {
 	//
 	// Reference: wgpu-core device/resource.rs Device.tracker (DeviceTracker)
 	tracker *DeviceTracker
+
+	// scopes keeps the usage scopes of spent command buffers for the next
+	// command encoder. nil for devices made without NewDevice.
+	scopes *scopePool
 }
 
 // Backend returns the backend type of the device's adapter.
@@ -188,6 +192,7 @@ func NewDevice(
 		trackerIndices: NewTrackerIndexAllocators(),
 		destroyQueue:   NewDestroyQueue(),
 		tracker:        NewDeviceTracker(),
+		scopes:         &scopePool{},
 		Label:          label,
 		Features:       features,
 		Limits:         limits,

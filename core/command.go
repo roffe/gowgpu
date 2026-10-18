@@ -119,6 +119,51 @@ type CommandBufferMutable struct {
 	activePass any
 }
 
+// scopePool keeps the usage scopes of spent command buffers, emptied, for
+// the next command encoder. A fresh pair is six allocations, and more as the
+// scopes grow to the tracker indices a frame's resources have.
+type scopePool struct {
+	mu   sync.Mutex
+	free []*CommandBufferMutable
+}
+
+// maxFreeScopes caps how many sets of scopes a device keeps for reuse.
+const maxFreeScopes = 8
+
+// get returns a kept set of scopes, or new ones. p may be nil.
+func (p *scopePool) get() *CommandBufferMutable {
+	if p != nil {
+		p.mu.Lock()
+		if n := len(p.free); n > 0 {
+			m := p.free[n-1]
+			p.free[n-1] = nil
+			p.free = p.free[:n-1]
+			p.mu.Unlock()
+			return m
+		}
+		p.mu.Unlock()
+	}
+	return &CommandBufferMutable{
+		textureScope: track.NewTextureUsageScope(),
+		bufferScope:  track.NewBufferUsageScope(),
+	}
+}
+
+// put empties the scopes and keeps them. p may be nil.
+func (p *scopePool) put(m *CommandBufferMutable) {
+	if p == nil || m == nil || m.textureScope == nil || m.bufferScope == nil {
+		return
+	}
+	m.textureScope.Clear()
+	m.bufferScope.Clear()
+	m.activePass = nil
+	p.mu.Lock()
+	if len(p.free) < maxFreeScopes {
+		p.free = append(p.free, m)
+	}
+	p.mu.Unlock()
+}
+
 // BufferUses tracks how a buffer is used within a command buffer.
 type BufferUses uint32
 
@@ -258,13 +303,10 @@ func (d *Device) CreateCommandEncoder(label string) (*CoreCommandEncoder, error)
 
 	// 5. Create core encoder
 	enc := &CoreCommandEncoder{
-		raw:    NewSnatchable(halEncoder),
-		device: d,
-		mutable: &CommandBufferMutable{
-			textureScope: track.NewTextureUsageScope(),
-			bufferScope:  track.NewBufferUsageScope(),
-		},
-		label: label,
+		raw:     NewSnatchable(halEncoder),
+		device:  d,
+		mutable: d.scopes.get(),
+		label:   label,
 	}
 	enc.status.Store(int32(CommandEncoderStatusRecording))
 
@@ -285,13 +327,10 @@ func (d *Device) CreateCommandEncoderWithHAL(halEncoder hal.CommandEncoder, labe
 	}
 
 	enc := &CoreCommandEncoder{
-		raw:    NewSnatchable(halEncoder),
-		device: d,
-		mutable: &CommandBufferMutable{
-			textureScope: track.NewTextureUsageScope(),
-			bufferScope:  track.NewBufferUsageScope(),
-		},
-		label: label,
+		raw:     NewSnatchable(halEncoder),
+		device:  d,
+		mutable: d.scopes.get(),
+		label:   label,
 	}
 	enc.status.Store(int32(CommandEncoderStatusRecording))
 
@@ -604,6 +643,9 @@ func (e *CoreCommandEncoder) Finish() (*CoreCommandBuffer, error) {
 			label:      e.label,
 			halBuffers: e.cbList,
 		}
+		// The scopes belong to the command buffer now, which hands them
+		// back to the device once they are spent (ReleaseScopes).
+		e.mutable = nil
 		// Set raw to the first CB for backward compatibility with Raw().
 		if len(e.cbList) > 0 {
 			cb.raw = e.cbList[0]
@@ -624,13 +666,17 @@ func (e *CoreCommandEncoder) Finish() (*CoreCommandBuffer, error) {
 
 	untrackResource(uintptr(unsafe.Pointer(e))) //nolint:gosec // debug tracking uses pointer as unique ID
 
-	return &CoreCommandBuffer{
+	cb := &CoreCommandBuffer{
 		raw:     halCmdBuffer,
 		rawList: [1]hal.CommandBuffer{halCmdBuffer},
 		device:  e.device,
 		mutable: e.mutable,
 		label:   e.label,
-	}, nil
+	}
+	// The scopes belong to the command buffer now, which hands them back to
+	// the device once they are spent (ReleaseScopes).
+	e.mutable = nil
+	return cb, nil
 }
 
 // =============================================================================
@@ -1560,6 +1606,21 @@ func (cb *CoreCommandBuffer) Device() *Device {
 // Label returns the debug label.
 func (cb *CoreCommandBuffer) Label() string {
 	return cb.label
+}
+
+// ReleaseScopes hands the usage scopes back to the device for the next
+// command encoder, once Submit has merged them into the device tracker or
+// the command buffer is dropped without a submit. TextureScope and
+// BufferScope return nil afterwards.
+func (cb *CoreCommandBuffer) ReleaseScopes() {
+	if cb == nil || cb.mutable == nil {
+		return
+	}
+	m := cb.mutable
+	cb.mutable = nil
+	if cb.device != nil {
+		cb.device.scopes.put(m)
+	}
 }
 
 // TextureScope returns the texture usage scope that was accumulated during

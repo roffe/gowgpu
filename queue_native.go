@@ -206,6 +206,9 @@ func (q *Queue) postSubmit(subIdx uint64, commandBuffers []*CommandBuffer) {
 		if cb != nil {
 			cb.submitted = true
 			cb.dropUsedSets()
+			// injectBarriers has merged the usage scopes; the next encoder
+			// can have them.
+			cb.core.ReleaseScopes()
 		}
 	}
 
