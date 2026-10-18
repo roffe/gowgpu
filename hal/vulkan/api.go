@@ -51,8 +51,8 @@ func (Backend) CreateInstance(desc *hal.InstanceDescriptor) (hal.Instance, error
 	}
 
 	// Prepare application info
-	appName := []byte("gogpu\x00")
-	engineName := []byte("gogpu/wgpu\x00")
+	appName := []byte("gowgpu\x00")
+	engineName := []byte("gowgpu\x00")
 
 	appInfo := vk.ApplicationInfo{
 		SType:              vk.StructureTypeApplicationInfo,

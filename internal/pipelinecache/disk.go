@@ -12,10 +12,10 @@ import (
 	"path/filepath"
 )
 
-const cacheRoot = "gogpu"
+const cacheRoot = "gowgpu"
 
 // UserCachePath returns an adapter-scoped cache file path under os.UserCacheDir().
-// Example: ~/.cache/gogpu/vulkan/<adapterKey>/pipeline.cache
+// Example: ~/.cache/gowgpu/vulkan/<adapterKey>/pipeline.cache
 func UserCachePath(backend, adapterKey, fileName string) (string, error) {
 	dir, err := os.UserCacheDir()
 	if err != nil {
