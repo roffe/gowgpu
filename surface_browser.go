@@ -3,7 +3,6 @@
 package wgpu
 
 import (
-	"errors"
 	"fmt"
 	"image"
 	"syscall/js"
@@ -19,9 +18,6 @@ var _ interface {
 	GetCurrentTexture() (*SurfaceTexture, bool, error)
 	Present(*SurfaceTexture) error
 	PresentWithDamage(*SurfaceTexture, []image.Rectangle) error
-	PresentPixels([]byte, uint32, uint32, []image.Rectangle) error
-	WritePixels([]byte, uint32, uint32) error
-	ReadPixels() ([]byte, error)
 	ActualExtent() (uint32, uint32)
 	DiscardTexture()
 	SetPresentsWithTransaction(bool)
@@ -244,18 +240,6 @@ func (s *Surface) PresentWithDamage(st *SurfaceTexture, _ []image.Rectangle) err
 	return s.Present(st)
 }
 
-// ReadPixels is not supported by browser WebGPU surfaces.
-// Headless surface readback is a Pure-Go software-backend extension.
-func (s *Surface) ReadPixels() ([]byte, error) {
-	if s == nil || s.released {
-		return nil, ErrReleased
-	}
-	if s.device == nil {
-		return nil, fmt.Errorf("wgpu: surface not configured")
-	}
-	return nil, fmt.Errorf("wgpu: ReadPixels not supported on this backend")
-}
-
 // ActualExtent returns the configured surface dimensions.
 // On browser, the canvas dimensions are always used as-is (no driver clamping).
 // Returns (0, 0) if the surface is not configured.
@@ -273,18 +257,6 @@ func (s *Surface) ActualExtent() (width, height uint32) {
 // Matches Rust wgpu where WebSurfaceOutputDetail::texture_discard() is a no-op.
 func (s *Surface) DiscardTexture() {
 	// No-op on browser. Cannot discard the texture.
-}
-
-// PresentPixels is not supported on browser backend.
-// Software-backend extension for direct pixel presentation.
-func (s *Surface) PresentPixels(_ []byte, _, _ uint32, _ []image.Rectangle) error {
-	return errors.New("wgpu: PresentPixels is not supported on the browser backend")
-}
-
-// WritePixels is not supported on browser backend.
-// Software-backend extension for direct framebuffer write.
-func (s *Surface) WritePixels(_ []byte, _, _ uint32) error {
-	return errors.New("wgpu: WritePixels is not supported on the browser backend")
 }
 
 // SetPrepareFrame is a no-op on browser backend.

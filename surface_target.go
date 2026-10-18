@@ -30,7 +30,6 @@ type surfaceTargetKind uint8
 
 const (
 	surfaceTargetInvalid surfaceTargetKind = iota
-	surfaceTargetHeadless
 	surfaceTargetWindowsHWND
 	surfaceTargetXlibWindow
 	surfaceTargetWaylandSurface
@@ -49,18 +48,6 @@ type SurfaceTargetUnsafe struct {
 	kind          surfaceTargetKind
 	displayHandle uintptr
 	windowHandle  uintptr
-}
-
-// HeadlessSurfaceTarget requests a surface without a native window.
-//
-// Deprecated: only gogpu's software backend took this target, and it is gone,
-// so every backend refuses it with ErrUnsupportedSurfaceTarget. It will be
-// removed. To render without a window, render into a texture.
-type HeadlessSurfaceTarget struct{}
-
-// SurfaceTarget returns the raw headless target.
-func (HeadlessSurfaceTarget) SurfaceTarget() (SurfaceTargetUnsafe, error) {
-	return SurfaceTargetUnsafe{kind: surfaceTargetHeadless}, nil
 }
 
 // SurfaceTargetFromWindowsHWND returns a raw Win32 surface target.
@@ -120,8 +107,6 @@ func SurfaceTargetFromWebCanvasID(id uintptr) SurfaceTargetUnsafe {
 
 func (t SurfaceTargetUnsafe) validate() error {
 	switch t.kind {
-	case surfaceTargetHeadless:
-		// A headless target carries no platform handles.
 	case surfaceTargetWindowsHWND:
 		if t.windowHandle == 0 {
 			return invalidSurfaceTarget("Win32 HWND is zero")

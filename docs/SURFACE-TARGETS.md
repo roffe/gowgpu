@@ -23,7 +23,6 @@ The safe/unsafe split follows Rust wgpu v29.0.3, pinned at [`4cbe6232`](https://
 | `SurfaceTargetFromAndroidNativeWindow(window)` | `ANativeWindow*`, there's no display | Vulkan and GLES on Android |
 | `SurfaceTargetFromMetalLayer(layer)` | `CAMetalLayer*` | Metal, and Vulkan through MoltenVK on macOS |
 | `SurfaceTargetFromWebCanvasID(id)` | the canvas's `data-raw-handle`, 0 picks the first canvas | the browser only |
-| `HeadlessSurfaceTarget{}` | none | nothing, see [below](#headlesssurfacetarget-readpixels-and-writepixels) |
 
 There's no GL on the BSDs, so there only Vulkan takes Xlib and Wayland targets. The BSDs have never been built or run.
 
@@ -61,7 +60,7 @@ Go can't mark a method unsafe, so the name, the opaque constructors and the vali
 
 - `ErrReleased`: the instance was already released. This is checked first, so a provider or target is never looked at after teardown.
 - `ErrInvalidSurfaceTarget`: an empty target, a nil or typed-nil provider, an unknown kind, or a required handle that is zero. Checked before any backend call.
-- `ErrUnsupportedSurfaceTarget`: no backend in the instance takes the kind, like a canvas ID on native, a native target in the browser, or `HeadlessSurfaceTarget` anywhere. Each backend's own error is joined inside.
+- `ErrUnsupportedSurfaceTarget`: no backend in the instance takes the kind, like a canvas ID on native or a native target in the browser. Each backend's own error is joined inside.
 - When every backend failed and at least one of them did take the kind, you get `wgpu: failed to create surface for every enabled backend`, with every backend's error joined.
 - A provider's error is wrapped with `%w`, so `errors.Is` and `errors.As` still find it.
 
@@ -91,16 +90,9 @@ So on the BSDs and iOS use a typed target. On Linux a typed target also gets rid
 
 In the browser `windowHandle` is the canvas ID and `displayHandle` is ignored. If you already have the canvas as a `js.Value`, `CreateSurfaceFromCanvas` is the better call.
 
-## HeadlessSurfaceTarget, ReadPixels and WritePixels
+## Without a window
 
-These came with gogpu's software backend, and that backend is gone. They're still in the API, but no backend implements them now, and they're planned for removal.
-
-- `CreateSurfaceFromTarget(wgpu.HeadlessSurfaceTarget{})` returns `ErrUnsupportedSurfaceTarget`, on native and in the browser.
-- `Surface.ReadPixels` and `Surface.WritePixels` always return an error. Nothing implements `hal.PixelReader` or `hal.PixelWriter`.
-- `Surface.PresentPixels` is in the same spot, nothing implements `hal.PixelPresenter`.
-- `hal.SurfaceTargetHeadless` only shows up in tests, against `hal/noop`, which takes any target.
-
-To get your pixels back, render into a texture and `CopyTextureToBuffer` it, the normal WebGPU way. `examples/triangle-headless` does that and writes a PNG.
+There's no headless surface. Render into a texture and `CopyTextureToBuffer` it, the normal WebGPU way. `examples/triangle-headless` does that and writes a PNG.
 
 ## API mapping
 
@@ -115,14 +107,12 @@ Every exported symbol of the typed surface path, with its Rust wgpu v29.0.3 coun
 | `SurfaceTarget` | safe `SurfaceTarget<'window>` | called once, kept until the surface is released |
 | `SurfaceTargetUnsafe` | `SurfaceTargetUnsafe::RawHandle` | opaque, so kind and handles can't be mixed up; retains nothing |
 | `SurfaceTargetFrom*` | the `RawWindowHandle` variants | see [Constructors](#constructors) |
-| `HeadlessSurfaceTarget` | none | no backend implements it |
 | `(*Instance).CreateSurfaceFromTarget` | `Instance::create_surface` | checks the instance, calls the provider once, keeps it on success |
 | `(*Instance).CreateSurfaceUnsafe` | `unsafe Instance::create_surface_unsafe` | validates, retains nothing |
 | `(*Instance).CreateSurface` | none | the GOOS mapping above, retains nothing |
 | `(*Instance).RequestAdapter` with `CompatibleSurface` | `RequestAdapterOptions::compatible_surface` | each adapter checked against its own backend's surface |
 | `(*Adapter).GetSurfaceCapabilities` | `Surface::get_capabilities` | the same backend's surface only, nil without one |
 | `(*Surface).Configure` | core's `surface_per_backend` lookup | activates the surface of the device's backend |
-| `(*Surface).ReadPixels`, `WritePixels`, `PresentPixels` | none | no backend implements them |
 | `(*Surface).Release` | `Surface` drop | destroys every backend surface, then drops the provider; idempotent |
 | `(*Instance).Release` | none, Rust surfaces have their own lifetime | native: devices, then surfaces; browser: release surfaces yourself |
 
@@ -131,12 +121,11 @@ Every exported symbol of the typed surface path, with its Rust wgpu v29.0.3 coun
 | Go symbol | Rust | Contract |
 |---|---|---|
 | `hal.ErrUnsupportedSurfaceTarget` | `wgpu_hal::InstanceError` for a foreign handle | returned before a handle is read |
-| `hal.SurfaceTargetKind` | the `RawWindowHandle` discriminant | `SurfaceTargetWindowsHWND`, `SurfaceTargetXlibWindow`, `SurfaceTargetWaylandSurface`, `SurfaceTargetAndroidNativeWindow`, `SurfaceTargetMetalLayer`. The root package never sends `SurfaceTargetInvalid`, and `SurfaceTargetHeadless` is for noop tests |
+| `hal.SurfaceTargetKind` | the `RawWindowHandle` discriminant | `SurfaceTargetWindowsHWND`, `SurfaceTargetXlibWindow`, `SurfaceTargetWaylandSurface`, `SurfaceTargetAndroidNativeWindow`, `SurfaceTargetMetalLayer`. The root package never sends `SurfaceTargetInvalid` |
 | `hal.SurfaceTarget` (`Kind`, `DisplayHandle`, `WindowHandle`) | the raw display and window handle pair | borrowed, hal never owns the handles. `DisplayHandle` is unused for Android and Metal |
 | `hal.SurfaceTarget.RequireKind` | a `match` arm | wraps `hal.ErrUnsupportedSurfaceTarget`, touches no handle |
 | `hal.SurfaceTargetKind.String` | `Debug` | stable names for logs, unknown values print as a number |
 | `hal.Instance.CreateSurface(hal.SurfaceTarget)` | `wgpu_hal::Instance::create_surface` | one typed target instead of two integers |
-| `hal.PixelReader`, `hal.PixelWriter`, `hal.PixelPresenter` | none | optional surface interfaces, no backend implements them |
 
 ### What each backend takes
 

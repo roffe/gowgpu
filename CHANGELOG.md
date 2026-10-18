@@ -26,10 +26,6 @@ gowgpu split off from gogpu/wgpu v0.34.5 on 2026-10-17. Everything from [0.34.5]
   - GL only calls `glGetError` after every command when warnings get logged.
 - **New textures get CopyDst on the HAL side** when gowgpu zeroes them (see Fixed).
 
-### Deprecated
-
-- **`HeadlessSurfaceTarget`, `Surface.PresentPixels`, `Surface.WritePixels` and `Surface.ReadPixels`.** Only the software backend implemented them, so every backend refuses them now. They'll be removed. To render without a window, render into a texture and read it back with `CopyTextureToBuffer`.
-
 ### Added
 
 - **DX12 falls back to WARP** when no hardware adapter works, so Windows VMs and CI runners get a device.
@@ -76,6 +72,7 @@ gowgpu split off from gogpu/wgpu v0.34.5 on 2026-10-17. Everything from [0.34.5]
 
 - **The `-tags rust` backend** (wgpu-native through go-webgpu/webgpu).
 - **The software backend** (`hal/software`). It didn't run the shaders: draws without a vertex buffer blitted the first bound texture over the target, pipelines without vertex layouts were dropped and fragments got a guessed color, at seconds per frame. Use Mesa's lavapipe on Linux or WARP on Windows for a CPU device. `cmd/sw-test`, `cmd/sw-triangle` and the `software-test` and `raytracing-headless` examples went with it.
+- **`HeadlessSurfaceTarget`, `Surface.PresentPixels`, `Surface.WritePixels` and `Surface.ReadPixels`**, and `hal.SurfaceTargetHeadless`, `hal.PixelPresenter`, `hal.PixelWriter` and `hal.PixelReader` behind them. Only the software backend implemented them. To render without a window, render into a texture and read it back with `CopyTextureToBuffer`.
 - **goffi** and the **gpucontext** handle helpers (`DeviceFromHandle`, `DeviceToHandle` and the rest).
 
 ## [0.34.5] - 2026-09-07

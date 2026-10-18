@@ -5,7 +5,6 @@ package core
 import (
 	"errors"
 	"image"
-	"strings"
 	"sync"
 	"testing"
 
@@ -25,7 +24,7 @@ func newTestSurface(t *testing.T) (*Surface, *Device, hal.Queue) {
 		t.Fatalf("CreateInstance: %v", err)
 	}
 
-	halSurface, err := inst.CreateSurface(hal.SurfaceTarget{Kind: hal.SurfaceTargetHeadless})
+	halSurface, err := inst.CreateSurface(hal.SurfaceTarget{}) // noop takes any target
 	if err != nil {
 		t.Fatalf("CreateSurface: %v", err)
 	}
@@ -962,108 +961,5 @@ func TestPresent_DamageWithNilQueue(t *testing.T) {
 		// If it didn't panic, that's also acceptable — it means the implementation
 		// handles nil queue gracefully. Either way, the test documents the behavior.
 		t.Log("PresentWithDamage(nil queue) did not panic — nil queue handled gracefully")
-	}
-}
-
-// --- PresentPixels tests ---
-
-func TestPresentPixels_Unconfigured(t *testing.T) {
-	surface, _, _ := newTestSurface(t)
-
-	err := surface.PresentPixels([]byte{0, 0, 0, 0}, 1, 1, nil)
-	if !errors.Is(err, ErrSurfaceNotConfigured) {
-		t.Errorf("PresentPixels unconfigured = %v, want ErrSurfaceNotConfigured", err)
-	}
-}
-
-func TestPresentPixels_UnsupportedBackend(t *testing.T) {
-	// noop backend does not implement PresentPixels — should return error.
-	surface, device, _ := newTestSurface(t)
-	config := testSurfaceConfig()
-
-	if err := surface.Configure(device, config); err != nil {
-		t.Fatalf("Configure: %v", err)
-	}
-
-	err := surface.PresentPixels([]byte{0, 0, 0, 0}, 1, 1, nil)
-	if err == nil {
-		t.Error("PresentPixels on noop backend should return error")
-	}
-	// Should mention "not supported"
-	if err != nil && !strings.Contains(err.Error(), "not supported") {
-		t.Errorf("PresentPixels error = %q, want to contain 'not supported'", err.Error())
-	}
-}
-
-func TestPresentPixels_PreservesAcquiredOnUnsupported(t *testing.T) {
-	// On backends that don't support PixelPresenter (like noop), PresentPixels
-	// should return an error WITHOUT discarding the acquired texture. This
-	// preserves the surface state so the normal render→Present path still works.
-	surface, device, _ := newTestSurface(t)
-	config := testSurfaceConfig()
-
-	if err := surface.Configure(device, config); err != nil {
-		t.Fatalf("Configure: %v", err)
-	}
-
-	_, err := surface.AcquireTexture(nil)
-	if err != nil {
-		t.Fatalf("AcquireTexture: %v", err)
-	}
-	if surface.State() != SurfaceStateAcquired {
-		t.Fatalf("state = %d, want SurfaceStateAcquired", surface.State())
-	}
-
-	// PresentPixels on noop should fail without side effects.
-	err = surface.PresentPixels([]byte{0, 0, 0, 0}, 1, 1, nil)
-	if err == nil {
-		t.Error("PresentPixels on noop should return error")
-	}
-
-	// State must stay Acquired — texture NOT discarded on unsupported backend.
-	if surface.State() != SurfaceStateAcquired {
-		t.Errorf("state after PresentPixels = %d, want SurfaceStateAcquired", surface.State())
-	}
-}
-
-type pixelPresentingTestSurface struct {
-	noop.Surface
-	discards int
-	presents int
-}
-
-func (s *pixelPresentingTestSurface) DiscardTexture(texture hal.SurfaceTexture) {
-	s.discards++
-	s.Surface.DiscardTexture(texture)
-}
-
-func (s *pixelPresentingTestSurface) PresentPixels([]byte, uint32, uint32, []image.Rectangle) error {
-	s.presents++
-	return nil
-}
-
-func TestPresentPixelsExpiresActiveAcquisition(t *testing.T) {
-	_, device, _ := newTestSurface(t)
-	raw := &pixelPresentingTestSurface{}
-	surface := NewSurface(raw, "pixel-presenting-test")
-	if err := surface.Configure(device, testSurfaceConfig()); err != nil {
-		t.Fatalf("Configure: %v", err)
-	}
-	_, lease, err := surface.AcquireTextureWithLease(nil)
-	if err != nil {
-		t.Fatalf("AcquireTextureWithLease: %v", err)
-	}
-
-	if err := surface.PresentPixels([]byte{0, 0, 0, 0}, 1, 1, nil); err != nil {
-		t.Fatalf("PresentPixels: %v", err)
-	}
-	if surface.State() != SurfaceStateConfigured {
-		t.Fatalf("surface state = %v, want configured", surface.State())
-	}
-	if surface.AcquisitionValid(lease) {
-		t.Fatal("PresentPixels left the replaced acquisition valid")
-	}
-	if raw.discards != 1 || raw.presents != 1 {
-		t.Fatalf("backend calls = %d discards, %d presents; want one each", raw.discards, raw.presents)
 	}
 }

@@ -141,7 +141,6 @@ Not run yet: the browser backend, the BSDs, GL on Windows and real Apple hardwar
 - On Vulkan every queue write moves the texture from `UNDEFINED`, which allows a driver to drop what's already in it. NVIDIA keeps it, AMD might not.
 - `DispatchIndirect` validation destroys its bind group before the GPU runs it, and indirect dispatches recorded before one `Submit` share one set of params.
 - Render bundles crash on Vulkan in `vkBeginCommandBuffer`.
-- `HeadlessSurfaceTarget` and `Surface.ReadPixels` and `WritePixels` are still in the API, but nothing implements them since the software backend went. They'll go.
 - `examples/browser-compute` doesn't build, it was written against an older API.
 - CI is still gogpu's and fails. It needs a rewrite for cgo.
 

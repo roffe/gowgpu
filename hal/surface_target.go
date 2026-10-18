@@ -17,7 +17,6 @@ type SurfaceTargetKind uint8
 
 const (
 	SurfaceTargetInvalid SurfaceTargetKind = iota
-	SurfaceTargetHeadless
 	SurfaceTargetWindowsHWND
 	SurfaceTargetXlibWindow
 	SurfaceTargetWaylandSurface
@@ -29,7 +28,6 @@ const (
 // DisplayHandle is unused for Android and Metal. WindowHandle is HWND, Xlib
 // Window, wl_surface*, ANativeWindow*, or CAMetalLayer* according to Kind.
 // HAL never owns these raw handles; they must outlive the created Surface.
-// Headless is a Go software/noop extension and carries no handles.
 type SurfaceTarget struct {
 	Kind          SurfaceTargetKind
 	DisplayHandle uintptr
@@ -47,8 +45,6 @@ func (t SurfaceTarget) RequireKind(expected SurfaceTargetKind) error {
 // String returns a stable diagnostic name for the target kind.
 func (k SurfaceTargetKind) String() string {
 	switch k {
-	case SurfaceTargetHeadless:
-		return "headless"
 	case SurfaceTargetWindowsHWND:
 		return "Win32 HWND"
 	case SurfaceTargetXlibWindow:

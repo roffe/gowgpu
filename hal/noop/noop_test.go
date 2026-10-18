@@ -95,7 +95,7 @@ func TestNoopEnumerateAdapters_WithSurfaceHint(t *testing.T) {
 	defer instance.Destroy()
 
 	// Create a surface
-	surface, err := instance.CreateSurface(hal.SurfaceTarget{Kind: hal.SurfaceTargetHeadless})
+	surface, err := instance.CreateSurface(hal.SurfaceTarget{})
 	if err != nil {
 		t.Fatalf("CreateSurface failed: %v", err)
 	}
@@ -129,7 +129,6 @@ func TestNoopCreateSurface(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			surface, err := instance.CreateSurface(hal.SurfaceTarget{
-				Kind:          hal.SurfaceTargetHeadless,
 				DisplayHandle: tt.displayHandle,
 				WindowHandle:  tt.windowHandle,
 			})
@@ -202,7 +201,7 @@ func TestNoopAdapterCapabilities(t *testing.T) {
 	}
 
 	// Test surface capabilities
-	surface, _ := instance.CreateSurface(hal.SurfaceTarget{Kind: hal.SurfaceTargetHeadless})
+	surface, _ := instance.CreateSurface(hal.SurfaceTarget{})
 	defer surface.Destroy()
 
 	surfaceCaps := adapter.SurfaceCapabilities(surface)
@@ -959,7 +958,7 @@ func TestNoopSurfaceConfigure(t *testing.T) {
 	instance, _ := api.CreateInstance(nil)
 	defer instance.Destroy()
 
-	surface, _ := instance.CreateSurface(hal.SurfaceTarget{Kind: hal.SurfaceTargetHeadless})
+	surface, _ := instance.CreateSurface(hal.SurfaceTarget{})
 	defer surface.Destroy()
 
 	adapters := instance.EnumerateAdapters(nil)
@@ -990,7 +989,7 @@ func TestNoopSurfaceAcquireTexture(t *testing.T) {
 	instance, _ := api.CreateInstance(nil)
 	defer instance.Destroy()
 
-	surface, _ := instance.CreateSurface(hal.SurfaceTarget{Kind: hal.SurfaceTargetHeadless})
+	surface, _ := instance.CreateSurface(hal.SurfaceTarget{})
 	defer surface.Destroy()
 
 	adapters := instance.EnumerateAdapters(nil)
@@ -1107,7 +1106,7 @@ func TestNoopFullLifecycle(t *testing.T) {
 	defer instance.Destroy()
 
 	// Create surface
-	surface, err := instance.CreateSurface(hal.SurfaceTarget{Kind: hal.SurfaceTargetHeadless})
+	surface, err := instance.CreateSurface(hal.SurfaceTarget{})
 	if err != nil {
 		t.Fatalf("CreateSurface failed: %v", err)
 	}

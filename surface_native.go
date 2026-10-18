@@ -21,9 +21,6 @@ var _ interface {
 	GetCurrentTexture() (*SurfaceTexture, bool, error)
 	Present(*SurfaceTexture) error
 	PresentWithDamage(*SurfaceTexture, []image.Rectangle) error
-	PresentPixels([]byte, uint32, uint32, []image.Rectangle) error
-	WritePixels([]byte, uint32, uint32) error
-	ReadPixels() ([]byte, error)
 	ActualExtent() (uint32, uint32)
 	DiscardTexture()
 	SetPresentsWithTransaction(bool)
@@ -228,8 +225,6 @@ func surfaceTargetFromLegacyHandlesForPlatform(goos, waylandDisplay string, disp
 func (t SurfaceTargetUnsafe) halTarget() (hal.SurfaceTarget, error) {
 	var kind hal.SurfaceTargetKind
 	switch t.kind {
-	case surfaceTargetHeadless:
-		kind = hal.SurfaceTargetHeadless
 	case surfaceTargetWindowsHWND:
 		kind = hal.SurfaceTargetWindowsHWND
 	case surfaceTargetXlibWindow:
@@ -437,75 +432,6 @@ func (s *Surface) SetPresentsWithTransaction(enabled bool) {
 	if tp, ok := raw.(interface{ SetPresentsWithTransaction(bool) }); ok {
 		tp.SetPresentsWithTransaction(enabled)
 	}
-}
-
-// PresentPixels writes RGBA pixel data straight to the surface and presents
-// it, without a render pass. damageRects limits the update (nil is the whole
-// surface).
-//
-// Deprecated: only gogpu's software backend implemented this, and it is gone.
-// Every backend now returns an error. It will be removed; render into the
-// surface texture instead.
-func (s *Surface) PresentPixels(data []byte, width, height uint32, damageRects []image.Rectangle) error {
-	if s.released {
-		return ErrReleased
-	}
-	if s.device == nil {
-		return fmt.Errorf("wgpu: surface not configured")
-	}
-	return s.core.PresentPixels(data, width, height, damageRects)
-}
-
-// WritePixels copies RGBA pixel data straight into the surface framebuffer,
-// between GetCurrentTexture and Present, without a render pass.
-//
-// Deprecated: only gogpu's software backend implemented this, and it is gone.
-// Every backend now returns an error. It will be removed; use
-// Queue.WriteTexture on the surface texture instead.
-func (s *Surface) WritePixels(data []byte, width, height uint32) error {
-	if s == nil || s.released || s.core == nil {
-		return ErrReleased
-	}
-	raw := s.core.RawSurface()
-	if raw == nil {
-		return ErrReleased
-	}
-	if pw, ok := raw.(hal.PixelWriter); ok {
-		return pw.WritePixels(data, width, height)
-	}
-	return fmt.Errorf("wgpu: WritePixels not supported on this backend")
-}
-
-// ReadPixels captures the current surface framebuffer as an owned, tightly
-// packed RGBA8 snapshot in top-left, row-major order.
-//
-// The surface must be configured, and any acquired texture presented or
-// discarded first.
-//
-// Deprecated: only gogpu's software backend implemented this, and it is gone.
-// Every backend now returns an error. It will be removed; render into a
-// texture and read it back with CopyTextureToBuffer instead.
-func (s *Surface) ReadPixels() ([]byte, error) {
-	if s == nil || s.released || s.core == nil {
-		return nil, ErrReleased
-	}
-
-	switch s.core.State() {
-	case core.SurfaceStateUnconfigured:
-		return nil, fmt.Errorf("wgpu: surface not configured")
-	case core.SurfaceStateAcquired:
-		return nil, fmt.Errorf("wgpu: surface texture is still acquired; present or discard it before ReadPixels")
-	}
-
-	reader, ok := s.core.RawSurface().(hal.PixelReader)
-	if !ok {
-		return nil, fmt.Errorf("wgpu: ReadPixels not supported on this backend")
-	}
-	pixels := reader.ReadPixels()
-	if pixels == nil {
-		return nil, fmt.Errorf("wgpu: ReadPixels returned no pixel data")
-	}
-	return pixels, nil
 }
 
 // ActualExtent returns the actual swapchain dimensions after driver clamping.

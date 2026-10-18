@@ -41,72 +41,6 @@ func TestErrZeroArea_IsComparable(t *testing.T) {
 	}
 }
 
-// TestSurfaceConfigureZeroDimensions_Vulkan tests that Vulkan Surface.Configure
-// returns ErrZeroArea when dimensions are zero.
-func TestSurfaceConfigureZeroDimensions_Vulkan(t *testing.T) {
-	// Skip if Vulkan backend is not available
-	backend, ok := hal.GetBackend(gputypes.BackendVulkan)
-	if !ok {
-		t.Skip("Vulkan backend not available")
-	}
-
-	instance, err := backend.CreateInstance(nil)
-	if err != nil {
-		t.Skipf("Vulkan instance creation failed: %v", err)
-	}
-	defer instance.Destroy()
-
-	surface, err := instance.CreateSurface(hal.SurfaceTarget{Kind: hal.SurfaceTargetHeadless})
-	if err != nil {
-		t.Skipf("Surface creation failed: %v", err)
-	}
-	defer surface.Destroy()
-
-	adapters := instance.EnumerateAdapters(surface)
-	if len(adapters) == 0 {
-		t.Skip("No Vulkan adapters available")
-	}
-
-	openDevice, err := adapters[0].Adapter.Open(0, gputypes.DefaultLimits())
-	if err != nil {
-		t.Skipf("Device creation failed: %v", err)
-	}
-	defer openDevice.Device.Destroy()
-
-	// Test with zero width
-	config := &hal.SurfaceConfiguration{
-		Width:       0,
-		Height:      600,
-		Format:      gputypes.TextureFormatBGRA8Unorm,
-		Usage:       gputypes.TextureUsageRenderAttachment,
-		PresentMode: hal.PresentModeFifo,
-		AlphaMode:   hal.CompositeAlphaModeOpaque,
-	}
-
-	err = surface.Configure(openDevice.Device, config)
-	if !errors.Is(err, hal.ErrZeroArea) {
-		t.Errorf("Configure with width=0 should return ErrZeroArea, got: %v", err)
-	}
-
-	// Test with zero height
-	config.Width = 800
-	config.Height = 0
-
-	err = surface.Configure(openDevice.Device, config)
-	if !errors.Is(err, hal.ErrZeroArea) {
-		t.Errorf("Configure with height=0 should return ErrZeroArea, got: %v", err)
-	}
-
-	// Test with both zero
-	config.Width = 0
-	config.Height = 0
-
-	err = surface.Configure(openDevice.Device, config)
-	if !errors.Is(err, hal.ErrZeroArea) {
-		t.Errorf("Configure with width=0, height=0 should return ErrZeroArea, got: %v", err)
-	}
-}
-
 // TestSurfaceConfigureValidDimensions verifies that valid dimensions work.
 func TestSurfaceConfigureValidDimensions(t *testing.T) {
 	// Use noop backend which should accept any dimensions
@@ -121,7 +55,7 @@ func TestSurfaceConfigureValidDimensions(t *testing.T) {
 	}
 	defer instance.Destroy()
 
-	surface, err := instance.CreateSurface(hal.SurfaceTarget{Kind: hal.SurfaceTargetHeadless})
+	surface, err := instance.CreateSurface(hal.SurfaceTarget{}) // noop takes any target
 	if err != nil {
 		t.Fatalf("CreateSurface failed: %v", err)
 	}
