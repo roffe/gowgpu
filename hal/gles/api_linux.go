@@ -62,6 +62,14 @@ func (Backend) CreateInstance(_ *hal.InstanceDescriptor) (hal.Instance, error) {
 		// device made survives the window Android replaces on every resume.
 		config.GLES, config.GLVersionMajor, config.GLVersionMinor, config.CoreProfile = true, 3, 0, false
 	}
+	// EGL keeps the bound API, the last error and the current context per
+	// thread, so the context is made, made current and loaded on one pinned
+	// thread, and released again before returning. Left current, it stays
+	// bound to whichever OS thread ran this: AdapterContext.Lock on any other
+	// thread fails with EGL_BAD_ACCESS and runs its GL calls without a
+	// context, and Destroy from another thread only marks it for deletion.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	eglCtx, err := egl.NewContext(config)
 	if err != nil {
 		hal.Logger().Info("gles: instance context unavailable (expected on Wayland)", "err", err)
@@ -85,6 +93,7 @@ func (Backend) CreateInstance(_ *hal.InstanceDescriptor) (hal.Instance, error) {
 		"version", glCtx.GetString(gl.VERSION),
 		"renderer", glCtx.GetString(gl.RENDERER))
 
+	egl.MakeCurrent(eglCtx.Display(), egl.NoSurface, egl.NoSurface, egl.NoContext)
 	return &Instance{ctx: NewAdapterContext(eglCtx, glCtx, true)}, nil
 }
 
@@ -146,6 +155,10 @@ func (i *Instance) CreateSurface(target hal.SurfaceTarget) (hal.Surface, error) 
 	// Path B: create new context (Wayland — Instance had no wl_display* at init).
 	// Try desktop GL first, fall back to GLES 3.0 — Mesa Wayland EGL may only
 	// expose EGL_OPENGL_ES3_BIT configs, not EGL_OPENGL_BIT. Found by @lkmavi (PR #215).
+	// One pinned thread for the whole setup, and released before returning,
+	// like the instance context in CreateInstance.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	config := egl.DefaultContextConfig()
 	config.NativeDisplay = displayHandle
 	config.WindowKind = &targetWindowKind
@@ -177,6 +190,7 @@ func (i *Instance) CreateSurface(target hal.SurfaceTarget) (hal.Surface, error) 
 	hal.Logger().Info("gles: surface created with owned AdapterContext",
 		"version", version, "renderer", renderer, "gles", config.GLES)
 
+	egl.MakeCurrent(eglCtx.Display(), egl.NoSurface, egl.NoSurface, egl.NoContext)
 	return &Surface{
 		displayHandle: displayHandle,
 		windowHandle:  windowHandle,
