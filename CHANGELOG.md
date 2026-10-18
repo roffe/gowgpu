@@ -25,6 +25,7 @@ gowgpu split off from gogpu/wgpu v0.34.5 on 2026-10-17. Everything from [0.34.5]
   - The Vulkan submit info stays off the heap.
   - GL only calls `glGetError` after every command when warnings get logged.
 - **New textures get CopyDst on the HAL side** when gowgpu zeroes them (see Fixed).
+- **CI builds with cgo** on Linux, Windows and macOS, cross builds for Android, iOS, Windows without cgo and the browser, checks that regenerating the Vulkan bindings changes nothing, and runs the tests on Mesa's lavapipe and llvmpipe. gogpu's workflow, with cgo off and the Rust backend, is gone.
 
 ### Added
 

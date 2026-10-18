@@ -8,7 +8,7 @@ gowgpu runs fyne's WebGPU painter on Linux, Windows, macOS, iOS and Android, thr
 
 ## Next
 
-1. **CI that works.** The workflow is still gogpu's: it builds with cgo off and cross compiles a Rust backend that's gone. It should build with cgo for Linux, Windows, macOS, iOS, Android and the browser, and run the tests on lavapipe (Linux), WARP (Windows) and the paravirtual GPU GitHub's macOS runners have.
+1. **CI on Windows and macOS.** CI builds for every platform with cgo and runs the tests on lavapipe and llvmpipe. The WARP and Metal test jobs still need a baseline before they can fail the workflow.
 2. **The 10 failing root tests.** Automatic pipeline layouts on Vulkan, and `Map` flushing a `WriteBuffer` that wasn't submitted yet.
 3. **DX12.** Honour dynamic bind group offsets, and take the vertex stride from the pipeline that draws instead of the one set at `SetVertexBuffer`.
 4. **`gl_` names in GLSL.** naga keeps WGSL identifiers that start with `gl_`, which GLSL reserves. Rename them on the way out, either in naga or before the GLSL reaches the driver.

@@ -142,7 +142,7 @@ Not run yet: the browser backend, the BSDs, GL on Windows and real Apple hardwar
 - `DispatchIndirect` validation destroys its bind group before the GPU runs it, and indirect dispatches recorded before one `Submit` share one set of params.
 - Render bundles crash on Vulkan in `vkBeginCommandBuffer`.
 - `examples/browser-compute` doesn't build, it was written against an older API.
-- CI is still gogpu's and fails. It needs a rewrite for cgo.
+- CI tests on Windows (WARP) and macOS (Metal) haven't run yet, so they can't fail the workflow until there's a baseline.
 
 What's next is in [ROADMAP.md](ROADMAP.md).
 
