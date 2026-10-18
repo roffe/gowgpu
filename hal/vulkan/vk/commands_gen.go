@@ -2485,7 +2485,7 @@ func (c *Commands) GetMemoryWin32HandleKHR(device Device, pGetWin32HandleInfo *M
 }
 
 // GetMemoryFdKHR wraps vkGetMemoryFdKHR.
-func (c *Commands) GetMemoryFdKHR(device Device, pGetFdInfo *MemoryGetFdInfoKHR, pFd *int) Result {
+func (c *Commands) GetMemoryFdKHR(device Device, pGetFdInfo *MemoryGetFdInfoKHR, pFd *int32) Result {
 	if c.getMemoryFdKHR == nil {
 		return ErrorInitializationFailed
 	}
@@ -2547,7 +2547,7 @@ func (c *Commands) ImportSemaphoreWin32HandleKHR(device Device, pImportSemaphore
 }
 
 // GetSemaphoreFdKHR wraps vkGetSemaphoreFdKHR.
-func (c *Commands) GetSemaphoreFdKHR(device Device, pGetFdInfo *SemaphoreGetFdInfoKHR, pFd *int) Result {
+func (c *Commands) GetSemaphoreFdKHR(device Device, pGetFdInfo *SemaphoreGetFdInfoKHR, pFd *int32) Result {
 	if c.getSemaphoreFdKHR == nil {
 		return ErrorInitializationFailed
 	}
@@ -2609,7 +2609,7 @@ func (c *Commands) ImportFenceWin32HandleKHR(device Device, pImportFenceWin32Han
 }
 
 // GetFenceFdKHR wraps vkGetFenceFdKHR.
-func (c *Commands) GetFenceFdKHR(device Device, pGetFdInfo *FenceGetFdInfoKHR, pFd *int) Result {
+func (c *Commands) GetFenceFdKHR(device Device, pGetFdInfo *FenceGetFdInfoKHR, pFd *int32) Result {
 	if c.getFenceFdKHR == nil {
 		return ErrorInitializationFailed
 	}

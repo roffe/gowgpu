@@ -1435,6 +1435,8 @@ func vkToGoBaseType(vkType string) string {
 		return "uint16"
 	case "int32_t":
 		return "int32"
+	case "int": // file descriptors and gralloc values: 32 bits wherever Vulkan runs
+		return "int32"
 	case "uint32_t":
 		return "uint32"
 	case "int64_t":
