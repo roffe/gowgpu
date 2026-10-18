@@ -24,7 +24,7 @@ Examples of unacceptable behavior:
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported via GitHub Issues: https://github.com/gogpu/wgpu/issues
+reported via GitHub Issues: https://github.com/roffe/gowgpu/issues
 
 All complaints will be reviewed and investigated promptly and fairly.
 

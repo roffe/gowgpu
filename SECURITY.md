@@ -1,36 +1,11 @@
-# Security Policy
+# Security
 
-## Supported Versions
+gowgpu has no releases yet, so fixes land on `main`.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 0.x.x   | :white_check_mark: |
+## Reporting a problem
 
-## Reporting a Vulnerability
+Don't open a public issue for it. Report it privately through [GitHub's security advisories](https://github.com/roffe/gowgpu/security/advisories/new) and i'll get back to you as soon as i can.
 
-To report a security vulnerability:
+## Worth knowing
 
-1. **Do NOT** open a public issue
-2. Email security concerns to the maintainers via GitHub private vulnerability reporting
-3. Or open a private security advisory at: https://github.com/gogpu/wgpu/security/advisories/new
-
-We will respond within 48 hours and work with you to understand and address the issue.
-
-## Security Considerations
-
-wgpu is a WebGPU implementation that interfaces with GPU hardware. Security considerations include:
-
-- **Memory safety**: Pure Go implementation minimizes unsafe code
-- **Resource limits**: Proper validation of buffer sizes and texture dimensions
-- **Shader validation**: Input shaders should be validated before execution
-- **Platform integration**: Backend-specific code follows platform security guidelines
-
-## Disclosure Policy
-
-We follow responsible disclosure practices:
-
-1. Reporter notifies us privately
-2. We acknowledge and investigate
-3. We develop and test a fix
-4. We release the fix and credit the reporter (if desired)
-5. We publish a security advisory
+gowgpu runs shaders and buffer contents you give it on the GPU driver, and it calls that driver through cgo and `syscall`. A bug in validation can hand a driver something it doesn't expect, so treat untrusted WGSL and untrusted sizes and offsets like any other untrusted input: check them before they reach the device.

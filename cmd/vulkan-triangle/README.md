@@ -1,218 +1,76 @@
-# Vulkan Triangle - Pure Go Integration Test
+# vulkan-triangle
 
-Full integration test for the Pure Go Vulkan backend. This test validates the entire rendering pipeline from window creation to triangle rendering.
+Draws a red triangle on a dark blue background in an 800x600 window, straight on `hal/vulkan`. There's no `wgpu` package or `core` in between, so if this draws and your app doesn't, look above the HAL.
 
-## Multi-Thread Architecture
+Windows only. It makes a Win32 window and a `VK_KHR_win32_surface` surface for it.
 
-This demo uses **enterprise-level multi-thread architecture** based on Ebiten/Gio patterns:
+## What it does
 
-- **Main Thread**: Win32 message pump only (`runtime.LockOSThread()` in `init()`)
-- **Render Thread**: All GPU operations (via `internal/thread` package)
-- **Deferred Resize**: Size captured in WM_SIZE, applied on render thread
+Instance, surface, adapters, device, then a BGRA8Unorm swapchain with FIFO. It always opens the first adapter. The shaders are WGSL that naga compiles to SPIR-V when the modules get created. Then a pipeline with an empty layout, and a loop that acquires, draws 3 vertices, submits and presents until you close the window.
 
-This ensures the window stays responsive during heavy GPU operations like swapchain recreation (`vkDeviceWaitIdle`).
+The Win32 message pump runs on the main thread and all GPU work on a render thread from `internal/thread`. Resizing configures the swapchain again. While you drag the border it waits until you let go. Every 180 frames it waits for the device to go idle and resets the command pool.
 
-## What It Tests
-
-This integration test validates:
-
-1. **Window Creation** - Win32 API via syscall/purego
-2. **Vulkan Instance** - Pure Go Vulkan initialization
-3. **Surface Creation** - Platform-specific surface for Win32
-4. **Adapter Enumeration** - Physical device detection
-5. **Device Creation** - Logical device and queue
-6. **Surface Configuration** - Swapchain setup
-7. **Shader Modules** - SPIR-V shader loading
-8. **Pipeline Creation** - Full render pipeline
-9. **Render Loop** - Acquire → Render → Present cycle
-10. **Clean Shutdown** - Resource cleanup
-
-## Test Output
-
-The test should:
-- Create an 800x600 window titled "Vulkan Triangle - Pure Go"
-- Display a **red triangle** on a **blue background**
-- Print initialization steps with OK/FAILED status
-- Show FPS counter in console
-- Run until window is closed
-
-## Architecture
-
-### Thread Model
-
-```
-Main Thread (OS Thread 0)     Render Thread (Dedicated)
-├─ runtime.LockOSThread()     ├─ runtime.LockOSThread()
-├─ Win32 Message Pump         ├─ GPU Initialization
-├─ WM_SIZE → RequestResize()  ├─ ConsumePendingResize()
-├─ WM_SETCURSOR handling      ├─ Surface.Configure()
-└─ window.PollEvents()        ├─ vkDeviceWaitIdle
-                              └─ Acquire → Render → Present
-```
-
-### Shaders
-
-Pre-compiled SPIR-V shaders are embedded in `shaders.go`:
-
-**Vertex Shader** (`triangle.vert.spv`):
-- Hardcoded triangle positions (no vertex buffers)
-- Uses `gl_VertexIndex` to select vertex
-
-**Fragment Shader** (`triangle.frag.spv`):
-- Outputs solid red color (1.0, 0.0, 0.0, 1.0)
-
-### Render Pipeline
-
-```
-Window (Win32) → Surface (VK_KHR_win32_surface)
-    → Swapchain (BGRA8Unorm, Fifo)
-    → RenderPass (Blue clear color)
-    → Pipeline (Vertex + Fragment shaders)
-    → Draw (3 vertices, triangle list)
-    → Present
-```
-
-### No CGO Required
-
-All Vulkan calls use `syscall.SyscallN` via `hal/vulkan/vk` package.
-No C compiler needed.
+The instance gets `InstanceFlagsDebug`, so the Khronos validation layer is switched on when it's installed and skipped when it's not. Its messages go to `hal.Logger()`, and this command never calls `hal.SetLogger`.
 
 ## Building
 
+Vulkan needs cgo. From Linux with mingw-w64:
+
 ```bash
-# Windows only (for now)
-cd cmd/vulkan-triangle
-GOROOT="/c/Program Files/Go" go build
+CGO_ENABLED=1 GOOS=windows CC=x86_64-w64-mingw32-gcc go build ./cmd/vulkan-triangle
 ```
+
+On Windows itself it's `go build ./cmd/vulkan-triangle` with `CGO_ENABLED=1` and a mingw-w64 gcc in `PATH`.
+
+With cgo off the build stops at `hal/vulkan needs cgo`. On anything but Windows the build constraints exclude all its files.
 
 ## Running
 
-```bash
-# Requires:
-# - Windows 10+
-# - Vulkan driver installed
-# - vulkan-1.dll in PATH (usually in System32)
+It needs a Vulkan driver, `vulkan-1.dll` comes with it. Then run `vulkan-triangle.exe`.
 
-./vulkan-triangle.exe
-```
-
-## Expected Output
+It prints each step as it goes, and every 60 frames the frame count and the average FPS since the loop started:
 
 ```
-=== Vulkan Triangle Integration Test ===
+=== Vulkan Triangle Integration Test (Multi-Thread) ===
 
 1. Creating window... OK
-2. Creating Vulkan backend... OK
-3. Creating Vulkan instance... OK
-4. Creating surface... OK
-5. Enumerating adapters... OK (found 1)
-   - Adapter 0: NVIDIA GeForce RTX 3080 (NVIDIA Vulkan 1.3.XXX)
-6. Opening device... OK
-7. Configuring surface... OK
-8. Creating shader modules... OK
-9. Creating pipeline layout... OK
-10. Creating render pipeline... OK
+2. Creating render thread... OK
+3. Creating Vulkan backend... OK
+4. Creating Vulkan instance... OK
+5. Creating surface... OK
+6. Enumerating adapters... OK (found 1)
+   - Adapter 0: <name> (<vendor> <driver info>)
+7. Opening device... OK
+8. Configuring surface... OK
+9. Creating shader modules... OK
+10. Creating pipeline layout... OK
+11. Creating render pipeline... OK
 
 === Starting Render Loop ===
-Press ESC or close window to exit
+Close the window to exit
 
 Rendered 60 frames (60.0 FPS)
 Rendered 120 frames (60.0 FPS)
 ...
-
-=== Test Complete ===
-Total frames: 360
-Average FPS: 60.0
 ```
 
-## Troubleshooting
+Close the window and it prints `=== Test Complete ===` with the total frames and the average FPS.
 
-### Build Errors
-
-**Error**: `cannot find package "github.com/gogpu/wgpu/hal/vulkan"`
-- Make sure you're in the `wgpu` repository
-- Run `go mod tidy`
-
-### Runtime Errors
-
-**Error**: `vulkan-1.dll not found`
-- Install Vulkan SDK or GPU driver with Vulkan support
-- Add Vulkan SDK bin directory to PATH
-
-**Error**: `vkCreateInstance failed`
-- GPU driver may not support Vulkan 1.2+
-- Try removing `types.InstanceFlagsDebug` from instance descriptor
-
-**Error**: `no adapters found`
-- GPU driver doesn't support the surface type
-- Check GPU supports Vulkan
-
-**Window doesn't appear**
-- Check console for error messages
-- Try running as administrator
-
-**Black window / No triangle**
-- Shaders may not be loading correctly
-- Pipeline creation may have failed (check console)
-- Check GPU supports BGRA8Unorm format
-
-## Implementation Status
-
-- [x] Window creation (Windows)
-- [x] Vulkan initialization
-- [x] Surface creation
-- [x] Adapter enumeration
-- [x] Device creation
-- [x] Swapchain configuration
-- [x] Shader modules (SPIR-V)
-- [x] Pipeline creation
-- [x] Render pass
-- [x] Command encoding
-- [x] Presentation
-- [ ] Linux support (VK_KHR_xlib_surface)
-- [ ] macOS support (MoltenVK)
+When a step fails it prints `FATAL:` and the error on that same line, and exits with 1. Without `vulkan-1.dll` that's step 4. Errors inside the loop print `Frame error:` and it carries on.
 
 ## Files
 
-| File | Purpose |
-|------|---------|
-| `main.go` | Main test logic and render loop |
-| `window_windows.go` | Win32 window creation via syscall |
-| `shaders.go` | Embedded SPIR-V bytecode |
-| `shaders/triangle.vert` | Original GLSL vertex shader |
-| `shaders/triangle.frag` | Original GLSL fragment shader |
+| File | What's in it |
+|---|---|
+| `main.go` | setup, render loop and cleanup |
+| `window_windows.go` | the Win32 window and message pump, through `golang.org/x/sys/windows` |
+| `shaders.go` | the WGSL shaders, plus SPIR-V from glslc that nothing uses any more (the comment there says why) |
+| `shaders/` | the GLSL that SPIR-V came from |
 
-## Design Notes
+## See also
 
-This test follows the **minimal WebGPU workflow**:
+These are Windows only too:
 
-1. Instance → Surface → Adapter → Device
-2. Configure surface with format and present mode
-3. Create shaders → Create pipeline
-4. Loop: Acquire → Encode → Submit → Present
-
-Key differences from WebGPU:
-- Vulkan requires explicit swapchain management
-- Memory allocation is explicit (using `hal/vulkan/memory` allocator)
-- No automatic resource tracking (manual Destroy calls)
-
-## Future Enhancements
-
-- [ ] Vertex buffers test (not hardcoded positions)
-- [ ] Index buffers test
-- [ ] Uniform buffers test
-- [ ] Texture sampling test
-- [ ] Depth testing test
-- [ ] Multiple render targets
-- [ ] Compute shader test
-
-## Related Tests
-
-- `cmd/vk-test` - Minimal Vulkan device test (no rendering)
-- `cmd/gles-test` - OpenGL ES backend test
-
----
-
-**Platform:** Windows 10+ (64-bit)
-**Go Version:** 1.25+
-**Vulkan Version:** 1.2+
+- `cmd/vk-test`: Vulkan library, instance, surface and device, no drawing
+- `cmd/wgpu-triangle`: a triangle through the public `wgpu` API, and `cmd/wgpu-triangle-mt` the same with a render thread like this one
+- `cmd/gles-test`: a triangle on the GL backend through WGL

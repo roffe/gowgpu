@@ -1,167 +1,108 @@
-# Contributing to wgpu
+# Contributing
 
-Thank you for your interest in contributing to the Pure Go WebGPU implementation!
+Bug reports, fixes and test runs on hardware i don't have are all welcome. The last one especially: see the "what has run where" table in the [README](README.md).
 
-wgpu is part of the [GoGPU](https://github.com/gogpu) ecosystem — 1.25M+ lines of Pure Go GPU code powering 2D graphics, 3D rendering, GUI toolkit, ML frameworks, and game engines.
+## Setup
 
-## Current Priorities
-
-See [tracking issues](https://github.com/gogpu/wgpu/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22) for what we need help with. Key areas:
-
-- **#329** — Move all implementation to `internal/` (architecture cleanup, P0)
-- **#330** — Expose CreateQuerySet + CreateRenderBundleEncoder (good first issue)
-- **#331** — Pipeline cache for Vulkan + DX12 (performance)
-- **#333** — Validation Phase C (~45%→~70% coverage)
-- **#334** — SPIR-V interpreter missing opcodes
-
-## AI-Assisted Contributions: Smart Coding Welcome
-
-**We welcome AI-assisted contributions.** This entire ecosystem is built using AI-assisted workflows. What matters is the quality of the result, not the tool used.
-
-We practice **Smart Coding** — human engineering judgment drives AI capabilities. The key: **you own architecture, AI owns implementation**. 70% effort on architecture/review/validation, 30% on implementation.
-
-**What we look for in any contribution:**
-
-- Evidence that you understand what the code does and why
-- Rust wgpu reference consulted for non-trivial changes (we port from [gfx-rs/wgpu](https://github.com/gfx-rs/wgpu))
-- Tests that verify behavior, not just compilation
-- Willingness to iterate on review feedback
-
-**We do NOT require:**
-
-- Disclosure of AI tool usage
-- "Hand-written" code — we care about correctness
-- Perfect first submission — we'll work with you
-
-## Getting Started
-
-1. Fork the repository
-2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/wgpu`
-3. Create a branch: `git checkout -b feat/your-feature`
-4. Make your changes
-5. Run checks (see below)
-6. Commit using [Conventional Commits](https://www.conventionalcommits.org/)
-7. Push and open a Pull Request
-
-## Development Setup
+You need Go 1.25 or newer, a C compiler (cgo) and preferably a GPU.
 
 ```bash
-git clone https://github.com/gogpu/wgpu
-cd wgpu
-
-go mod download
+git clone https://github.com/roffe/gowgpu
+cd gowgpu
 go build ./...
 go test ./...
-golangci-lint run --timeout=5m
 ```
 
-**Requirements:** Go 1.25+, `golangci-lint`, `CGO_ENABLED=0` (pure Go, no C compiler needed).
+`go test ./...` runs the root package tests on whatever GPU your machine has, and skips them when there's no adapter. On Vulkan 10 of them fail today, same as on gogpu v0.34.5: 7 because Vulkan has no automatic pipeline layouts and 3 because `Map` doesn't see a `WriteBuffer` that was never submitted. Don't add to that list.
 
-## Pre-Submit Checklist
+No GPU? Install Mesa's lavapipe and Vulkan runs on the CPU. You don't even need root for it, see [Vulkan without a GPU or root](#vulkan-without-a-gpu-or-root).
+
+## Before you send a PR
 
 ```bash
-go fmt ./...                      # Format
-go vet ./...                      # Vet
-golangci-lint run --timeout=5m    # Lint
-go build ./...                    # Build
-go test ./...                     # Test
+gofmt -l .
+go vet ./...
+go build ./...
+go test ./...
+golangci-lint run
 ```
 
-For platform-specific changes, lint on **all target platforms:**
+golangci-lint has a backlog of old findings, mostly from gogpu. Don't add new ones.
+
+Build for the platforms your change touches. Most of them cross compile from Linux:
 
 ```bash
-GOOS=linux GOARCH=amd64 golangci-lint run --timeout=5m
-GOOS=darwin GOARCH=arm64 golangci-lint run --timeout=5m
+# Windows, Vulkan needs cgo
+CGO_ENABLED=1 GOOS=windows CC=x86_64-w64-mingw32-gcc go build ./...
+
+# Android, with the NDK's clang
+CGO_ENABLED=1 GOOS=android GOARCH=arm64 \
+  CC=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android31-clang go build ./...
+
+# browser
+GOOS=js GOARCH=wasm go build .
 ```
 
-Platform-specific files (`_darwin.go`, `_linux.go`, `_windows.go`) are invisible to lint on other platforms.
-
-## Architecture Principle
-
-**If implementation CAN be hidden — it MUST be hidden.**
-
-New code goes into `internal/` packages. The root package contains only exported types and thin delegation methods. See [ARCHITECTURE.md](docs/ARCHITECTURE.md) and ADR-070.
-
-## Project Structure
-
-```
-wgpu/
-├── *.go                # Public API (exported types + thin wrappers)
-├── internal/
-│   ├── core/           # Validation, resource management, state tracking
-│   ├── hal/            # Hardware abstraction layer
-│   │   ├── vulkan/     # Vulkan backend (Windows, Linux, macOS, Android)
-│   │   ├── metal/      # Metal backend (macOS, iOS)
-│   │   ├── dx12/       # DirectX 12 backend (Windows)
-│   │   ├── gles/       # OpenGL ES backend (Windows, Linux)
-│   │   ├── software/   # Full CPU rasterizer + SPIR-V interpreter + RT BVH
-│   │   └── noop/       # No-op backend (testing)
-│   ├── browser/        # Browser WebGPU via syscall/js
-│   ├── raytracing/     # RT build orchestration, compaction, validation
-│   └── ...
-├── cmd/                # CLI tools and test apps
-├── examples/           # Example applications
-│   ├── raytracing-headless/  # RT verification on software backend
-│   ├── compute-sum/          # Compute shader example
-│   └── ...
-└── docs/               # Public documentation
-```
-
-> **Note:** Migration from `core/` and `hal/` to `internal/` is in progress (#329). New code should go directly into `internal/` sub-packages.
-
-## Commit Messages
-
-[Conventional Commits](https://www.conventionalcommits.org/):
-
-```
-feat(vulkan): add Android arm64 WSI support
-fix(metal): pin autorelease pools to OS threads
-docs: update ARCHITECTURE.md
-test(core): add surface lifecycle tests
-refactor(hal): share checked swapchain enumeration
-```
-
-Components: `core`, `hal`, `vulkan`, `metal`, `dx12`, `gles`, `software`, `noop`, `browser`, `raytracing`, `docs`, `ci`
-
-## Pull Request Guidelines
-
-- Keep PRs focused on a single change
-- Reference the Rust wgpu equivalent for non-trivial HAL/core changes
-- Add tests for new functionality
-- Update documentation if needed (CHANGELOG, docs/, README)
-- Ensure all CI checks pass (14 checks: build×3, test×3, lint, format, deps, GLES integration, browser, Android, Rust cross-compile)
-- Reference related issues
-
-## Testing
+macOS and iOS need Apple's SDK to link. Without a Mac, `cmd/cgocheck` still type checks a cgo package for those targets, with a faked `C` package, and writes out the C side so clang can compile it on its own:
 
 ```bash
-go test ./...              # Unit tests
-go test -cover ./...       # With coverage
-go test -race ./...        # Race detector (requires CGO_ENABLED=1)
+go run ./cmd/cgocheck -goos ios -goarch arm64 -out /tmp/pre ./hal/metal
 ```
 
-Backend-specific verification:
+It checks one package at a time, because the packages it imports still go through the real cgo.
+
+In the PR, say what you ran it on: OS, GPU, driver and backend.
+
+## The Vulkan bindings
+
+`hal/vulkan/vk` is generated. `cmd/vk-gen` writes Go bindings from `vk.xml`, then `cmd/vk-cgo` moves the wrappers onto the C trampolines in `trampolines.h`. Don't edit the generated files by hand, change the generator and run:
 
 ```bash
-GOGPU_GRAPHICS_API=vulkan   go run ./examples/compute-sum/
-GOGPU_GRAPHICS_API=dx12     go run ./examples/compute-sum/
-GOGPU_GRAPHICS_API=software go run ./examples/compute-sum/
-go run ./examples/raytracing-headless/   # RT verification (no GPU needed)
+(cd cmd/vk-gen && go run . -spec vk.xml -out ../../hal/vulkan/vk/) && go run ./cmd/vk-cgo hal/vulkan/vk
 ```
 
-## Reporting Issues
+It reproduces the checked in files byte for byte, so `git diff` after it shows exactly what your change did.
 
-- Use [GitHub Issues](https://github.com/gogpu/wgpu/issues)
-- Include Go version, OS, and GPU (if relevant)
-- Provide minimal reproduction
-- Include error messages and backend used (`GOGPU_GRAPHICS_API=?`)
+## Calling into C
 
-## Questions?
+All native calls go through small header-free C trampolines, one per C signature, with the function pointer as the first argument. When you add one:
 
-- [GitHub Discussions](https://github.com/orgs/gogpu/discussions) for questions and ideas
-- [W3C gpuweb discussion](https://github.com/gpuweb/gpuweb/discussions/7023) for WebGPU spec topics
-- PR comments for code-specific discussion
+- Pass Go memory as a typed pointer (`*C.uint8_t` and friends), never as `uintptr`. A `uintptr` doesn't keep the memory alive and doesn't follow a stack that moves.
+- Use `uintptr_t` on the C side for pointer-sized integers so 32-bit builds stay right.
+- Mark it `#cgo noescape` and `#cgo nocallback` only when C really neither keeps the pointer nor calls back into Go. Anything that dispatches events (Wayland roundtrips, debug messengers) must not be `nocallback`.
+- Open libraries with `internal/dl` at run time. Don't link against them: a missing library should mean a missing backend, not a binary that won't start.
 
----
+## Vulkan without a GPU or root
 
-Thank you for contributing!
+Arch packages can be unpacked anywhere. `pacman -Sp vulkan-swrast vulkan-validation-layers` prints the package URLs, download and `tar -xf` them into a directory, and point the JSON manifests' `library_path` at the unpacked `.so` files. Then:
+
+```bash
+# lavapipe, Mesa's CPU Vulkan driver
+VK_ICD_FILENAMES=<dir>/usr/share/vulkan/icd.d/lvp_icd.json go test ./...
+
+# the Khronos validation layer
+VK_LAYER_PATH=<dir>/usr/share/vulkan/explicit_layer.d \
+VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation go test ./...
+```
+
+To check what happens on a machine with no Vulkan at all, point `VK_ICD_FILENAMES` at a JSON whose `library_path` doesn't exist.
+
+## Commit messages
+
+[Conventional Commits](https://www.conventionalcommits.org/): `type(scope): summary`, for example
+
+```
+fix(gles): write textures at their origin and row pitch
+feat(dx12): fall back to WARP when no hardware adapter works
+refactor!: drop the software backend
+```
+
+Scopes are the package or backend: `core`, `hal`, `vulkan`, `metal`, `dx12`, `gles`, `browser`, `gputypes`, `allbackends`, `cmd`, `docs`, `ci`. Use the body for why, not what.
+
+## AI tools
+
+Use whatever tools you like. You own the result: know what the code does, test it on real hardware where it matters, and be ready to change it after review.
+
+## Reporting bugs
+
+Open an [issue](https://github.com/roffe/gowgpu/issues) with the Go version, OS, GPU and driver, the backend (`adapter.Info()` tells you), and the smallest program that shows the problem. Logs help: the HAL logs through `log/slog`.

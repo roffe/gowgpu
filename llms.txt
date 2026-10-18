@@ -1,14 +1,10 @@
-# wgpu — GoGPU Ecosystem
+# gowgpu
 
-> Part of the GoGPU Pure Go GPU Computing Ecosystem.
+> WebGPU for Go over Vulkan, Metal, DX12, OpenGL and the browser's WebGPU. Module github.com/roffe/gowgpu, package wgpu. Uses cgo for native calls.
 
 ## Docs
 
-- [API Reference](https://pkg.go.dev/github.com/gogpu/wgpu)
-- [AGENTS.md](https://github.com/gogpu/wgpu/blob/main/AGENTS.md): AI agent instructions
-- [README](https://github.com/gogpu/wgpu/blob/main/README.md): Human-readable overview
-
-## Ecosystem
-
-- [GoGPU Ecosystem](https://github.com/gogpu/gogpu/blob/main/AGENTS.md): Full ecosystem map
-- [Open Collective](https://opencollective.com/gogpu): Support development
+- [README](https://github.com/roffe/gowgpu/blob/main/README.md): what it is, backends, building, known issues
+- [AGENTS.md](https://github.com/roffe/gowgpu/blob/main/AGENTS.md): notes for AI coding agents
+- [Architecture](https://github.com/roffe/gowgpu/blob/main/docs/ARCHITECTURE.md)
+- [API reference](https://pkg.go.dev/github.com/roffe/gowgpu)

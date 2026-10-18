@@ -1,4 +1,4 @@
-# GolangCI-Lint v2.7 Configuration for wgpu - Pure Go WebGPU
+# golangci-lint v2 configuration for gowgpu
 # Documentation: https://golangci-lint.run/docs/configuration/
 
 version: "2"
@@ -182,12 +182,6 @@ linters:
       - path: hal/gles/gl/context\.go
         linters:
           - errcheck
-
-      # Rust FFI backend (//go:build rust): invisible to CI lint (GOOS=linux).
-      # nolint directives appear "unused" because suppressed linters never run.
-      - path: .*_rust\.go
-        linters:
-          - nolintlint
 
       # Browser-only mapped range (//go:build js && wasm): same CI blind spot.
       - path: mapped_range_browser\.go

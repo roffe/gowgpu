@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+gowgpu split off from gogpu/wgpu v0.34.5 on 2026-10-17. Everything from [0.34.5] down is gogpu's history.
+
+### Changed
+
+- **The module is `github.com/roffe/gowgpu`** (package name still `wgpu`). Breaking: import paths change.
+- **cgo instead of goffi for every native call.** Vulkan goes through 61 header-free C trampolines, one per C signature: about 20 ns and no allocations per call, where goffi took 85 to 128 ns and 3 to 8 allocations. Metal sends its Objective-C messages through 43 cgo casts of `objc_msgSend`, about 21 ns instead of 210 ns and 9 allocations. EGL, GL, X11 and wayland-egl went the same way. Libraries are still opened at run time (the Vulkan loader itself, everything else through the new `internal/dl`), so building needs no SDK for them. DX12 and WGL keep using `syscall`.
+- **`vk-gen` writes typed pointers** instead of `uintptr`, and the new `cmd/vk-cgo` moves its wrappers onto the trampolines. Regenerating reproduces the checked in bindings byte for byte.
+- **`gputypes` lives in this module**, as `github.com/roffe/gowgpu/gputypes` (from gogpu/gputypes v0.8.0, MIT). Breaking: import paths change. The only dependencies left are naga and `golang.org/x/sys`.
+- **OpenGL is registered by `hal/allbackends` again**, on Linux, Windows and Android, but stays out of the default instance. Ask for `gputypes.BackendsGL` to use it.
+- **The Vulkan application and engine names and the pipeline cache folder say gowgpu**, so caches go to `os.UserCacheDir()/gowgpu` instead of sharing gogpu's folder. An old cache just gets rebuilt.
+
+### Deprecated
+
+- **`HeadlessSurfaceTarget`, `Surface.PresentPixels`, `Surface.WritePixels` and `Surface.ReadPixels`.** Only the software backend implemented them, so every backend refuses them now. They'll be removed. To render without a window, render into a texture and read it back with `CopyTextureToBuffer`.
+
+### Added
+
+- **DX12 falls back to WARP** when no hardware adapter works, so Windows VMs and CI runners get a device.
+- **GLES on Android**: a GLES 3.0 context on the Instance and EGL window surfaces on `ANativeWindow`, so a device survives the window Android replaces on every resume.
+- **`cmd/cgocheck`** type checks a cgo package for a target this machine has no SDK for (darwin, ios, android, windows/arm64).
+- Building the Vulkan bindings without cgo stops with a message that says cgo is needed.
+
+### Fixed
+
+- **GL presented nothing**: a context first made current without a surface keeps the window's draw buffer at `GL_NONE`, so Present drew nowhere. It sets `GL_BACK` before the blit now.
+- **GL texture uploads ignored their origin, row pitch and offset**, so every write landed at (0,0).
+- **GL on X11 with NVIDIA**: the EGL config asked for alpha, which is a 32-bit visual there, and `eglCreateWindowSurface` refused it for a default 24-bit window (`EGL_BAD_CONFIG`). X11 configs don't ask for alpha now.
+- **Vulkan surface formats for a second surface**: an adapter qualified for one surface returned no capabilities for any other, so the new window an Android app gets after a resume fell back to a format Mali doesn't offer.
+- **Metal**: triangle strips drew as triangle lists, depth bias floats were sent as integers, and iOS crashed on `setDisplaySyncEnabled:`, which only exists on macOS.
+- **Direct draws with a non-zero first instance** were refused; WebGPU only gates that for indirect draws.
+- **`MultiDrawIndirectCount` crashed on Vulkan 1.2 devices** with a SIGSEGV: the pointer from `vkGetDeviceProcAddr` was turned into a Go func value, which points at a closure, not at code, and the Go type was one parameter (`stride`) short. It goes through a trampoline now.
+- **The root tests failed on a machine without a GPU** instead of skipping: 334 of them got their adapter through a `t.Fatalf` helper.
+- **DX12 under `-race`**: bind group handles are Go pointers kept as `uintptr`, and turning them back into pointers is what checkptr rejects; it goes through a `//go:nocheckptr` helper now. The resource barrier, texture copy location and ray tracing geometry unions were byte arrays with 4-byte alignment where C has 8, a misaligned conversion to checkptr; they're `uint64` arrays now.
+
+### Removed
+
+- **The `-tags rust` backend** (wgpu-native through go-webgpu/webgpu).
+- **The software backend** (`hal/software`). It didn't run the shaders: draws without a vertex buffer blitted the first bound texture over the target, pipelines without vertex layouts were dropped and fragments got a guessed colour, at seconds per frame. Use Mesa's lavapipe on Linux or WARP on Windows for a CPU device. `cmd/sw-test`, `cmd/sw-triangle` and the `software-test` and `raytracing-headless` examples went with it.
+- **goffi** and the **gpucontext** handle helpers (`DeviceFromHandle`, `DeviceToHandle` and the rest).
+
 ## [0.34.5] - 2026-09-07
 
 ### Fixed
@@ -4152,7 +4194,7 @@ The following features are not yet fully implemented in the Vulkan backend:
 - **OpenGL ES backend** (`hal/gles/`) - Pure Go via goffi (~3.5K LOC)
 
 [#55]: https://github.com/gogpu/wgpu/issues/55
-[Unreleased]: https://github.com/gogpu/wgpu/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/roffe/gowgpu/commits/main
 [0.17.0]: https://github.com/gogpu/wgpu/compare/v0.16.17...v0.17.0
 [0.16.14]: https://github.com/gogpu/wgpu/compare/v0.16.13...v0.16.14
 [0.16.13]: https://github.com/gogpu/wgpu/compare/v0.16.12...v0.16.13

@@ -1,285 +1,51 @@
 # Surface targets
 
-Surface creation follows the safe/unsafe ownership split in Rust `wgpu`
-v29.0.3, pinned at
-[`4cbe6232b2d7c289b6e1a38416a6ae1461a22e81`](https://github.com/gfx-rs/wgpu/tree/4cbe6232b2d7c289b6e1a38416a6ae1461a22e81).
-The Go API is additive: the existing two-`uintptr` `CreateSurface` method remains
-available as a compatibility adapter, while new code can name its platform
-target and ownership mode explicitly.
+A surface is made from a typed target. The target says what kind of handle it carries (HWND, Xlib window, Wayland surface, `ANativeWindow`, `CAMetalLayer` or a canvas), so a backend never has to guess Xlib from Wayland out of two integers, and it refuses a kind it can't use before it touches any handle.
 
-## Exhaustive API mapping
+The safe/unsafe split follows Rust wgpu v29.0.3, pinned at [`4cbe6232`](https://github.com/gfx-rs/wgpu/tree/4cbe6232b2d7c289b6e1a38416a6ae1461a22e81). Rust has an enum of raw-window-handle values and `unsafe` methods. Go has neither, so here it's an opaque value with named constructors, checked at the API boundary.
 
-This map covers every exported production symbol added or behaviorally changed
-by the typed-surface integration in PR #273. Test-only declarations are
-excluded. Build-tagged implementations of the same package selector are one
-logical Go symbol. The Rust references are the pinned v29.0.3 sources for
-[`Instance::create_surface`](https://github.com/gfx-rs/wgpu/blob/4cbe6232b2d7c289b6e1a38416a6ae1461a22e81/wgpu/src/api/instance.rs#L175-L280),
-[`SurfaceTarget` and `SurfaceTargetUnsafe`](https://github.com/gfx-rs/wgpu/blob/4cbe6232b2d7c289b6e1a38416a6ae1461a22e81/wgpu/src/api/surface.rs#L254-L458),
-and [core surface creation](https://github.com/gfx-rs/wgpu/blob/4cbe6232b2d7c289b6e1a38416a6ae1461a22e81/wgpu-core/src/instance.rs#L218-L290).
+## Making a surface
 
-### Root `wgpu` package
+| Method | Takes | Ownership |
+|---|---|---|
+| `CreateSurfaceUnsafe(SurfaceTargetUnsafe)` | raw handles from a `SurfaceTargetFrom*` constructor | nothing is retained, the handles have to stay valid until `Surface.Release` returns |
+| `CreateSurfaceFromTarget(SurfaceTarget)` | a provider, any value with `SurfaceTarget() (SurfaceTargetUnsafe, error)` | the provider is called once and kept until the surface is released |
+| `CreateSurface(displayHandle, windowHandle)` | the old two `uintptr`s | nothing is retained, mapped onto a typed target by GOOS, see [The old CreateSurface](#the-old-createsurface) |
+| `CreateSurfaceFromCanvas(js.Value)` | an `HTMLCanvasElement` or `OffscreenCanvas` | browser only |
 
-| Go symbol | Rust analogue or explicit Go adaptation | Ownership and error contract |
-|-----------|------------------------------------------|------------------------------|
-| `ErrInvalidSurfaceTarget` | `CreateSurfaceErrorKind::RawHandle`, represented as an `errors.Is` sentinel because Go has no raw-window-handle error type | Returned for an empty target, typed-nil provider, unknown kind, or missing required handle before a backend call |
-| `ErrUnsupportedSurfaceTarget` | `CreateSurfaceError::FailedToCreateSurfaceForAnyBackend`, split from malformed-input errors so callers can distinguish platform support | Returned when an implementation or every enabled native backend rejects the target kind; backend detail remains wrapped |
-| `SurfaceTarget` | Safe `SurfaceTarget<'window>` | A provider is sampled exactly once; the provider, not merely its raw result, is retained through backend destruction |
-| `SurfaceTarget.SurfaceTarget` | `Into<SurfaceTarget>` followed by raw-handle extraction | May return an application error; its identity is preserved with wrapping; it is never called after instance release |
-| `SurfaceTargetUnsafe` | `SurfaceTargetUnsafe::RawHandle` | Opaque closed value prevents callers from inventing a kind/handle mismatch; retains no ownership source |
-| `HeadlessSurfaceTarget` | Explicit Go software extension; Rust `wgpu` has no windowless `SurfaceTarget` variant | Zero-sized safe target with no handles or external lifetime; accepted by the Pure-Go software backend and rejected by Rust/browser implementations |
-| `SurfaceTargetFromWindowsHWND` | `RawWindowHandle::Win32` plus the optional Windows display/module handle | `HWND` is required at creation; caller owns both handles through release |
-| `SurfaceTargetFromXlibWindow` | `RawDisplayHandle::Xlib` plus `RawWindowHandle::Xlib` | Both `Display*` and `Window` are required and caller-owned |
-| `SurfaceTargetFromWaylandSurface` | `RawDisplayHandle::Wayland` plus `RawWindowHandle::Wayland` | Both `wl_display*` and `wl_surface*` are required and caller-owned |
-| `SurfaceTargetFromAndroidNativeWindow` | `RawWindowHandle::AndroidNdk`; Rust Vulkan also ignores the display variant | `ANativeWindow*` is required; caller keeps its native reference alive through release |
-| `SurfaceTargetFromMetalLayer` | Rust core's Metal-layer creation path, adapted to the repository's existing `CAMetalLayer*` convention | Layer is required; the Metal HAL takes its own Objective-C retain while the unsafe Go call retains no provider |
-| `SurfaceTargetFromWebCanvasID` | `RawWindowHandle::Web` numeric DOM identifier | Zero intentionally preserves the first-canvas convention; non-browser implementations return the unsupported sentinel |
-| `(*Instance).CreateSurfaceFromTarget` | Safe `Instance::create_surface` | Checks instance lifetime first, samples and validates once, retains the provider on success, and clears it only after surface teardown |
-| `(*Instance).CreateSurfaceUnsafe` | `unsafe Instance::create_surface_unsafe` | Go cannot mark a method unsafe, so the name, opaque constructors, validation, and documentation carry the contract; no provider is retained |
-| `(*Instance).CreateSurface` | Go-only source-compatibility adapter to the typed unsafe path | Retains no provider; Linux alone keeps legacy environment-based Xlib/Wayland selection; new code should use an explicit target |
-| `(*Instance).RequestAdapter` with `CompatibleSurface` | Rust `RequestAdapterOptions::compatible_surface` | Native dispatch supplies the surface created by each candidate adapter's own backend; a missing backend surface makes that backend incompatible |
-| `(*Adapter).GetSurfaceCapabilities` | `Surface::get_capabilities`, which resolves `surface.raw(adapter.backend())` | Never substitutes the currently active surface for another backend; missing same-backend state reports no capabilities |
-| `(*Surface).Configure` backend selection | Rust core's `surface_per_backend` selection by device backend | Reuses the retained surface for that backend and leaves other backend surfaces owned but inactive |
-| `(*Surface).ReadPixels` | Explicit Go software extension; ordinary WebGPU readback uses texture-to-buffer copies | After present/discard, returns an owned, tightly packed top-left RGBA8 snapshot; unsupported implementations return an error rather than inventing pixels |
-| `(*Surface).Release` | Rust `Surface` drop and `_handle_source` field order | Destroys the active and inactive backend surfaces before clearing the safe provider; idempotent |
-| `(*Instance).Release` documentation | Rust surfaces have independent lifetimes | Native instances retire tracked surfaces; Rust-tag and browser surfaces still require explicit release, now stated without a false cascading promise |
+### Constructors
 
-### Exported integration seams
+| Constructor | Handles | Taken by |
+|---|---|---|
+| `SurfaceTargetFromWindowsHWND(hinstance, hwnd)` | `HWND` required, `HINSTANCE` may be 0 | Vulkan, DX12, GL (WGL) |
+| `SurfaceTargetFromXlibWindow(display, window)` | `Display*` and `Window`, both required | Vulkan on Linux and the BSDs, GL on Linux |
+| `SurfaceTargetFromWaylandSurface(display, surface)` | `wl_display*` and `wl_surface*`, both required | Vulkan on Linux and the BSDs, GL on Linux |
+| `SurfaceTargetFromAndroidNativeWindow(window)` | `ANativeWindow*`, there's no display | Vulkan and GLES on Android |
+| `SurfaceTargetFromMetalLayer(layer)` | `CAMetalLayer*` | Metal, and Vulkan through MoltenVK on macOS |
+| `SurfaceTargetFromWebCanvasID(id)` | the canvas's `data-raw-handle`, 0 picks the first canvas | the browser only |
+| `HeadlessSurfaceTarget{}` | none | nothing, see [below](#headlesssurfacetarget-readpixels-and-writepixels) |
 
-These packages are advanced implementation surfaces, but they are importable Go
-packages and therefore still require an explicit parity rationale. Rust's
-corresponding layers are the ordered `instance_per_backend` / `surface_per_backend`
-maps in core and the [`wgpu-hal::Instance::create_surface`](https://github.com/gfx-rs/wgpu/blob/4cbe6232b2d7c289b6e1a38416a6ae1461a22e81/wgpu-hal/src/lib.rs#L648-L662)
-backend trait.
+There's no GL on the BSDs, so there only Vulkan takes Xlib and Wayland targets. The BSDs have never been built or run.
 
-| Go symbol | Rust analogue or explicit Go adaptation | Ownership and error contract |
-|-----------|------------------------------------------|------------------------------|
-| `hal.ErrUnsupportedSurfaceTarget` | `wgpu_hal::InstanceError` for an incompatible raw-window-handle variant, made classifiable with `errors.Is` | Must be returned before a foreign target's integers are interpreted as platform pointers |
-| `hal.SurfaceTargetKind` | The discriminator of `RawWindowHandle` | Closed enum used only below the public opaque target; no ownership |
-| `hal.SurfaceTargetInvalid` | Go validation sentinel; no Rust payload analogue | Never reaches a platform API |
-| `hal.SurfaceTargetHeadless` | Go software/noop extension | Carries no handles; accepted only by backends with an explicit headless contract |
-| `hal.SurfaceTargetWindowsHWND` | `RawWindowHandle::Win32` | Selects Win32 consumers only |
-| `hal.SurfaceTargetXlibWindow` | `RawWindowHandle::Xlib` | Selects Xlib consumers independently of environment variables |
-| `hal.SurfaceTargetWaylandSurface` | `RawWindowHandle::Wayland` | Selects Wayland consumers independently of environment variables |
-| `hal.SurfaceTargetAndroidNativeWindow` | `RawWindowHandle::AndroidNdk` | Selects `ANativeWindow*`; display is ignored |
-| `hal.SurfaceTargetMetalLayer` | Rust Metal-layer surface path | Selects `CAMetalLayer*` |
-| `hal.SurfaceTarget` and fields `Kind`, `DisplayHandle`, `WindowHandle` | Go representation of Rust's typed display/window-handle pair | Borrowed data only; HAL does not receive a Go ownership source and must reject a mismatched kind before pointer use |
-| `hal.SurfaceTarget.RequireKind` | A Rust `match` arm on `RawWindowHandle` | Wraps `hal.ErrUnsupportedSurfaceTarget`; performs no I/O or pointer access |
-| `hal.SurfaceTargetKind.String` | `Debug` formatting of raw-window-handle variants | Stable diagnostics only; unknown numeric values remain printable and unsupported |
-| `hal.PixelReader` | Go optional-capability adaptation; no `wgpu-hal` surface method analogue | Implementations return a caller-owned, tightly packed top-left RGBA8 snapshot; adding the capability does not widen the mandatory `hal.Surface` interface |
-| `hal.Instance.CreateSurface` | `wgpu_hal::Instance::create_surface` | Signature intentionally changes from two unlabelled integers to one typed borrowed target; platform failures remain backend errors |
-| `hal/dx12.(*Instance).CreateSurface` | Rust DX12 Win32 surface creation | Accepts only `WindowsHWND`; stores a borrowed HWND and rejects other kinds first |
-| `hal/gles.(*Instance).CreateSurface` | Rust GLES WGL/EGL surface creation | Windows accepts `WindowsHWND`; Linux accepts Xlib or Wayland and explicitly selects the matching EGL display; backend errors remain wrapped |
-| `hal/metal.(*Instance).CreateSurface` | Rust Metal layer creation | Accepts only `MetalLayer`, validates nonzero, then retains/releases the Objective-C layer internally |
-| `hal/noop.(*Instance).CreateSurface` | Go test-backend adaptation | Performs no native access and accepts the target without ownership; not a platform support claim |
-| `hal/software.(*Instance).CreateSurface` | Go CPU-presenter adaptation | Accepts only headless or host-appropriate kinds, stores the kind with the handles, and rejects foreign kinds before deferred blit setup |
-| `hal/vulkan.Backend.CreateInstance` | Rust Vulkan instance creation enables the loader-supported WSI set rather than selecting one ABI from session state | Enumerates extensions before instance creation, preserves deterministic candidate order, and returns loader/enumeration failures without acquiring window ownership |
-| `hal/vulkan.(*Instance).CreateSurface` | Rust Vulkan's [raw-handle match](https://github.com/gfx-rs/wgpu/blob/4cbe6232b2d7c289b6e1a38416a6ae1461a22e81/wgpu-hal/src/vulkan/instance.rs#L879-L922) | Accepts only kinds supported by the build target; Android passes `ANativeWindow*` directly and ignores display; Vulkan errors remain wrapped |
-| `core.HALInstanceEntry` and fields `Backend`, `Instance` | One ordered entry in Rust core's `instance_per_backend` | Core retains ownership; snapshots handed upward borrow instances until core destruction |
-| `core.(*Instance).HALInstanceEntries` | Ordered iteration over `instance_per_backend` | Returns a copied slice in backend-priority order; copying transfers no HAL ownership |
-| `core.(*Instance).RequestAdapterWithSurfaces` | Adapter selection against Rust core's backend-keyed `surface_per_backend` | Borrows the map for the call, gives each adapter only its same-backend surface, and falls back to ordinary selection only for an empty map |
-| `core.(*Instance).RequestAdapterWithSurface` | Go-only compatibility wrapper for existing single-HAL callers | Borrows one surface and preserves historical single-backend behavior; root multi-backend code uses the map method |
-| `egl.ContextConfig.WindowKind` | Rust EGL's display-handle-selected window-system interface | Optional pointer: `nil` means legacy detection, non-nil forces X11/Wayland/surfaceless; zero-value `ContextConfig` therefore cannot accidentally force X11 |
-| `egl.DefaultContextConfig` | Default Rust EGL instance policy | Leaves `WindowKind` nil, so no native object or environment decision is captured early |
-| `egl.NewContext` | Rust EGL initialization from an explicit display-handle variant | Honors an explicit kind without consulting opposing session variables; otherwise preserves detection; owns only any display connection it opens itself |
-| `egl.GetEGLDisplay` | Existing Go auto-detection entry point | Remains source-compatible and delegates to the private explicit-kind mechanism; errors close any internally opened display owner |
-
-### Canonical Rust-wrapper dependency
-
-| Go symbol | Rust / WebGPU-native analogue | Ownership and error contract |
-|-----------|--------------------------------|------------------------------|
-| `go-webgpu/webgpu/wgpu.(*Instance).CreateSurfaceFromAndroidNativeWindow` | `WGPUSurfaceSourceAndroidNativeWindow` passed to `wgpuInstanceCreateSurface` | Android-only; rejects zero before FFI, keeps the wire descriptor live for the call, retains no `ANativeWindow` reference, and returns `WGPUError` for released instance or null result |
-
-That wrapper method belongs in canonical
-[go-webgpu/webgpu#24](https://github.com/go-webgpu/webgpu/pull/24), not this
-repository. This branch tests its exact clean head
-`a801aed7399042e5564ef76fc9f075da5cb70081`, the canonical #24 merge. Until a
-release contains that commit, the Rust-tag Android lane injects the exact clean
-source through an ephemeral workspace. The WGPU follow-up does not vendor the
-ABI struct or add a local `replace`.
-
-Like Rust `wgpu`, the native implementation attempts surface creation for
-every enabled backend and succeeds when at least one backend succeeds. It keeps
-one raw surface per successful backend so `CompatibleSurface` qualification and
-later configuration always use the surface created by that same backend.
-
-Rust can express the target as an enum of `raw-window-handle` values and mark a
-method `unsafe`. Go has neither tagged unions nor unsafe methods, so the Go
-adaptation uses an opaque value with named constructors and validates it at the
-API boundary. The target kind remains explicit all the way into HAL; backends
-never infer Xlib versus Wayland from two unlabelled integers.
-
-## Headless software surface and readback
-
-`HeadlessSurfaceTarget` is a deliberate Pure-Go software extension, not a Rust
-`wgpu` or WebGPU surface variant. It lets tests and server-side renderers use the
-normal surface lifecycle without fabricating a platform window:
-
-1. create a headless surface;
-2. request a compatible fallback adapter;
-3. configure, acquire, render, submit, and present normally; then
-4. call `Surface.ReadPixels` after the acquired texture has been presented or
-   discarded.
-
-`ReadPixels` returns a caller-owned `width * height * 4` byte slice in tightly
-packed, top-left, row-major RGBA8 order. The output contract is the same for
-RGBA8 and BGRA8 surface configurations. Mutating the returned slice does not
-change the surface. Calling it before configuration, while a texture is
-acquired, after unconfiguration/release, or on a backend without the optional
-readback capability returns an error.
-
-The following complete clear-and-capture path uses only the public root API:
-
-```go
-package main
-
-import (
-	"fmt"
-
-	"github.com/roffe/gowgpu/gputypes"
-	"github.com/gogpu/wgpu"
-	_ "github.com/gogpu/wgpu/hal/allbackends"
-)
-
-func capture() ([]byte, error) {
-	instance, err := wgpu.CreateInstance(nil)
-	if err != nil {
-		return nil, err
-	}
-	defer instance.Release()
-
-	surface, err := instance.CreateSurfaceFromTarget(wgpu.HeadlessSurfaceTarget{})
-	if err != nil {
-		return nil, err
-	}
-	defer surface.Release()
-
-	adapter, err := instance.RequestAdapter(&wgpu.RequestAdapterOptions{
-		CompatibleSurface:    surface,
-		ForceFallbackAdapter: true,
-	})
-	if err != nil {
-		return nil, err
-	}
-	defer adapter.Release()
-
-	device, err := adapter.RequestDevice(nil)
-	if err != nil {
-		return nil, err
-	}
-	defer device.Release()
-
-	if err := surface.Configure(device, &wgpu.SurfaceConfiguration{
-		Width:       4,
-		Height:      4,
-		Format:      wgpu.TextureFormatRGBA8Unorm,
-		Usage:       gputypes.TextureUsageRenderAttachment,
-		PresentMode: gputypes.PresentModeFifo,
-		AlphaMode:   gputypes.CompositeAlphaModeOpaque,
-	}); err != nil {
-		return nil, err
-	}
-	if width, height := surface.ActualExtent(); width != 4 || height != 4 {
-		return nil, fmt.Errorf("configured extent = %dx%d, want 4x4", width, height)
-	}
-
-	texture, _, err := surface.GetCurrentTexture()
-	if err != nil {
-		return nil, err
-	}
-	presented := false
-	defer func() {
-		if !presented {
-			surface.DiscardTexture()
-		}
-	}()
-
-	view, err := texture.CreateView(nil)
-	if err != nil {
-		return nil, err
-	}
-	defer view.Release()
-
-	encoder, err := device.CreateCommandEncoder(nil)
-	if err != nil {
-		return nil, err
-	}
-	pass, err := encoder.BeginRenderPass(&wgpu.RenderPassDescriptor{
-		ColorAttachments: []wgpu.RenderPassColorAttachment{{
-			View:       view,
-			LoadOp:     gputypes.LoadOpClear,
-			StoreOp:    gputypes.StoreOpStore,
-			ClearValue: wgpu.Color{R: 1, A: 1},
-		}},
-	})
-	if err != nil {
-		encoder.DiscardEncoding()
-		return nil, err
-	}
-	if err := pass.End(); err != nil {
-		encoder.DiscardEncoding()
-		return nil, err
-	}
-
-	commands, err := encoder.Finish()
-	if err != nil {
-		return nil, err
-	}
-	if _, err := device.Queue().Submit(commands); err != nil {
-		commands.Release()
-		return nil, err
-	}
-	if err := surface.Present(texture); err != nil {
-		return nil, err
-	}
-	presented = true
-
-	return surface.ReadPixels()
-}
-
-func main() {
-	pixels, err := capture()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(len(pixels)) // 64
-}
-```
-
-`ForceFallbackAdapter` makes the all-backends example select the software
-adapter compatible with the headless surface. The Rust and browser builds
-expose the same Go method set, but reject this target with
-`ErrUnsupportedSurfaceTarget`; ordinary GPU backends also reject `ReadPixels`
-because surface readback is not part of WebGPU.
-
-## Safe provider path
-
-A provider converts an application-owned window object into a raw target:
+### Provider
 
 ```go
 type AndroidWindow struct {
 	nativeWindow uintptr
-	// Fields that own or retain the native window belong here.
+	// whatever owns or retains the native window goes here
 }
 
 func (w *AndroidWindow) SurfaceTarget() (wgpu.SurfaceTargetUnsafe, error) {
 	return wgpu.SurfaceTargetFromAndroidNativeWindow(w.nativeWindow), nil
 }
 
+window := &AndroidWindow{nativeWindow: nativeWindow}
 surface, err := instance.CreateSurfaceFromTarget(window)
 ```
 
-`CreateSurfaceFromTarget` calls `SurfaceTarget` exactly once. On success it
-retains the provider until backend surface destruction has completed during
-`Surface.Release`. The default native implementation also releases its tracked
-surfaces from `Instance.Release`; Rust-tag and browser callers must release each
-surface explicitly. This keeps the provider's Go ownership graph reachable.
-The provider still must make the underlying native objects valid for that whole
-lifetime; finalizers are not a substitute for an explicit platform lifetime
-contract.
+`CreateSurfaceFromTarget` calls `SurfaceTarget()` exactly once. On success it keeps the provider until `Surface.Release` has destroyed the backend surfaces, so the provider's Go objects stay reachable that long. The native objects behind it still have to stay valid for that whole time. A finalizer is no substitute for that.
 
-## Unsafe raw-target path
-
-Use a raw target when the host already controls the native object's lifetime:
+### Raw handles
 
 ```go
 surface, err := instance.CreateSurfaceUnsafe(
@@ -287,36 +53,120 @@ surface, err := instance.CreateSurfaceUnsafe(
 )
 ```
 
-No ownership source is retained. Every referenced display, window, surface, or
-layer must remain valid until `Surface.Release` returns. A zero required handle
-is rejected before any backend call.
+Nothing is retained. Every display, window, surface or layer you pass has to stay valid until `Surface.Release` returns. A zero handle where one is required is refused before any backend sees it.
 
-Available constructors are:
+Go can't mark a method unsafe, so the name, the opaque constructors and the validation carry the contract.
 
-| Constructor | Raw objects |
-|-------------|-------------|
-| `SurfaceTargetFromWindowsHWND` | optional `HINSTANCE`, required `HWND` |
-| `SurfaceTargetFromXlibWindow` | required `Display*` and Xlib `Window` |
-| `SurfaceTargetFromWaylandSurface` | required `wl_display*` and `wl_surface*` |
-| `SurfaceTargetFromAndroidNativeWindow` | required `ANativeWindow*`; no display |
-| `SurfaceTargetFromMetalLayer` | required `CAMetalLayer*` |
-| `SurfaceTargetFromWebCanvasID` | numeric `data-raw-handle`; zero selects the first canvas |
+## Errors
 
-Each implementation accepts only targets it can realize. A mismatched target
-returns `ErrUnsupportedSurfaceTarget`; a malformed or empty target returns
-`ErrInvalidSurfaceTarget`. Provider errors preserve `errors.Is` identity.
-`ErrReleased` takes precedence when the instance has already been released, so
-creation never evaluates a provider or target after instance teardown.
+- `ErrReleased`: the instance was already released. This is checked first, so a provider or target is never looked at after teardown.
+- `ErrInvalidSurfaceTarget`: an empty target, a nil or typed-nil provider, an unknown kind, or a required handle that is zero. Checked before any backend call.
+- `ErrUnsupportedSurfaceTarget`: no backend in the instance takes the kind, like a canvas ID on native, a native target in the browser, or `HeadlessSurfaceTarget` anywhere. Each backend's own error is joined inside.
+- When every backend failed and at least one of them did take the kind, you get `wgpu: failed to create surface for every enabled backend`, with every backend's error joined.
+- A provider's error is wrapped with `%w`, so `errors.Is` and `errors.As` still find it.
 
-## Compatibility method
+## One surface per backend
 
-`Instance.CreateSurface(displayHandle, windowHandle)` adapts legacy handles to
-the same typed implementation. It remains source-compatible, but new code
-should prefer one of the explicit methods above. On Linux only, the legacy
-method must still use `WAYLAND_DISPLAY` to distinguish Wayland from Xlib;
-typed targets remove that ambiguity. On Android, `displayHandle` is ignored,
-matching Rust's Vulkan mapping of `RawWindowHandle::AndroidNdk` directly to
-`a_native_window`.
+On native, `CreateSurface*` tries every backend in the instance, in priority order, and keeps one surface for each backend that takes the target. It succeeds when at least one does, like Rust wgpu's `surface_per_backend`.
 
-The browser-specific `CreateSurfaceFromCanvas(js.Value)` remains the preferred
-path when the caller already has an `HTMLCanvasElement` or `OffscreenCanvas`.
+- `RequestAdapter` with `CompatibleSurface` checks each adapter against the surface of its own backend. A backend without a surface can't be picked. Vulkan asks `vkGetPhysicalDeviceSurfaceSupportKHR`, GL makes its adapter from the surface's context.
+- `Adapter.GetSurfaceCapabilities` uses the surface of the adapter's backend, and returns nil when there isn't one. It never falls back to another backend's surface.
+- `Surface.Configure` makes the surface of the device's backend the active one, and creates it then if the first try failed. The others stay around unused until release.
+- `Surface.Release` destroys all of them, then lets go of the provider. Calling it twice is fine.
+- `Instance.Release` releases its devices and then its surfaces. The browser's doesn't, release browser surfaces yourself.
+
+## The old CreateSurface
+
+`Instance.CreateSurface(displayHandle, windowHandle)` still works. It goes down the same typed path and retains nothing. On native the target comes from `runtime.GOOS`:
+
+| GOOS | Target |
+|---|---|
+| windows | `SurfaceTargetFromWindowsHWND(displayHandle, windowHandle)`, so pass 0 or the HINSTANCE |
+| darwin | `SurfaceTargetFromMetalLayer(windowHandle)` |
+| linux | Wayland when `WAYLAND_DISPLAY` is set, Xlib otherwise |
+| android | `SurfaceTargetFromAndroidNativeWindow(windowHandle)`, `displayHandle` is ignored |
+| anything else, like the BSDs and ios | no mapping, you get `ErrInvalidSurfaceTarget` |
+
+So on the BSDs and iOS use a typed target. On Linux a typed target also gets rid of the `WAYLAND_DISPLAY` guess: an XWayland window in a Wayland session can go in as an Xlib target.
+
+In the browser `windowHandle` is the canvas ID and `displayHandle` is ignored. If you already have the canvas as a `js.Value`, `CreateSurfaceFromCanvas` is the better call.
+
+## HeadlessSurfaceTarget, ReadPixels and WritePixels
+
+These came with gogpu's software backend, and that backend is gone. They're still in the API, but no backend implements them now, and they're planned for removal.
+
+- `CreateSurfaceFromTarget(wgpu.HeadlessSurfaceTarget{})` returns `ErrUnsupportedSurfaceTarget`, on native and in the browser.
+- `Surface.ReadPixels` and `Surface.WritePixels` always return an error. Nothing implements `hal.PixelReader` or `hal.PixelWriter`.
+- `Surface.PresentPixels` is in the same spot, nothing implements `hal.PixelPresenter`.
+- `hal.SurfaceTargetHeadless` only shows up in tests, against `hal/noop`, which takes any target.
+
+To get your pixels back, render into a texture and `CopyTextureToBuffer` it, the normal WebGPU way. `examples/triangle-headless` does that and writes a PNG.
+
+## API mapping
+
+Every exported symbol of the typed surface path, with its Rust wgpu v29.0.3 counterpart where there is one. The Rust sources: [`Instance::create_surface`](https://github.com/gfx-rs/wgpu/blob/4cbe6232b2d7c289b6e1a38416a6ae1461a22e81/wgpu/src/api/instance.rs#L175-L280), [`SurfaceTarget` and `SurfaceTargetUnsafe`](https://github.com/gfx-rs/wgpu/blob/4cbe6232b2d7c289b6e1a38416a6ae1461a22e81/wgpu/src/api/surface.rs#L254-L458), [core surface creation](https://github.com/gfx-rs/wgpu/blob/4cbe6232b2d7c289b6e1a38416a6ae1461a22e81/wgpu-core/src/instance.rs#L218-L290) and [`wgpu_hal::Instance::create_surface`](https://github.com/gfx-rs/wgpu/blob/4cbe6232b2d7c289b6e1a38416a6ae1461a22e81/wgpu-hal/src/lib.rs#L648-L662).
+
+### Root package
+
+| Go symbol | Rust | Contract |
+|---|---|---|
+| `ErrInvalidSurfaceTarget` | `CreateSurfaceErrorKind::RawHandle` | malformed input, caught before any backend call |
+| `ErrUnsupportedSurfaceTarget` | `CreateSurfaceError::FailedToCreateSurfaceForAnyBackend` | no backend takes the kind, their errors wrapped inside |
+| `SurfaceTarget` | safe `SurfaceTarget<'window>` | called once, kept until the surface is released |
+| `SurfaceTargetUnsafe` | `SurfaceTargetUnsafe::RawHandle` | opaque, so kind and handles can't be mixed up; retains nothing |
+| `SurfaceTargetFrom*` | the `RawWindowHandle` variants | see [Constructors](#constructors) |
+| `HeadlessSurfaceTarget` | none | no backend implements it |
+| `(*Instance).CreateSurfaceFromTarget` | `Instance::create_surface` | checks the instance, calls the provider once, keeps it on success |
+| `(*Instance).CreateSurfaceUnsafe` | `unsafe Instance::create_surface_unsafe` | validates, retains nothing |
+| `(*Instance).CreateSurface` | none | the GOOS mapping above, retains nothing |
+| `(*Instance).RequestAdapter` with `CompatibleSurface` | `RequestAdapterOptions::compatible_surface` | each adapter checked against its own backend's surface |
+| `(*Adapter).GetSurfaceCapabilities` | `Surface::get_capabilities` | the same backend's surface only, nil without one |
+| `(*Surface).Configure` | core's `surface_per_backend` lookup | activates the surface of the device's backend |
+| `(*Surface).ReadPixels`, `WritePixels`, `PresentPixels` | none | no backend implements them |
+| `(*Surface).Release` | `Surface` drop | destroys every backend surface, then drops the provider; idempotent |
+| `(*Instance).Release` | none, Rust surfaces have their own lifetime | native: devices, then surfaces; browser: release surfaces yourself |
+
+### hal
+
+| Go symbol | Rust | Contract |
+|---|---|---|
+| `hal.ErrUnsupportedSurfaceTarget` | `wgpu_hal::InstanceError` for a foreign handle | returned before a handle is read |
+| `hal.SurfaceTargetKind` | the `RawWindowHandle` discriminant | `SurfaceTargetWindowsHWND`, `SurfaceTargetXlibWindow`, `SurfaceTargetWaylandSurface`, `SurfaceTargetAndroidNativeWindow`, `SurfaceTargetMetalLayer`. The root package never sends `SurfaceTargetInvalid`, and `SurfaceTargetHeadless` is for noop tests |
+| `hal.SurfaceTarget` (`Kind`, `DisplayHandle`, `WindowHandle`) | the raw display and window handle pair | borrowed, hal never owns the handles. `DisplayHandle` is unused for Android and Metal |
+| `hal.SurfaceTarget.RequireKind` | a `match` arm | wraps `hal.ErrUnsupportedSurfaceTarget`, touches no handle |
+| `hal.SurfaceTargetKind.String` | `Debug` | stable names for logs, unknown values print as a number |
+| `hal.Instance.CreateSurface(hal.SurfaceTarget)` | `wgpu_hal::Instance::create_surface` | one typed target instead of two integers |
+| `hal.PixelReader`, `hal.PixelWriter`, `hal.PixelPresenter` | none | optional surface interfaces, no backend implements them |
+
+### What each backend takes
+
+| `CreateSurface` in | Takes | Notes |
+|---|---|---|
+| `hal/vulkan`, Linux and the BSDs | Xlib, Wayland | the instance enables whichever of `VK_KHR_xlib_surface` and `VK_KHR_wayland_surface` the loader has, both at once is fine |
+| `hal/vulkan`, Windows | Windows HWND | a zero HINSTANCE becomes `GetModuleHandleW(NULL)` |
+| `hal/vulkan`, macOS | Metal layer | through `VK_EXT_metal_surface` |
+| `hal/vulkan`, Android | Android native window | display ignored. gowgpu never acquires or releases the window, see [ANDROID.md](ANDROID.md) |
+| `hal/metal` | Metal layer | refuses a zero layer, retains it, and releases it when the surface is destroyed |
+| `hal/dx12` | Windows HWND | keeps the HWND, the swapchain gets made in `Configure` |
+| `hal/gles`, Windows | Windows HWND | sets the pixel format on the window's DC so the hidden window's context can present to it |
+| `hal/gles`, Linux and Android | Xlib, Wayland, Android native window | picks the EGL display for that kind explicitly, no guessing from the environment |
+| `hal/noop` | anything | no native access, for tests |
+
+### core
+
+| Go symbol | Rust | Contract |
+|---|---|---|
+| `core.HALInstanceEntry` (`Backend`, `Instance`) | one entry of core's `instance_per_backend` | core owns the instance |
+| `core.(*Instance).HALInstanceEntries` | iterating `instance_per_backend` | a copy, in backend priority order. Ownership stays with core |
+| `core.(*Instance).RequestAdapterWithSurfaces` | adapter selection against `surface_per_backend` | each adapter only sees its own backend's surface. An empty map is a plain `RequestAdapter` |
+| `core.(*Instance).RequestAdapterWithSurface` | none | one surface for every backend, for callers that drive a single hal |
+
+### EGL
+
+| Go symbol | Contract |
+|---|---|
+| `egl.ContextConfig.WindowKind` | a `*WindowKind`. nil detects the window system from the environment, set forces X11, Wayland, Android or surfaceless |
+| `egl.DefaultContextConfig` | desktop GL 3.3 core, `WindowKind` nil |
+| `egl.NewContext` | uses an explicit `WindowKind` without looking at the environment, otherwise detects. Owns any display connection it opened itself |
+| `egl.GetEGLDisplay` | the old auto-detecting entry point |
+| `egl.DetectWindowKind` | Android on Android. Otherwise surfaceless when neither `DISPLAY` nor `WAYLAND_DISPLAY` is set and EGL can do it, then Wayland, then X11, and surfaceless when neither works |
