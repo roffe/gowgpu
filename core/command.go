@@ -418,6 +418,23 @@ func (e *CoreCommandEncoder) BeginRenderPass(desc *RenderPassDescriptor) (*CoreR
 		return nil, valErr
 	}
 
+	// Populate textureScope from render pass attachments.
+	// Each color attachment is tracked as COLOR_TARGET, depth/stencil as
+	// DEPTH_STENCIL_WRITE (or DEPTH_STENCIL_READ if both aspects read-only),
+	// and resolve targets as COLOR_TARGET.
+	//
+	// WebGPU spec: usage conflict (e.g. COLOR_TARGET + RESOURCE on same texture)
+	// is a validation error that should prevent the render pass from being used.
+	// So this runs before the HAL pass begins: a pass begun and then dropped
+	// is never ended, and Metal leaks its render pass descriptor together
+	// with every attachment texture it holds on to.
+	//
+	// Reference: wgpu-core command/render.rs RenderPassInfo::finish (scope merge)
+	if conflictErr := e.populateTextureScope(desc); conflictErr != nil {
+		e.setError(conflictErr)
+		return nil, conflictErr
+	}
+
 	// Convert to HAL descriptor
 	halDesc := e.convertRenderPassDescriptor(desc)
 
@@ -434,20 +451,6 @@ func (e *CoreCommandEncoder) BeginRenderPass(desc *RenderPassDescriptor) (*CoreR
 
 	// Begin HAL render pass
 	halPass := (*halEncoder).BeginRenderPass(halDesc)
-
-	// Populate textureScope from render pass attachments.
-	// Each color attachment is tracked as COLOR_TARGET, depth/stencil as
-	// DEPTH_STENCIL_WRITE (or DEPTH_STENCIL_READ if both aspects read-only),
-	// and resolve targets as COLOR_TARGET.
-	//
-	// WebGPU spec: usage conflict (e.g. COLOR_TARGET + RESOURCE on same texture)
-	// is a validation error that should prevent the render pass from being used.
-	//
-	// Reference: wgpu-core command/render.rs RenderPassInfo::finish (scope merge)
-	if conflictErr := e.populateTextureScope(desc); conflictErr != nil {
-		e.setError(conflictErr)
-		return nil, conflictErr
-	}
 
 	// Transition to locked state
 	e.status.Store(int32(CommandEncoderStatusLocked))
