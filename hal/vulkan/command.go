@@ -1889,5 +1889,5 @@ func vkCmdDispatchIndirect(cmds *vk.Commands, cmdBuffer vk.CommandBuffer, buffer
 }
 
 func vkCmdCopyQueryPoolResults(cmds *vk.Commands, cmdBuffer vk.CommandBuffer, queryPool vk.QueryPool, firstQuery, queryCount uint32, dstBuffer vk.Buffer, dstOffset, stride uint64, flags vk.QueryResultFlags) {
-	cmds.CmdCopyQueryPoolResults(cmdBuffer, queryPool, firstQuery, queryCount, dstBuffer, dstOffset, stride, flags)
+	cmds.CmdCopyQueryPoolResults(cmdBuffer, queryPool, firstQuery, queryCount, dstBuffer, vk.DeviceSize(dstOffset), vk.DeviceSize(stride), flags)
 }

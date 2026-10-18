@@ -15,6 +15,7 @@ import (
 	"flag"
 	"fmt"
 	"go/format"
+	"go/token"
 	"os"
 	"path/filepath"
 	"sort"
@@ -805,121 +806,6 @@ func generateCommands(registry *Registry, outDir string) error {
 	return nil
 }
 
-// commandSignature represents the signature pattern of a Vulkan command
-type commandSignature struct {
-	returnType string
-	paramTypes []string
-}
-
-// signatureToCallInterface maps command signatures to predefined CallInterface names
-func signatureToCallInterface(sig commandSignature) (string, bool) {
-	// Build signature string for matching
-	sigStr := sig.returnType + "("
-	for i, p := range sig.paramTypes {
-		if i > 0 {
-			sigStr += ", "
-		}
-		sigStr += p
-	}
-	sigStr += ")"
-
-	// Map to existing signatures in signatures.go
-	// This is a simplified mapping - expand as needed
-	sigMap := map[string]string{
-		// Result-returning
-		"Result(ptr, ptr, ptr)":                            "SigResultPtrPtrPtr",
-		"Result(ptr, ptr)":                                 "SigResultPtrPtr",
-		"Result(ptr)":                                      "SigResultPtr", // vkEnumerateInstanceVersion
-		"Result(handle, ptr)":                              "SigResultHandlePtr",
-		"Result(handle)":                                   "SigResultHandle",
-		"Result(handle, u32, ptr, ptr)":                    "SigResultHandleU32PtrPtr",
-		"Result(handle, ptr, ptr, ptr)":                    "SigResultHandlePtrPtrPtr", // vkAllocateMemory
-		"Result(handle, ptr, ptr, ptr, ptr)":               "SigResultHandlePtrPtrPtrPtr",
-		"Result(handle, u64, u32, ptr)":                    "SigResultHandleU64U32Ptr",
-		"Result(handle, ptr, ptr)":                         "SigResultHandlePtrPtr",
-		"Result(handle, handle, ptr)":                      "SigResultHandleHandlePtr",
-		"Result(handle, u32, u32, ptr, ptr)":               "SigResultHandleU32U32PtrPtr",
-		"Result(handle, u32, ptr, ptr, ptr)":               "SigResultHandleU32PtrPtrPtr",
-		"Result(handle, handle, u32)":                      "SigResultHandleHandleU32",    // vkResetCommandPool, vkResetDescriptorPool
-		"Result(handle, u32)":                              "SigResultHandleU32",          // vkResetCommandBuffer
-		"Result(handle, handle)":                           "SigResultHandleHandle",       // vkGetFenceStatus, vkSetEvent, vkResetEvent
-		"Result(handle, u32, ptr)":                         "SigResultHandleU32Ptr",       // vkFlushMappedMemoryRanges
-		"Result(handle, handle, handle, u64)":              "SigResultHandle4",            // vkBindBufferMemory, vkBindImageMemory
-		"Result(handle, handle, u64, u64, u32, ptr)":       "SigResultMapMemory",          // vkMapMemory
-		"Result(handle, u32, ptr, handle)":                 "SigResultHandleU32PtrHandle", // vkQueueSubmit
-		"Result(handle, u32, ptr, u32, u64)":               "SigResultWaitForFences",      // vkWaitForFences
-		"Result(handle, handle, ptr, ptr)":                 "SigResultHandleHandlePtrPtr", // vkGetSwapchainImagesKHR
-		"Result(handle, handle, u64, handle, handle, ptr)": "SigResultAcquireNextImage",   // vkAcquireNextImageKHR
-		"Result(handle, u32, ptr, handle, u64)":            "SigResultQueuePresent",       // vkQueuePresentKHR (different params)
-		"Result(handle, handle, u32, ptr)":                 "SigResultHandleHandleU32Ptr", // vkFreeDescriptorSets, vkFreeCommandBuffers
-		"Result(handle, handle, u32, ptr, ptr, ptr)":       "SigResultCreatePipelines",    // vkCreateGraphicsPipelines, vkCreateComputePipelines
-		"Result(handle, u32, handle, ptr)":                 "SigResultHandleU32HandlePtr", // vkGetPhysicalDeviceSurfaceSupportKHR
-
-		// Void-returning
-		"void(handle, ptr)":                      "SigVoidHandlePtr",
-		"void(handle, handle, ptr)":              "SigVoidHandleHandlePtr",
-		"void(handle, ptr, ptr)":                 "SigVoidHandlePtrPtr",
-		"void(handle, u32, ptr)":                 "SigVoidHandleU32Ptr",
-		"void(handle)":                           "SigVoidHandle",
-		"void(handle, u32, handle)":              "SigVoidHandleU32Handle",
-		"void(handle, u32, u32, u32, u32)":       "SigVoidHandleU32x4",                // vkCmdDraw
-		"void(handle, u32, u32, u32, i32, u32)":  "SigVoidHandleU32x3I32U32",          // vkCmdDrawIndexed
-		"void(handle, u32, u32, ptr, ptr)":       "SigVoidHandleU32U32PtrPtr",         // vkCmdBindVertexBuffers
-		"void(handle, handle, u64, u32)":         "SigVoidHandleHandleU64U32",         // vkCmdBindIndexBuffer
-		"void(handle, u32, u32, ptr)":            "SigVoidHandleU32U32Ptr",            // vkCmdSetViewport, vkCmdSetScissor
-		"void(handle, u32, u32, u32)":            "SigVoidHandleU32x3",                // vkCmdDispatch
-		"void(handle, handle, u64)":              "SigVoidHandleHandleU64",            // vkCmdDispatchIndirect
-		"void(handle, handle)":                   "SigVoidHandleHandle",               // vkUnmapMemory, vkCmdNextSubpass(with subpass enum=handle)
-		"void(handle, handle, handle)":           "SigVoidHandleHandleHandle",         // vkCmdBindPipeline (handle, enum, handle)
-		"void(handle, u32, u32)":                 "SigVoidHandleU32U32",               // vkCmdSetStencilCompareMask, etc.
-		"void(handle, u32)":                      "SigVoidHandleU32",                  // vkCmdSetAttachmentFeedbackLoopEnableEXT
-		"void(handle, u32, ptr, u32, ptr)":       "SigVoidDeviceUpdateDescriptorSets", // vkUpdateDescriptorSets
-		"void(handle, handle, u32, u32)":         "SigVoidHandleHandleU32U32",         // vkCmdBeginQuery, vkResetQueryPool
-		"void(handle, handle, u32)":              "SigVoidHandleHandleU32",            // vkCmdSetEvent, vkCmdResetEvent
-		"void(handle, handle, handle, u32, u32)": "SigVoidHandle3U32U32",              // vkCmdDrawIndirect, vkCmdDrawIndexedIndirect
-		"void(handle, ptr, u32)":                 "SigVoidHandlePtrU32",               // vkCmdBeginRenderPass
-		"void(handle, handle, u32, ptr)":         "SigVoidHandleHandleU32Ptr",         // vkFreeCommandBuffers
-		"void(handle, f32)":                      "SigVoidHandleF32",                  // vkCmdSetBlendConstants (ptr to float array)
-		"void(handle, handle, u64, u32, u32)":    "SigVoidHandleHandleU64U32U32",      // vkCmdDrawIndirect, vkCmdDrawIndexedIndirect
-
-		// Cmd-specific complex signatures (using custom CallInterface)
-		"void(handle, u32, u32, u32, u32, ptr, u32, ptr, u32, ptr)": "SigVoidCmdPipelineBarrier",    // vkCmdPipelineBarrier (10 params)
-		"void(handle, handle, handle, u32, ptr)":                    "SigVoidCmdCopyBuffer",         // vkCmdCopyBuffer
-		"void(handle, handle, u64, u64, u32)":                       "SigVoidCmdFillBuffer",         // vkCmdFillBuffer
-		"void(handle, handle, handle, u32, u32, ptr)":               "SigVoidCmdCopyBufferToImage",  // vkCmdCopyBufferToImage
-		"void(handle, handle, u32, handle, u32, ptr)":               "SigVoidCmdCopyImageToBuffer",  // vkCmdCopyImageToBuffer
-		"void(handle, handle, u32, handle, u32, u32, ptr)":          "SigVoidCmdCopyImage",          // vkCmdCopyImage
-		"void(handle, u32, handle, u32, u32, ptr, u32, ptr)":        "SigVoidCmdBindDescriptorSets", // vkCmdBindDescriptorSets
-	}
-
-	callInterface, ok := sigMap[sigStr]
-	return callInterface, ok
-}
-
-// analyzeCommandSignature analyzes a Vulkan command and returns its signature
-func analyzeCommandSignature(cmd Command) commandSignature {
-	sig := commandSignature{}
-
-	// Determine return type
-	switch cmd.Proto.Type {
-	case "VkResult":
-		sig.returnType = "Result"
-	case "void":
-		sig.returnType = "void"
-	default:
-		sig.returnType = "other"
-	}
-
-	// Analyze parameters (filter out vulkansc-only params)
-	params := filterParams(cmd.Params)
-	for _, param := range params {
-		paramType := classifyParamType(param)
-		sig.paramTypes = append(sig.paramTypes, paramType)
-	}
-
-	return sig
-}
-
 // filterParams filters out vulkansc-only parameters and deduplicates by name.
 // Vulkan XML can have multiple params with the same name but different api attributes:
 //   - api="vulkan,vulkanbase" - standard Vulkan
@@ -946,63 +832,6 @@ func filterParams(params []Param) []Param {
 	}
 
 	return result
-}
-
-// classifyParamType classifies a parameter into a simplified category
-func classifyParamType(param Param) string {
-	isPointer := strings.Contains(param.RawXML, "*")
-	isArray := strings.Contains(param.RawXML, "[")
-	baseType := param.Type
-
-	// In C ABI, array parameters decay to pointers (e.g., const float[4] → const float*).
-	if isPointer || isArray {
-		return "ptr"
-	}
-
-	// Primitive types
-	switch baseType {
-	case "uint32_t":
-		return "u32"
-	case "int32_t":
-		return "i32"
-	case "uint64_t":
-		return "u64"
-	case "int64_t":
-		return "i64"
-	case "float":
-		return "f32"
-	case "double":
-		return "f64"
-	case "size_t":
-		return "u64" // size_t is 64-bit on 64-bit systems
-	}
-
-	// VkFlags types are 32-bit
-	if strings.Contains(baseType, "Flags") {
-		return "u32"
-	}
-
-	// VkDeviceSize and VkDeviceAddress are 64-bit
-	if baseType == "VkDeviceSize" || baseType == "VkDeviceAddress" {
-		return "u64"
-	}
-
-	// VkBool32 is 32-bit
-	if baseType == "VkBool32" {
-		return "u32"
-	}
-
-	// Vulkan enums are 32-bit integers
-	if isVulkanEnum(baseType) {
-		return "u32"
-	}
-
-	// Vulkan handles are 64-bit
-	if strings.HasPrefix(baseType, "Vk") {
-		return "handle"
-	}
-
-	return "other"
 }
 
 // isVulkanEnum returns true if the type is a known Vulkan enum type.
@@ -1102,15 +931,11 @@ func generateCommandMethod(f *os.File, cmd Command) error {
 	goFieldName := strings.TrimPrefix(name, "vk")
 	goFieldName = strings.ToLower(goFieldName[:1]) + goFieldName[1:]
 
-	// Analyze signature
-	sig := analyzeCommandSignature(cmd)
-	callInterface, ok := signatureToCallInterface(sig)
-	if !ok {
-		// Signature not yet supported - add TODO comment
-		fmt.Fprintf(f, "// TODO: %s - signature not yet supported: %s(%s)\n", goMethodName, sig.returnType, strings.Join(sig.paramTypes, ", "))
-		fmt.Fprintln(f, "")
-		return fmt.Errorf("unsupported signature")
-	}
+	// The wrapper is written in goffi's form, and vk-cgo turns it into a call
+	// through the C trampoline for its signature, which it reads off the Go
+	// parameter types. So every signature works, and the CallFunction
+	// interface named here is only a placeholder vk-cgo drops.
+	const callInterface = "cgoTrampoline"
 
 	// Filter params (exclude vulkansc, deduplicate)
 	params := filterParams(cmd.Params)
@@ -1124,7 +949,7 @@ func generateCommandMethod(f *os.File, cmd Command) error {
 		if i > 0 {
 			fmt.Fprint(f, ", ")
 		}
-		paramName := param.Name
+		paramName := goParamName(param.Name)
 		paramType := vkToGoParamType(param)
 		fmt.Fprintf(f, "%s %s", paramName, paramType)
 	}
@@ -1164,13 +989,13 @@ func generateCommandMethod(f *os.File, cmd Command) error {
 	// Emit local pointer vars for array params (C arrays decay to pointers).
 	for _, param := range params {
 		if strings.Contains(param.RawXML, "[") && !strings.Contains(param.RawXML, "*") {
-			fmt.Fprintf(f, "\t%sPtr := unsafe.Pointer(&%s)\n", param.Name, param.Name)
+			fmt.Fprintf(f, "\t%sPtr := unsafe.Pointer(&%s)\n", goParamName(param.Name), goParamName(param.Name))
 		}
 	}
 
 	fmt.Fprintf(f, "\targs := [%d]unsafe.Pointer{\n", argCount)
 	for _, param := range params {
-		paramName := param.Name
+		paramName := goParamName(param.Name)
 		if strings.Contains(param.RawXML, "[") && !strings.Contains(param.RawXML, "*") {
 			// Array param: pass pointer-to-pointer (C array decays to pointer)
 			fmt.Fprintf(f, "\t\tunsafe.Pointer(&%sPtr),\n", paramName)
@@ -1216,6 +1041,18 @@ func generateCommandMethod(f *os.File, cmd Command) error {
 	fmt.Fprintln(f, "")
 
 	return nil
+}
+
+// goParamName keeps a Vulkan parameter name from being a Go keyword: three
+// image format queries have a parameter called type.
+func goParamName(name string) string {
+	switch {
+	case name == "type":
+		return "typ"
+	case token.IsKeyword(name):
+		return name + "_"
+	}
+	return name
 }
 
 // vkToGoParamType converts Vulkan parameter type to Go type

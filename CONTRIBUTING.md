@@ -63,6 +63,8 @@ In the PR, say what you ran it on: OS, GPU, driver and backend.
 
 It reproduces the checked in files byte for byte, so `git diff` after it shows exactly what your change did.
 
+Every command in `vk.xml` has a wrapper. To call one gowgpu doesn't use yet, load its pointer in `commands.go` (`LoadInstance` or `LoadDevice`) and call the method; there's no wrapper to write by hand.
+
 ## Calling into C
 
 All native calls go through small header-free C trampolines, one per C signature, with the function pointer as the first argument. When you add one:

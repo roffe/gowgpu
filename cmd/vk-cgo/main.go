@@ -1,5 +1,5 @@
 // Command vk-cgo rewrites the goffi Vulkan wrappers vk-gen writes
-// (vk/commands_gen.go and vk/commands_manual.go) into cgo: every wrapper calls
+// (vk/commands_gen.go) into cgo: every wrapper calls
 // one C trampoline per distinct C signature, through the function pointer the
 // loader resolved. Pointer arguments cross as const uint8_t *: a pointee cgo
 // sees no pointers in, so cgocheck never walks the Go memory a create info
@@ -12,8 +12,8 @@
 //	(cd cmd/vk-gen && go run . -spec vk.xml -out ../../hal/vulkan/vk/)
 //	go run ./cmd/vk-cgo hal/vulkan/vk
 //
-// It rewrites both files in place, leaving wrappers already converted as they
-// are, and writes trampolines.h next to them.
+// It rewrites the file in place, leaving wrappers already converted as they
+// are, and writes trampolines.h next to it.
 package main
 
 import (
@@ -66,7 +66,7 @@ func resolve(name string) string {
 }
 
 // class is the C ABI class of a Go type: h handle, p pointer, q 64-bit int,
-// i 32-bit int, f float, d double.
+// i 32-bit int, s 16-bit int, b 8-bit int, f float, d double.
 func class(e ast.Expr) (string, error) {
 	switch t := e.(type) {
 	case *ast.StarExpr:
@@ -85,6 +85,10 @@ func class(e ast.Expr) (string, error) {
 			return "q", nil
 		case "uint32", "int32":
 			return "i", nil
+		case "uint16", "int16":
+			return "s", nil
+		case "uint8", "int8":
+			return "b", nil
 		case "float32":
 			return "f", nil
 		case "float64":
@@ -96,7 +100,10 @@ func class(e ast.Expr) (string, error) {
 	return "", fmt.Errorf("unsupported type expression %T", e)
 }
 
-var ctype = map[byte]string{'h': "uint64_t", 'p': "const uint8_t *", 'P': "const uint8_t *", 'a': "const uint8_t *", 'q': "uint64_t", 'i': "uint32_t", 'f': "float", 'd': "double", 'v': "void"}
+// cPtr is how every pointer argument crosses into C.
+const cPtr = "const uint8_t *"
+
+var ctype = map[byte]string{'h': "uint64_t", 'p': cPtr, 'P': cPtr, 'a': cPtr, 'q': "uint64_t", 'i': "uint32_t", 's': "uint16_t", 'b': "uint8_t", 'f': "float", 'd': "double", 'v': "void"}
 
 func trampolineName(ret string, params []string) string {
 	s := strings.Join(params, "")
@@ -240,6 +247,10 @@ func convert(fset *token.FileSet, fd *ast.FuncDecl) (string, bool, error) {
 			args = append(args, fmt.Sprintf("C.uint64_t(%s)", p.name))
 		case "i":
 			args = append(args, fmt.Sprintf("C.uint32_t(%s)", p.name))
+		case "s":
+			args = append(args, fmt.Sprintf("C.uint16_t(%s)", p.name))
+		case "b":
+			args = append(args, fmt.Sprintf("C.uint8_t(%s)", p.name))
 		case "f":
 			args = append(args, fmt.Sprintf("C.float(%s)", p.name))
 		case "d":
@@ -350,7 +361,7 @@ func main() {
 		}
 	}
 	total := 0
-	for _, name := range []string{"commands_gen.go", "commands_manual.go"} {
+	for _, name := range []string{"commands_gen.go"} {
 		n, err := rewrite(dir, name)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)

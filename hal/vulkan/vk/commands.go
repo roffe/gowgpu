@@ -361,3 +361,9 @@ func (c *Commands) DebugFunctionPointer(name string) unsafe.Pointer {
 		return nil
 	}
 }
+
+// HasDrawIndirectCount reports whether the device gave out
+// vkCmdDrawIndirectCount and vkCmdDrawIndexedIndirectCount (Vulkan 1.2).
+func (c *Commands) HasDrawIndirectCount() bool {
+	return c.cmdDrawIndirectCount != nil && c.cmdDrawIndexedIndirectCount != nil
+}

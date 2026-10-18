@@ -6,48 +6,110 @@ package vk
 
 /*
 #include "trampolines.h"
+#cgo noescape gvk_h_hp
+#cgo nocallback gvk_h_hp
+#cgo noescape gvk_i_hh
+#cgo nocallback gvk_i_hh
+#cgo noescape gvk_i_hi
+#cgo nocallback gvk_i_hi
+#cgo noescape gvk_i_hip
+#cgo nocallback gvk_i_hip
+#cgo noescape gvk_i_hiph
+#cgo nocallback gvk_i_hiph
+#cgo noescape gvk_i_hipi
+#cgo nocallback gvk_i_hipi
+#cgo noescape gvk_i_hp
+#cgo nocallback gvk_i_hp
+#cgo noescape gvk_q_hhii
+#cgo nocallback gvk_q_hhii
+#cgo noescape gvk_q_hp
+#cgo nocallback gvk_q_hp
 #cgo noescape gvk_r_h
 #cgo nocallback gvk_r_h
 #cgo noescape gvk_r_hh
 #cgo nocallback gvk_r_hh
+#cgo noescape gvk_r_hhhippp
+#cgo nocallback gvk_r_hhhippp
+#cgo noescape gvk_r_hhhp
+#cgo nocallback gvk_r_hhhp
 #cgo noescape gvk_r_hhhq
 #cgo nocallback gvk_r_hhhq
 #cgo noescape gvk_r_hhi
 #cgo nocallback gvk_r_hhi
+#cgo noescape gvk_r_hhihh
+#cgo nocallback gvk_r_hhihh
+#cgo noescape gvk_r_hhihi
+#cgo nocallback gvk_r_hhihi
+#cgo noescape gvk_r_hhiihp
+#cgo nocallback gvk_r_hhiihp
+#cgo noescape gvk_r_hhiihpqi
+#cgo nocallback gvk_r_hhiihpqi
+#cgo noescape gvk_r_hhiipp
+#cgo nocallback gvk_r_hhiipp
 #cgo noescape gvk_r_hhip
 #cgo nocallback gvk_r_hhip
+#cgo noescape gvk_r_hhipp
+#cgo nocallback gvk_r_hhipp
 #cgo noescape gvk_r_hhippp
 #cgo nocallback gvk_r_hhippp
 #cgo noescape gvk_r_hhp
 #cgo nocallback gvk_r_hhp
 #cgo noescape gvk_r_hhpp
 #cgo nocallback gvk_r_hhpp
+#cgo noescape gvk_r_hhppp
+#cgo nocallback gvk_r_hhppp
 #cgo noescape gvk_r_hhqhhp
 #cgo nocallback gvk_r_hhqhhp
+#cgo noescape gvk_r_hhqq
+#cgo nocallback gvk_r_hhqq
 #cgo noescape gvk_r_hhqqip
 #cgo nocallback gvk_r_hhqqip
 #cgo noescape gvk_r_hi
 #cgo nocallback gvk_r_hi
+#cgo noescape gvk_r_hih
+#cgo nocallback gvk_r_hih
 #cgo noescape gvk_r_hihp
 #cgo nocallback gvk_r_hihp
+#cgo noescape gvk_r_hiiiiiip
+#cgo nocallback gvk_r_hiiiiiip
+#cgo noescape gvk_r_hiiiiip
+#cgo nocallback gvk_r_hiiiiip
+#cgo noescape gvk_r_hiiipp
+#cgo nocallback gvk_r_hiiipp
+#cgo noescape gvk_r_hiip
+#cgo nocallback gvk_r_hiip
 #cgo noescape gvk_r_hip
 #cgo nocallback gvk_r_hip
 #cgo noescape gvk_r_hiph
 #cgo nocallback gvk_r_hiph
+#cgo noescape gvk_r_hiphp
+#cgo nocallback gvk_r_hiphp
+#cgo noescape gvk_r_hipihph
+#cgo nocallback gvk_r_hipihph
 #cgo noescape gvk_r_hipiq
 #cgo nocallback gvk_r_hipiq
 #cgo noescape gvk_r_hipp
 #cgo nocallback gvk_r_hipp
 #cgo noescape gvk_r_hippp
 #cgo nocallback gvk_r_hippp
+#cgo noescape gvk_r_hiqhq
+#cgo nocallback gvk_r_hiqhq
 #cgo noescape gvk_r_hp
 #cgo nocallback gvk_r_hp
+#cgo noescape gvk_r_hph
+#cgo nocallback gvk_r_hph
+#cgo noescape gvk_r_hphp
+#cgo nocallback gvk_r_hphp
+#cgo noescape gvk_r_hpip
+#cgo nocallback gvk_r_hpip
 #cgo noescape gvk_r_hpp
 #cgo nocallback gvk_r_hpp
 #cgo noescape gvk_r_hppp
 #cgo nocallback gvk_r_hppp
 #cgo noescape gvk_r_hpppp
 #cgo nocallback gvk_r_hpppp
+#cgo noescape gvk_r_hpq
+#cgo nocallback gvk_r_hpq
 #cgo noescape gvk_r_p
 #cgo nocallback gvk_r_p
 #cgo noescape gvk_r_pp
@@ -58,62 +120,162 @@ package vk
 #cgo nocallback gvk_v_h
 #cgo noescape gvk_v_hf
 #cgo nocallback gvk_v_hf
+#cgo noescape gvk_v_hff
+#cgo nocallback gvk_v_hff
+#cgo noescape gvk_v_hfff
+#cgo nocallback gvk_v_hfff
 #cgo noescape gvk_v_hh
 #cgo nocallback gvk_v_hh
+#cgo noescape gvk_v_hhf
+#cgo nocallback gvk_v_hhf
+#cgo noescape gvk_v_hhhi
+#cgo nocallback gvk_v_hhhi
 #cgo noescape gvk_v_hhhiip
 #cgo nocallback gvk_v_hhhiip
 #cgo noescape gvk_v_hhhip
 #cgo nocallback gvk_v_hhhip
+#cgo noescape gvk_v_hhhp
+#cgo nocallback gvk_v_hhhp
 #cgo noescape gvk_v_hhi
 #cgo nocallback gvk_v_hhi
 #cgo noescape gvk_v_hhihiip
 #cgo nocallback gvk_v_hhihiip
+#cgo noescape gvk_v_hhihiipi
+#cgo nocallback gvk_v_hhihiipi
 #cgo noescape gvk_v_hhihip
 #cgo nocallback gvk_v_hhihip
 #cgo noescape gvk_v_hhii
 #cgo nocallback gvk_v_hhii
+#cgo noescape gvk_v_hhiihqqi
+#cgo nocallback gvk_v_hhiihqqi
+#cgo noescape gvk_v_hhiii
+#cgo nocallback gvk_v_hhiii
+#cgo noescape gvk_v_hhiiip
+#cgo nocallback gvk_v_hhiiip
 #cgo noescape gvk_v_hhip
 #cgo nocallback gvk_v_hhip
+#cgo noescape gvk_v_hhipip
+#cgo nocallback gvk_v_hhipip
 #cgo noescape gvk_v_hhp
 #cgo nocallback gvk_v_hhp
+#cgo noescape gvk_v_hhpp
+#cgo nocallback gvk_v_hhpp
 #cgo noescape gvk_v_hhq
 #cgo nocallback gvk_v_hhq
+#cgo noescape gvk_v_hhqhqii
+#cgo nocallback gvk_v_hhqhqii
+#cgo noescape gvk_v_hhqhqqhqqhqqiii
+#cgo nocallback gvk_v_hhqhqqhqqhqqiii
 #cgo noescape gvk_v_hhqi
 #cgo nocallback gvk_v_hhqi
 #cgo noescape gvk_v_hhqii
 #cgo nocallback gvk_v_hhqii
+#cgo noescape gvk_v_hhqq
+#cgo nocallback gvk_v_hhqq
 #cgo noescape gvk_v_hhqqi
 #cgo nocallback gvk_v_hhqqi
+#cgo noescape gvk_v_hhqqp
+#cgo nocallback gvk_v_hhqqp
 #cgo noescape gvk_v_hi
 #cgo nocallback gvk_v_hi
 #cgo noescape gvk_v_hih
 #cgo nocallback gvk_v_hih
+#cgo noescape gvk_v_hihi
+#cgo nocallback gvk_v_hihi
+#cgo noescape gvk_v_hihiip
+#cgo nocallback gvk_v_hihiip
 #cgo noescape gvk_v_hihiipip
 #cgo nocallback gvk_v_hihiipip
+#cgo noescape gvk_v_hihiipp
+#cgo nocallback gvk_v_hihiipp
+#cgo noescape gvk_v_hihqi
+#cgo nocallback gvk_v_hihqi
 #cgo noescape gvk_v_hii
 #cgo nocallback gvk_v_hii
+#cgo noescape gvk_v_hiihqii
+#cgo nocallback gvk_v_hiihqii
 #cgo noescape gvk_v_hiii
 #cgo nocallback gvk_v_hiii
 #cgo noescape gvk_v_hiiii
 #cgo nocallback gvk_v_hiiii
 #cgo noescape gvk_v_hiiiii
 #cgo nocallback gvk_v_hiiiii
+#cgo noescape gvk_v_hiiiiii
+#cgo nocallback gvk_v_hiiiiii
+#cgo noescape gvk_v_hiiiiipp
+#cgo nocallback gvk_v_hiiiiipp
 #cgo noescape gvk_v_hiiiipipip
 #cgo nocallback gvk_v_hiiiipipip
+#cgo noescape gvk_v_hiiip
+#cgo nocallback gvk_v_hiiip
 #cgo noescape gvk_v_hiip
 #cgo nocallback gvk_v_hiip
 #cgo noescape gvk_v_hiipp
 #cgo nocallback gvk_v_hiipp
+#cgo noescape gvk_v_hiippp
+#cgo nocallback gvk_v_hiippp
+#cgo noescape gvk_v_hiipppp
+#cgo nocallback gvk_v_hiipppp
+#cgo noescape gvk_v_hiiqhipp
+#cgo nocallback gvk_v_hiiqhipp
 #cgo noescape gvk_v_hip
 #cgo nocallback gvk_v_hip
+#cgo noescape gvk_v_hipihi
+#cgo nocallback gvk_v_hipihi
+#cgo noescape gvk_v_hipiii
+#cgo nocallback gvk_v_hipiii
+#cgo noescape gvk_v_hipiiip
+#cgo nocallback gvk_v_hipiiip
+#cgo noescape gvk_v_hipiiipipip
+#cgo nocallback gvk_v_hipiiipipip
 #cgo noescape gvk_v_hipip
 #cgo nocallback gvk_v_hipip
+#cgo noescape gvk_v_hipp
+#cgo nocallback gvk_v_hipp
+#cgo noescape gvk_v_hippp
+#cgo nocallback gvk_v_hippp
+#cgo noescape gvk_v_hipppp
+#cgo nocallback gvk_v_hipppp
+#cgo noescape gvk_v_hiqhp
+#cgo nocallback gvk_v_hiqhp
+#cgo noescape gvk_v_his
+#cgo nocallback gvk_v_his
 #cgo noescape gvk_v_hp
 #cgo nocallback gvk_v_hp
+#cgo noescape gvk_v_hph
+#cgo nocallback gvk_v_hph
+#cgo noescape gvk_v_hphp
+#cgo nocallback gvk_v_hphp
+#cgo noescape gvk_v_hphqihhhq
+#cgo nocallback gvk_v_hphqihhhq
 #cgo noescape gvk_v_hpi
 #cgo nocallback gvk_v_hpi
 #cgo noescape gvk_v_hpp
 #cgo nocallback gvk_v_hpp
+#cgo noescape gvk_v_hppp
+#cgo nocallback gvk_v_hppp
+#cgo noescape gvk_v_hppppiii
+#cgo nocallback gvk_v_hppppiii
+#cgo noescape gvk_v_hppppq
+#cgo nocallback gvk_v_hppppq
+#cgo noescape gvk_v_hq
+#cgo nocallback gvk_v_hq
+#cgo noescape gvk_v_hqhi
+#cgo nocallback gvk_v_hqhi
+#cgo noescape gvk_v_hqhqi
+#cgo nocallback gvk_v_hqhqi
+#cgo noescape gvk_v_hqii
+#cgo nocallback gvk_v_hqii
+#cgo noescape gvk_v_hqiihip
+#cgo nocallback gvk_v_hqiihip
+#cgo noescape gvk_v_hqqi
+#cgo nocallback gvk_v_hqqi
+#cgo noescape gvk_v_hqqp
+#cgo nocallback gvk_v_hqqp
+#cgo noescape gvk_v_hqqq
+#cgo nocallback gvk_v_hqqq
+#cgo noescape gvk_v_hqqqii
+#cgo nocallback gvk_v_hqqqii
 */
 import "C"
 
@@ -841,6 +1003,24 @@ func (c *Commands) EnumeratePhysicalDevices(instance Instance, pPhysicalDeviceCo
 	return Result(r)
 }
 
+// GetDeviceProcAddr wraps vkGetDeviceProcAddr.
+func (c *Commands) GetDeviceProcAddr(device Device, pName *byte) uintptr {
+	if c.getDeviceProcAddr == nil {
+		return 0
+	}
+	r := C.gvk_h_hp(C.uintptr_t(uintptr(c.getDeviceProcAddr)), C.uint64_t(device), (*C.uint8_t)(unsafe.Pointer(pName)))
+	return uintptr(r)
+}
+
+// GetInstanceProcAddr wraps vkGetInstanceProcAddr.
+func (c *Commands) GetInstanceProcAddr(instance Instance, pName *byte) uintptr {
+	if c.getInstanceProcAddr == nil {
+		return 0
+	}
+	r := C.gvk_h_hp(C.uintptr_t(uintptr(c.getInstanceProcAddr)), C.uint64_t(instance), (*C.uint8_t)(unsafe.Pointer(pName)))
+	return uintptr(r)
+}
+
 // GetPhysicalDeviceProperties wraps vkGetPhysicalDeviceProperties.
 func (c *Commands) GetPhysicalDeviceProperties(physicalDevice PhysicalDevice, pProperties *PhysicalDeviceProperties) {
 	if c.getPhysicalDeviceProperties == nil {
@@ -879,6 +1059,15 @@ func (c *Commands) GetPhysicalDeviceFormatProperties(physicalDevice PhysicalDevi
 		return
 	}
 	C.gvk_v_hip(C.uintptr_t(uintptr(c.getPhysicalDeviceFormatProperties)), C.uint64_t(physicalDevice), C.uint32_t(format), (*C.uint8_t)(unsafe.Pointer(pFormatProperties)))
+}
+
+// GetPhysicalDeviceImageFormatProperties wraps vkGetPhysicalDeviceImageFormatProperties.
+func (c *Commands) GetPhysicalDeviceImageFormatProperties(physicalDevice PhysicalDevice, format Format, typ ImageType, tiling ImageTiling, usage ImageUsageFlags, flags ImageCreateFlags, pImageFormatProperties *ImageFormatProperties) Result {
+	if c.getPhysicalDeviceImageFormatProperties == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hiiiiip(C.uintptr_t(uintptr(c.getPhysicalDeviceImageFormatProperties)), C.uint64_t(physicalDevice), C.uint32_t(format), C.uint32_t(typ), C.uint32_t(tiling), C.uint32_t(usage), C.uint32_t(flags), (*C.uint8_t)(unsafe.Pointer(pImageFormatProperties)))
+	return Result(r)
 }
 
 // CreateDevice wraps vkCreateDevice.
@@ -1072,6 +1261,22 @@ func (c *Commands) BindImageMemory(device Device, image Image, memory DeviceMemo
 	return Result(r)
 }
 
+// GetImageSparseMemoryRequirements wraps vkGetImageSparseMemoryRequirements.
+func (c *Commands) GetImageSparseMemoryRequirements(device Device, image Image, pSparseMemoryRequirementCount *uint32, pSparseMemoryRequirements *SparseImageMemoryRequirements) {
+	if c.getImageSparseMemoryRequirements == nil {
+		return
+	}
+	C.gvk_v_hhpp(C.uintptr_t(uintptr(c.getImageSparseMemoryRequirements)), C.uint64_t(device), C.uint64_t(image), (*C.uint8_t)(unsafe.Pointer(pSparseMemoryRequirementCount)), (*C.uint8_t)(unsafe.Pointer(pSparseMemoryRequirements)))
+}
+
+// GetPhysicalDeviceSparseImageFormatProperties wraps vkGetPhysicalDeviceSparseImageFormatProperties.
+func (c *Commands) GetPhysicalDeviceSparseImageFormatProperties(physicalDevice PhysicalDevice, format Format, typ ImageType, samples SampleCountFlagBits, usage ImageUsageFlags, tiling ImageTiling, pPropertyCount *uint32, pProperties *SparseImageFormatProperties) {
+	if c.getPhysicalDeviceSparseImageFormatProperties == nil {
+		return
+	}
+	C.gvk_v_hiiiiipp(C.uintptr_t(uintptr(c.getPhysicalDeviceSparseImageFormatProperties)), C.uint64_t(physicalDevice), C.uint32_t(format), C.uint32_t(typ), C.uint32_t(samples), C.uint32_t(usage), C.uint32_t(tiling), (*C.uint8_t)(unsafe.Pointer(pPropertyCount)), (*C.uint8_t)(unsafe.Pointer(pProperties)))
+}
+
 // QueueBindSparse wraps vkQueueBindSparse.
 func (c *Commands) QueueBindSparse(queue Queue, bindInfoCount uint32, pBindInfo *BindSparseInfo, fence Fence) Result {
 	if c.queueBindSparse == nil {
@@ -1203,6 +1408,15 @@ func (c *Commands) DestroyQueryPool(device Device, queryPool QueryPool, pAllocat
 	C.gvk_v_hhp(C.uintptr_t(uintptr(c.destroyQueryPool)), C.uint64_t(device), C.uint64_t(queryPool), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
 }
 
+// GetQueryPoolResults wraps vkGetQueryPoolResults.
+func (c *Commands) GetQueryPoolResults(device Device, queryPool QueryPool, firstQuery uint32, queryCount uint32, dataSize uintptr, pData *uintptr, stride DeviceSize, flags QueryResultFlags) Result {
+	if c.getQueryPoolResults == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hhiihpqi(C.uintptr_t(uintptr(c.getQueryPoolResults)), C.uint64_t(device), C.uint64_t(queryPool), C.uint32_t(firstQuery), C.uint32_t(queryCount), C.uint64_t(dataSize), (*C.uint8_t)(unsafe.Pointer(pData)), C.uint64_t(stride), C.uint32_t(flags))
+	return Result(r)
+}
+
 // ResetQueryPool wraps vkResetQueryPool.
 func (c *Commands) ResetQueryPool(device Device, queryPool QueryPool, firstQuery uint32, queryCount uint32) {
 	if c.resetQueryPool == nil {
@@ -1260,6 +1474,14 @@ func (c *Commands) DestroyImage(device Device, image Image, pAllocator *Allocati
 		return
 	}
 	C.gvk_v_hhp(C.uintptr_t(uintptr(c.destroyImage)), C.uint64_t(device), C.uint64_t(image), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+}
+
+// GetImageSubresourceLayout wraps vkGetImageSubresourceLayout.
+func (c *Commands) GetImageSubresourceLayout(device Device, image Image, pSubresource *ImageSubresource, pLayout *SubresourceLayout) {
+	if c.getImageSubresourceLayout == nil {
+		return
+	}
+	C.gvk_v_hhpp(C.uintptr_t(uintptr(c.getImageSubresourceLayout)), C.uint64_t(device), C.uint64_t(image), (*C.uint8_t)(unsafe.Pointer(pSubresource)), (*C.uint8_t)(unsafe.Pointer(pLayout)))
 }
 
 // CreateImageView wraps vkCreateImageView.
@@ -1673,12 +1895,28 @@ func (c *Commands) CmdSetLineWidth(commandBuffer CommandBuffer, lineWidth float3
 	C.gvk_v_hf(C.uintptr_t(uintptr(c.cmdSetLineWidth)), C.uint64_t(commandBuffer), C.float(lineWidth))
 }
 
+// CmdSetDepthBias wraps vkCmdSetDepthBias.
+func (c *Commands) CmdSetDepthBias(commandBuffer CommandBuffer, depthBiasConstantFactor float32, depthBiasClamp float32, depthBiasSlopeFactor float32) {
+	if c.cmdSetDepthBias == nil {
+		return
+	}
+	C.gvk_v_hfff(C.uintptr_t(uintptr(c.cmdSetDepthBias)), C.uint64_t(commandBuffer), C.float(depthBiasConstantFactor), C.float(depthBiasClamp), C.float(depthBiasSlopeFactor))
+}
+
 // CmdSetBlendConstants wraps vkCmdSetBlendConstants.
 func (c *Commands) CmdSetBlendConstants(commandBuffer CommandBuffer, blendConstants [4]float32) {
 	if c.cmdSetBlendConstants == nil {
 		return
 	}
 	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdSetBlendConstants)), C.uint64_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(&blendConstants)))
+}
+
+// CmdSetDepthBounds wraps vkCmdSetDepthBounds.
+func (c *Commands) CmdSetDepthBounds(commandBuffer CommandBuffer, minDepthBounds float32, maxDepthBounds float32) {
+	if c.cmdSetDepthBounds == nil {
+		return
+	}
+	C.gvk_v_hff(C.uintptr_t(uintptr(c.cmdSetDepthBounds)), C.uint64_t(commandBuffer), C.float(minDepthBounds), C.float(maxDepthBounds))
 }
 
 // CmdSetStencilCompareMask wraps vkCmdSetStencilCompareMask.
@@ -1743,6 +1981,22 @@ func (c *Commands) CmdDrawIndexed(commandBuffer CommandBuffer, indexCount uint32
 		return
 	}
 	C.gvk_v_hiiiii(C.uintptr_t(uintptr(c.cmdDrawIndexed)), C.uint64_t(commandBuffer), C.uint32_t(indexCount), C.uint32_t(instanceCount), C.uint32_t(firstIndex), C.uint32_t(vertexOffset), C.uint32_t(firstInstance))
+}
+
+// CmdDrawMultiEXT wraps vkCmdDrawMultiEXT.
+func (c *Commands) CmdDrawMultiEXT(commandBuffer CommandBuffer, drawCount uint32, pVertexInfo *MultiDrawInfoEXT, instanceCount uint32, firstInstance uint32, stride uint32) {
+	if c.cmdDrawMultiEXT == nil {
+		return
+	}
+	C.gvk_v_hipiii(C.uintptr_t(uintptr(c.cmdDrawMultiEXT)), C.uint64_t(commandBuffer), C.uint32_t(drawCount), (*C.uint8_t)(unsafe.Pointer(pVertexInfo)), C.uint32_t(instanceCount), C.uint32_t(firstInstance), C.uint32_t(stride))
+}
+
+// CmdDrawMultiIndexedEXT wraps vkCmdDrawMultiIndexedEXT.
+func (c *Commands) CmdDrawMultiIndexedEXT(commandBuffer CommandBuffer, drawCount uint32, pIndexInfo *MultiDrawIndexedInfoEXT, instanceCount uint32, firstInstance uint32, stride uint32, pVertexOffset *int32) {
+	if c.cmdDrawMultiIndexedEXT == nil {
+		return
+	}
+	C.gvk_v_hipiiip(C.uintptr_t(uintptr(c.cmdDrawMultiIndexedEXT)), C.uint64_t(commandBuffer), C.uint32_t(drawCount), (*C.uint8_t)(unsafe.Pointer(pIndexInfo)), C.uint32_t(instanceCount), C.uint32_t(firstInstance), C.uint32_t(stride), (*C.uint8_t)(unsafe.Pointer(pVertexOffset)))
 }
 
 // CmdDrawIndirect wraps vkCmdDrawIndirect.
@@ -1825,6 +2079,14 @@ func (c *Commands) CmdCopyImage(commandBuffer CommandBuffer, srcImage Image, src
 	C.gvk_v_hhihiip(C.uintptr_t(uintptr(c.cmdCopyImage)), C.uint64_t(commandBuffer), C.uint64_t(srcImage), C.uint32_t(srcImageLayout), C.uint64_t(dstImage), C.uint32_t(dstImageLayout), C.uint32_t(regionCount), (*C.uint8_t)(unsafe.Pointer(pRegions)))
 }
 
+// CmdBlitImage wraps vkCmdBlitImage.
+func (c *Commands) CmdBlitImage(commandBuffer CommandBuffer, srcImage Image, srcImageLayout ImageLayout, dstImage Image, dstImageLayout ImageLayout, regionCount uint32, pRegions *ImageBlit, filter Filter) {
+	if c.cmdBlitImage == nil {
+		return
+	}
+	C.gvk_v_hhihiipi(C.uintptr_t(uintptr(c.cmdBlitImage)), C.uint64_t(commandBuffer), C.uint64_t(srcImage), C.uint32_t(srcImageLayout), C.uint64_t(dstImage), C.uint32_t(dstImageLayout), C.uint32_t(regionCount), (*C.uint8_t)(unsafe.Pointer(pRegions)), C.uint32_t(filter))
+}
+
 // CmdCopyBufferToImage wraps vkCmdCopyBufferToImage.
 func (c *Commands) CmdCopyBufferToImage(commandBuffer CommandBuffer, srcBuffer Buffer, dstImage Image, dstImageLayout ImageLayout, regionCount uint32, pRegions *BufferImageCopy) {
 	if c.cmdCopyBufferToImage == nil {
@@ -1841,12 +2103,28 @@ func (c *Commands) CmdCopyImageToBuffer(commandBuffer CommandBuffer, srcImage Im
 	C.gvk_v_hhihip(C.uintptr_t(uintptr(c.cmdCopyImageToBuffer)), C.uint64_t(commandBuffer), C.uint64_t(srcImage), C.uint32_t(srcImageLayout), C.uint64_t(dstBuffer), C.uint32_t(regionCount), (*C.uint8_t)(unsafe.Pointer(pRegions)))
 }
 
+// CmdCopyMemoryIndirectNV wraps vkCmdCopyMemoryIndirectNV.
+func (c *Commands) CmdCopyMemoryIndirectNV(commandBuffer CommandBuffer, copyBufferAddress DeviceAddress, copyCount uint32, stride uint32) {
+	if c.cmdCopyMemoryIndirectNV == nil {
+		return
+	}
+	C.gvk_v_hqii(C.uintptr_t(uintptr(c.cmdCopyMemoryIndirectNV)), C.uint64_t(commandBuffer), C.uint64_t(copyBufferAddress), C.uint32_t(copyCount), C.uint32_t(stride))
+}
+
 // CmdCopyMemoryIndirectKHR wraps vkCmdCopyMemoryIndirectKHR.
 func (c *Commands) CmdCopyMemoryIndirectKHR(commandBuffer CommandBuffer, pCopyMemoryIndirectInfo *CopyMemoryIndirectInfoKHR) {
 	if c.cmdCopyMemoryIndirectKHR == nil {
 		return
 	}
 	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdCopyMemoryIndirectKHR)), C.uint64_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pCopyMemoryIndirectInfo)))
+}
+
+// CmdCopyMemoryToImageIndirectNV wraps vkCmdCopyMemoryToImageIndirectNV.
+func (c *Commands) CmdCopyMemoryToImageIndirectNV(commandBuffer CommandBuffer, copyBufferAddress DeviceAddress, copyCount uint32, stride uint32, dstImage Image, dstImageLayout ImageLayout, pImageSubresources *ImageSubresourceLayers) {
+	if c.cmdCopyMemoryToImageIndirectNV == nil {
+		return
+	}
+	C.gvk_v_hqiihip(C.uintptr_t(uintptr(c.cmdCopyMemoryToImageIndirectNV)), C.uint64_t(commandBuffer), C.uint64_t(copyBufferAddress), C.uint32_t(copyCount), C.uint32_t(stride), C.uint64_t(dstImage), C.uint32_t(dstImageLayout), (*C.uint8_t)(unsafe.Pointer(pImageSubresources)))
 }
 
 // CmdCopyMemoryToImageIndirectKHR wraps vkCmdCopyMemoryToImageIndirectKHR.
@@ -1857,12 +2135,36 @@ func (c *Commands) CmdCopyMemoryToImageIndirectKHR(commandBuffer CommandBuffer, 
 	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdCopyMemoryToImageIndirectKHR)), C.uint64_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pCopyMemoryToImageIndirectInfo)))
 }
 
+// CmdUpdateBuffer wraps vkCmdUpdateBuffer.
+func (c *Commands) CmdUpdateBuffer(commandBuffer CommandBuffer, dstBuffer Buffer, dstOffset DeviceSize, dataSize DeviceSize, pData *uintptr) {
+	if c.cmdUpdateBuffer == nil {
+		return
+	}
+	C.gvk_v_hhqqp(C.uintptr_t(uintptr(c.cmdUpdateBuffer)), C.uint64_t(commandBuffer), C.uint64_t(dstBuffer), C.uint64_t(dstOffset), C.uint64_t(dataSize), (*C.uint8_t)(unsafe.Pointer(pData)))
+}
+
 // CmdFillBuffer wraps vkCmdFillBuffer.
 func (c *Commands) CmdFillBuffer(commandBuffer CommandBuffer, dstBuffer Buffer, dstOffset DeviceSize, size DeviceSize, data uint32) {
 	if c.cmdFillBuffer == nil {
 		return
 	}
 	C.gvk_v_hhqqi(C.uintptr_t(uintptr(c.cmdFillBuffer)), C.uint64_t(commandBuffer), C.uint64_t(dstBuffer), C.uint64_t(dstOffset), C.uint64_t(size), C.uint32_t(data))
+}
+
+// CmdClearColorImage wraps vkCmdClearColorImage.
+func (c *Commands) CmdClearColorImage(commandBuffer CommandBuffer, image Image, imageLayout ImageLayout, pColor *ClearColorValue, rangeCount uint32, pRanges *ImageSubresourceRange) {
+	if c.cmdClearColorImage == nil {
+		return
+	}
+	C.gvk_v_hhipip(C.uintptr_t(uintptr(c.cmdClearColorImage)), C.uint64_t(commandBuffer), C.uint64_t(image), C.uint32_t(imageLayout), (*C.uint8_t)(unsafe.Pointer(pColor)), C.uint32_t(rangeCount), (*C.uint8_t)(unsafe.Pointer(pRanges)))
+}
+
+// CmdClearDepthStencilImage wraps vkCmdClearDepthStencilImage.
+func (c *Commands) CmdClearDepthStencilImage(commandBuffer CommandBuffer, image Image, imageLayout ImageLayout, pDepthStencil *ClearDepthStencilValue, rangeCount uint32, pRanges *ImageSubresourceRange) {
+	if c.cmdClearDepthStencilImage == nil {
+		return
+	}
+	C.gvk_v_hhipip(C.uintptr_t(uintptr(c.cmdClearDepthStencilImage)), C.uint64_t(commandBuffer), C.uint64_t(image), C.uint32_t(imageLayout), (*C.uint8_t)(unsafe.Pointer(pDepthStencil)), C.uint32_t(rangeCount), (*C.uint8_t)(unsafe.Pointer(pRanges)))
 }
 
 // CmdClearAttachments wraps vkCmdClearAttachments.
@@ -1895,6 +2197,14 @@ func (c *Commands) CmdResetEvent(commandBuffer CommandBuffer, event Event, stage
 		return
 	}
 	C.gvk_v_hhi(C.uintptr_t(uintptr(c.cmdResetEvent)), C.uint64_t(commandBuffer), C.uint64_t(event), C.uint32_t(stageMask))
+}
+
+// CmdWaitEvents wraps vkCmdWaitEvents.
+func (c *Commands) CmdWaitEvents(commandBuffer CommandBuffer, eventCount uint32, pEvents *Event, srcStageMask PipelineStageFlags, dstStageMask PipelineStageFlags, memoryBarrierCount uint32, pMemoryBarriers *MemoryBarrier, bufferMemoryBarrierCount uint32, pBufferMemoryBarriers *BufferMemoryBarrier, imageMemoryBarrierCount uint32, pImageMemoryBarriers *ImageMemoryBarrier) {
+	if c.cmdWaitEvents == nil {
+		return
+	}
+	C.gvk_v_hipiiipipip(C.uintptr_t(uintptr(c.cmdWaitEvents)), C.uint64_t(commandBuffer), C.uint32_t(eventCount), (*C.uint8_t)(unsafe.Pointer(pEvents)), C.uint32_t(srcStageMask), C.uint32_t(dstStageMask), C.uint32_t(memoryBarrierCount), (*C.uint8_t)(unsafe.Pointer(pMemoryBarriers)), C.uint32_t(bufferMemoryBarrierCount), (*C.uint8_t)(unsafe.Pointer(pBufferMemoryBarriers)), C.uint32_t(imageMemoryBarrierCount), (*C.uint8_t)(unsafe.Pointer(pImageMemoryBarriers)))
 }
 
 // CmdPipelineBarrier wraps vkCmdPipelineBarrier.
@@ -1951,6 +2261,30 @@ func (c *Commands) CmdResetQueryPool(commandBuffer CommandBuffer, queryPool Quer
 		return
 	}
 	C.gvk_v_hhii(C.uintptr_t(uintptr(c.cmdResetQueryPool)), C.uint64_t(commandBuffer), C.uint64_t(queryPool), C.uint32_t(firstQuery), C.uint32_t(queryCount))
+}
+
+// CmdWriteTimestamp wraps vkCmdWriteTimestamp.
+func (c *Commands) CmdWriteTimestamp(commandBuffer CommandBuffer, pipelineStage PipelineStageFlagBits, queryPool QueryPool, query uint32) {
+	if c.cmdWriteTimestamp == nil {
+		return
+	}
+	C.gvk_v_hihi(C.uintptr_t(uintptr(c.cmdWriteTimestamp)), C.uint64_t(commandBuffer), C.uint32_t(pipelineStage), C.uint64_t(queryPool), C.uint32_t(query))
+}
+
+// CmdCopyQueryPoolResults wraps vkCmdCopyQueryPoolResults.
+func (c *Commands) CmdCopyQueryPoolResults(commandBuffer CommandBuffer, queryPool QueryPool, firstQuery uint32, queryCount uint32, dstBuffer Buffer, dstOffset DeviceSize, stride DeviceSize, flags QueryResultFlags) {
+	if c.cmdCopyQueryPoolResults == nil {
+		return
+	}
+	C.gvk_v_hhiihqqi(C.uintptr_t(uintptr(c.cmdCopyQueryPoolResults)), C.uint64_t(commandBuffer), C.uint64_t(queryPool), C.uint32_t(firstQuery), C.uint32_t(queryCount), C.uint64_t(dstBuffer), C.uint64_t(dstOffset), C.uint64_t(stride), C.uint32_t(flags))
+}
+
+// CmdPushConstants wraps vkCmdPushConstants.
+func (c *Commands) CmdPushConstants(commandBuffer CommandBuffer, layout PipelineLayout, stageFlags ShaderStageFlags, offset uint32, size uint32, pValues *uintptr) {
+	if c.cmdPushConstants == nil {
+		return
+	}
+	C.gvk_v_hhiiip(C.uintptr_t(uintptr(c.cmdPushConstants)), C.uint64_t(commandBuffer), C.uint64_t(layout), C.uint32_t(stageFlags), C.uint32_t(offset), C.uint32_t(size), (*C.uint8_t)(unsafe.Pointer(pValues)))
 }
 
 // CmdBeginRenderPass wraps vkCmdBeginRenderPass.
@@ -2036,6 +2370,15 @@ func (c *Commands) GetDisplayModePropertiesKHR(physicalDevice PhysicalDevice, di
 		return ErrorInitializationFailed
 	}
 	r := C.gvk_r_hhpp(C.uintptr_t(uintptr(c.getDisplayModePropertiesKHR)), C.uint64_t(physicalDevice), C.uint64_t(display), (*C.uint8_t)(unsafe.Pointer(pPropertyCount)), (*C.uint8_t)(unsafe.Pointer(pProperties)))
+	return Result(r)
+}
+
+// CreateDisplayModeKHR wraps vkCreateDisplayModeKHR.
+func (c *Commands) CreateDisplayModeKHR(physicalDevice PhysicalDevice, display DisplayKHR, pCreateInfo *DisplayModeCreateInfoKHR, pAllocator *AllocationCallbacks, pMode *DisplayModeKHR) Result {
+	if c.createDisplayModeKHR == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hhppp(C.uintptr_t(uintptr(c.createDisplayModeKHR)), C.uint64_t(physicalDevice), C.uint64_t(display), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pMode)))
 	return Result(r)
 }
 
@@ -2172,6 +2515,15 @@ func (c *Commands) CreateWaylandSurfaceKHR(instance Instance, pCreateInfo *Wayla
 	return Result(r)
 }
 
+// GetPhysicalDeviceWaylandPresentationSupportKHR wraps vkGetPhysicalDeviceWaylandPresentationSupportKHR.
+func (c *Commands) GetPhysicalDeviceWaylandPresentationSupportKHR(physicalDevice PhysicalDevice, queueFamilyIndex uint32, display *WlDisplay) Bool32 {
+	if c.getPhysicalDeviceWaylandPresentationSupportKHR == nil {
+		return 0
+	}
+	r := C.gvk_i_hip(C.uintptr_t(uintptr(c.getPhysicalDeviceWaylandPresentationSupportKHR)), C.uint64_t(physicalDevice), C.uint32_t(queueFamilyIndex), (*C.uint8_t)(unsafe.Pointer(display)))
+	return Bool32(r)
+}
+
 // CreateWin32SurfaceKHR wraps vkCreateWin32SurfaceKHR.
 func (c *Commands) CreateWin32SurfaceKHR(instance Instance, pCreateInfo *Win32SurfaceCreateInfoKHR, pAllocator *AllocationCallbacks, pSurface *SurfaceKHR) Result {
 	if c.createWin32SurfaceKHR == nil {
@@ -2179,6 +2531,15 @@ func (c *Commands) CreateWin32SurfaceKHR(instance Instance, pCreateInfo *Win32Su
 	}
 	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createWin32SurfaceKHR)), C.uint64_t(instance), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pSurface)))
 	return Result(r)
+}
+
+// GetPhysicalDeviceWin32PresentationSupportKHR wraps vkGetPhysicalDeviceWin32PresentationSupportKHR.
+func (c *Commands) GetPhysicalDeviceWin32PresentationSupportKHR(physicalDevice PhysicalDevice, queueFamilyIndex uint32) Bool32 {
+	if c.getPhysicalDeviceWin32PresentationSupportKHR == nil {
+		return 0
+	}
+	r := C.gvk_i_hi(C.uintptr_t(uintptr(c.getPhysicalDeviceWin32PresentationSupportKHR)), C.uint64_t(physicalDevice), C.uint32_t(queueFamilyIndex))
+	return Bool32(r)
 }
 
 // CreateXlibSurfaceKHR wraps vkCreateXlibSurfaceKHR.
@@ -2190,6 +2551,15 @@ func (c *Commands) CreateXlibSurfaceKHR(instance Instance, pCreateInfo *XlibSurf
 	return Result(r)
 }
 
+// GetPhysicalDeviceXlibPresentationSupportKHR wraps vkGetPhysicalDeviceXlibPresentationSupportKHR.
+func (c *Commands) GetPhysicalDeviceXlibPresentationSupportKHR(physicalDevice PhysicalDevice, queueFamilyIndex uint32, dpy *XlibDisplay, visualID XlibVisualID) Bool32 {
+	if c.getPhysicalDeviceXlibPresentationSupportKHR == nil {
+		return 0
+	}
+	r := C.gvk_i_hiph(C.uintptr_t(uintptr(c.getPhysicalDeviceXlibPresentationSupportKHR)), C.uint64_t(physicalDevice), C.uint32_t(queueFamilyIndex), (*C.uint8_t)(unsafe.Pointer(dpy)), C.uint64_t(visualID))
+	return Bool32(r)
+}
+
 // CreateXcbSurfaceKHR wraps vkCreateXcbSurfaceKHR.
 func (c *Commands) CreateXcbSurfaceKHR(instance Instance, pCreateInfo *XcbSurfaceCreateInfoKHR, pAllocator *AllocationCallbacks, pSurface *SurfaceKHR) Result {
 	if c.createXcbSurfaceKHR == nil {
@@ -2199,6 +2569,15 @@ func (c *Commands) CreateXcbSurfaceKHR(instance Instance, pCreateInfo *XcbSurfac
 	return Result(r)
 }
 
+// GetPhysicalDeviceXcbPresentationSupportKHR wraps vkGetPhysicalDeviceXcbPresentationSupportKHR.
+func (c *Commands) GetPhysicalDeviceXcbPresentationSupportKHR(physicalDevice PhysicalDevice, queueFamilyIndex uint32, connection *XcbConnection, visual_id XcbVisualid) Bool32 {
+	if c.getPhysicalDeviceXcbPresentationSupportKHR == nil {
+		return 0
+	}
+	r := C.gvk_i_hipi(C.uintptr_t(uintptr(c.getPhysicalDeviceXcbPresentationSupportKHR)), C.uint64_t(physicalDevice), C.uint32_t(queueFamilyIndex), (*C.uint8_t)(unsafe.Pointer(connection)), C.uint32_t(visual_id))
+	return Bool32(r)
+}
+
 // CreateDirectFBSurfaceEXT wraps vkCreateDirectFBSurfaceEXT.
 func (c *Commands) CreateDirectFBSurfaceEXT(instance Instance, pCreateInfo *DirectFBSurfaceCreateInfoEXT, pAllocator *AllocationCallbacks, pSurface *SurfaceKHR) Result {
 	if c.createDirectFBSurfaceEXT == nil {
@@ -2206,6 +2585,15 @@ func (c *Commands) CreateDirectFBSurfaceEXT(instance Instance, pCreateInfo *Dire
 	}
 	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createDirectFBSurfaceEXT)), C.uint64_t(instance), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pSurface)))
 	return Result(r)
+}
+
+// GetPhysicalDeviceDirectFBPresentationSupportEXT wraps vkGetPhysicalDeviceDirectFBPresentationSupportEXT.
+func (c *Commands) GetPhysicalDeviceDirectFBPresentationSupportEXT(physicalDevice PhysicalDevice, queueFamilyIndex uint32, dfb *IDirectFB) Bool32 {
+	if c.getPhysicalDeviceDirectFBPresentationSupportEXT == nil {
+		return 0
+	}
+	r := C.gvk_i_hip(C.uintptr_t(uintptr(c.getPhysicalDeviceDirectFBPresentationSupportEXT)), C.uint64_t(physicalDevice), C.uint32_t(queueFamilyIndex), (*C.uint8_t)(unsafe.Pointer(dfb)))
+	return Bool32(r)
 }
 
 // CreateImagePipeSurfaceFUCHSIA wraps vkCreateImagePipeSurfaceFUCHSIA.
@@ -2235,6 +2623,15 @@ func (c *Commands) CreateScreenSurfaceQNX(instance Instance, pCreateInfo *Screen
 	return Result(r)
 }
 
+// GetPhysicalDeviceScreenPresentationSupportQNX wraps vkGetPhysicalDeviceScreenPresentationSupportQNX.
+func (c *Commands) GetPhysicalDeviceScreenPresentationSupportQNX(physicalDevice PhysicalDevice, queueFamilyIndex uint32, window *ScreenWindow) Bool32 {
+	if c.getPhysicalDeviceScreenPresentationSupportQNX == nil {
+		return 0
+	}
+	r := C.gvk_i_hip(C.uintptr_t(uintptr(c.getPhysicalDeviceScreenPresentationSupportQNX)), C.uint64_t(physicalDevice), C.uint32_t(queueFamilyIndex), (*C.uint8_t)(unsafe.Pointer(window)))
+	return Bool32(r)
+}
+
 // CreateDebugReportCallbackEXT wraps vkCreateDebugReportCallbackEXT.
 func (c *Commands) CreateDebugReportCallbackEXT(instance Instance, pCreateInfo *DebugReportCallbackCreateInfoEXT, pAllocator *AllocationCallbacks, pCallback *DebugReportCallbackEXT) Result {
 	if c.createDebugReportCallbackEXT == nil {
@@ -2250,6 +2647,14 @@ func (c *Commands) DestroyDebugReportCallbackEXT(instance Instance, callback Deb
 		return
 	}
 	C.gvk_v_hhp(C.uintptr_t(uintptr(c.destroyDebugReportCallbackEXT)), C.uint64_t(instance), C.uint64_t(callback), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+}
+
+// DebugReportMessageEXT wraps vkDebugReportMessageEXT.
+func (c *Commands) DebugReportMessageEXT(instance Instance, flags DebugReportFlagsEXT, objectType DebugReportObjectTypeEXT, object uint64, location uintptr, messageCode int32, pLayerPrefix *byte, pMessage *byte) {
+	if c.debugReportMessageEXT == nil {
+		return
+	}
+	C.gvk_v_hiiqhipp(C.uintptr_t(uintptr(c.debugReportMessageEXT)), C.uint64_t(instance), C.uint32_t(flags), C.uint32_t(objectType), C.uint64_t(object), C.uint64_t(location), C.uint32_t(messageCode), (*C.uint8_t)(unsafe.Pointer(pLayerPrefix)), (*C.uint8_t)(unsafe.Pointer(pMessage)))
 }
 
 // DebugMarkerSetObjectNameEXT wraps vkDebugMarkerSetObjectNameEXT.
@@ -2294,6 +2699,15 @@ func (c *Commands) CmdDebugMarkerInsertEXT(commandBuffer CommandBuffer, pMarkerI
 	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdDebugMarkerInsertEXT)), C.uint64_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pMarkerInfo)))
 }
 
+// GetPhysicalDeviceExternalImageFormatPropertiesNV wraps vkGetPhysicalDeviceExternalImageFormatPropertiesNV.
+func (c *Commands) GetPhysicalDeviceExternalImageFormatPropertiesNV(physicalDevice PhysicalDevice, format Format, typ ImageType, tiling ImageTiling, usage ImageUsageFlags, flags ImageCreateFlags, externalHandleType ExternalMemoryHandleTypeFlagsNV, pExternalImageFormatProperties *ExternalImageFormatPropertiesNV) Result {
+	if c.getPhysicalDeviceExternalImageFormatPropertiesNV == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hiiiiiip(C.uintptr_t(uintptr(c.getPhysicalDeviceExternalImageFormatPropertiesNV)), C.uint64_t(physicalDevice), C.uint32_t(format), C.uint32_t(typ), C.uint32_t(tiling), C.uint32_t(usage), C.uint32_t(flags), C.uint32_t(externalHandleType), (*C.uint8_t)(unsafe.Pointer(pExternalImageFormatProperties)))
+	return Result(r)
+}
+
 // GetMemoryWin32HandleNV wraps vkGetMemoryWin32HandleNV.
 func (c *Commands) GetMemoryWin32HandleNV(device Device, memory DeviceMemory, handleType ExternalMemoryHandleTypeFlagsNV, pHandle *uintptr) Result {
 	if c.getMemoryWin32HandleNV == nil {
@@ -2317,6 +2731,14 @@ func (c *Commands) CmdPreprocessGeneratedCommandsNV(commandBuffer CommandBuffer,
 		return
 	}
 	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdPreprocessGeneratedCommandsNV)), C.uint64_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pGeneratedCommandsInfo)))
+}
+
+// CmdBindPipelineShaderGroupNV wraps vkCmdBindPipelineShaderGroupNV.
+func (c *Commands) CmdBindPipelineShaderGroupNV(commandBuffer CommandBuffer, pipelineBindPoint PipelineBindPoint, pipeline Pipeline, groupIndex uint32) {
+	if c.cmdBindPipelineShaderGroupNV == nil {
+		return
+	}
+	C.gvk_v_hihi(C.uintptr_t(uintptr(c.cmdBindPipelineShaderGroupNV)), C.uint64_t(commandBuffer), C.uint32_t(pipelineBindPoint), C.uint64_t(pipeline), C.uint32_t(groupIndex))
 }
 
 // GetGeneratedCommandsMemoryRequirementsNV wraps vkGetGeneratedCommandsMemoryRequirementsNV.
@@ -2350,6 +2772,14 @@ func (c *Commands) CmdExecuteGeneratedCommandsEXT(commandBuffer CommandBuffer, i
 		return
 	}
 	C.gvk_v_hip(C.uintptr_t(uintptr(c.cmdExecuteGeneratedCommandsEXT)), C.uint64_t(commandBuffer), C.uint32_t(isPreprocessed), (*C.uint8_t)(unsafe.Pointer(pGeneratedCommandsInfo)))
+}
+
+// CmdPreprocessGeneratedCommandsEXT wraps vkCmdPreprocessGeneratedCommandsEXT.
+func (c *Commands) CmdPreprocessGeneratedCommandsEXT(commandBuffer CommandBuffer, pGeneratedCommandsInfo *GeneratedCommandsInfoEXT, stateCommandBuffer CommandBuffer) {
+	if c.cmdPreprocessGeneratedCommandsEXT == nil {
+		return
+	}
+	C.gvk_v_hph(C.uintptr_t(uintptr(c.cmdPreprocessGeneratedCommandsEXT)), C.uint64_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pGeneratedCommandsInfo)), C.uint64_t(stateCommandBuffer))
 }
 
 // GetGeneratedCommandsMemoryRequirementsEXT wraps vkGetGeneratedCommandsMemoryRequirementsEXT.
@@ -2459,6 +2889,22 @@ func (c *Commands) GetPhysicalDeviceMemoryProperties2(physicalDevice PhysicalDev
 	C.gvk_v_hp(C.uintptr_t(uintptr(c.getPhysicalDeviceMemoryProperties2)), C.uint64_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pMemoryProperties)))
 }
 
+// GetPhysicalDeviceSparseImageFormatProperties2 wraps vkGetPhysicalDeviceSparseImageFormatProperties2.
+func (c *Commands) GetPhysicalDeviceSparseImageFormatProperties2(physicalDevice PhysicalDevice, pFormatInfo *PhysicalDeviceSparseImageFormatInfo2, pPropertyCount *uint32, pProperties *SparseImageFormatProperties2) {
+	if c.getPhysicalDeviceSparseImageFormatProperties2 == nil {
+		return
+	}
+	C.gvk_v_hppp(C.uintptr_t(uintptr(c.getPhysicalDeviceSparseImageFormatProperties2)), C.uint64_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pFormatInfo)), (*C.uint8_t)(unsafe.Pointer(pPropertyCount)), (*C.uint8_t)(unsafe.Pointer(pProperties)))
+}
+
+// CmdPushDescriptorSet wraps vkCmdPushDescriptorSet.
+func (c *Commands) CmdPushDescriptorSet(commandBuffer CommandBuffer, pipelineBindPoint PipelineBindPoint, layout PipelineLayout, set uint32, descriptorWriteCount uint32, pDescriptorWrites *WriteDescriptorSet) {
+	if c.cmdPushDescriptorSet == nil {
+		return
+	}
+	C.gvk_v_hihiip(C.uintptr_t(uintptr(c.cmdPushDescriptorSet)), C.uint64_t(commandBuffer), C.uint32_t(pipelineBindPoint), C.uint64_t(layout), C.uint32_t(set), C.uint32_t(descriptorWriteCount), (*C.uint8_t)(unsafe.Pointer(pDescriptorWrites)))
+}
+
 // TrimCommandPool wraps vkTrimCommandPool.
 func (c *Commands) TrimCommandPool(device Device, commandPool CommandPool, flags CommandPoolTrimFlags) {
 	if c.trimCommandPool == nil {
@@ -2484,6 +2930,15 @@ func (c *Commands) GetMemoryWin32HandleKHR(device Device, pGetWin32HandleInfo *M
 	return Result(r)
 }
 
+// GetMemoryWin32HandlePropertiesKHR wraps vkGetMemoryWin32HandlePropertiesKHR.
+func (c *Commands) GetMemoryWin32HandlePropertiesKHR(device Device, handleType ExternalMemoryHandleTypeFlagBits, handle uintptr, pMemoryWin32HandleProperties *MemoryWin32HandlePropertiesKHR) Result {
+	if c.getMemoryWin32HandlePropertiesKHR == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hihp(C.uintptr_t(uintptr(c.getMemoryWin32HandlePropertiesKHR)), C.uint64_t(device), C.uint32_t(handleType), C.uint64_t(handle), (*C.uint8_t)(unsafe.Pointer(pMemoryWin32HandleProperties)))
+	return Result(r)
+}
+
 // GetMemoryFdKHR wraps vkGetMemoryFdKHR.
 func (c *Commands) GetMemoryFdKHR(device Device, pGetFdInfo *MemoryGetFdInfoKHR, pFd *int32) Result {
 	if c.getMemoryFdKHR == nil {
@@ -2493,12 +2948,30 @@ func (c *Commands) GetMemoryFdKHR(device Device, pGetFdInfo *MemoryGetFdInfoKHR,
 	return Result(r)
 }
 
+// GetMemoryFdPropertiesKHR wraps vkGetMemoryFdPropertiesKHR.
+func (c *Commands) GetMemoryFdPropertiesKHR(device Device, handleType ExternalMemoryHandleTypeFlagBits, fd int32, pMemoryFdProperties *MemoryFdPropertiesKHR) Result {
+	if c.getMemoryFdPropertiesKHR == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hiip(C.uintptr_t(uintptr(c.getMemoryFdPropertiesKHR)), C.uint64_t(device), C.uint32_t(handleType), C.uint32_t(fd), (*C.uint8_t)(unsafe.Pointer(pMemoryFdProperties)))
+	return Result(r)
+}
+
 // GetMemoryZirconHandleFUCHSIA wraps vkGetMemoryZirconHandleFUCHSIA.
 func (c *Commands) GetMemoryZirconHandleFUCHSIA(device Device, pGetZirconHandleInfo *MemoryGetZirconHandleInfoFUCHSIA, pZirconHandle *uint32) Result {
 	if c.getMemoryZirconHandleFUCHSIA == nil {
 		return ErrorInitializationFailed
 	}
 	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getMemoryZirconHandleFUCHSIA)), C.uint64_t(device), (*C.uint8_t)(unsafe.Pointer(pGetZirconHandleInfo)), (*C.uint8_t)(unsafe.Pointer(pZirconHandle)))
+	return Result(r)
+}
+
+// GetMemoryZirconHandlePropertiesFUCHSIA wraps vkGetMemoryZirconHandlePropertiesFUCHSIA.
+func (c *Commands) GetMemoryZirconHandlePropertiesFUCHSIA(device Device, handleType ExternalMemoryHandleTypeFlagBits, zirconHandle uint32, pMemoryZirconHandleProperties *MemoryZirconHandlePropertiesFUCHSIA) Result {
+	if c.getMemoryZirconHandlePropertiesFUCHSIA == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hiip(C.uintptr_t(uintptr(c.getMemoryZirconHandlePropertiesFUCHSIA)), C.uint64_t(device), C.uint32_t(handleType), C.uint32_t(zirconHandle), (*C.uint8_t)(unsafe.Pointer(pMemoryZirconHandleProperties)))
 	return Result(r)
 }
 
@@ -2517,6 +2990,24 @@ func (c *Commands) GetMemorySciBufNV(device Device, pGetSciBufInfo *MemoryGetSci
 		return ErrorInitializationFailed
 	}
 	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getMemorySciBufNV)), C.uint64_t(device), (*C.uint8_t)(unsafe.Pointer(pGetSciBufInfo)), (*C.uint8_t)(unsafe.Pointer(pHandle)))
+	return Result(r)
+}
+
+// GetPhysicalDeviceExternalMemorySciBufPropertiesNV wraps vkGetPhysicalDeviceExternalMemorySciBufPropertiesNV.
+func (c *Commands) GetPhysicalDeviceExternalMemorySciBufPropertiesNV(physicalDevice PhysicalDevice, handleType ExternalMemoryHandleTypeFlagBits, handle NvSciBufObj, pMemorySciBufProperties *MemorySciBufPropertiesNV) Result {
+	if c.getPhysicalDeviceExternalMemorySciBufPropertiesNV == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hihp(C.uintptr_t(uintptr(c.getPhysicalDeviceExternalMemorySciBufPropertiesNV)), C.uint64_t(physicalDevice), C.uint32_t(handleType), C.uint64_t(handle), (*C.uint8_t)(unsafe.Pointer(pMemorySciBufProperties)))
+	return Result(r)
+}
+
+// GetPhysicalDeviceSciBufAttributesNV wraps vkGetPhysicalDeviceSciBufAttributesNV.
+func (c *Commands) GetPhysicalDeviceSciBufAttributesNV(physicalDevice PhysicalDevice, pAttributes NvSciBufAttrList) Result {
+	if c.getPhysicalDeviceSciBufAttributesNV == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hh(C.uintptr_t(uintptr(c.getPhysicalDeviceSciBufAttributesNV)), C.uint64_t(physicalDevice), C.uint64_t(pAttributes))
 	return Result(r)
 }
 
@@ -2680,6 +3171,15 @@ func (c *Commands) ImportSemaphoreSciSyncObjNV(device Device, pImportSemaphoreSc
 	return Result(r)
 }
 
+// GetPhysicalDeviceSciSyncAttributesNV wraps vkGetPhysicalDeviceSciSyncAttributesNV.
+func (c *Commands) GetPhysicalDeviceSciSyncAttributesNV(physicalDevice PhysicalDevice, pSciSyncAttributesInfo *SciSyncAttributesInfoNV, pAttributes NvSciSyncAttrList) Result {
+	if c.getPhysicalDeviceSciSyncAttributesNV == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hph(C.uintptr_t(uintptr(c.getPhysicalDeviceSciSyncAttributesNV)), C.uint64_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pSciSyncAttributesInfo)), C.uint64_t(pAttributes))
+	return Result(r)
+}
+
 // CreateSemaphoreSciSyncPoolNV wraps vkCreateSemaphoreSciSyncPoolNV.
 func (c *Commands) CreateSemaphoreSciSyncPoolNV(device Device, pCreateInfo *SemaphoreSciSyncPoolCreateInfoNV, pAllocator *AllocationCallbacks, pSemaphorePool *SemaphoreSciSyncPoolNV) Result {
 	if c.createSemaphoreSciSyncPoolNV == nil {
@@ -2703,6 +3203,24 @@ func (c *Commands) ReleaseDisplayEXT(physicalDevice PhysicalDevice, display Disp
 		return ErrorInitializationFailed
 	}
 	r := C.gvk_r_hh(C.uintptr_t(uintptr(c.releaseDisplayEXT)), C.uint64_t(physicalDevice), C.uint64_t(display))
+	return Result(r)
+}
+
+// AcquireXlibDisplayEXT wraps vkAcquireXlibDisplayEXT.
+func (c *Commands) AcquireXlibDisplayEXT(physicalDevice PhysicalDevice, dpy *XlibDisplay, display DisplayKHR) Result {
+	if c.acquireXlibDisplayEXT == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hph(C.uintptr_t(uintptr(c.acquireXlibDisplayEXT)), C.uint64_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(dpy)), C.uint64_t(display))
+	return Result(r)
+}
+
+// GetRandROutputDisplayEXT wraps vkGetRandROutputDisplayEXT.
+func (c *Commands) GetRandROutputDisplayEXT(physicalDevice PhysicalDevice, dpy *XlibDisplay, rrOutput uintptr, pDisplay *DisplayKHR) Result {
+	if c.getRandROutputDisplayEXT == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hphp(C.uintptr_t(uintptr(c.getRandROutputDisplayEXT)), C.uint64_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(dpy)), C.uint64_t(rrOutput), (*C.uint8_t)(unsafe.Pointer(pDisplay)))
 	return Result(r)
 }
 
@@ -2742,6 +3260,24 @@ func (c *Commands) RegisterDeviceEventEXT(device Device, pDeviceEventInfo *Devic
 	return Result(r)
 }
 
+// RegisterDisplayEventEXT wraps vkRegisterDisplayEventEXT.
+func (c *Commands) RegisterDisplayEventEXT(device Device, display DisplayKHR, pDisplayEventInfo *DisplayEventInfoEXT, pAllocator *AllocationCallbacks, pFence *Fence) Result {
+	if c.registerDisplayEventEXT == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hhppp(C.uintptr_t(uintptr(c.registerDisplayEventEXT)), C.uint64_t(device), C.uint64_t(display), (*C.uint8_t)(unsafe.Pointer(pDisplayEventInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pFence)))
+	return Result(r)
+}
+
+// GetSwapchainCounterEXT wraps vkGetSwapchainCounterEXT.
+func (c *Commands) GetSwapchainCounterEXT(device Device, swapchain SwapchainKHR, counter SurfaceCounterFlagBitsEXT, pCounterValue *uint64) Result {
+	if c.getSwapchainCounterEXT == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hhip(C.uintptr_t(uintptr(c.getSwapchainCounterEXT)), C.uint64_t(device), C.uint64_t(swapchain), C.uint32_t(counter), (*C.uint8_t)(unsafe.Pointer(pCounterValue)))
+	return Result(r)
+}
+
 // GetPhysicalDeviceSurfaceCapabilities2EXT wraps vkGetPhysicalDeviceSurfaceCapabilities2EXT.
 func (c *Commands) GetPhysicalDeviceSurfaceCapabilities2EXT(physicalDevice PhysicalDevice, surface SurfaceKHR, pSurfaceCapabilities *SurfaceCapabilities2EXT) Result {
 	if c.getPhysicalDeviceSurfaceCapabilities2EXT == nil {
@@ -2758,6 +3294,14 @@ func (c *Commands) EnumeratePhysicalDeviceGroups(instance Instance, pPhysicalDev
 	}
 	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.enumeratePhysicalDeviceGroups)), C.uint64_t(instance), (*C.uint8_t)(unsafe.Pointer(pPhysicalDeviceGroupCount)), (*C.uint8_t)(unsafe.Pointer(pPhysicalDeviceGroupProperties)))
 	return Result(r)
+}
+
+// GetDeviceGroupPeerMemoryFeatures wraps vkGetDeviceGroupPeerMemoryFeatures.
+func (c *Commands) GetDeviceGroupPeerMemoryFeatures(device Device, heapIndex uint32, localDeviceIndex uint32, remoteDeviceIndex uint32, pPeerMemoryFeatures *PeerMemoryFeatureFlags) {
+	if c.getDeviceGroupPeerMemoryFeatures == nil {
+		return
+	}
+	C.gvk_v_hiiip(C.uintptr_t(uintptr(c.getDeviceGroupPeerMemoryFeatures)), C.uint64_t(device), C.uint32_t(heapIndex), C.uint32_t(localDeviceIndex), C.uint32_t(remoteDeviceIndex), (*C.uint8_t)(unsafe.Pointer(pPeerMemoryFeatures)))
 }
 
 // BindBufferMemory2 wraps vkBindBufferMemory2.
@@ -2813,6 +3357,14 @@ func (c *Commands) AcquireNextImage2KHR(device Device, pAcquireInfo *AcquireNext
 	return Result(r)
 }
 
+// CmdDispatchBase wraps vkCmdDispatchBase.
+func (c *Commands) CmdDispatchBase(commandBuffer CommandBuffer, baseGroupX uint32, baseGroupY uint32, baseGroupZ uint32, groupCountX uint32, groupCountY uint32, groupCountZ uint32) {
+	if c.cmdDispatchBase == nil {
+		return
+	}
+	C.gvk_v_hiiiiii(C.uintptr_t(uintptr(c.cmdDispatchBase)), C.uint64_t(commandBuffer), C.uint32_t(baseGroupX), C.uint32_t(baseGroupY), C.uint32_t(baseGroupZ), C.uint32_t(groupCountX), C.uint32_t(groupCountY), C.uint32_t(groupCountZ))
+}
+
 // GetPhysicalDevicePresentRectanglesKHR wraps vkGetPhysicalDevicePresentRectanglesKHR.
 func (c *Commands) GetPhysicalDevicePresentRectanglesKHR(physicalDevice PhysicalDevice, surface SurfaceKHR, pRectCount *uint32, pRects *Rect2D) Result {
 	if c.getPhysicalDevicePresentRectanglesKHR == nil {
@@ -2839,12 +3391,28 @@ func (c *Commands) DestroyDescriptorUpdateTemplate(device Device, descriptorUpda
 	C.gvk_v_hhp(C.uintptr_t(uintptr(c.destroyDescriptorUpdateTemplate)), C.uint64_t(device), C.uint64_t(descriptorUpdateTemplate), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
 }
 
+// UpdateDescriptorSetWithTemplate wraps vkUpdateDescriptorSetWithTemplate.
+func (c *Commands) UpdateDescriptorSetWithTemplate(device Device, descriptorSet DescriptorSet, descriptorUpdateTemplate DescriptorUpdateTemplate, pData *uintptr) {
+	if c.updateDescriptorSetWithTemplate == nil {
+		return
+	}
+	C.gvk_v_hhhp(C.uintptr_t(uintptr(c.updateDescriptorSetWithTemplate)), C.uint64_t(device), C.uint64_t(descriptorSet), C.uint64_t(descriptorUpdateTemplate), (*C.uint8_t)(unsafe.Pointer(pData)))
+}
+
 // CmdPushDescriptorSetWithTemplate wraps vkCmdPushDescriptorSetWithTemplate.
 func (c *Commands) CmdPushDescriptorSetWithTemplate(commandBuffer CommandBuffer, descriptorUpdateTemplate DescriptorUpdateTemplate, layout PipelineLayout, set uint32, pData *uintptr) {
 	if c.cmdPushDescriptorSetWithTemplate == nil {
 		return
 	}
 	C.gvk_v_hhhip(C.uintptr_t(uintptr(c.cmdPushDescriptorSetWithTemplate)), C.uint64_t(commandBuffer), C.uint64_t(descriptorUpdateTemplate), C.uint64_t(layout), C.uint32_t(set), (*C.uint8_t)(unsafe.Pointer(pData)))
+}
+
+// SetHdrMetadataEXT wraps vkSetHdrMetadataEXT.
+func (c *Commands) SetHdrMetadataEXT(device Device, swapchainCount uint32, pSwapchains *SwapchainKHR, pMetadata *HdrMetadataEXT) {
+	if c.setHdrMetadataEXT == nil {
+		return
+	}
+	C.gvk_v_hipp(C.uintptr_t(uintptr(c.setHdrMetadataEXT)), C.uint64_t(device), C.uint32_t(swapchainCount), (*C.uint8_t)(unsafe.Pointer(pSwapchains)), (*C.uint8_t)(unsafe.Pointer(pMetadata)))
 }
 
 // GetSwapchainStatusKHR wraps vkGetSwapchainStatusKHR.
@@ -3019,6 +3587,14 @@ func (c *Commands) GetImageMemoryRequirements2(device Device, pInfo *ImageMemory
 	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getImageMemoryRequirements2)), C.uint64_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pMemoryRequirements)))
 }
 
+// GetImageSparseMemoryRequirements2 wraps vkGetImageSparseMemoryRequirements2.
+func (c *Commands) GetImageSparseMemoryRequirements2(device Device, pInfo *ImageSparseMemoryRequirementsInfo2, pSparseMemoryRequirementCount *uint32, pSparseMemoryRequirements *SparseImageMemoryRequirements2) {
+	if c.getImageSparseMemoryRequirements2 == nil {
+		return
+	}
+	C.gvk_v_hppp(C.uintptr_t(uintptr(c.getImageSparseMemoryRequirements2)), C.uint64_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pSparseMemoryRequirementCount)), (*C.uint8_t)(unsafe.Pointer(pSparseMemoryRequirements)))
+}
+
 // GetDeviceBufferMemoryRequirements wraps vkGetDeviceBufferMemoryRequirements.
 func (c *Commands) GetDeviceBufferMemoryRequirements(device Device, pInfo *DeviceBufferMemoryRequirements, pMemoryRequirements *MemoryRequirements2) {
 	if c.getDeviceBufferMemoryRequirements == nil {
@@ -3033,6 +3609,14 @@ func (c *Commands) GetDeviceImageMemoryRequirements(device Device, pInfo *Device
 		return
 	}
 	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getDeviceImageMemoryRequirements)), C.uint64_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pMemoryRequirements)))
+}
+
+// GetDeviceImageSparseMemoryRequirements wraps vkGetDeviceImageSparseMemoryRequirements.
+func (c *Commands) GetDeviceImageSparseMemoryRequirements(device Device, pInfo *DeviceImageMemoryRequirements, pSparseMemoryRequirementCount *uint32, pSparseMemoryRequirements *SparseImageMemoryRequirements2) {
+	if c.getDeviceImageSparseMemoryRequirements == nil {
+		return
+	}
+	C.gvk_v_hppp(C.uintptr_t(uintptr(c.getDeviceImageSparseMemoryRequirements)), C.uint64_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pSparseMemoryRequirementCount)), (*C.uint8_t)(unsafe.Pointer(pSparseMemoryRequirements)))
 }
 
 // CreateSamplerYcbcrConversion wraps vkCreateSamplerYcbcrConversion.
@@ -3101,6 +3685,51 @@ func (c *Commands) GetDescriptorSetLayoutSupport(device Device, pCreateInfo *Des
 		return
 	}
 	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getDescriptorSetLayoutSupport)), C.uint64_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pSupport)))
+}
+
+// GetSwapchainGrallocUsageANDROID wraps vkGetSwapchainGrallocUsageANDROID.
+func (c *Commands) GetSwapchainGrallocUsageANDROID(device Device, format Format, imageUsage ImageUsageFlags, grallocUsage *int32) Result {
+	if c.getSwapchainGrallocUsageANDROID == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hiip(C.uintptr_t(uintptr(c.getSwapchainGrallocUsageANDROID)), C.uint64_t(device), C.uint32_t(format), C.uint32_t(imageUsage), (*C.uint8_t)(unsafe.Pointer(grallocUsage)))
+	return Result(r)
+}
+
+// GetSwapchainGrallocUsage2ANDROID wraps vkGetSwapchainGrallocUsage2ANDROID.
+func (c *Commands) GetSwapchainGrallocUsage2ANDROID(device Device, format Format, imageUsage ImageUsageFlags, swapchainImageUsage SwapchainImageUsageFlagsANDROID, grallocConsumerUsage *uint64, grallocProducerUsage *uint64) Result {
+	if c.getSwapchainGrallocUsage2ANDROID == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hiiipp(C.uintptr_t(uintptr(c.getSwapchainGrallocUsage2ANDROID)), C.uint64_t(device), C.uint32_t(format), C.uint32_t(imageUsage), C.uint32_t(swapchainImageUsage), (*C.uint8_t)(unsafe.Pointer(grallocConsumerUsage)), (*C.uint8_t)(unsafe.Pointer(grallocProducerUsage)))
+	return Result(r)
+}
+
+// AcquireImageANDROID wraps vkAcquireImageANDROID.
+func (c *Commands) AcquireImageANDROID(device Device, image Image, nativeFenceFd int32, semaphore Semaphore, fence Fence) Result {
+	if c.acquireImageANDROID == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hhihh(C.uintptr_t(uintptr(c.acquireImageANDROID)), C.uint64_t(device), C.uint64_t(image), C.uint32_t(nativeFenceFd), C.uint64_t(semaphore), C.uint64_t(fence))
+	return Result(r)
+}
+
+// QueueSignalReleaseImageANDROID wraps vkQueueSignalReleaseImageANDROID.
+func (c *Commands) QueueSignalReleaseImageANDROID(queue Queue, waitSemaphoreCount uint32, pWaitSemaphores *Semaphore, image Image, pNativeFenceFd *int32) Result {
+	if c.queueSignalReleaseImageANDROID == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hiphp(C.uintptr_t(uintptr(c.queueSignalReleaseImageANDROID)), C.uint64_t(queue), C.uint32_t(waitSemaphoreCount), (*C.uint8_t)(unsafe.Pointer(pWaitSemaphores)), C.uint64_t(image), (*C.uint8_t)(unsafe.Pointer(pNativeFenceFd)))
+	return Result(r)
+}
+
+// GetShaderInfoAMD wraps vkGetShaderInfoAMD.
+func (c *Commands) GetShaderInfoAMD(device Device, pipeline Pipeline, shaderStage ShaderStageFlagBits, infoType ShaderInfoTypeAMD, pInfoSize *uintptr, pInfo *uintptr) Result {
+	if c.getShaderInfoAMD == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hhiipp(C.uintptr_t(uintptr(c.getShaderInfoAMD)), C.uint64_t(device), C.uint64_t(pipeline), C.uint32_t(shaderStage), C.uint32_t(infoType), (*C.uint8_t)(unsafe.Pointer(pInfoSize)), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	return Result(r)
 }
 
 // SetLocalDimmingAMD wraps vkSetLocalDimmingAMD.
@@ -3229,6 +3858,14 @@ func (c *Commands) GetMemoryHostPointerPropertiesEXT(device Device, handleType E
 	return Result(r)
 }
 
+// CmdWriteBufferMarkerAMD wraps vkCmdWriteBufferMarkerAMD.
+func (c *Commands) CmdWriteBufferMarkerAMD(commandBuffer CommandBuffer, pipelineStage PipelineStageFlagBits, dstBuffer Buffer, dstOffset DeviceSize, marker uint32) {
+	if c.cmdWriteBufferMarkerAMD == nil {
+		return
+	}
+	C.gvk_v_hihqi(C.uintptr_t(uintptr(c.cmdWriteBufferMarkerAMD)), C.uint64_t(commandBuffer), C.uint32_t(pipelineStage), C.uint64_t(dstBuffer), C.uint64_t(dstOffset), C.uint32_t(marker))
+}
+
 // CreateRenderPass2 wraps vkCreateRenderPass2.
 func (c *Commands) CreateRenderPass2(device Device, pCreateInfo *RenderPassCreateInfo2, pAllocator *AllocationCallbacks, pRenderPass *RenderPass) Result {
 	if c.createRenderPass2 == nil {
@@ -3271,6 +3908,15 @@ func (c *Commands) GetSemaphoreCounterValue(device Device, semaphore Semaphore, 
 	return Result(r)
 }
 
+// WaitSemaphores wraps vkWaitSemaphores.
+func (c *Commands) WaitSemaphores(device Device, pWaitInfo *SemaphoreWaitInfo, timeout uint64) Result {
+	if c.waitSemaphores == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hpq(C.uintptr_t(uintptr(c.waitSemaphores)), C.uint64_t(device), (*C.uint8_t)(unsafe.Pointer(pWaitInfo)), C.uint64_t(timeout))
+	return Result(r)
+}
+
 // SignalSemaphore wraps vkSignalSemaphore.
 func (c *Commands) SignalSemaphore(device Device, pSignalInfo *SemaphoreSignalInfo) Result {
 	if c.signalSemaphore == nil {
@@ -3298,6 +3944,22 @@ func (c *Commands) GetMemoryAndroidHardwareBufferANDROID(device Device, pInfo *M
 	return Result(r)
 }
 
+// CmdDrawIndirectCount wraps vkCmdDrawIndirectCount.
+func (c *Commands) CmdDrawIndirectCount(commandBuffer CommandBuffer, buffer Buffer, offset DeviceSize, countBuffer Buffer, countBufferOffset DeviceSize, maxDrawCount uint32, stride uint32) {
+	if c.cmdDrawIndirectCount == nil {
+		return
+	}
+	C.gvk_v_hhqhqii(C.uintptr_t(uintptr(c.cmdDrawIndirectCount)), C.uint64_t(commandBuffer), C.uint64_t(buffer), C.uint64_t(offset), C.uint64_t(countBuffer), C.uint64_t(countBufferOffset), C.uint32_t(maxDrawCount), C.uint32_t(stride))
+}
+
+// CmdDrawIndexedIndirectCount wraps vkCmdDrawIndexedIndirectCount.
+func (c *Commands) CmdDrawIndexedIndirectCount(commandBuffer CommandBuffer, buffer Buffer, offset DeviceSize, countBuffer Buffer, countBufferOffset DeviceSize, maxDrawCount uint32, stride uint32) {
+	if c.cmdDrawIndexedIndirectCount == nil {
+		return
+	}
+	C.gvk_v_hhqhqii(C.uintptr_t(uintptr(c.cmdDrawIndexedIndirectCount)), C.uint64_t(commandBuffer), C.uint64_t(buffer), C.uint64_t(offset), C.uint64_t(countBuffer), C.uint64_t(countBufferOffset), C.uint32_t(maxDrawCount), C.uint32_t(stride))
+}
+
 // CmdSetCheckpointNV wraps vkCmdSetCheckpointNV.
 func (c *Commands) CmdSetCheckpointNV(commandBuffer CommandBuffer, pCheckpointMarker *uintptr) {
 	if c.cmdSetCheckpointNV == nil {
@@ -3312,6 +3974,14 @@ func (c *Commands) GetQueueCheckpointDataNV(queue Queue, pCheckpointDataCount *u
 		return
 	}
 	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getQueueCheckpointDataNV)), C.uint64_t(queue), (*C.uint8_t)(unsafe.Pointer(pCheckpointDataCount)), (*C.uint8_t)(unsafe.Pointer(pCheckpointData)))
+}
+
+// CmdBindTransformFeedbackBuffersEXT wraps vkCmdBindTransformFeedbackBuffersEXT.
+func (c *Commands) CmdBindTransformFeedbackBuffersEXT(commandBuffer CommandBuffer, firstBinding uint32, bindingCount uint32, pBuffers *Buffer, pOffsets *DeviceSize, pSizes *DeviceSize) {
+	if c.cmdBindTransformFeedbackBuffersEXT == nil {
+		return
+	}
+	C.gvk_v_hiippp(C.uintptr_t(uintptr(c.cmdBindTransformFeedbackBuffersEXT)), C.uint64_t(commandBuffer), C.uint32_t(firstBinding), C.uint32_t(bindingCount), (*C.uint8_t)(unsafe.Pointer(pBuffers)), (*C.uint8_t)(unsafe.Pointer(pOffsets)), (*C.uint8_t)(unsafe.Pointer(pSizes)))
 }
 
 // CmdBeginTransformFeedbackEXT wraps vkCmdBeginTransformFeedbackEXT.
@@ -3330,12 +4000,28 @@ func (c *Commands) CmdEndTransformFeedbackEXT(commandBuffer CommandBuffer, first
 	C.gvk_v_hiipp(C.uintptr_t(uintptr(c.cmdEndTransformFeedbackEXT)), C.uint64_t(commandBuffer), C.uint32_t(firstCounterBuffer), C.uint32_t(counterBufferCount), (*C.uint8_t)(unsafe.Pointer(pCounterBuffers)), (*C.uint8_t)(unsafe.Pointer(pCounterBufferOffsets)))
 }
 
+// CmdBeginQueryIndexedEXT wraps vkCmdBeginQueryIndexedEXT.
+func (c *Commands) CmdBeginQueryIndexedEXT(commandBuffer CommandBuffer, queryPool QueryPool, query uint32, flags QueryControlFlags, index uint32) {
+	if c.cmdBeginQueryIndexedEXT == nil {
+		return
+	}
+	C.gvk_v_hhiii(C.uintptr_t(uintptr(c.cmdBeginQueryIndexedEXT)), C.uint64_t(commandBuffer), C.uint64_t(queryPool), C.uint32_t(query), C.uint32_t(flags), C.uint32_t(index))
+}
+
 // CmdEndQueryIndexedEXT wraps vkCmdEndQueryIndexedEXT.
 func (c *Commands) CmdEndQueryIndexedEXT(commandBuffer CommandBuffer, queryPool QueryPool, query uint32, index uint32) {
 	if c.cmdEndQueryIndexedEXT == nil {
 		return
 	}
 	C.gvk_v_hhii(C.uintptr_t(uintptr(c.cmdEndQueryIndexedEXT)), C.uint64_t(commandBuffer), C.uint64_t(queryPool), C.uint32_t(query), C.uint32_t(index))
+}
+
+// CmdDrawIndirectByteCountEXT wraps vkCmdDrawIndirectByteCountEXT.
+func (c *Commands) CmdDrawIndirectByteCountEXT(commandBuffer CommandBuffer, instanceCount uint32, firstInstance uint32, counterBuffer Buffer, counterBufferOffset DeviceSize, counterOffset uint32, vertexStride uint32) {
+	if c.cmdDrawIndirectByteCountEXT == nil {
+		return
+	}
+	C.gvk_v_hiihqii(C.uintptr_t(uintptr(c.cmdDrawIndirectByteCountEXT)), C.uint64_t(commandBuffer), C.uint32_t(instanceCount), C.uint32_t(firstInstance), C.uint64_t(counterBuffer), C.uint64_t(counterBufferOffset), C.uint32_t(counterOffset), C.uint32_t(vertexStride))
 }
 
 // CmdSetExclusiveScissorNV wraps vkCmdSetExclusiveScissorNV.
@@ -3394,6 +4080,14 @@ func (c *Commands) CmdDrawMeshTasksIndirectNV(commandBuffer CommandBuffer, buffe
 	C.gvk_v_hhqii(C.uintptr_t(uintptr(c.cmdDrawMeshTasksIndirectNV)), C.uint64_t(commandBuffer), C.uint64_t(buffer), C.uint64_t(offset), C.uint32_t(drawCount), C.uint32_t(stride))
 }
 
+// CmdDrawMeshTasksIndirectCountNV wraps vkCmdDrawMeshTasksIndirectCountNV.
+func (c *Commands) CmdDrawMeshTasksIndirectCountNV(commandBuffer CommandBuffer, buffer Buffer, offset DeviceSize, countBuffer Buffer, countBufferOffset DeviceSize, maxDrawCount uint32, stride uint32) {
+	if c.cmdDrawMeshTasksIndirectCountNV == nil {
+		return
+	}
+	C.gvk_v_hhqhqii(C.uintptr_t(uintptr(c.cmdDrawMeshTasksIndirectCountNV)), C.uint64_t(commandBuffer), C.uint64_t(buffer), C.uint64_t(offset), C.uint64_t(countBuffer), C.uint64_t(countBufferOffset), C.uint32_t(maxDrawCount), C.uint32_t(stride))
+}
+
 // CmdDrawMeshTasksEXT wraps vkCmdDrawMeshTasksEXT.
 func (c *Commands) CmdDrawMeshTasksEXT(commandBuffer CommandBuffer, groupCountX uint32, groupCountY uint32, groupCountZ uint32) {
 	if c.cmdDrawMeshTasksEXT == nil {
@@ -3408,6 +4102,14 @@ func (c *Commands) CmdDrawMeshTasksIndirectEXT(commandBuffer CommandBuffer, buff
 		return
 	}
 	C.gvk_v_hhqii(C.uintptr_t(uintptr(c.cmdDrawMeshTasksIndirectEXT)), C.uint64_t(commandBuffer), C.uint64_t(buffer), C.uint64_t(offset), C.uint32_t(drawCount), C.uint32_t(stride))
+}
+
+// CmdDrawMeshTasksIndirectCountEXT wraps vkCmdDrawMeshTasksIndirectCountEXT.
+func (c *Commands) CmdDrawMeshTasksIndirectCountEXT(commandBuffer CommandBuffer, buffer Buffer, offset DeviceSize, countBuffer Buffer, countBufferOffset DeviceSize, maxDrawCount uint32, stride uint32) {
+	if c.cmdDrawMeshTasksIndirectCountEXT == nil {
+		return
+	}
+	C.gvk_v_hhqhqii(C.uintptr_t(uintptr(c.cmdDrawMeshTasksIndirectCountEXT)), C.uint64_t(commandBuffer), C.uint64_t(buffer), C.uint64_t(offset), C.uint64_t(countBuffer), C.uint64_t(countBufferOffset), C.uint32_t(maxDrawCount), C.uint32_t(stride))
 }
 
 // CompileDeferredNV wraps vkCompileDeferredNV.
@@ -3469,6 +4171,14 @@ func (c *Commands) BindAccelerationStructureMemoryNV(device Device, bindInfoCoun
 	return Result(r)
 }
 
+// CmdCopyAccelerationStructureNV wraps vkCmdCopyAccelerationStructureNV.
+func (c *Commands) CmdCopyAccelerationStructureNV(commandBuffer CommandBuffer, dst AccelerationStructureNV, src AccelerationStructureNV, mode CopyAccelerationStructureModeKHR) {
+	if c.cmdCopyAccelerationStructureNV == nil {
+		return
+	}
+	C.gvk_v_hhhi(C.uintptr_t(uintptr(c.cmdCopyAccelerationStructureNV)), C.uint64_t(commandBuffer), C.uint64_t(dst), C.uint64_t(src), C.uint32_t(mode))
+}
+
 // CmdCopyAccelerationStructureKHR wraps vkCmdCopyAccelerationStructureKHR.
 func (c *Commands) CmdCopyAccelerationStructureKHR(commandBuffer CommandBuffer, pInfo *CopyAccelerationStructureInfoKHR) {
 	if c.cmdCopyAccelerationStructureKHR == nil {
@@ -3520,12 +4230,97 @@ func (c *Commands) CopyMemoryToAccelerationStructureKHR(device Device, deferredO
 	return Result(r)
 }
 
+// CmdWriteAccelerationStructuresPropertiesKHR wraps vkCmdWriteAccelerationStructuresPropertiesKHR.
+func (c *Commands) CmdWriteAccelerationStructuresPropertiesKHR(commandBuffer CommandBuffer, accelerationStructureCount uint32, pAccelerationStructures *AccelerationStructureKHR, queryType QueryType, queryPool QueryPool, firstQuery uint32) {
+	if c.cmdWriteAccelerationStructuresPropertiesKHR == nil {
+		return
+	}
+	C.gvk_v_hipihi(C.uintptr_t(uintptr(c.cmdWriteAccelerationStructuresPropertiesKHR)), C.uint64_t(commandBuffer), C.uint32_t(accelerationStructureCount), (*C.uint8_t)(unsafe.Pointer(pAccelerationStructures)), C.uint32_t(queryType), C.uint64_t(queryPool), C.uint32_t(firstQuery))
+}
+
+// CmdWriteAccelerationStructuresPropertiesNV wraps vkCmdWriteAccelerationStructuresPropertiesNV.
+func (c *Commands) CmdWriteAccelerationStructuresPropertiesNV(commandBuffer CommandBuffer, accelerationStructureCount uint32, pAccelerationStructures *AccelerationStructureNV, queryType QueryType, queryPool QueryPool, firstQuery uint32) {
+	if c.cmdWriteAccelerationStructuresPropertiesNV == nil {
+		return
+	}
+	C.gvk_v_hipihi(C.uintptr_t(uintptr(c.cmdWriteAccelerationStructuresPropertiesNV)), C.uint64_t(commandBuffer), C.uint32_t(accelerationStructureCount), (*C.uint8_t)(unsafe.Pointer(pAccelerationStructures)), C.uint32_t(queryType), C.uint64_t(queryPool), C.uint32_t(firstQuery))
+}
+
+// CmdBuildAccelerationStructureNV wraps vkCmdBuildAccelerationStructureNV.
+func (c *Commands) CmdBuildAccelerationStructureNV(commandBuffer CommandBuffer, pInfo *AccelerationStructureInfoNV, instanceData Buffer, instanceOffset DeviceSize, update Bool32, dst AccelerationStructureNV, src AccelerationStructureNV, scratch Buffer, scratchOffset DeviceSize) {
+	if c.cmdBuildAccelerationStructureNV == nil {
+		return
+	}
+	C.gvk_v_hphqihhhq(C.uintptr_t(uintptr(c.cmdBuildAccelerationStructureNV)), C.uint64_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pInfo)), C.uint64_t(instanceData), C.uint64_t(instanceOffset), C.uint32_t(update), C.uint64_t(dst), C.uint64_t(src), C.uint64_t(scratch), C.uint64_t(scratchOffset))
+}
+
+// WriteAccelerationStructuresPropertiesKHR wraps vkWriteAccelerationStructuresPropertiesKHR.
+func (c *Commands) WriteAccelerationStructuresPropertiesKHR(device Device, accelerationStructureCount uint32, pAccelerationStructures *AccelerationStructureKHR, queryType QueryType, dataSize uintptr, pData *uintptr, stride uintptr) Result {
+	if c.writeAccelerationStructuresPropertiesKHR == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hipihph(C.uintptr_t(uintptr(c.writeAccelerationStructuresPropertiesKHR)), C.uint64_t(device), C.uint32_t(accelerationStructureCount), (*C.uint8_t)(unsafe.Pointer(pAccelerationStructures)), C.uint32_t(queryType), C.uint64_t(dataSize), (*C.uint8_t)(unsafe.Pointer(pData)), C.uint64_t(stride))
+	return Result(r)
+}
+
+// CmdTraceRaysKHR wraps vkCmdTraceRaysKHR.
+func (c *Commands) CmdTraceRaysKHR(commandBuffer CommandBuffer, pRaygenShaderBindingTable *StridedDeviceAddressRegionKHR, pMissShaderBindingTable *StridedDeviceAddressRegionKHR, pHitShaderBindingTable *StridedDeviceAddressRegionKHR, pCallableShaderBindingTable *StridedDeviceAddressRegionKHR, width uint32, height uint32, depth uint32) {
+	if c.cmdTraceRaysKHR == nil {
+		return
+	}
+	C.gvk_v_hppppiii(C.uintptr_t(uintptr(c.cmdTraceRaysKHR)), C.uint64_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pRaygenShaderBindingTable)), (*C.uint8_t)(unsafe.Pointer(pMissShaderBindingTable)), (*C.uint8_t)(unsafe.Pointer(pHitShaderBindingTable)), (*C.uint8_t)(unsafe.Pointer(pCallableShaderBindingTable)), C.uint32_t(width), C.uint32_t(height), C.uint32_t(depth))
+}
+
+// CmdTraceRaysNV wraps vkCmdTraceRaysNV.
+func (c *Commands) CmdTraceRaysNV(commandBuffer CommandBuffer, raygenShaderBindingTableBuffer Buffer, raygenShaderBindingOffset DeviceSize, missShaderBindingTableBuffer Buffer, missShaderBindingOffset DeviceSize, missShaderBindingStride DeviceSize, hitShaderBindingTableBuffer Buffer, hitShaderBindingOffset DeviceSize, hitShaderBindingStride DeviceSize, callableShaderBindingTableBuffer Buffer, callableShaderBindingOffset DeviceSize, callableShaderBindingStride DeviceSize, width uint32, height uint32, depth uint32) {
+	if c.cmdTraceRaysNV == nil {
+		return
+	}
+	C.gvk_v_hhqhqqhqqhqqiii(C.uintptr_t(uintptr(c.cmdTraceRaysNV)), C.uint64_t(commandBuffer), C.uint64_t(raygenShaderBindingTableBuffer), C.uint64_t(raygenShaderBindingOffset), C.uint64_t(missShaderBindingTableBuffer), C.uint64_t(missShaderBindingOffset), C.uint64_t(missShaderBindingStride), C.uint64_t(hitShaderBindingTableBuffer), C.uint64_t(hitShaderBindingOffset), C.uint64_t(hitShaderBindingStride), C.uint64_t(callableShaderBindingTableBuffer), C.uint64_t(callableShaderBindingOffset), C.uint64_t(callableShaderBindingStride), C.uint32_t(width), C.uint32_t(height), C.uint32_t(depth))
+}
+
+// GetRayTracingShaderGroupHandlesKHR wraps vkGetRayTracingShaderGroupHandlesKHR.
+func (c *Commands) GetRayTracingShaderGroupHandlesKHR(device Device, pipeline Pipeline, firstGroup uint32, groupCount uint32, dataSize uintptr, pData *uintptr) Result {
+	if c.getRayTracingShaderGroupHandlesKHR == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hhiihp(C.uintptr_t(uintptr(c.getRayTracingShaderGroupHandlesKHR)), C.uint64_t(device), C.uint64_t(pipeline), C.uint32_t(firstGroup), C.uint32_t(groupCount), C.uint64_t(dataSize), (*C.uint8_t)(unsafe.Pointer(pData)))
+	return Result(r)
+}
+
+// GetRayTracingCaptureReplayShaderGroupHandlesKHR wraps vkGetRayTracingCaptureReplayShaderGroupHandlesKHR.
+func (c *Commands) GetRayTracingCaptureReplayShaderGroupHandlesKHR(device Device, pipeline Pipeline, firstGroup uint32, groupCount uint32, dataSize uintptr, pData *uintptr) Result {
+	if c.getRayTracingCaptureReplayShaderGroupHandlesKHR == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hhiihp(C.uintptr_t(uintptr(c.getRayTracingCaptureReplayShaderGroupHandlesKHR)), C.uint64_t(device), C.uint64_t(pipeline), C.uint32_t(firstGroup), C.uint32_t(groupCount), C.uint64_t(dataSize), (*C.uint8_t)(unsafe.Pointer(pData)))
+	return Result(r)
+}
+
+// GetAccelerationStructureHandleNV wraps vkGetAccelerationStructureHandleNV.
+func (c *Commands) GetAccelerationStructureHandleNV(device Device, accelerationStructure AccelerationStructureNV, dataSize uintptr, pData *uintptr) Result {
+	if c.getAccelerationStructureHandleNV == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hhhp(C.uintptr_t(uintptr(c.getAccelerationStructureHandleNV)), C.uint64_t(device), C.uint64_t(accelerationStructure), C.uint64_t(dataSize), (*C.uint8_t)(unsafe.Pointer(pData)))
+	return Result(r)
+}
+
 // CreateRayTracingPipelinesNV wraps vkCreateRayTracingPipelinesNV.
 func (c *Commands) CreateRayTracingPipelinesNV(device Device, pipelineCache PipelineCache, createInfoCount uint32, pCreateInfos *RayTracingPipelineCreateInfoNV, pAllocator *AllocationCallbacks, pPipelines *Pipeline) Result {
 	if c.createRayTracingPipelinesNV == nil {
 		return ErrorInitializationFailed
 	}
 	r := C.gvk_r_hhippp(C.uintptr_t(uintptr(c.createRayTracingPipelinesNV)), C.uint64_t(device), C.uint64_t(pipelineCache), C.uint32_t(createInfoCount), (*C.uint8_t)(unsafe.Pointer(pCreateInfos)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pPipelines)))
+	return Result(r)
+}
+
+// CreateRayTracingPipelinesKHR wraps vkCreateRayTracingPipelinesKHR.
+func (c *Commands) CreateRayTracingPipelinesKHR(device Device, deferredOperation DeferredOperationKHR, pipelineCache PipelineCache, createInfoCount uint32, pCreateInfos *RayTracingPipelineCreateInfoKHR, pAllocator *AllocationCallbacks, pPipelines *Pipeline) Result {
+	if c.createRayTracingPipelinesKHR == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hhhippp(C.uintptr_t(uintptr(c.createRayTracingPipelinesKHR)), C.uint64_t(device), C.uint64_t(deferredOperation), C.uint64_t(pipelineCache), C.uint32_t(createInfoCount), (*C.uint8_t)(unsafe.Pointer(pCreateInfos)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pPipelines)))
 	return Result(r)
 }
 
@@ -3536,6 +4331,22 @@ func (c *Commands) GetPhysicalDeviceCooperativeMatrixPropertiesNV(physicalDevice
 	}
 	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getPhysicalDeviceCooperativeMatrixPropertiesNV)), C.uint64_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pPropertyCount)), (*C.uint8_t)(unsafe.Pointer(pProperties)))
 	return Result(r)
+}
+
+// CmdTraceRaysIndirectKHR wraps vkCmdTraceRaysIndirectKHR.
+func (c *Commands) CmdTraceRaysIndirectKHR(commandBuffer CommandBuffer, pRaygenShaderBindingTable *StridedDeviceAddressRegionKHR, pMissShaderBindingTable *StridedDeviceAddressRegionKHR, pHitShaderBindingTable *StridedDeviceAddressRegionKHR, pCallableShaderBindingTable *StridedDeviceAddressRegionKHR, indirectDeviceAddress DeviceAddress) {
+	if c.cmdTraceRaysIndirectKHR == nil {
+		return
+	}
+	C.gvk_v_hppppq(C.uintptr_t(uintptr(c.cmdTraceRaysIndirectKHR)), C.uint64_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pRaygenShaderBindingTable)), (*C.uint8_t)(unsafe.Pointer(pMissShaderBindingTable)), (*C.uint8_t)(unsafe.Pointer(pHitShaderBindingTable)), (*C.uint8_t)(unsafe.Pointer(pCallableShaderBindingTable)), C.uint64_t(indirectDeviceAddress))
+}
+
+// CmdTraceRaysIndirect2KHR wraps vkCmdTraceRaysIndirect2KHR.
+func (c *Commands) CmdTraceRaysIndirect2KHR(commandBuffer CommandBuffer, indirectDeviceAddress DeviceAddress) {
+	if c.cmdTraceRaysIndirect2KHR == nil {
+		return
+	}
+	C.gvk_v_hq(C.uintptr_t(uintptr(c.cmdTraceRaysIndirect2KHR)), C.uint64_t(commandBuffer), C.uint64_t(indirectDeviceAddress))
 }
 
 // GetClusterAccelerationStructureBuildSizesNV wraps vkGetClusterAccelerationStructureBuildSizesNV.
@@ -3562,12 +4373,39 @@ func (c *Commands) GetDeviceAccelerationStructureCompatibilityKHR(device Device,
 	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getDeviceAccelerationStructureCompatibilityKHR)), C.uint64_t(device), (*C.uint8_t)(unsafe.Pointer(pVersionInfo)), (*C.uint8_t)(unsafe.Pointer(pCompatibility)))
 }
 
+// GetRayTracingShaderGroupStackSizeKHR wraps vkGetRayTracingShaderGroupStackSizeKHR.
+func (c *Commands) GetRayTracingShaderGroupStackSizeKHR(device Device, pipeline Pipeline, group uint32, groupShader ShaderGroupShaderKHR) DeviceSize {
+	if c.getRayTracingShaderGroupStackSizeKHR == nil {
+		return 0
+	}
+	r := C.gvk_q_hhii(C.uintptr_t(uintptr(c.getRayTracingShaderGroupStackSizeKHR)), C.uint64_t(device), C.uint64_t(pipeline), C.uint32_t(group), C.uint32_t(groupShader))
+	return DeviceSize(r)
+}
+
 // CmdSetRayTracingPipelineStackSizeKHR wraps vkCmdSetRayTracingPipelineStackSizeKHR.
 func (c *Commands) CmdSetRayTracingPipelineStackSizeKHR(commandBuffer CommandBuffer, pipelineStackSize uint32) {
 	if c.cmdSetRayTracingPipelineStackSizeKHR == nil {
 		return
 	}
 	C.gvk_v_hi(C.uintptr_t(uintptr(c.cmdSetRayTracingPipelineStackSizeKHR)), C.uint64_t(commandBuffer), C.uint32_t(pipelineStackSize))
+}
+
+// GetImageViewHandleNVX wraps vkGetImageViewHandleNVX.
+func (c *Commands) GetImageViewHandleNVX(device Device, pInfo *ImageViewHandleInfoNVX) uint32 {
+	if c.getImageViewHandleNVX == nil {
+		return 0
+	}
+	r := C.gvk_i_hp(C.uintptr_t(uintptr(c.getImageViewHandleNVX)), C.uint64_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	return uint32(r)
+}
+
+// GetImageViewHandle64NVX wraps vkGetImageViewHandle64NVX.
+func (c *Commands) GetImageViewHandle64NVX(device Device, pInfo *ImageViewHandleInfoNVX) uint64 {
+	if c.getImageViewHandle64NVX == nil {
+		return 0
+	}
+	r := C.gvk_q_hp(C.uintptr_t(uintptr(c.getImageViewHandle64NVX)), C.uint64_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	return uint64(r)
 }
 
 // GetImageViewAddressNVX wraps vkGetImageViewAddressNVX.
@@ -3656,6 +4494,24 @@ func (c *Commands) GetImageDrmFormatModifierPropertiesEXT(device Device, image I
 	}
 	r := C.gvk_r_hhp(C.uintptr_t(uintptr(c.getImageDrmFormatModifierPropertiesEXT)), C.uint64_t(device), C.uint64_t(image), (*C.uint8_t)(unsafe.Pointer(pProperties)))
 	return Result(r)
+}
+
+// GetBufferOpaqueCaptureAddress wraps vkGetBufferOpaqueCaptureAddress.
+func (c *Commands) GetBufferOpaqueCaptureAddress(device Device, pInfo *BufferDeviceAddressInfo) uint64 {
+	if c.getBufferOpaqueCaptureAddress == nil {
+		return 0
+	}
+	r := C.gvk_q_hp(C.uintptr_t(uintptr(c.getBufferOpaqueCaptureAddress)), C.uint64_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	return uint64(r)
+}
+
+// GetBufferDeviceAddress wraps vkGetBufferDeviceAddress.
+func (c *Commands) GetBufferDeviceAddress(device Device, pInfo *BufferDeviceAddressInfo) DeviceAddress {
+	if c.getBufferDeviceAddress == nil {
+		return 0
+	}
+	r := C.gvk_q_hp(C.uintptr_t(uintptr(c.getBufferDeviceAddress)), C.uint64_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	return DeviceAddress(r)
 }
 
 // CreateHeadlessSurfaceEXT wraps vkCreateHeadlessSurfaceEXT.
@@ -3756,6 +4612,15 @@ func (c *Commands) GetPerformanceParameterINTEL(device Device, parameter Perform
 	return Result(r)
 }
 
+// GetDeviceMemoryOpaqueCaptureAddress wraps vkGetDeviceMemoryOpaqueCaptureAddress.
+func (c *Commands) GetDeviceMemoryOpaqueCaptureAddress(device Device, pInfo *DeviceMemoryOpaqueCaptureAddressInfo) uint64 {
+	if c.getDeviceMemoryOpaqueCaptureAddress == nil {
+		return 0
+	}
+	r := C.gvk_q_hp(C.uintptr_t(uintptr(c.getDeviceMemoryOpaqueCaptureAddress)), C.uint64_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	return uint64(r)
+}
+
 // GetPipelineExecutablePropertiesKHR wraps vkGetPipelineExecutablePropertiesKHR.
 func (c *Commands) GetPipelineExecutablePropertiesKHR(device Device, pPipelineInfo *PipelineInfoKHR, pExecutableCount *uint32, pProperties *PipelineExecutablePropertiesKHR) Result {
 	if c.getPipelineExecutablePropertiesKHR == nil {
@@ -3783,6 +4648,23 @@ func (c *Commands) GetPipelineExecutableInternalRepresentationsKHR(device Device
 	return Result(r)
 }
 
+// CmdSetLineStipple wraps vkCmdSetLineStipple.
+func (c *Commands) CmdSetLineStipple(commandBuffer CommandBuffer, lineStippleFactor uint32, lineStipplePattern uint16) {
+	if c.cmdSetLineStipple == nil {
+		return
+	}
+	C.gvk_v_his(C.uintptr_t(uintptr(c.cmdSetLineStipple)), C.uint64_t(commandBuffer), C.uint32_t(lineStippleFactor), C.uint16_t(lineStipplePattern))
+}
+
+// GetFaultData wraps vkGetFaultData.
+func (c *Commands) GetFaultData(device Device, faultQueryBehavior FaultQueryBehavior, pUnrecordedFaults *Bool32, pFaultCount *uint32, pFaults *FaultData) Result {
+	if c.getFaultData == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hippp(C.uintptr_t(uintptr(c.getFaultData)), C.uint64_t(device), C.uint32_t(faultQueryBehavior), (*C.uint8_t)(unsafe.Pointer(pUnrecordedFaults)), (*C.uint8_t)(unsafe.Pointer(pFaultCount)), (*C.uint8_t)(unsafe.Pointer(pFaults)))
+	return Result(r)
+}
+
 // GetPhysicalDeviceToolProperties wraps vkGetPhysicalDeviceToolProperties.
 func (c *Commands) GetPhysicalDeviceToolProperties(physicalDevice PhysicalDevice, pToolCount *uint32, pToolProperties *PhysicalDeviceToolProperties) Result {
 	if c.getPhysicalDeviceToolProperties == nil {
@@ -3801,6 +4683,40 @@ func (c *Commands) CreateAccelerationStructureKHR(device Device, pCreateInfo *Ac
 	return Result(r)
 }
 
+// CmdBuildAccelerationStructuresKHR wraps vkCmdBuildAccelerationStructuresKHR.
+func (c *Commands) CmdBuildAccelerationStructuresKHR(commandBuffer CommandBuffer, infoCount uint32, pInfos *AccelerationStructureBuildGeometryInfoKHR, ppBuildRangeInfos **AccelerationStructureBuildRangeInfoKHR) {
+	if c.cmdBuildAccelerationStructuresKHR == nil {
+		return
+	}
+	C.gvk_v_hipp(C.uintptr_t(uintptr(c.cmdBuildAccelerationStructuresKHR)), C.uint64_t(commandBuffer), C.uint32_t(infoCount), (*C.uint8_t)(unsafe.Pointer(pInfos)), (*C.uint8_t)(unsafe.Pointer(ppBuildRangeInfos)))
+}
+
+// CmdBuildAccelerationStructuresIndirectKHR wraps vkCmdBuildAccelerationStructuresIndirectKHR.
+func (c *Commands) CmdBuildAccelerationStructuresIndirectKHR(commandBuffer CommandBuffer, infoCount uint32, pInfos *AccelerationStructureBuildGeometryInfoKHR, pIndirectDeviceAddresses *DeviceAddress, pIndirectStrides *uint32, ppMaxPrimitiveCounts **uint32) {
+	if c.cmdBuildAccelerationStructuresIndirectKHR == nil {
+		return
+	}
+	C.gvk_v_hipppp(C.uintptr_t(uintptr(c.cmdBuildAccelerationStructuresIndirectKHR)), C.uint64_t(commandBuffer), C.uint32_t(infoCount), (*C.uint8_t)(unsafe.Pointer(pInfos)), (*C.uint8_t)(unsafe.Pointer(pIndirectDeviceAddresses)), (*C.uint8_t)(unsafe.Pointer(pIndirectStrides)), (*C.uint8_t)(unsafe.Pointer(ppMaxPrimitiveCounts)))
+}
+
+// BuildAccelerationStructuresKHR wraps vkBuildAccelerationStructuresKHR.
+func (c *Commands) BuildAccelerationStructuresKHR(device Device, deferredOperation DeferredOperationKHR, infoCount uint32, pInfos *AccelerationStructureBuildGeometryInfoKHR, ppBuildRangeInfos **AccelerationStructureBuildRangeInfoKHR) Result {
+	if c.buildAccelerationStructuresKHR == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hhipp(C.uintptr_t(uintptr(c.buildAccelerationStructuresKHR)), C.uint64_t(device), C.uint64_t(deferredOperation), C.uint32_t(infoCount), (*C.uint8_t)(unsafe.Pointer(pInfos)), (*C.uint8_t)(unsafe.Pointer(ppBuildRangeInfos)))
+	return Result(r)
+}
+
+// GetAccelerationStructureDeviceAddressKHR wraps vkGetAccelerationStructureDeviceAddressKHR.
+func (c *Commands) GetAccelerationStructureDeviceAddressKHR(device Device, pInfo *AccelerationStructureDeviceAddressInfoKHR) DeviceAddress {
+	if c.getAccelerationStructureDeviceAddressKHR == nil {
+		return 0
+	}
+	r := C.gvk_q_hp(C.uintptr_t(uintptr(c.getAccelerationStructureDeviceAddressKHR)), C.uint64_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	return DeviceAddress(r)
+}
+
 // CreateDeferredOperationKHR wraps vkCreateDeferredOperationKHR.
 func (c *Commands) CreateDeferredOperationKHR(device Device, pAllocator *AllocationCallbacks, pDeferredOperation *DeferredOperationKHR) Result {
 	if c.createDeferredOperationKHR == nil {
@@ -3816,6 +4732,15 @@ func (c *Commands) DestroyDeferredOperationKHR(device Device, operation Deferred
 		return
 	}
 	C.gvk_v_hhp(C.uintptr_t(uintptr(c.destroyDeferredOperationKHR)), C.uint64_t(device), C.uint64_t(operation), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+}
+
+// GetDeferredOperationMaxConcurrencyKHR wraps vkGetDeferredOperationMaxConcurrencyKHR.
+func (c *Commands) GetDeferredOperationMaxConcurrencyKHR(device Device, operation DeferredOperationKHR) uint32 {
+	if c.getDeferredOperationMaxConcurrencyKHR == nil {
+		return 0
+	}
+	r := C.gvk_i_hh(C.uintptr_t(uintptr(c.getDeferredOperationMaxConcurrencyKHR)), C.uint64_t(device), C.uint64_t(operation))
+	return uint32(r)
 }
 
 // GetDeferredOperationResultKHR wraps vkGetDeferredOperationResultKHR.
@@ -3842,6 +4767,15 @@ func (c *Commands) GetPipelineIndirectMemoryRequirementsNV(device Device, pCreat
 		return
 	}
 	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getPipelineIndirectMemoryRequirementsNV)), C.uint64_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pMemoryRequirements)))
+}
+
+// GetPipelineIndirectDeviceAddressNV wraps vkGetPipelineIndirectDeviceAddressNV.
+func (c *Commands) GetPipelineIndirectDeviceAddressNV(device Device, pInfo *PipelineIndirectDeviceAddressInfoNV) DeviceAddress {
+	if c.getPipelineIndirectDeviceAddressNV == nil {
+		return 0
+	}
+	r := C.gvk_q_hp(C.uintptr_t(uintptr(c.getPipelineIndirectDeviceAddressNV)), C.uint64_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	return DeviceAddress(r)
 }
 
 // AntiLagUpdateAMD wraps vkAntiLagUpdateAMD.
@@ -3900,6 +4834,14 @@ func (c *Commands) CmdBindIndexBuffer2(commandBuffer CommandBuffer, buffer Buffe
 	C.gvk_v_hhqqi(C.uintptr_t(uintptr(c.cmdBindIndexBuffer2)), C.uint64_t(commandBuffer), C.uint64_t(buffer), C.uint64_t(offset), C.uint64_t(size), C.uint32_t(indexType))
 }
 
+// CmdBindVertexBuffers2 wraps vkCmdBindVertexBuffers2.
+func (c *Commands) CmdBindVertexBuffers2(commandBuffer CommandBuffer, firstBinding uint32, bindingCount uint32, pBuffers *Buffer, pOffsets *DeviceSize, pSizes *DeviceSize, pStrides *DeviceSize) {
+	if c.cmdBindVertexBuffers2 == nil {
+		return
+	}
+	C.gvk_v_hiipppp(C.uintptr_t(uintptr(c.cmdBindVertexBuffers2)), C.uint64_t(commandBuffer), C.uint32_t(firstBinding), C.uint32_t(bindingCount), (*C.uint8_t)(unsafe.Pointer(pBuffers)), (*C.uint8_t)(unsafe.Pointer(pOffsets)), (*C.uint8_t)(unsafe.Pointer(pSizes)), (*C.uint8_t)(unsafe.Pointer(pStrides)))
+}
+
 // CmdSetDepthTestEnable wraps vkCmdSetDepthTestEnable.
 func (c *Commands) CmdSetDepthTestEnable(commandBuffer CommandBuffer, depthTestEnable Bool32) {
 	if c.cmdSetDepthTestEnable == nil {
@@ -3938,6 +4880,14 @@ func (c *Commands) CmdSetStencilTestEnable(commandBuffer CommandBuffer, stencilT
 		return
 	}
 	C.gvk_v_hi(C.uintptr_t(uintptr(c.cmdSetStencilTestEnable)), C.uint64_t(commandBuffer), C.uint32_t(stencilTestEnable))
+}
+
+// CmdSetStencilOp wraps vkCmdSetStencilOp.
+func (c *Commands) CmdSetStencilOp(commandBuffer CommandBuffer, faceMask StencilFaceFlags, failOp StencilOp, passOp StencilOp, depthFailOp StencilOp, compareOp CompareOp) {
+	if c.cmdSetStencilOp == nil {
+		return
+	}
+	C.gvk_v_hiiiii(C.uintptr_t(uintptr(c.cmdSetStencilOp)), C.uint64_t(commandBuffer), C.uint32_t(faceMask), C.uint32_t(failOp), C.uint32_t(passOp), C.uint32_t(depthFailOp), C.uint32_t(compareOp))
 }
 
 // CmdSetPatchControlPointsEXT wraps vkCmdSetPatchControlPointsEXT.
@@ -4245,6 +5195,23 @@ func (c *Commands) DestroyPrivateDataSlot(device Device, privateDataSlot Private
 	C.gvk_v_hhp(C.uintptr_t(uintptr(c.destroyPrivateDataSlot)), C.uint64_t(device), C.uint64_t(privateDataSlot), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
 }
 
+// SetPrivateData wraps vkSetPrivateData.
+func (c *Commands) SetPrivateData(device Device, objectType ObjectType, objectHandle uint64, privateDataSlot PrivateDataSlot, data uint64) Result {
+	if c.setPrivateData == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hiqhq(C.uintptr_t(uintptr(c.setPrivateData)), C.uint64_t(device), C.uint32_t(objectType), C.uint64_t(objectHandle), C.uint64_t(privateDataSlot), C.uint64_t(data))
+	return Result(r)
+}
+
+// GetPrivateData wraps vkGetPrivateData.
+func (c *Commands) GetPrivateData(device Device, objectType ObjectType, objectHandle uint64, privateDataSlot PrivateDataSlot, pData *uint64) {
+	if c.getPrivateData == nil {
+		return
+	}
+	C.gvk_v_hiqhp(C.uintptr_t(uintptr(c.getPrivateData)), C.uint64_t(device), C.uint32_t(objectType), C.uint64_t(objectHandle), C.uint64_t(privateDataSlot), (*C.uint8_t)(unsafe.Pointer(pData)))
+}
+
 // CmdCopyBuffer2 wraps vkCmdCopyBuffer2.
 func (c *Commands) CmdCopyBuffer2(commandBuffer CommandBuffer, pCopyBufferInfo *CopyBufferInfo2) {
 	if c.cmdCopyBuffer2 == nil {
@@ -4335,6 +5302,14 @@ func (c *Commands) CmdSetFragmentShadingRateEnumNV(commandBuffer CommandBuffer, 
 	C.gvk_v_hip(C.uintptr_t(uintptr(c.cmdSetFragmentShadingRateEnumNV)), C.uint64_t(commandBuffer), C.uint32_t(shadingRate), (*C.uint8_t)(unsafe.Pointer(&combinerOps)))
 }
 
+// GetAccelerationStructureBuildSizesKHR wraps vkGetAccelerationStructureBuildSizesKHR.
+func (c *Commands) GetAccelerationStructureBuildSizesKHR(device Device, buildType AccelerationStructureBuildTypeKHR, pBuildInfo *AccelerationStructureBuildGeometryInfoKHR, pMaxPrimitiveCounts *uint32, pSizeInfo *AccelerationStructureBuildSizesInfoKHR) {
+	if c.getAccelerationStructureBuildSizesKHR == nil {
+		return
+	}
+	C.gvk_v_hippp(C.uintptr_t(uintptr(c.getAccelerationStructureBuildSizesKHR)), C.uint64_t(device), C.uint32_t(buildType), (*C.uint8_t)(unsafe.Pointer(pBuildInfo)), (*C.uint8_t)(unsafe.Pointer(pMaxPrimitiveCounts)), (*C.uint8_t)(unsafe.Pointer(pSizeInfo)))
+}
+
 // CmdSetVertexInputEXT wraps vkCmdSetVertexInputEXT.
 func (c *Commands) CmdSetVertexInputEXT(commandBuffer CommandBuffer, vertexBindingDescriptionCount uint32, pVertexBindingDescriptions *VertexInputBindingDescription2EXT, vertexAttributeDescriptionCount uint32, pVertexAttributeDescriptions *VertexInputAttributeDescription2EXT) {
 	if c.cmdSetVertexInputEXT == nil {
@@ -4367,6 +5342,14 @@ func (c *Commands) CmdResetEvent2(commandBuffer CommandBuffer, event Event, stag
 	C.gvk_v_hhq(C.uintptr_t(uintptr(c.cmdResetEvent2)), C.uint64_t(commandBuffer), C.uint64_t(event), C.uint64_t(stageMask))
 }
 
+// CmdWaitEvents2 wraps vkCmdWaitEvents2.
+func (c *Commands) CmdWaitEvents2(commandBuffer CommandBuffer, eventCount uint32, pEvents *Event, pDependencyInfos *DependencyInfo) {
+	if c.cmdWaitEvents2 == nil {
+		return
+	}
+	C.gvk_v_hipp(C.uintptr_t(uintptr(c.cmdWaitEvents2)), C.uint64_t(commandBuffer), C.uint32_t(eventCount), (*C.uint8_t)(unsafe.Pointer(pEvents)), (*C.uint8_t)(unsafe.Pointer(pDependencyInfos)))
+}
+
 // CmdPipelineBarrier2 wraps vkCmdPipelineBarrier2.
 func (c *Commands) CmdPipelineBarrier2(commandBuffer CommandBuffer, pDependencyInfo *DependencyInfo) {
 	if c.cmdPipelineBarrier2 == nil {
@@ -4382,6 +5365,22 @@ func (c *Commands) QueueSubmit2(queue Queue, submitCount uint32, pSubmits *Submi
 	}
 	r := C.gvk_r_hiph(C.uintptr_t(uintptr(c.queueSubmit2)), C.uint64_t(queue), C.uint32_t(submitCount), (*C.uint8_t)(unsafe.Pointer(pSubmits)), C.uint64_t(fence))
 	return Result(r)
+}
+
+// CmdWriteTimestamp2 wraps vkCmdWriteTimestamp2.
+func (c *Commands) CmdWriteTimestamp2(commandBuffer CommandBuffer, stage PipelineStageFlags2, queryPool QueryPool, query uint32) {
+	if c.cmdWriteTimestamp2 == nil {
+		return
+	}
+	C.gvk_v_hqhi(C.uintptr_t(uintptr(c.cmdWriteTimestamp2)), C.uint64_t(commandBuffer), C.uint64_t(stage), C.uint64_t(queryPool), C.uint32_t(query))
+}
+
+// CmdWriteBufferMarker2AMD wraps vkCmdWriteBufferMarker2AMD.
+func (c *Commands) CmdWriteBufferMarker2AMD(commandBuffer CommandBuffer, stage PipelineStageFlags2, dstBuffer Buffer, dstOffset DeviceSize, marker uint32) {
+	if c.cmdWriteBufferMarker2AMD == nil {
+		return
+	}
+	C.gvk_v_hqhqi(C.uintptr_t(uintptr(c.cmdWriteBufferMarker2AMD)), C.uint64_t(commandBuffer), C.uint64_t(stage), C.uint64_t(dstBuffer), C.uint64_t(dstOffset), C.uint32_t(marker))
 }
 
 // GetQueueCheckpointData2NV wraps vkGetQueueCheckpointData2NV.
@@ -4426,6 +5425,14 @@ func (c *Commands) TransitionImageLayout(device Device, transitionCount uint32, 
 	}
 	r := C.gvk_r_hip(C.uintptr_t(uintptr(c.transitionImageLayout)), C.uint64_t(device), C.uint32_t(transitionCount), (*C.uint8_t)(unsafe.Pointer(pTransitions)))
 	return Result(r)
+}
+
+// GetCommandPoolMemoryConsumption wraps vkGetCommandPoolMemoryConsumption.
+func (c *Commands) GetCommandPoolMemoryConsumption(device Device, commandPool CommandPool, commandBuffer CommandBuffer, pConsumption *CommandPoolMemoryConsumption) {
+	if c.getCommandPoolMemoryConsumption == nil {
+		return
+	}
+	C.gvk_v_hhhp(C.uintptr_t(uintptr(c.getCommandPoolMemoryConsumption)), C.uint64_t(device), C.uint64_t(commandPool), C.uint64_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pConsumption)))
 }
 
 // GetPhysicalDeviceVideoCapabilitiesKHR wraps vkGetPhysicalDeviceVideoCapabilitiesKHR.
@@ -4573,6 +5580,14 @@ func (c *Commands) CmdDecompressMemoryNV(commandBuffer CommandBuffer, decompress
 	C.gvk_v_hip(C.uintptr_t(uintptr(c.cmdDecompressMemoryNV)), C.uint64_t(commandBuffer), C.uint32_t(decompressRegionCount), (*C.uint8_t)(unsafe.Pointer(pDecompressMemoryRegions)))
 }
 
+// CmdDecompressMemoryIndirectCountNV wraps vkCmdDecompressMemoryIndirectCountNV.
+func (c *Commands) CmdDecompressMemoryIndirectCountNV(commandBuffer CommandBuffer, indirectCommandsAddress DeviceAddress, indirectCommandsCountAddress DeviceAddress, stride uint32) {
+	if c.cmdDecompressMemoryIndirectCountNV == nil {
+		return
+	}
+	C.gvk_v_hqqi(C.uintptr_t(uintptr(c.cmdDecompressMemoryIndirectCountNV)), C.uint64_t(commandBuffer), C.uint64_t(indirectCommandsAddress), C.uint64_t(indirectCommandsCountAddress), C.uint32_t(stride))
+}
+
 // GetPartitionedAccelerationStructuresBuildSizesNV wraps vkGetPartitionedAccelerationStructuresBuildSizesNV.
 func (c *Commands) GetPartitionedAccelerationStructuresBuildSizesNV(device Device, pInfo *PartitionedAccelerationStructureInstancesInputNV, pSizeInfo *AccelerationStructureBuildSizesInfoKHR) {
 	if c.getPartitionedAccelerationStructuresBuildSizesNV == nil {
@@ -4595,6 +5610,14 @@ func (c *Commands) CmdDecompressMemoryEXT(commandBuffer CommandBuffer, pDecompre
 		return
 	}
 	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdDecompressMemoryEXT)), C.uint64_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pDecompressMemoryInfoEXT)))
+}
+
+// CmdDecompressMemoryIndirectCountEXT wraps vkCmdDecompressMemoryIndirectCountEXT.
+func (c *Commands) CmdDecompressMemoryIndirectCountEXT(commandBuffer CommandBuffer, decompressionMethod MemoryDecompressionMethodFlagsEXT, indirectCommandsAddress DeviceAddress, indirectCommandsCountAddress DeviceAddress, maxDecompressionCount uint32, stride uint32) {
+	if c.cmdDecompressMemoryIndirectCountEXT == nil {
+		return
+	}
+	C.gvk_v_hqqqii(C.uintptr_t(uintptr(c.cmdDecompressMemoryIndirectCountEXT)), C.uint64_t(commandBuffer), C.uint64_t(decompressionMethod), C.uint64_t(indirectCommandsAddress), C.uint64_t(indirectCommandsCountAddress), C.uint32_t(maxDecompressionCount), C.uint32_t(stride))
 }
 
 // CreateCuModuleNVX wraps vkCreateCuModuleNVX.
@@ -4655,12 +5678,36 @@ func (c *Commands) GetDescriptorSetLayoutBindingOffsetEXT(device Device, layout 
 	C.gvk_v_hhip(C.uintptr_t(uintptr(c.getDescriptorSetLayoutBindingOffsetEXT)), C.uint64_t(device), C.uint64_t(layout), C.uint32_t(binding), (*C.uint8_t)(unsafe.Pointer(pOffset)))
 }
 
+// GetDescriptorEXT wraps vkGetDescriptorEXT.
+func (c *Commands) GetDescriptorEXT(device Device, pDescriptorInfo *DescriptorGetInfoEXT, dataSize uintptr, pDescriptor *uintptr) {
+	if c.getDescriptorEXT == nil {
+		return
+	}
+	C.gvk_v_hphp(C.uintptr_t(uintptr(c.getDescriptorEXT)), C.uint64_t(device), (*C.uint8_t)(unsafe.Pointer(pDescriptorInfo)), C.uint64_t(dataSize), (*C.uint8_t)(unsafe.Pointer(pDescriptor)))
+}
+
 // CmdBindDescriptorBuffersEXT wraps vkCmdBindDescriptorBuffersEXT.
 func (c *Commands) CmdBindDescriptorBuffersEXT(commandBuffer CommandBuffer, bufferCount uint32, pBindingInfos *DescriptorBufferBindingInfoEXT) {
 	if c.cmdBindDescriptorBuffersEXT == nil {
 		return
 	}
 	C.gvk_v_hip(C.uintptr_t(uintptr(c.cmdBindDescriptorBuffersEXT)), C.uint64_t(commandBuffer), C.uint32_t(bufferCount), (*C.uint8_t)(unsafe.Pointer(pBindingInfos)))
+}
+
+// CmdSetDescriptorBufferOffsetsEXT wraps vkCmdSetDescriptorBufferOffsetsEXT.
+func (c *Commands) CmdSetDescriptorBufferOffsetsEXT(commandBuffer CommandBuffer, pipelineBindPoint PipelineBindPoint, layout PipelineLayout, firstSet uint32, setCount uint32, pBufferIndices *uint32, pOffsets *DeviceSize) {
+	if c.cmdSetDescriptorBufferOffsetsEXT == nil {
+		return
+	}
+	C.gvk_v_hihiipp(C.uintptr_t(uintptr(c.cmdSetDescriptorBufferOffsetsEXT)), C.uint64_t(commandBuffer), C.uint32_t(pipelineBindPoint), C.uint64_t(layout), C.uint32_t(firstSet), C.uint32_t(setCount), (*C.uint8_t)(unsafe.Pointer(pBufferIndices)), (*C.uint8_t)(unsafe.Pointer(pOffsets)))
+}
+
+// CmdBindDescriptorBufferEmbeddedSamplersEXT wraps vkCmdBindDescriptorBufferEmbeddedSamplersEXT.
+func (c *Commands) CmdBindDescriptorBufferEmbeddedSamplersEXT(commandBuffer CommandBuffer, pipelineBindPoint PipelineBindPoint, layout PipelineLayout, set uint32) {
+	if c.cmdBindDescriptorBufferEmbeddedSamplersEXT == nil {
+		return
+	}
+	C.gvk_v_hihi(C.uintptr_t(uintptr(c.cmdBindDescriptorBufferEmbeddedSamplersEXT)), C.uint64_t(commandBuffer), C.uint32_t(pipelineBindPoint), C.uint64_t(layout), C.uint32_t(set))
 }
 
 // GetBufferOpaqueCaptureDescriptorDataEXT wraps vkGetBufferOpaqueCaptureDescriptorDataEXT.
@@ -4708,12 +5755,47 @@ func (c *Commands) GetAccelerationStructureOpaqueCaptureDescriptorDataEXT(device
 	return Result(r)
 }
 
+// SetDeviceMemoryPriorityEXT wraps vkSetDeviceMemoryPriorityEXT.
+func (c *Commands) SetDeviceMemoryPriorityEXT(device Device, memory DeviceMemory, priority float32) {
+	if c.setDeviceMemoryPriorityEXT == nil {
+		return
+	}
+	C.gvk_v_hhf(C.uintptr_t(uintptr(c.setDeviceMemoryPriorityEXT)), C.uint64_t(device), C.uint64_t(memory), C.float(priority))
+}
+
+// AcquireDrmDisplayEXT wraps vkAcquireDrmDisplayEXT.
+func (c *Commands) AcquireDrmDisplayEXT(physicalDevice PhysicalDevice, drmFd int32, display DisplayKHR) Result {
+	if c.acquireDrmDisplayEXT == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hih(C.uintptr_t(uintptr(c.acquireDrmDisplayEXT)), C.uint64_t(physicalDevice), C.uint32_t(drmFd), C.uint64_t(display))
+	return Result(r)
+}
+
+// GetDrmDisplayEXT wraps vkGetDrmDisplayEXT.
+func (c *Commands) GetDrmDisplayEXT(physicalDevice PhysicalDevice, drmFd int32, connectorId uint32, display *DisplayKHR) Result {
+	if c.getDrmDisplayEXT == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hiip(C.uintptr_t(uintptr(c.getDrmDisplayEXT)), C.uint64_t(physicalDevice), C.uint32_t(drmFd), C.uint32_t(connectorId), (*C.uint8_t)(unsafe.Pointer(display)))
+	return Result(r)
+}
+
 // WaitForPresent2KHR wraps vkWaitForPresent2KHR.
 func (c *Commands) WaitForPresent2KHR(device Device, swapchain SwapchainKHR, pPresentWait2Info *PresentWait2InfoKHR) Result {
 	if c.waitForPresent2KHR == nil {
 		return ErrorInitializationFailed
 	}
 	r := C.gvk_r_hhp(C.uintptr_t(uintptr(c.waitForPresent2KHR)), C.uint64_t(device), C.uint64_t(swapchain), (*C.uint8_t)(unsafe.Pointer(pPresentWait2Info)))
+	return Result(r)
+}
+
+// WaitForPresentKHR wraps vkWaitForPresentKHR.
+func (c *Commands) WaitForPresentKHR(device Device, swapchain SwapchainKHR, presentId uint64, timeout uint64) Result {
+	if c.waitForPresentKHR == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hhqq(C.uintptr_t(uintptr(c.waitForPresentKHR)), C.uint64_t(device), C.uint64_t(swapchain), C.uint64_t(presentId), C.uint64_t(timeout))
 	return Result(r)
 }
 
@@ -4937,12 +6019,37 @@ func (c *Commands) CopyMemoryToMicromapEXT(device Device, deferredOperation Defe
 	return Result(r)
 }
 
+// CmdWriteMicromapsPropertiesEXT wraps vkCmdWriteMicromapsPropertiesEXT.
+func (c *Commands) CmdWriteMicromapsPropertiesEXT(commandBuffer CommandBuffer, micromapCount uint32, pMicromaps *MicromapEXT, queryType QueryType, queryPool QueryPool, firstQuery uint32) {
+	if c.cmdWriteMicromapsPropertiesEXT == nil {
+		return
+	}
+	C.gvk_v_hipihi(C.uintptr_t(uintptr(c.cmdWriteMicromapsPropertiesEXT)), C.uint64_t(commandBuffer), C.uint32_t(micromapCount), (*C.uint8_t)(unsafe.Pointer(pMicromaps)), C.uint32_t(queryType), C.uint64_t(queryPool), C.uint32_t(firstQuery))
+}
+
+// WriteMicromapsPropertiesEXT wraps vkWriteMicromapsPropertiesEXT.
+func (c *Commands) WriteMicromapsPropertiesEXT(device Device, micromapCount uint32, pMicromaps *MicromapEXT, queryType QueryType, dataSize uintptr, pData *uintptr, stride uintptr) Result {
+	if c.writeMicromapsPropertiesEXT == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hipihph(C.uintptr_t(uintptr(c.writeMicromapsPropertiesEXT)), C.uint64_t(device), C.uint32_t(micromapCount), (*C.uint8_t)(unsafe.Pointer(pMicromaps)), C.uint32_t(queryType), C.uint64_t(dataSize), (*C.uint8_t)(unsafe.Pointer(pData)), C.uint64_t(stride))
+	return Result(r)
+}
+
 // GetDeviceMicromapCompatibilityEXT wraps vkGetDeviceMicromapCompatibilityEXT.
 func (c *Commands) GetDeviceMicromapCompatibilityEXT(device Device, pVersionInfo *MicromapVersionInfoEXT, pCompatibility *AccelerationStructureCompatibilityKHR) {
 	if c.getDeviceMicromapCompatibilityEXT == nil {
 		return
 	}
 	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getDeviceMicromapCompatibilityEXT)), C.uint64_t(device), (*C.uint8_t)(unsafe.Pointer(pVersionInfo)), (*C.uint8_t)(unsafe.Pointer(pCompatibility)))
+}
+
+// GetMicromapBuildSizesEXT wraps vkGetMicromapBuildSizesEXT.
+func (c *Commands) GetMicromapBuildSizesEXT(device Device, buildType AccelerationStructureBuildTypeKHR, pBuildInfo *MicromapBuildInfoEXT, pSizeInfo *MicromapBuildSizesInfoEXT) {
+	if c.getMicromapBuildSizesEXT == nil {
+		return
+	}
+	C.gvk_v_hipp(C.uintptr_t(uintptr(c.getMicromapBuildSizesEXT)), C.uint64_t(device), C.uint32_t(buildType), (*C.uint8_t)(unsafe.Pointer(pBuildInfo)), (*C.uint8_t)(unsafe.Pointer(pSizeInfo)))
 }
 
 // GetShaderModuleIdentifierEXT wraps vkGetShaderModuleIdentifierEXT.
@@ -4959,6 +6066,14 @@ func (c *Commands) GetShaderModuleCreateInfoIdentifierEXT(device Device, pCreate
 		return
 	}
 	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getShaderModuleCreateInfoIdentifierEXT)), C.uint64_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pIdentifier)))
+}
+
+// GetImageSubresourceLayout2 wraps vkGetImageSubresourceLayout2.
+func (c *Commands) GetImageSubresourceLayout2(device Device, image Image, pSubresource *ImageSubresource2, pLayout *SubresourceLayout2) {
+	if c.getImageSubresourceLayout2 == nil {
+		return
+	}
+	C.gvk_v_hhpp(C.uintptr_t(uintptr(c.getImageSubresourceLayout2)), C.uint64_t(device), C.uint64_t(image), (*C.uint8_t)(unsafe.Pointer(pSubresource)), (*C.uint8_t)(unsafe.Pointer(pLayout)))
 }
 
 // GetPipelinePropertiesEXT wraps vkGetPipelinePropertiesEXT.
@@ -5028,6 +6143,15 @@ func (c *Commands) DestroyOpticalFlowSessionNV(device Device, session OpticalFlo
 		return
 	}
 	C.gvk_v_hhp(C.uintptr_t(uintptr(c.destroyOpticalFlowSessionNV)), C.uint64_t(device), C.uint64_t(session), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+}
+
+// BindOpticalFlowSessionImageNV wraps vkBindOpticalFlowSessionImageNV.
+func (c *Commands) BindOpticalFlowSessionImageNV(device Device, session OpticalFlowSessionNV, bindingPoint OpticalFlowSessionBindingPointNV, view ImageView, layout ImageLayout) Result {
+	if c.bindOpticalFlowSessionImageNV == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hhihi(C.uintptr_t(uintptr(c.bindOpticalFlowSessionImageNV)), C.uint64_t(device), C.uint64_t(session), C.uint32_t(bindingPoint), C.uint64_t(view), C.uint32_t(layout))
+	return Result(r)
 }
 
 // CmdOpticalFlowExecuteNV wraps vkCmdOpticalFlowExecuteNV.
@@ -5116,6 +6240,14 @@ func (c *Commands) GetShaderBinaryDataEXT(device Device, shader ShaderEXT, pData
 	return Result(r)
 }
 
+// CmdBindShadersEXT wraps vkCmdBindShadersEXT.
+func (c *Commands) CmdBindShadersEXT(commandBuffer CommandBuffer, stageCount uint32, pStages *ShaderStageFlagBits, pShaders *ShaderEXT) {
+	if c.cmdBindShadersEXT == nil {
+		return
+	}
+	C.gvk_v_hipp(C.uintptr_t(uintptr(c.cmdBindShadersEXT)), C.uint64_t(commandBuffer), C.uint32_t(stageCount), (*C.uint8_t)(unsafe.Pointer(pStages)), (*C.uint8_t)(unsafe.Pointer(pShaders)))
+}
+
 // SetSwapchainPresentTimingQueueSizeEXT wraps vkSetSwapchainPresentTimingQueueSizeEXT.
 func (c *Commands) SetSwapchainPresentTimingQueueSizeEXT(device Device, swapchain SwapchainKHR, size uint32) Result {
 	if c.setSwapchainPresentTimingQueueSizeEXT == nil {
@@ -5195,6 +6327,38 @@ func (c *Commands) CreateExecutionGraphPipelinesAMDX(device Device, pipelineCach
 	}
 	r := C.gvk_r_hhippp(C.uintptr_t(uintptr(c.createExecutionGraphPipelinesAMDX)), C.uint64_t(device), C.uint64_t(pipelineCache), C.uint32_t(createInfoCount), (*C.uint8_t)(unsafe.Pointer(pCreateInfos)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pPipelines)))
 	return Result(r)
+}
+
+// CmdInitializeGraphScratchMemoryAMDX wraps vkCmdInitializeGraphScratchMemoryAMDX.
+func (c *Commands) CmdInitializeGraphScratchMemoryAMDX(commandBuffer CommandBuffer, executionGraph Pipeline, scratch DeviceAddress, scratchSize DeviceSize) {
+	if c.cmdInitializeGraphScratchMemoryAMDX == nil {
+		return
+	}
+	C.gvk_v_hhqq(C.uintptr_t(uintptr(c.cmdInitializeGraphScratchMemoryAMDX)), C.uint64_t(commandBuffer), C.uint64_t(executionGraph), C.uint64_t(scratch), C.uint64_t(scratchSize))
+}
+
+// CmdDispatchGraphAMDX wraps vkCmdDispatchGraphAMDX.
+func (c *Commands) CmdDispatchGraphAMDX(commandBuffer CommandBuffer, scratch DeviceAddress, scratchSize DeviceSize, pCountInfo *DispatchGraphCountInfoAMDX) {
+	if c.cmdDispatchGraphAMDX == nil {
+		return
+	}
+	C.gvk_v_hqqp(C.uintptr_t(uintptr(c.cmdDispatchGraphAMDX)), C.uint64_t(commandBuffer), C.uint64_t(scratch), C.uint64_t(scratchSize), (*C.uint8_t)(unsafe.Pointer(pCountInfo)))
+}
+
+// CmdDispatchGraphIndirectAMDX wraps vkCmdDispatchGraphIndirectAMDX.
+func (c *Commands) CmdDispatchGraphIndirectAMDX(commandBuffer CommandBuffer, scratch DeviceAddress, scratchSize DeviceSize, pCountInfo *DispatchGraphCountInfoAMDX) {
+	if c.cmdDispatchGraphIndirectAMDX == nil {
+		return
+	}
+	C.gvk_v_hqqp(C.uintptr_t(uintptr(c.cmdDispatchGraphIndirectAMDX)), C.uint64_t(commandBuffer), C.uint64_t(scratch), C.uint64_t(scratchSize), (*C.uint8_t)(unsafe.Pointer(pCountInfo)))
+}
+
+// CmdDispatchGraphIndirectCountAMDX wraps vkCmdDispatchGraphIndirectCountAMDX.
+func (c *Commands) CmdDispatchGraphIndirectCountAMDX(commandBuffer CommandBuffer, scratch DeviceAddress, scratchSize DeviceSize, countInfo DeviceAddress) {
+	if c.cmdDispatchGraphIndirectCountAMDX == nil {
+		return
+	}
+	C.gvk_v_hqqq(C.uintptr_t(uintptr(c.cmdDispatchGraphIndirectCountAMDX)), C.uint64_t(commandBuffer), C.uint64_t(scratch), C.uint64_t(scratchSize), C.uint64_t(countInfo))
 }
 
 // CmdBindDescriptorSets2 wraps vkCmdBindDescriptorSets2.
@@ -5506,6 +6670,15 @@ func (c *Commands) GetPhysicalDeviceExternalTensorPropertiesARM(physicalDevice P
 	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getPhysicalDeviceExternalTensorPropertiesARM)), C.uint64_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pExternalTensorInfo)), (*C.uint8_t)(unsafe.Pointer(pExternalTensorProperties)))
 }
 
+// CreateDataGraphPipelinesARM wraps vkCreateDataGraphPipelinesARM.
+func (c *Commands) CreateDataGraphPipelinesARM(device Device, deferredOperation DeferredOperationKHR, pipelineCache PipelineCache, createInfoCount uint32, pCreateInfos *DataGraphPipelineCreateInfoARM, pAllocator *AllocationCallbacks, pPipelines *Pipeline) Result {
+	if c.createDataGraphPipelinesARM == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hhhippp(C.uintptr_t(uintptr(c.createDataGraphPipelinesARM)), C.uint64_t(device), C.uint64_t(deferredOperation), C.uint64_t(pipelineCache), C.uint32_t(createInfoCount), (*C.uint8_t)(unsafe.Pointer(pCreateInfos)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pPipelines)))
+	return Result(r)
+}
+
 // CreateDataGraphPipelineSessionARM wraps vkCreateDataGraphPipelineSessionARM.
 func (c *Commands) CreateDataGraphPipelineSessionARM(device Device, pCreateInfo *DataGraphPipelineSessionCreateInfoARM, pAllocator *AllocationCallbacks, pSession *DataGraphPipelineSessionARM) Result {
 	if c.createDataGraphPipelineSessionARM == nil {
@@ -5566,6 +6739,15 @@ func (c *Commands) GetDataGraphPipelineAvailablePropertiesARM(device Device, pPi
 	return Result(r)
 }
 
+// GetDataGraphPipelinePropertiesARM wraps vkGetDataGraphPipelinePropertiesARM.
+func (c *Commands) GetDataGraphPipelinePropertiesARM(device Device, pPipelineInfo *DataGraphPipelineInfoARM, propertiesCount uint32, pProperties *DataGraphPipelinePropertyQueryResultARM) Result {
+	if c.getDataGraphPipelinePropertiesARM == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hpip(C.uintptr_t(uintptr(c.getDataGraphPipelinePropertiesARM)), C.uint64_t(device), (*C.uint8_t)(unsafe.Pointer(pPipelineInfo)), C.uint32_t(propertiesCount), (*C.uint8_t)(unsafe.Pointer(pProperties)))
+	return Result(r)
+}
+
 // GetPhysicalDeviceQueueFamilyDataGraphPropertiesARM wraps vkGetPhysicalDeviceQueueFamilyDataGraphPropertiesARM.
 func (c *Commands) GetPhysicalDeviceQueueFamilyDataGraphPropertiesARM(physicalDevice PhysicalDevice, queueFamilyIndex uint32, pQueueFamilyDataGraphPropertyCount *uint32, pQueueFamilyDataGraphProperties *QueueFamilyDataGraphPropertiesARM) Result {
 	if c.getPhysicalDeviceQueueFamilyDataGraphPropertiesARM == nil {
@@ -5598,6 +6780,33 @@ func (c *Commands) GetMemoryNativeBufferOHOS(device Device, pInfo *MemoryGetNati
 		return ErrorInitializationFailed
 	}
 	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getMemoryNativeBufferOHOS)), C.uint64_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pBuffer)))
+	return Result(r)
+}
+
+// GetSwapchainGrallocUsageOHOS wraps vkGetSwapchainGrallocUsageOHOS.
+func (c *Commands) GetSwapchainGrallocUsageOHOS(device Device, format Format, imageUsage ImageUsageFlags, grallocUsage *uint64) Result {
+	if c.getSwapchainGrallocUsageOHOS == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hiip(C.uintptr_t(uintptr(c.getSwapchainGrallocUsageOHOS)), C.uint64_t(device), C.uint32_t(format), C.uint32_t(imageUsage), (*C.uint8_t)(unsafe.Pointer(grallocUsage)))
+	return Result(r)
+}
+
+// AcquireImageOHOS wraps vkAcquireImageOHOS.
+func (c *Commands) AcquireImageOHOS(device Device, image Image, nativeFenceFd int32, semaphore Semaphore, fence Fence) Result {
+	if c.acquireImageOHOS == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hhihh(C.uintptr_t(uintptr(c.acquireImageOHOS)), C.uint64_t(device), C.uint64_t(image), C.uint32_t(nativeFenceFd), C.uint64_t(semaphore), C.uint64_t(fence))
+	return Result(r)
+}
+
+// QueueSignalReleaseImageOHOS wraps vkQueueSignalReleaseImageOHOS.
+func (c *Commands) QueueSignalReleaseImageOHOS(queue Queue, waitSemaphoreCount uint32, pWaitSemaphores *Semaphore, image Image, pNativeFenceFd *int32) Result {
+	if c.queueSignalReleaseImageOHOS == nil {
+		return ErrorInitializationFailed
+	}
+	r := C.gvk_r_hiphp(C.uintptr_t(uintptr(c.queueSignalReleaseImageOHOS)), C.uint64_t(queue), C.uint32_t(waitSemaphoreCount), (*C.uint8_t)(unsafe.Pointer(pWaitSemaphores)), C.uint64_t(image), (*C.uint8_t)(unsafe.Pointer(pNativeFenceFd)))
 	return Result(r)
 }
 
