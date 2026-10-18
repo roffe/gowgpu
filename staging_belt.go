@@ -55,9 +55,20 @@ type stagingBelt struct {
 	closedSubmissions []closedSubmission
 
 	// oversized tracks one-off buffers for writes larger than chunkSize.
-	// These are not recycled — destroyed after GPU completion (too large
-	// to keep in the pool without wasting memory).
-	oversized []hal.Buffer
+	// After GPU completion a few of them are kept in freeOversized for the
+	// next write of about the same size, the rest are destroyed.
+	oversized []stagingChunk
+
+	// freeOversized are one-off buffers whose submissions completed. An app
+	// that writes one big buffer every frame (fyne writes about 1 MB of
+	// uniforms) would otherwise create and destroy a staging buffer every
+	// frame. At most maxFreeOversized, none over maxPooledOversizedSize.
+	freeOversized []stagingChunk
+
+	// spareChunkLists and spareOversizedLists are the emptied lists of
+	// recalled submissions, reused for the active lists of later ones.
+	spareChunkLists     [][]stagingChunk
+	spareOversizedLists [][]stagingChunk
 
 	// chunkedAllocs temporarily holds chunk allocations from allocateChunked.
 	// Consumed by pendingWrites.writeBuffer to issue CopyBufferToBuffer for
@@ -78,7 +89,7 @@ type stagingChunk struct {
 type closedSubmission struct {
 	submissionIndex uint64
 	chunks          []stagingChunk
-	oversized       []hal.Buffer
+	oversized       []stagingChunk
 }
 
 // stagingBeltDefaultChunkSize is 256KB — large enough for typical per-frame
@@ -91,6 +102,14 @@ const stagingBeltDefaultChunkSize = 256 * 1024
 // We default to 8 (Rust parity) — good balance between spec compliance and
 // cache performance. Configurable via newStagingBelt alignment parameter.
 const stagingBeltDefaultAlignment uint64 = 8
+
+// maxFreeOversized and maxPooledOversizedSize bound the one-off staging
+// buffers the belt keeps for reuse to 16 MB: a few frames' worth of a big
+// per-frame write, but not a one-time texture upload.
+const (
+	maxFreeOversized       = 4
+	maxPooledOversizedSize = 4 << 20
+)
 
 // stagingBeltMaxOversizedSize caps individual staging buffer allocations at 64MB.
 // Rust wgpu caps staging buffers at 1 << 26 (64MB). This prevents
@@ -174,7 +193,7 @@ func (b *stagingBelt) allocate(size uint64, data []byte) (stagingAllocation, err
 		chunk := b.freeChunks[len(b.freeChunks)-1]
 		b.freeChunks = b.freeChunks[:len(b.freeChunks)-1]
 		alloc, _ := chunk.tryAllocate(alignedSize)
-		b.activeChunks = append(b.activeChunks, chunk)
+		b.activateChunk(chunk)
 		if err := b.halQueue.WriteBuffer(alloc.buffer, alloc.offset, data); err != nil {
 			b.activeChunks[len(b.activeChunks)-1].rollback(alignedSize)
 			return stagingAllocation{}, fmt.Errorf("staging belt: write to recycled chunk: %w", err)
@@ -188,7 +207,7 @@ func (b *stagingBelt) allocate(size uint64, data []byte) (stagingAllocation, err
 		return stagingAllocation{}, err
 	}
 	alloc, _ := chunk.tryAllocate(alignedSize)
-	b.activeChunks = append(b.activeChunks, chunk)
+	b.activateChunk(chunk)
 	if err := b.halQueue.WriteBuffer(alloc.buffer, alloc.offset, data); err != nil {
 		chunk.rollback(alignedSize)
 		return stagingAllocation{}, fmt.Errorf("staging belt: write to new chunk: %w", err)
@@ -221,25 +240,93 @@ func (b *stagingBelt) allocateOversized(size uint64, data []byte) (stagingAlloca
 	return b.allocateChunked(size, data)
 }
 
-// allocateSingleOversized creates a single one-off staging buffer.
+// allocateSingleOversized takes a one-off staging buffer, a kept one of
+// about the right size or a new one, and writes data into it.
 // Validates the mapped pointer before writing (BUG-VK-001 Fix 3).
 func (b *stagingBelt) allocateSingleOversized(size uint64, data []byte) (stagingAllocation, error) {
-	desc := hal.BufferDescriptor{
-		Label:            "(wgpu internal) staging oversized",
-		Size:             size,
-		Usage:            gputypes.BufferUsageCopySrc | gputypes.BufferUsageMapWrite,
-		MappedAtCreation: true,
+	chunk, ok := b.takeFreeOversized(size)
+	if !ok {
+		// Round up to whole chunks, so that a write that changes size a
+		// little from frame to frame still fits the buffer it used before.
+		bufSize := min(alignUp64(size, b.chunkSize), max(size, b.maxStagingBufferSize))
+		desc := hal.BufferDescriptor{
+			Label:            "(wgpu internal) staging oversized",
+			Size:             bufSize,
+			Usage:            gputypes.BufferUsageCopySrc | gputypes.BufferUsageMapWrite,
+			MappedAtCreation: true,
+		}
+		buf, err := b.halDevice.CreateBuffer(&desc)
+		if err != nil {
+			return stagingAllocation{}, fmt.Errorf("staging belt: create oversized buffer (%d bytes): %w", bufSize, err)
+		}
+		chunk = stagingChunk{buffer: buf, size: bufSize}
 	}
-	buf, err := b.halDevice.CreateBuffer(&desc)
-	if err != nil {
-		return stagingAllocation{}, fmt.Errorf("staging belt: create oversized buffer (%d bytes): %w", size, err)
-	}
-	if err := b.halQueue.WriteBuffer(buf, 0, data); err != nil {
-		b.halDevice.DestroyBuffer(buf)
+	if err := b.halQueue.WriteBuffer(chunk.buffer, 0, data); err != nil {
+		b.halDevice.DestroyBuffer(chunk.buffer)
 		return stagingAllocation{}, fmt.Errorf("staging belt: write oversized buffer: %w", err)
 	}
-	b.oversized = append(b.oversized, buf)
-	return stagingAllocation{buffer: buf, offset: 0}, nil
+	if b.oversized == nil {
+		b.oversized = takeSpareList(&b.spareOversizedLists)
+	}
+	b.oversized = append(b.oversized, chunk)
+	return stagingAllocation{buffer: chunk.buffer, offset: 0}, nil
+}
+
+// activateChunk appends a chunk to the active list, starting the list from a
+// recycled one after finish handed the last one to a submission.
+func (b *stagingBelt) activateChunk(c stagingChunk) {
+	if b.activeChunks == nil {
+		b.activeChunks = takeSpareList(&b.spareChunkLists)
+	}
+	b.activeChunks = append(b.activeChunks, c)
+}
+
+// takeFreeOversized returns a kept one-off buffer that holds size bytes and
+// is at most twice that, so a small write does not pin a huge buffer.
+func (b *stagingBelt) takeFreeOversized(size uint64) (stagingChunk, bool) {
+	for i, c := range b.freeOversized {
+		if c.size < size || c.size > 2*size {
+			continue
+		}
+		last := len(b.freeOversized) - 1
+		b.freeOversized[i] = b.freeOversized[last]
+		b.freeOversized[last] = stagingChunk{}
+		b.freeOversized = b.freeOversized[:last]
+		return c, true
+	}
+	return stagingChunk{}, false
+}
+
+// retireOversized keeps a one-off buffer the GPU is done with for reuse, or
+// destroys it when enough are kept or it is too big to keep.
+func (b *stagingBelt) retireOversized(c stagingChunk) {
+	if len(b.freeOversized) < maxFreeOversized && c.size <= maxPooledOversizedSize {
+		b.freeOversized = append(b.freeOversized, c)
+		return
+	}
+	b.halDevice.DestroyBuffer(c.buffer)
+}
+
+// takeSpareList returns an emptied list kept by recall, or nil.
+func takeSpareList(spares *[][]stagingChunk) []stagingChunk {
+	n := len(*spares)
+	if n == 0 {
+		return nil
+	}
+	l := (*spares)[n-1]
+	(*spares)[n-1] = nil
+	*spares = (*spares)[:n-1]
+	return l
+}
+
+// keepSpareList clears a list no submission references any more and keeps
+// it for reuse.
+func keepSpareList(spares *[][]stagingChunk, l []stagingChunk) {
+	if cap(l) == 0 || len(*spares) >= 4 {
+		return
+	}
+	clear(l)
+	*spares = append(*spares, l[:0])
 }
 
 // stagingChunkedAllocation holds one chunk of a multi-chunk oversized write.
@@ -318,7 +405,8 @@ func (b *stagingBelt) finish(submissionIndex uint64) {
 
 	// Reset active lists. Use nil (not [:0]) to avoid backing array aliasing
 	// with closedSubmission slices — otherwise new appends could overwrite
-	// closed submission data before recall() processes it.
+	// closed submission data before recall() processes it. The next lists
+	// come from takeSpareList, out of recalled submissions only.
 	b.activeChunks = nil
 	b.oversized = nil
 }
@@ -333,8 +421,8 @@ func (b *stagingBelt) discardActive() {
 	}
 	b.activeChunks = nil
 
-	for _, buf := range b.oversized {
-		b.halDevice.DestroyBuffer(buf)
+	for _, c := range b.oversized {
+		b.retireOversized(c)
 	}
 	b.oversized = nil
 
@@ -355,8 +443,8 @@ func (b *stagingBelt) discardLastClosed() {
 		submission.chunks[i].offset = 0
 		b.freeChunks = append(b.freeChunks, submission.chunks[i])
 	}
-	for _, buf := range submission.oversized {
-		b.halDevice.DestroyBuffer(buf)
+	for _, c := range submission.oversized {
+		b.retireOversized(c)
 	}
 }
 
@@ -385,14 +473,20 @@ func (b *stagingBelt) recall(completedIndex uint64) {
 			b.freeChunks = append(b.freeChunks, sub.chunks[j])
 		}
 
-		// Destroy oversized one-off buffers (too large to pool).
-		for _, buf := range sub.oversized {
-			b.halDevice.DestroyBuffer(buf)
+		// Keep a few oversized one-off buffers, destroy the rest.
+		for _, c := range sub.oversized {
+			b.retireOversized(c)
 		}
+		keepSpareList(&b.spareChunkLists, sub.chunks)
+		keepSpareList(&b.spareOversizedLists, sub.oversized)
 	}
 
 	if cutoff > 0 {
-		b.closedSubmissions = b.closedSubmissions[cutoff:]
+		// Compact in place, so the list does not creep along its backing
+		// array and reallocate every few frames.
+		n := copy(b.closedSubmissions, b.closedSubmissions[cutoff:])
+		clear(b.closedSubmissions[n:])
+		b.closedSubmissions = b.closedSubmissions[:n]
 	}
 }
 
@@ -448,16 +542,21 @@ func (b *stagingBelt) destroy() {
 		for _, chunk := range sub.chunks {
 			b.halDevice.DestroyBuffer(chunk.buffer)
 		}
-		for _, buf := range sub.oversized {
-			b.halDevice.DestroyBuffer(buf)
+		for _, c := range sub.oversized {
+			b.halDevice.DestroyBuffer(c.buffer)
 		}
 	}
 	b.closedSubmissions = nil
 
-	for _, buf := range b.oversized {
-		b.halDevice.DestroyBuffer(buf)
+	for _, c := range b.oversized {
+		b.halDevice.DestroyBuffer(c.buffer)
 	}
 	b.oversized = nil
+
+	for _, c := range b.freeOversized {
+		b.halDevice.DestroyBuffer(c.buffer)
+	}
+	b.freeOversized = nil
 
 	// chunkedAllocs only holds references to buffers already in oversized —
 	// no extra DestroyBuffer needed, just nil the slice.

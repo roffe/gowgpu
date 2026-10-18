@@ -553,3 +553,96 @@ func TestStagingBelt_SmallMaxStagingBufferSize(t *testing.T) {
 		}
 	}
 }
+
+// A write too big for a chunk reuses the one-off buffer of an earlier write
+// of about the same size once the GPU is done with it, instead of creating
+// and destroying one every frame.
+func TestStagingBelt_OversizedBufferReused(t *testing.T) {
+	const chunkSize = 256
+	belt := createTestBelt(t, chunkSize)
+	defer belt.destroy()
+
+	first, err := belt.allocate(1000, make([]byte, 1000))
+	if err != nil {
+		t.Fatal(err)
+	}
+	belt.finish(0)
+	belt.setLastSubmissionIndex(1)
+
+	// Still in flight: a second write gets a buffer of its own.
+	second, err := belt.allocate(1000, make([]byte, 1000))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.buffer == first.buffer {
+		t.Fatal("reused a staging buffer the GPU may still read")
+	}
+	belt.finish(0)
+	belt.setLastSubmissionIndex(2)
+
+	belt.recall(2)
+	if got := len(belt.freeOversized); got != 2 {
+		t.Fatalf("kept %d one-off buffers after recall, want 2", got)
+	}
+	third, err := belt.allocate(900, make([]byte, 900))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if third.buffer != first.buffer && third.buffer != second.buffer {
+		t.Fatal("a 900 byte write did not reuse a kept 1024 byte buffer")
+	}
+	// Under half the kept buffers' size: a new one, not a 1024 byte one.
+	small, err := belt.allocate(300, make([]byte, 300))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if small.buffer == first.buffer || small.buffer == second.buffer {
+		t.Fatal("a 300 byte write took a 1024 byte buffer")
+	}
+}
+
+// One-off buffers past maxPooledOversizedSize are destroyed after use, not
+// kept.
+func TestStagingBelt_HugeOversizedBufferNotKept(t *testing.T) {
+	belt := createTestBelt(t, 256)
+	defer belt.destroy()
+	size := uint64(maxPooledOversizedSize + 1)
+	if _, err := belt.allocate(size, make([]byte, size)); err != nil {
+		t.Fatal(err)
+	}
+	belt.finish(0)
+	belt.setLastSubmissionIndex(1)
+	belt.recall(1)
+	if got := len(belt.freeOversized); got != 0 {
+		t.Fatalf("kept %d huge one-off buffers, want 0", got)
+	}
+}
+
+// A frame's oversized write, with finish and recall, allocates nothing once
+// the belt has warmed up.
+func TestStagingBelt_OversizedSteadyStateAllocations(t *testing.T) {
+	// noop's queue, not the recording mock: it writes without allocating.
+	belt := newStagingBelt(&noop.Device{}, &noop.Queue{}, 256, 0, 0)
+	defer belt.destroy()
+	data := make([]byte, 1000)
+	small := make([]byte, 64)
+	var index uint64
+	frame := func() {
+		if _, err := belt.allocate(1000, data); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := belt.allocate(64, small); err != nil {
+			t.Fatal(err)
+		}
+		index++
+		belt.finish(0)
+		belt.setLastSubmissionIndex(index)
+		belt.recall(index)
+	}
+	for range 3 {
+		frame()
+	}
+	if allocs := testing.AllocsPerRun(50, frame); allocs > 0 {
+		t.Fatalf("a frame costs %.1f allocations, want 0", allocs)
+	}
+}
