@@ -1602,25 +1602,26 @@ type CopyTextureToBufferCommand struct {
 	bytesPerRow uint32
 }
 
-// Execute reads pixels from the source texture's FBO into the destination buffer.
+// Execute reads pixels from the source texture's FBO into the destination
+// buffer's GL storage, a row every bytesPerRow from dstOffset like WebGPU
+// lays it out. Mapping the buffer then reads them back from GL.
 func (c *CopyTextureToBufferCommand) Execute(ctx *gl.Context) {
 	width := int32(c.copySize[0])
 	height := int32(c.copySize[1])
-	if width == 0 || height == 0 {
+	if width == 0 || height == 0 || c.dstBuffer.id == 0 {
 		return
 	}
 
-	// Calculate byte sizes. Assume RGBA8 (4 bytes per pixel) for readback.
+	// Assume 4 bytes per pixel, in the texture's own channel order.
 	bpp := uint32(4)
 	rowBytes := uint32(width) * bpp
-	totalBytes := uint64(rowBytes) * uint64(height)
-
-	// Ensure destination buffer has enough CPU-side storage.
-	requiredSize := c.dstOffset + totalBytes
-	if uint64(len(c.dstBuffer.data)) < requiredSize {
-		newData := make([]byte, requiredSize)
-		copy(newData, c.dstBuffer.data)
-		c.dstBuffer.data = newData
+	pitch := uint64(rowBytes)
+	if c.bytesPerRow != 0 {
+		pitch = uint64(c.bytesPerRow) // usually wider: copies align rows to 256 bytes
+	}
+	format := uint32(gl.RGBA)
+	if c.srcTexture.format == gputypes.TextureFormatBGRA8Unorm || c.srcTexture.format == gputypes.TextureFormatBGRA8UnormSrgb {
+		format = gl.BGRA
 	}
 
 	// Save the current FBO binding so we can restore it after the read.
@@ -1647,24 +1648,23 @@ func (c *CopyTextureToBufferCommand) Execute(ctx *gl.Context) {
 	ctx.PixelStorei(gl.PACK_ALIGNMENT, 1)
 
 	// Read pixels from the bound FBO into a temporary CPU buffer.
-	tmpBuf := make([]byte, totalBytes)
+	tmpBuf := make([]byte, uint64(rowBytes)*uint64(height))
 	ctx.ReadPixels(
 		int32(c.srcOrigin[0]), int32(c.srcOrigin[1]),
 		width, height,
-		gl.BGRA, gl.UNSIGNED_BYTE,
+		format, gl.UNSIGNED_BYTE,
 		unsafe.Pointer(&tmpBuf[0]),
 	)
 
-	// Copy the pixel data into the destination buffer's CPU-side storage.
-	// OpenGL reads bottom-to-top, but callers expect top-to-bottom order.
-	// Flip the rows during copy.
+	// Write each row to its place in the buffer. They come out top row first:
+	// textures here are stored top-down like WebGPU's, and only the blit to
+	// the window flips.
+	ctx.BindBuffer(gl.COPY_WRITE_BUFFER, c.dstBuffer.id)
 	for row := int32(0); row < height; row++ {
-		// OpenGL row 0 = bottom. We want row 0 = top.
-		srcRow := (height - 1 - row)
-		srcStart := uint64(srcRow) * uint64(rowBytes)
-		dstStart := c.dstOffset + uint64(row)*uint64(rowBytes)
-		copy(c.dstBuffer.data[dstStart:dstStart+uint64(rowBytes)], tmpBuf[srcStart:srcStart+uint64(rowBytes)])
+		srcStart := uint64(row) * uint64(rowBytes)
+		ctx.BufferSubData(gl.COPY_WRITE_BUFFER, int(c.dstOffset+uint64(row)*pitch), int(rowBytes), unsafe.Pointer(&tmpBuf[srcStart]))
 	}
+	ctx.BindBuffer(gl.COPY_WRITE_BUFFER, 0)
 
 	// Restore the previous FBO binding.
 	ctx.BindFramebuffer(gl.FRAMEBUFFER, uint32(prevFBO))
