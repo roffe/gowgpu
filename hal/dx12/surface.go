@@ -275,14 +275,18 @@ func (s *Surface) createBackBufferRTVs() error {
 // releaseBackBuffers releases all back buffer resources and recycles RTV descriptors.
 func (s *Surface) releaseBackBuffers() {
 	for i := range s.backBuffers {
-		if s.backBuffers[i].resource != nil {
-			if s.backBuffers[i].texture != nil {
-				s.backBuffers[i].texture.raw = nil
-				s.backBuffers[i].texture = nil
-			}
-			s.backBuffers[i].resource.Release()
-			s.backBuffers[i].resource = nil
+		// An entry never filled (a GetBuffer or RTV failure part way through
+		// createBackBuffers) has no RTV slot: freeing its zero index would
+		// hand slot 0, someone else's, to the next view.
+		if s.backBuffers[i].resource == nil {
+			continue
 		}
+		if s.backBuffers[i].texture != nil {
+			s.backBuffers[i].texture.raw = nil
+			s.backBuffers[i].texture = nil
+		}
+		s.backBuffers[i].resource.Release()
+		s.backBuffers[i].resource = nil
 		// Recycle RTV descriptor slot for reuse (prevents heap exhaustion on resize)
 		if s.device != nil && s.device.rtvHeap != nil {
 			s.device.rtvHeap.Free(s.backBuffers[i].rtvIndex, 1)
