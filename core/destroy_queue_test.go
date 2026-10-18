@@ -154,3 +154,66 @@ func TestDestroyQueue_DeferAfterTriage(t *testing.T) {
 		t.Fatal("both resources should be destroyed")
 	}
 }
+
+// Once Triage has dropped a submission's refs, its emptied list comes back
+// from RecycledRefs, cleared, and not before.
+func TestDestroyQueue_RecyclesRefLists(t *testing.T) {
+	q := NewDestroyQueue()
+	ref := NewResourceRef("buffer", nil)
+	ref.Clone()
+	refs := append(make([]*ResourceRef, 0, 16), ref)
+
+	q.TrackSubmission(1, refs)
+	if got := q.RecycledRefs(); got != nil {
+		t.Fatalf("list came back before its submission completed: %v", got)
+	}
+	q.Triage(1)
+	if got := ref.RefCount(); got != 1 {
+		t.Fatalf("ref count after triage = %d, want 1", got)
+	}
+	got := q.RecycledRefs()
+	if len(got) != 0 || cap(got) != 16 {
+		t.Fatalf("recycled list len %d cap %d, want 0 and 16", len(got), cap(got))
+	}
+	if got[:1][0] != nil {
+		t.Fatal("recycled list still holds the ref")
+	}
+	if again := q.RecycledRefs(); again != nil {
+		t.Fatal("the same list came back twice")
+	}
+
+	// An empty list has nothing to keep alive and comes straight back.
+	q.TrackSubmission(2, make([]*ResourceRef, 0, 8))
+	if got := q.RecycledRefs(); cap(got) != 8 {
+		t.Fatalf("empty list cap %d, want 8", cap(got))
+	}
+}
+
+// Tracking a submission's refs and triaging it, the way Queue.Submit does
+// every frame, allocates nothing once the lists are recycled.
+func TestDestroyQueue_SteadyStateAllocations(t *testing.T) {
+	q := NewDestroyQueue()
+	ref := NewResourceRef("buffer", nil)
+	var index uint64
+	frame := func() {
+		refs := q.RecycledRefs()
+		if refs == nil {
+			refs = make([]*ResourceRef, 0, 64)
+		}
+		for range 50 {
+			ref.Clone()
+			refs = append(refs, ref)
+		}
+		index++
+		q.TrackSubmission(index, refs)
+		q.Defer(index, "encoder", func() {})
+		q.Triage(index)
+	}
+	frame()
+	if allocs := testing.AllocsPerRun(100, frame); allocs > 0 {
+		t.Fatalf("a tracked submission costs %.1f allocations, want 0", allocs)
+	}
+	if got := ref.RefCount(); got != 1 {
+		t.Fatalf("ref count = %d, want 1", got)
+	}
+}

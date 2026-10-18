@@ -41,6 +41,10 @@ type Device struct {
 	//
 	// nil when no HAL device (e.g., core-only path).
 	cmdEncoderPool *encoderPool
+
+	// usedLists recycles the submit-time validation lists of spent command
+	// buffers.
+	usedLists usedListPool
 }
 
 // Queue returns the device's command queue.
@@ -860,11 +864,24 @@ func (d *Device) CreateCommandEncoder(desc *CommandEncoderDescriptor) (*CommandE
 			return nil, err
 		}
 
+		// The ref and validation lists of spent command buffers come back,
+		// so a steady stream of frames does not grow new ones.
+		var refs []*core.ResourceRef
+		if dq := d.destroyQueue(); dq != nil {
+			refs = dq.RecycledRefs()
+		}
+		if refs == nil {
+			refs = make([]*core.ResourceRef, 0, 64)
+		}
+		lists := d.usedLists.get()
 		return &CommandEncoder{
-			core:        coreEncoder,
-			device:      d,
-			halEncoder:  halEnc,
-			trackedRefs: make([]*core.ResourceRef, 0, 64),
+			core:           coreEncoder,
+			device:         d,
+			halEncoder:     halEnc,
+			trackedRefs:    refs,
+			usedBuffers:    lists.buffers,
+			usedTextures:   lists.textures,
+			usedBindGroups: lists.bindGroups,
 		}, nil
 	}
 

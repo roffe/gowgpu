@@ -49,7 +49,18 @@ type DestroyQueue struct {
 	mu      sync.Mutex
 	pending []DeferredDestroy
 	tracked []TrackedSubmission
+
+	// Triage's working lists and the ref lists of triaged submissions, kept
+	// so that a steady stream of submissions allocates nothing here. A Triage
+	// takes the working lists out under the lock and puts them back after,
+	// so concurrent or nested calls just allocate their own.
+	completedFns  []func()
+	completedSubs []TrackedSubmission
+	freeRefs      [][]*ResourceRef
 }
+
+// maxFreeRefs caps how many emptied ref lists the queue keeps for reuse.
+const maxFreeRefs = 8
 
 // NewDestroyQueue creates a new DestroyQueue.
 func NewDestroyQueue() *DestroyQueue {
@@ -79,18 +90,43 @@ func (q *DestroyQueue) Defer(index uint64, label string, fn func()) {
 // When Triage() confirms the submission has completed, all refs are Drop()'d.
 //
 // This is the Phase 2 per-command-buffer tracking entry point. Called by
-// Queue.Submit() after HAL submit succeeds.
+// Queue.Submit() after HAL submit succeeds, once per command buffer.
+//
+// The queue takes ownership of refs: once Triage has dropped them, the
+// emptied slice may come back from RecycledRefs for a new command encoder.
 //
 // Parameters:
 //   - index: the submission index from HAL Queue.Submit()
 //   - refs: Clone'd ResourceRef pointers from command encoding
 func (q *DestroyQueue) TrackSubmission(index uint64, refs []*ResourceRef) {
-	if len(refs) == 0 {
+	if cap(refs) == 0 {
 		return
 	}
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	if len(refs) == 0 {
+		// Nothing to keep alive: the list can go straight back.
+		if len(q.freeRefs) < maxFreeRefs {
+			q.freeRefs = append(q.freeRefs, refs)
+		}
+		return
+	}
 	q.tracked = append(q.tracked, TrackedSubmission{index: index, refs: refs})
+}
+
+// RecycledRefs returns an empty slice with room for refs, reusing the list of
+// a submission Triage has dropped, or nil when there is none.
+func (q *DestroyQueue) RecycledRefs() []*ResourceRef {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	n := len(q.freeRefs)
+	if n == 0 {
+		return nil
+	}
+	refs := q.freeRefs[n-1]
+	q.freeRefs[n-1] = nil
+	q.freeRefs = q.freeRefs[:n-1]
+	return refs
 }
 
 // Triage checks which deferred destructions can now proceed because their
@@ -106,11 +142,11 @@ func (q *DestroyQueue) TrackSubmission(index uint64, refs []*ResourceRef) {
 // This should be called after each Queue.Submit() with the result of
 // hal.Queue.PollCompleted().
 func (q *DestroyQueue) Triage(completedIndex uint64) {
-	// Collect completed items under the lock; execute callbacks outside.
-	var completedDestroys []func()
-	var completedRefs []*ResourceRef
-
 	q.mu.Lock()
+
+	// Collect completed items under the lock; execute callbacks outside.
+	completedDestroys, completedSubs := q.completedFns[:0], q.completedSubs[:0]
+	q.completedFns, q.completedSubs = nil, nil
 
 	// Triage deferred destroys (Phase 1).
 	n := 0
@@ -132,7 +168,7 @@ func (q *DestroyQueue) Triage(completedIndex uint64) {
 	tn := 0
 	for i := range q.tracked {
 		if q.tracked[i].index <= completedIndex {
-			completedRefs = append(completedRefs, q.tracked[i].refs...)
+			completedSubs = append(completedSubs, q.tracked[i])
 		} else {
 			q.tracked[tn] = q.tracked[i]
 			tn++
@@ -152,9 +188,28 @@ func (q *DestroyQueue) Triage(completedIndex uint64) {
 
 	// Drop Phase 2 refs outside the lock.
 	// onZero callbacks may call q.Defer() — safe because the lock is released.
-	for _, ref := range completedRefs {
-		ref.Drop()
+	for _, sub := range completedSubs {
+		for _, ref := range sub.refs {
+			ref.Drop()
+		}
+		clear(sub.refs)
 	}
+
+	clear(completedDestroys)
+	q.mu.Lock()
+	for i := range completedSubs {
+		if refs := completedSubs[i].refs; cap(refs) > 0 && len(q.freeRefs) < maxFreeRefs {
+			q.freeRefs = append(q.freeRefs, refs[:0])
+		}
+		completedSubs[i] = TrackedSubmission{}
+	}
+	if q.completedFns == nil {
+		q.completedFns = completedDestroys
+	}
+	if q.completedSubs == nil {
+		q.completedSubs = completedSubs
+	}
+	q.mu.Unlock()
 }
 
 // FlushAll destroys all pending resources regardless of GPU completion status.

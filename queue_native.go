@@ -201,17 +201,15 @@ func (q *Queue) postSubmit(subIdx uint64, commandBuffers []*CommandBuffer) {
 		return
 	}
 
-	// Collect tracked refs from command buffers and associate with this submission.
-	// Phase 2: per-command-buffer resource tracking — refs are Drop'd when GPU completes.
-	var allRefs []*core.ResourceRef
+	// Hand each command buffer's tracked refs to the DestroyQueue for this
+	// submission (Phase 2: per-command-buffer resource tracking). The refs
+	// are Drop'd when the GPU completes, and the queue reuses the emptied
+	// lists.
 	for _, cb := range commandBuffers {
-		if cb != nil && len(cb.trackedRefs) > 0 {
-			allRefs = append(allRefs, cb.trackedRefs...)
+		if cb != nil && cb.trackedRefs != nil {
+			dq.TrackSubmission(subIdx, cb.trackedRefs)
 			cb.trackedRefs = nil
 		}
-	}
-	if len(allRefs) > 0 {
-		dq.TrackSubmission(subIdx, allRefs)
 	}
 
 	// Schedule HAL encoder recycling after GPU completion (BUG-DX12-004).

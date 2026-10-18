@@ -101,3 +101,24 @@ func TestSubmitValidatesBufferReachedThroughGroup(t *testing.T) {
 		t.Fatal("Submit accepted a command buffer using a released buffer")
 	}
 }
+
+// Spent validation lists come back emptied and cleared, so they stop pinning
+// the resources the last frame used.
+func TestUsedListPoolClearsLists(t *testing.T) {
+	var pool usedListPool
+	if got := pool.get(); got.buffers != nil || got.textures != nil || got.bindGroups != nil {
+		t.Fatal("an empty pool handed out lists")
+	}
+	pool.put(usedLists{
+		buffers:    append(make([]*Buffer, 0, 4), &Buffer{}),
+		bindGroups: append(make([]*BindGroup, 0, 8), &BindGroup{}, &BindGroup{}),
+	})
+	got := pool.get()
+	if len(got.buffers) != 0 || cap(got.buffers) != 4 || len(got.bindGroups) != 0 || cap(got.bindGroups) != 8 {
+		t.Fatalf("lists came back as buffers %d/%d, groups %d/%d, want 0/4 and 0/8",
+			len(got.buffers), cap(got.buffers), len(got.bindGroups), cap(got.bindGroups))
+	}
+	if got.buffers[:1][0] != nil || got.bindGroups[:2][1] != nil {
+		t.Fatal("a recycled list still holds a resource")
+	}
+}

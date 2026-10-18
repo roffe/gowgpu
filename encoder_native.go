@@ -4,6 +4,7 @@ package wgpu
 
 import (
 	"fmt"
+	"sync"
 	"sync/atomic"
 
 	"github.com/roffe/gowgpu/core"
@@ -84,6 +85,52 @@ func (m *encoderMark) claim(serial uint64) bool {
 	}
 	m.last.Store(serial)
 	return true
+}
+
+// usedLists are the submit-time validation lists of one command buffer.
+type usedLists struct {
+	buffers    []*Buffer
+	textures   []*Texture
+	bindGroups []*BindGroup
+}
+
+// usedListPool keeps the emptied validation lists of spent command buffers,
+// so the next command encoder fills them instead of growing new ones.
+type usedListPool struct {
+	mu   sync.Mutex
+	free []usedLists
+}
+
+// maxFreeUsedLists caps how many sets of lists a device keeps for reuse.
+const maxFreeUsedLists = 8
+
+func (p *usedListPool) get() usedLists {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	n := len(p.free)
+	if n == 0 {
+		return usedLists{}
+	}
+	l := p.free[n-1]
+	p.free[n-1] = usedLists{}
+	p.free = p.free[:n-1]
+	return l
+}
+
+// put clears the lists, so they stop pinning resources, and keeps them.
+func (p *usedListPool) put(l usedLists) {
+	if cap(l.buffers)+cap(l.textures)+cap(l.bindGroups) == 0 {
+		return
+	}
+	clear(l.buffers)
+	clear(l.textures)
+	clear(l.bindGroups)
+	l.buffers, l.textures, l.bindGroups = l.buffers[:0], l.textures[:0], l.bindGroups[:0]
+	p.mu.Lock()
+	if len(p.free) < maxFreeUsedLists {
+		p.free = append(p.free, l)
+	}
+	p.mu.Unlock()
 }
 
 // id returns the encoder's serial, handing one out on first use.
@@ -747,6 +794,7 @@ func (e *CommandEncoder) DiscardEncoding() {
 		ref.Drop()
 	}
 	e.trackedRefs = nil
+	e.dropUsedLists()
 	raw := e.core.RawEncoder()
 	if raw != nil {
 		raw.DiscardEncoding()
@@ -790,6 +838,7 @@ func (e *CommandEncoder) Finish() (*CommandBuffer, error) {
 			ref.Drop()
 		}
 		e.trackedRefs = nil
+		e.dropUsedLists()
 		// An encoder in the error state never gets to EndEncoding, so the
 		// HAL encoder is still recording. Discard that like DiscardEncoding
 		// does before it goes back to the pool: otherwise Vulkan loses a
@@ -984,11 +1033,26 @@ func (cb *CommandBuffer) Release() {
 // usedTextures and usedBindGroups exist only for
 // validateCommandBufferForSubmit; once a command buffer is spent — submitted
 // or released — they are hard references pinning every resource the frame
-// touched for as long as the command buffer stays reachable.
+// touched for as long as the command buffer stays reachable. The emptied
+// lists go back to the device for the next encoder.
 func (cb *CommandBuffer) dropUsedSets() {
+	if cb.device != nil {
+		cb.device.usedLists.put(usedLists{cb.usedBuffers, cb.usedTextures, cb.usedBindGroups})
+	}
 	cb.usedBuffers = nil
 	cb.usedTextures = nil
 	cb.usedBindGroups = nil
+}
+
+// dropUsedLists is dropUsedSets for an encoder that will not produce a
+// command buffer.
+func (e *CommandEncoder) dropUsedLists() {
+	if e.device != nil {
+		e.device.usedLists.put(usedLists{e.usedBuffers, e.usedTextures, e.usedBindGroups})
+	}
+	e.usedBuffers = nil
+	e.usedTextures = nil
+	e.usedBindGroups = nil
 }
 
 // halBufferList returns all HAL command buffers in submission order.
