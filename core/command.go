@@ -441,8 +441,8 @@ func (e *CoreCommandEncoder) BeginRenderPass(desc *RenderPassDescriptor) (*CoreR
 	// Validate MRT rules: attachment count, sample count consistency,
 	// dimension consistency. This produces the RenderPassContext used
 	// for draw-time pipeline compatibility checks.
-	passCtx, valErr := ValidateRenderPassDescriptor(desc, e.device.Limits)
-	if valErr != nil {
+	pass := &CoreRenderPassEncoder{encoder: e, device: e.device}
+	if valErr := validateRenderPassDescriptor(desc, e.device.Limits, &pass.passCtx); valErr != nil {
 		e.setError(valErr)
 		return nil, valErr
 	}
@@ -464,8 +464,10 @@ func (e *CoreCommandEncoder) BeginRenderPass(desc *RenderPassDescriptor) (*CoreR
 		return nil, conflictErr
 	}
 
-	// Convert to HAL descriptor
-	halDesc := e.convertRenderPassDescriptor(desc)
+	// Convert to HAL descriptor. The backends read it until the pass ends, so
+	// it lives that long and then goes back to the pool.
+	pass.halDesc = halPassPool.Get().(*halPassDescriptor)
+	halDesc := pass.halDesc.fill(e, desc)
 
 	// Get HAL encoder
 	guard := e.device.snatchLock.Read()
@@ -484,12 +486,8 @@ func (e *CoreCommandEncoder) BeginRenderPass(desc *RenderPassDescriptor) (*CoreR
 	// Transition to locked state
 	e.status.Store(int32(CommandEncoderStatusLocked))
 
-	pass := &CoreRenderPassEncoder{
-		raw:         halPass,
-		encoder:     e,
-		device:      e.device,
-		passContext: passCtx,
-	}
+	pass.raw = halPass
+	pass.passContext = &pass.passCtx
 	e.mutable.activePass = pass
 
 	return pass, nil
@@ -936,13 +934,22 @@ func (e *CoreCommandEncoder) statusError(operation string) error {
 	return ese
 }
 
-// convertRenderPassDescriptor converts a core descriptor to HAL descriptor.
-func (e *CoreCommandEncoder) convertRenderPassDescriptor(desc *RenderPassDescriptor) *hal.RenderPassDescriptor {
-	halDesc := &hal.RenderPassDescriptor{
-		Label: desc.Label,
-	}
+// halPassDescriptor is the HAL descriptor of one render pass with room for
+// its attachments, kept in a pool between passes.
+type halPassDescriptor struct {
+	desc   hal.RenderPassDescriptor
+	color  []hal.RenderPassColorAttachment
+	depth  hal.RenderPassDepthStencilAttachment
+	stamps hal.RenderPassTimestampWrites
+}
 
-	// Convert color attachments
+var halPassPool = sync.Pool{New: func() any { return new(halPassDescriptor) }}
+
+// fill converts desc into the HAL descriptor.
+func (h *halPassDescriptor) fill(e *CoreCommandEncoder, desc *RenderPassDescriptor) *hal.RenderPassDescriptor {
+	h.desc = hal.RenderPassDescriptor{Label: desc.Label}
+
+	h.color = h.color[:0]
 	for _, ca := range desc.ColorAttachments {
 		halCA := hal.RenderPassColorAttachment{
 			LoadOp:     ca.LoadOp,
@@ -955,25 +962,25 @@ func (e *CoreCommandEncoder) convertRenderPassDescriptor(desc *RenderPassDescrip
 		if ca.ResolveTarget != nil {
 			halCA.ResolveTarget = ca.ResolveTarget.HAL
 		}
-		halDesc.ColorAttachments = append(halDesc.ColorAttachments, halCA)
+		h.color = append(h.color, halCA)
 	}
+	h.desc.ColorAttachments = h.color
 
-	// Convert depth/stencil attachment if present
-	if desc.DepthStencilAttachment != nil {
-		halDS := &hal.RenderPassDepthStencilAttachment{
-			DepthLoadOp:       desc.DepthStencilAttachment.DepthLoadOp,
-			DepthStoreOp:      desc.DepthStencilAttachment.DepthStoreOp,
-			DepthClearValue:   desc.DepthStencilAttachment.DepthClearValue,
-			DepthReadOnly:     desc.DepthStencilAttachment.DepthReadOnly,
-			StencilLoadOp:     desc.DepthStencilAttachment.StencilLoadOp,
-			StencilStoreOp:    desc.DepthStencilAttachment.StencilStoreOp,
-			StencilClearValue: desc.DepthStencilAttachment.StencilClearValue,
-			StencilReadOnly:   desc.DepthStencilAttachment.StencilReadOnly,
+	if ds := desc.DepthStencilAttachment; ds != nil {
+		h.depth = hal.RenderPassDepthStencilAttachment{
+			DepthLoadOp:       ds.DepthLoadOp,
+			DepthStoreOp:      ds.DepthStoreOp,
+			DepthClearValue:   ds.DepthClearValue,
+			DepthReadOnly:     ds.DepthReadOnly,
+			StencilLoadOp:     ds.StencilLoadOp,
+			StencilStoreOp:    ds.StencilStoreOp,
+			StencilClearValue: ds.StencilClearValue,
+			StencilReadOnly:   ds.StencilReadOnly,
 		}
-		if desc.DepthStencilAttachment.View != nil {
-			halDS.View = desc.DepthStencilAttachment.View.HAL
+		if ds.View != nil {
+			h.depth.View = ds.View.HAL
 		}
-		halDesc.DepthStencilAttachment = halDS
+		h.desc.DepthStencilAttachment = &h.depth
 	}
 
 	if writes := desc.TimestampWrites; writes != nil && writes.QuerySet != nil {
@@ -981,15 +988,25 @@ func (e *CoreCommandEncoder) convertRenderPassDescriptor(desc *RenderPassDescrip
 		raw := writes.QuerySet.Raw(guard)
 		guard.Release()
 		if raw != nil {
-			halDesc.TimestampWrites = &hal.RenderPassTimestampWrites{
+			h.stamps = hal.RenderPassTimestampWrites{
 				QuerySet:                  raw,
 				BeginningOfPassWriteIndex: writes.BeginningOfPassWriteIndex,
 				EndOfPassWriteIndex:       writes.EndOfPassWriteIndex,
 			}
+			h.desc.TimestampWrites = &h.stamps
 		}
 	}
 
-	return halDesc
+	return &h.desc
+}
+
+// release puts h back in the pool, holding on to nothing.
+func (h *halPassDescriptor) release() {
+	clear(h.color)
+	h.depth = hal.RenderPassDepthStencilAttachment{}
+	h.stamps = hal.RenderPassTimestampWrites{}
+	h.desc = hal.RenderPassDescriptor{}
+	halPassPool.Put(h)
 }
 
 // populateTextureScope records texture usage from the render pass descriptor
@@ -1223,6 +1240,11 @@ type CoreRenderPassEncoder struct {
 	//
 	// Matches Rust wgpu-core command/render.rs RenderPassInfo.context.
 	passContext *RenderPassContext
+
+	// passCtx holds passContext, and halDesc the HAL descriptor the backend
+	// reads until End, so a pass allocates neither.
+	passCtx RenderPassContext
+	halDesc *halPassDescriptor
 }
 
 // RawPass returns the underlying HAL render pass encoder for direct HAL access.
@@ -1434,6 +1456,10 @@ func (p *CoreRenderPassEncoder) End() error {
 
 	if p.raw != nil {
 		p.raw.End()
+	}
+	if p.halDesc != nil {
+		p.halDesc.release()
+		p.halDesc = nil
 	}
 
 	return p.encoder.EndRenderPass(p)

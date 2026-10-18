@@ -417,9 +417,11 @@ func (e *CommandEncoder) BeginRenderPass(desc *RenderPassDescriptor) (*RenderPas
 	}
 	trackRenderPassTextureViews(e, desc)
 
-	coreDesc := convertRenderPassDesc(desc)
-
-	corePass, err := e.core.BeginRenderPass(coreDesc)
+	// Core reads the descriptor and keeps none of it, so it comes from a pool
+	// and goes straight back.
+	s := passDescPool.Get().(*corePassDescriptor)
+	corePass, err := e.core.BeginRenderPass(s.fill(desc))
+	s.release()
 	if err != nil {
 		return nil, err
 	}
@@ -901,19 +903,34 @@ func (e *CommandEncoder) Finish() (*CommandBuffer, error) {
 	return cb, nil
 }
 
-// convertRenderPassDesc converts a public descriptor to core descriptor.
-// The conversion wires core.TextureView.Parent from the public TextureView's
-// parent Texture coreTexture, enabling TrackerIndex-based usage tracking in
-// populateTextureScope for submit-time barrier injection.
-func convertRenderPassDesc(desc *RenderPassDescriptor) *core.RenderPassDescriptor {
+// corePassDescriptor is the core descriptor of one render pass, with room for
+// the views of its attachments, kept in a pool between passes.
+type corePassDescriptor struct {
+	desc   core.RenderPassDescriptor
+	color  []core.RenderPassColorAttachment
+	views  []core.TextureView
+	depth  core.RenderPassDepthStencilAttachment
+	stamps core.RenderPassTimestampWrites
+}
+
+var passDescPool = sync.Pool{New: func() any { return new(corePassDescriptor) }}
+
+// fill converts desc into the core descriptor.
+func (c *corePassDescriptor) fill(desc *RenderPassDescriptor) *core.RenderPassDescriptor {
+	c.desc = core.RenderPassDescriptor{}
 	if desc == nil {
-		return &core.RenderPassDescriptor{}
+		return &c.desc
 	}
+	c.desc.Label = desc.Label
 
-	coreDesc := &core.RenderPassDescriptor{
-		Label: desc.Label,
+	// The attachments point into views, so it gets its full length before the
+	// first one is taken: growing it later would leave them behind.
+	if n := 2*len(desc.ColorAttachments) + 1; cap(c.views) < n {
+		c.views = make([]core.TextureView, 0, n)
 	}
+	c.views = c.views[:0]
 
+	c.color = c.color[:0]
 	for _, ca := range desc.ColorAttachments {
 		coreCA := core.RenderPassColorAttachment{
 			LoadOp:     ca.LoadOp,
@@ -921,17 +938,17 @@ func convertRenderPassDesc(desc *RenderPassDescriptor) *core.RenderPassDescripto
 			ClearValue: ca.ClearValue,
 		}
 		if ca.View != nil {
-			coreCA.View = coreTextureViewFrom(ca.View)
+			coreCA.View = c.view(ca.View)
 		}
 		if ca.ResolveTarget != nil {
-			coreCA.ResolveTarget = coreTextureViewFrom(ca.ResolveTarget)
+			coreCA.ResolveTarget = c.view(ca.ResolveTarget)
 		}
-		coreDesc.ColorAttachments = append(coreDesc.ColorAttachments, coreCA)
+		c.color = append(c.color, coreCA)
 	}
+	c.desc.ColorAttachments = c.color
 
-	if desc.DepthStencilAttachment != nil {
-		ds := desc.DepthStencilAttachment
-		coreDSA := &core.RenderPassDepthStencilAttachment{
+	if ds := desc.DepthStencilAttachment; ds != nil {
+		c.depth = core.RenderPassDepthStencilAttachment{
 			DepthLoadOp:       ds.DepthLoadOp,
 			DepthStoreOp:      ds.DepthStoreOp,
 			DepthClearValue:   ds.DepthClearValue,
@@ -942,31 +959,47 @@ func convertRenderPassDesc(desc *RenderPassDescriptor) *core.RenderPassDescripto
 			StencilReadOnly:   ds.StencilReadOnly,
 		}
 		if ds.View != nil {
-			coreDSA.View = coreTextureViewFrom(ds.View)
+			c.depth.View = c.view(ds.View)
 		}
-		coreDesc.DepthStencilAttachment = coreDSA
+		c.desc.DepthStencilAttachment = &c.depth
 	}
 
 	if writes := desc.TimestampWrites; writes != nil {
-		halQuerySet := writes.QuerySet.halQuerySet()
-		if halQuerySet != nil {
-			coreDesc.TimestampWrites = &core.RenderPassTimestampWrites{
+		if writes.QuerySet.halQuerySet() != nil {
+			c.stamps = core.RenderPassTimestampWrites{
 				QuerySet:                  writes.QuerySet.core,
 				BeginningOfPassWriteIndex: writes.BeginningOfPassWriteIndex,
 				EndOfPassWriteIndex:       writes.EndOfPassWriteIndex,
 			}
+			c.desc.TimestampWrites = &c.stamps
 		}
 	}
 
-	return coreDesc
+	return &c.desc
 }
 
-// coreTextureViewFrom creates a core.TextureView from a public TextureView,
+// view adds the core view of v to views and returns it.
+func (c *corePassDescriptor) view(v *TextureView) *core.TextureView {
+	c.views = append(c.views, coreTextureViewFrom(v))
+	return &c.views[len(c.views)-1]
+}
+
+// release puts c back in the pool, holding on to nothing.
+func (c *corePassDescriptor) release() {
+	clear(c.color)
+	clear(c.views)
+	c.depth = core.RenderPassDepthStencilAttachment{}
+	c.stamps = core.RenderPassTimestampWrites{}
+	c.desc = core.RenderPassDescriptor{}
+	passDescPool.Put(c)
+}
+
+// coreTextureViewFrom makes the core.TextureView of a public TextureView,
 // wiring the Parent to the texture's coreTexture for TrackerIndex access.
 // The Parent reference enables populateTextureScope to record per-texture
 // usage in the command buffer's TextureUsageScope.
-func coreTextureViewFrom(v *TextureView) *core.TextureView {
-	cv := &core.TextureView{HAL: v.resolveHAL()}
+func coreTextureViewFrom(v *TextureView) core.TextureView {
+	cv := core.TextureView{HAL: v.resolveHAL()}
 	if v.texture != nil && v.texture.coreTexture != nil {
 		cv.Parent = v.texture.coreTexture
 	}

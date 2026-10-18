@@ -422,9 +422,6 @@ func TestCoreTextureViewFrom_WiresParent(t *testing.T) {
 	defer view.Release()
 
 	cv := coreTextureViewFrom(view)
-	if cv == nil {
-		t.Fatal("coreTextureViewFrom should not return nil")
-	}
 	if cv.Parent == nil {
 		t.Fatal("core.TextureView.Parent should be set from texture.coreTexture")
 	}
@@ -440,9 +437,6 @@ func TestCoreTextureViewFrom_WiresParent(t *testing.T) {
 func TestCoreTextureViewFrom_NilTexture(t *testing.T) {
 	v := &TextureView{}
 	cv := coreTextureViewFrom(v)
-	if cv == nil {
-		t.Fatal("coreTextureViewFrom should not return nil")
-	}
 	if cv.Parent != nil {
 		t.Error("Parent should be nil when texture is nil")
 	}

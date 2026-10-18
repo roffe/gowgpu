@@ -30,7 +30,7 @@ func TestRenderPassTimestampDescriptor(t *testing.T) {
 	encoder := &CoreCommandEncoder{device: device}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := encoder.convertRenderPassDescriptor(&RenderPassDescriptor{Label: "pass", TimestampWrites: tt.writes})
+			got := new(halPassDescriptor).fill(encoder, &RenderPassDescriptor{Label: "pass", TimestampWrites: tt.writes})
 			if got.Label != "pass" {
 				t.Fatalf("Label = %q", got.Label)
 			}

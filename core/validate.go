@@ -917,6 +917,10 @@ type RenderPassContext struct {
 	// SampleCount is the sample count of the attachments.
 	// All attachments must share the same sample count.
 	SampleCount uint32
+
+	// colorFormats backs ColorFormats up to 8 attachments, WebGPU's limit, so
+	// a context needs no allocation of its own.
+	colorFormats [8]gputypes.TextureFormat
 }
 
 // CheckCompatible validates that a render pipeline's pass context is
@@ -986,14 +990,24 @@ func (ctx *RenderPassContext) CheckCompatible(pipeline *RenderPassContext, pipel
 // Reference: Rust wgpu-core command/render.rs begin_render_pass_inner → fill_arc_desc
 // and command/render.rs encode_render_pass → add_view + sample_count checks.
 func ValidateRenderPassDescriptor(desc *RenderPassDescriptor, limits gputypes.Limits) (*RenderPassContext, error) {
+	ctx := new(RenderPassContext)
+	if err := validateRenderPassDescriptor(desc, limits, ctx); err != nil {
+		return nil, err
+	}
+	return ctx, nil
+}
+
+// validateRenderPassDescriptor is ValidateRenderPassDescriptor filling ctx,
+// which BeginRenderPass keeps inside the pass instead of allocating one.
+func validateRenderPassDescriptor(desc *RenderPassDescriptor, limits gputypes.Limits, ctx *RenderPassContext) error {
 	if desc == nil {
-		return nil, fmt.Errorf("render pass descriptor is nil")
+		return fmt.Errorf("render pass descriptor is nil")
 	}
 
 	// MRT-1: Color attachment count must not exceed maxColorAttachments.
 	maxCA := limits.MaxColorAttachments
 	if uint32(len(desc.ColorAttachments)) > maxCA { //nolint:gosec // len bounded by spec
-		return nil, &RenderPassValidationError{
+		return &RenderPassValidationError{
 			Kind:  RenderPassErrorTooManyColorAttachments,
 			Label: desc.Label,
 			Given: uint32(len(desc.ColorAttachments)), //nolint:gosec // len bounded by spec
@@ -1002,8 +1016,10 @@ func ValidateRenderPassDescriptor(desc *RenderPassDescriptor, limits gputypes.Li
 	}
 
 	// Resolve the pass context from actual attachments.
-	ctx := &RenderPassContext{
-		ColorFormats: make([]gputypes.TextureFormat, len(desc.ColorAttachments)),
+	if n := len(desc.ColorAttachments); n <= len(ctx.colorFormats) {
+		ctx.ColorFormats = ctx.colorFormats[:n]
+	} else {
+		ctx.ColorFormats = make([]gputypes.TextureFormat, n)
 	}
 
 	var (
@@ -1035,7 +1051,7 @@ func ValidateRenderPassDescriptor(desc *RenderPassDescriptor, limits gputypes.Li
 			refSampleIdx = i
 			hasSampleCount = true
 		} else if texSamples != sampleCount {
-			return nil, &RenderPassValidationError{
+			return &RenderPassValidationError{
 				Kind:            RenderPassErrorSampleCountMismatch,
 				Label:           desc.Label,
 				AttachmentIndex: i,
@@ -1052,7 +1068,7 @@ func ValidateRenderPassDescriptor(desc *RenderPassDescriptor, limits gputypes.Li
 			refDimIdx = i
 			hasDimensions = true
 		} else if texSize.Width != width || texSize.Height != height {
-			return nil, &RenderPassValidationError{
+			return &RenderPassValidationError{
 				Kind:            RenderPassErrorDimensionMismatch,
 				Label:           desc.Label,
 				AttachmentIndex: i,
@@ -1068,7 +1084,7 @@ func ValidateRenderPassDescriptor(desc *RenderPassDescriptor, limits gputypes.Li
 	// Include depth/stencil in sample count and dimension checks.
 	if err := validateDepthStencilAttachment(desc, &sampleCount, &hasSampleCount, refSampleIdx,
 		&width, &height, &hasDimensions, refDimIdx, ctx); err != nil {
-		return nil, err
+		return err
 	}
 
 	// Store the resolved sample count (default 1 if no attachments).
@@ -1078,7 +1094,7 @@ func ValidateRenderPassDescriptor(desc *RenderPassDescriptor, limits gputypes.Li
 		ctx.SampleCount = 1
 	}
 
-	return ctx, nil
+	return nil
 }
 
 // validateDepthStencilAttachment checks that the depth/stencil attachment
