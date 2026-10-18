@@ -1587,9 +1587,10 @@ func (e *ComputePassEncoder) SetBindGroup(index uint32, group hal.BindGroup, off
 	)
 }
 
-// Dispatch dispatches compute work.
+// Dispatch dispatches compute work. Without a pipeline bound there is
+// nothing to run and the driver faults, so the dispatch is dropped.
 func (e *ComputePassEncoder) Dispatch(x, y, z uint32) {
-	if e.encoder.active == 0 {
+	if e.encoder.active == 0 || e.pipeline == nil {
 		return
 	}
 
@@ -1600,7 +1601,7 @@ func (e *ComputePassEncoder) Dispatch(x, y, z uint32) {
 // DispatchIndirect dispatches compute work with GPU-generated parameters.
 func (e *ComputePassEncoder) DispatchIndirect(buffer hal.Buffer, offset uint64) {
 	buf, ok := buffer.(*Buffer)
-	if !ok || e.encoder.active == 0 {
+	if !ok || e.encoder.active == 0 || e.pipeline == nil {
 		return
 	}
 
