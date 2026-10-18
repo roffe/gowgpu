@@ -136,6 +136,16 @@ type Queue struct {
 	swapchainSuppressed bool
 	savedSwapchain      *Swapchain
 	savedAcquireUsed    bool
+
+	// submitScratch holds what Submit hands vkQueueSubmit through pointers
+	// inside the VkSubmitInfo chain. As locals they escaped to the heap, four
+	// allocations every submit. Guarded by mu.
+	submitScratch struct {
+		signalSems   [3]vk.Semaphore
+		waitValues   [2]uint64
+		signalValues [3]uint64
+		timeline     vk.TimelineSemaphoreSubmitInfo
+	}
 }
 
 func validateSwapchainSubmission(swapchain *Swapchain, device *Device) error {
@@ -201,10 +211,12 @@ func (q *Queue) submitTimeline(
 	submitInfo.SignalSemaphoreCount = signalCount
 	submitInfo.PSignalSemaphores = &signalSems[0]
 
-	var waitValues [2]uint64
-	var signalValues [3]uint64
+	waitValues := &q.submitScratch.waitValues
+	signalValues := &q.submitScratch.signalValues
+	*waitValues, *signalValues = [2]uint64{}, [3]uint64{}
 	signalValues[signalCount-1] = signalValue
-	timelineSubmitInfo := vk.TimelineSemaphoreSubmitInfo{
+	timelineSubmitInfo := &q.submitScratch.timeline
+	*timelineSubmitInfo = vk.TimelineSemaphoreSubmitInfo{
 		SType: vk.StructureTypeTimelineSemaphoreSubmitInfo,
 	}
 	if waitCount > 0 {
@@ -213,7 +225,7 @@ func (q *Queue) submitTimeline(
 	}
 	timelineSubmitInfo.SignalSemaphoreValueCount = signalCount
 	timelineSubmitInfo.PSignalSemaphoreValues = &signalValues[0]
-	submitInfo.PNext = (*uintptr)(unsafe.Pointer(&timelineSubmitInfo))
+	submitInfo.PNext = (*uintptr)(unsafe.Pointer(timelineSubmitInfo))
 
 	result := vkQueueSubmit(q, 1, submitInfo, vk.Fence(0))
 	if result != vk.Success {
@@ -269,9 +281,10 @@ func (q *Queue) Submit(commandBuffers []hal.CommandBuffer) (uint64, error) {
 		waitStages [2]vk.PipelineStageFlags
 		waitCount  uint32
 
-		signalSems  [3]vk.Semaphore
 		signalCount uint32
 	)
+	signalSems := &q.submitScratch.signalSems
+	*signalSems = [3]vk.Semaphore{}
 
 	// ADR-058: Acquire wait and present signal are now SEPARATE concerns.
 	//
@@ -343,7 +356,7 @@ func (q *Queue) Submit(commandBuffers []hal.CommandBuffer) (uint64, error) {
 	signalValue := q.device.timelineFence.nextSignalValue()
 
 	if q.device.timelineFence.isTimeline {
-		return q.submitTimeline(&submitInfo, &signalSems, waitCount, signalCount, consumedAcquire, signalValue)
+		return q.submitTimeline(&submitInfo, signalSems, waitCount, signalCount, consumedAcquire, signalValue)
 	}
 
 	// Binary path (VK-IMPL-003): Get a fence from the pool to track this submission.
