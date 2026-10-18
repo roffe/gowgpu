@@ -134,15 +134,15 @@ Not run yet: the browser backend, the BSDs, GL on Windows and real Apple hardwar
 
 ## Known issues
 
-- On Vulkan, pipelines need an explicit layout (there are no automatic layouts). And `Map` doesn't see a `WriteBuffer` until something is submitted, an empty `Queue.Submit()` is enough. 10 tests in the root package fail because of those two, same as on gogpu v0.34.5.
-- DX12 ignores dynamic bind group offsets, and takes the vertex stride from whatever pipeline was set when `SetVertexBuffer` ran.
+- On Vulkan and DX12, pipelines need an explicit layout (there are no automatic layouts; Metal takes pipelines without one). And `Map` doesn't see a `WriteBuffer` until something is submitted, an empty `Queue.Submit()` is enough. 10 tests in the root package fail on Vulkan and DX12 because of those two, 3 on Metal.
+- DX12 ignores dynamic bind group offsets, takes the vertex stride from whatever pipeline was set when `SetVertexBuffer` ran, and indexed draws render nothing (`TestDrawIndexedRenders`, on WARP and through vkd3d).
+- Metal doesn't check compute pipelines against the device's workgroup limits.
 - naga keeps identifiers that start with `gl_` when it writes GLSL, and strict drivers like Mali refuse them. Don't name things `gl_*` in WGSL.
 - New textures are zeroed only when they have a color format, one sample and `TextureBinding`. Depth, multisampled and compressed textures start with whatever the memory held, so clear them in their first render pass or write all of them.
 - On Vulkan every queue write moves the texture from `UNDEFINED`, which allows a driver to drop what's already in it. NVIDIA keeps it, AMD might not.
 - `DispatchIndirect` validation destroys its bind group before the GPU runs it, and indirect dispatches recorded before one `Submit` share one set of params.
 - Render bundles crash on Vulkan in `vkBeginCommandBuffer`.
 - `examples/browser-compute` doesn't build, it was written against an older API.
-- CI tests on Windows (WARP) and macOS (Metal) haven't run yet, so they can't fail the workflow until there's a baseline.
 
 What's next is in [ROADMAP.md](ROADMAP.md).
 

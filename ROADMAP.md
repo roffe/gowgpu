@@ -8,15 +8,14 @@ gowgpu runs fyne's WebGPU painter on Linux, Windows, macOS, iOS and Android, thr
 
 ## Next
 
-1. **CI on Windows and macOS.** CI builds for every platform with cgo and runs the tests on lavapipe and llvmpipe. The WARP and Metal test jobs still need a baseline before they can fail the workflow.
-2. **The 10 failing root tests.** Automatic pipeline layouts on Vulkan, and `Map` flushing a `WriteBuffer` that wasn't submitted yet.
-3. **DX12.** Honour dynamic bind group offsets, and take the vertex stride from the pipeline that draws instead of the one set at `SetVertexBuffer`.
-4. **`gl_` names in GLSL.** naga keeps WGSL identifiers that start with `gl_`, which GLSL reserves. Rename them on the way out, either in naga or before the GLSL reaches the driver.
-5. **Vulkan image layouts.** The validation layer reports layout errors from the state tracking gogpu wrote, and every queue write starts from `UNDEFINED`, which allows a driver to throw away what's in the texture.
-6. **What the vet left open.** `DispatchIndirect` validation has to keep its bind group alive until the GPU is done with it and give every dispatch its own params. Depth, multisampled and compressed textures need zeroing on the HAL side. Render bundles crash on Vulkan.
-7. **Real Apple hardware.** Metal has only run on GitHub's macOS runners and in the iOS simulator.
-8. **The browser backend.** Get `examples/browser-compute` building against the current API again and run it in a browser.
-9. **The lint backlog**, then a first tagged release.
+1. **The failing root tests.** Automatic pipeline layouts on Vulkan and DX12 (Metal takes pipelines without one), and `Map` flushing a `WriteBuffer` that wasn't submitted yet. CI skips them by name until then.
+2. **DX12.** Honour dynamic bind group offsets, take the vertex stride from the pipeline that draws instead of the one set at `SetVertexBuffer`, and find out why indexed draws render nothing (`TestDrawIndexedRenders`, on WARP and through vkd3d).
+3. **`gl_` names in GLSL.** naga keeps WGSL identifiers that start with `gl_`, which GLSL reserves. Rename them on the way out, either in naga or before the GLSL reaches the driver.
+4. **Vulkan image layouts.** The validation layer reports layout errors from the state tracking gogpu wrote, and every queue write starts from `UNDEFINED`, which allows a driver to throw away what's in the texture.
+5. **What the vet left open.** `DispatchIndirect` validation has to keep its bind group alive until the GPU is done with it and give every dispatch its own params. Depth, multisampled and compressed textures need zeroing on the HAL side. Render bundles crash on Vulkan.
+6. **Metal.** Check compute pipelines against the device's workgroup limits, and run on real Apple hardware: Metal has only run on GitHub's macOS runners and in the iOS simulator.
+7. **The browser backend.** Get `examples/browser-compute` building against the current API again and run it in a browser.
+8. **The lint backlog**, then a first tagged release.
 
 ## Not planned
 

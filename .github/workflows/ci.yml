@@ -23,9 +23,7 @@ jobs:
         with:
           go-version-file: go.mod
       - run: go build ./...
-      # vet hasn't been run on macOS outside CI yet, so it can't fail the job there.
       - run: go vet ./...
-        continue-on-error: ${{ runner.os == 'macOS' }}
 
   cross:
     name: Build for ${{ matrix.name }}
@@ -104,18 +102,17 @@ jobs:
           sudo apt-get install --no-install-recommends libvulkan1 mesa-vulkan-drivers libegl1 libegl-mesa0 libgl1-mesa-dri
       # These ten fail on every driver: there are no automatic pipeline layouts
       # on Vulkan, and Map doesn't flush a WriteBuffer that wasn't submitted.
-      # ROADMAP item 2.
+      # Both are in ROADMAP.md.
       - name: Tests on Vulkan
         run: go test -race -skip '^(TestBufferMapAsyncStatus|TestBufferMapRoundTrip|TestDeviceCreateRenderPipeline|TestIntegrationQueueReadBuffer|TestMixedResourceLifecycle_TrackedSubmission|TestMRTTwoTargetRenderPass|TestRenderPipelineHasRef|TestRenderPipelineReleaseIdempotent|TestRenderPipeline_ReleaseUsesRefDrop|TestRenderPipelineWithVertexBuffers)$' ./...
       - name: GL tests, surfaceless EGL
         run: go test -race -tags integration ./hal/gles/...
 
-  # Neither has been run outside CI yet, so they can't fail the workflow until
-  # their results are known.
+  # DX12 has the same ten as Vulkan, and indexed draws render nothing
+  # (TestDrawIndexedRenders). Both are in ROADMAP.md.
   test-windows:
     name: Test on WARP
     runs-on: windows-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v5
         with:
@@ -123,12 +120,15 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-      - run: go test ./...
+      - run: go test -skip '^(TestBufferMapAsyncStatus|TestBufferMapRoundTrip|TestDeviceCreateRenderPipeline|TestIntegrationQueueReadBuffer|TestMixedResourceLifecycle_TrackedSubmission|TestMRTTwoTargetRenderPass|TestRenderPipelineHasRef|TestRenderPipelineReleaseIdempotent|TestRenderPipeline_ReleaseUsesRefDrop|TestRenderPipelineWithVertexBuffers|TestDrawIndexedRenders)$' ./...
+        shell: bash
 
+  # Pipelines without a layout work on Metal, so only the three Map tests of
+  # the ten fail there. Compute pipelines aren't checked against the device's
+  # workgroup limits yet. Both are in ROADMAP.md.
   test-macos:
     name: Test on Metal
     runs-on: macos-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v5
         with:
@@ -136,4 +136,4 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-      - run: go test ./...
+      - run: go test -skip '^(TestBufferMapAsyncStatus|TestBufferMapRoundTrip|TestIntegrationQueueReadBuffer|TestCreateComputePipelineWorkgroupSizeTooLarge|TestCreateComputePipelineTotalInvocationsExceeded)$' ./...
