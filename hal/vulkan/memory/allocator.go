@@ -30,6 +30,10 @@ type AllocatorConfig struct {
 	MaxBlocksPerHeap int
 }
 
+// firstBlockSize is the size of a pool's first block; each block after it is
+// twice the size, up to AllocatorConfig.BlockSize.
+const firstBlockSize = 8 << 20
+
 // DefaultConfig returns sensible default configuration.
 func DefaultConfig() AllocatorConfig {
 	return AllocatorConfig{
@@ -288,14 +292,22 @@ func (a *GpuAllocator) allocPooled(size uint64, memTypeIndex uint32) (*MemoryBlo
 		return a.allocDedicated(size, memTypeIndex)
 	}
 
+	// Blocks start small and double up to the configured size, so an app
+	// that needs a few MB of each memory type does not commit 64 MB of it
+	// up front. A request bigger than the next block gets a block that fits.
+	blockSize := min(pool.blockSize, firstBlockSize<<uint(min(len(pool.blocks), 8)))
+	for blockSize < size {
+		blockSize <<= 1
+	}
+
 	// Allocate new Vulkan memory block
-	memory, err := a.vulkanAllocate(pool.blockSize, memTypeIndex)
+	memory, err := a.vulkanAllocate(blockSize, memTypeIndex)
 	if err != nil {
 		return nil, err
 	}
 
 	// Create buddy allocator for the block
-	buddy, err := NewBuddyAllocator(pool.blockSize, pool.minAllocSize)
+	buddy, err := NewBuddyAllocator(blockSize, pool.minAllocSize)
 	if err != nil {
 		a.vulkanFree(memory)
 		return nil, err
@@ -303,13 +315,13 @@ func (a *GpuAllocator) allocPooled(size uint64, memTypeIndex uint32) (*MemoryBlo
 
 	newBlock := &poolBlock{
 		memory: memory,
-		size:   pool.blockSize,
+		size:   blockSize,
 		buddy:  buddy,
 	}
 	pool.blocks = append(pool.blocks, newBlock)
 	pool.stats.BlockCount++
-	pool.stats.TotalSize += pool.blockSize
-	a.stats.TotalAllocated += pool.blockSize
+	pool.stats.TotalSize += blockSize
+	a.stats.TotalAllocated += blockSize
 
 	// Allocate from the new block
 	buddyBlock, err := buddy.Alloc(size)
