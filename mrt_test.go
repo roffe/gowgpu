@@ -179,7 +179,10 @@ func TestMRTTwoTargetRenderPass(t *testing.T) {
 	// --- Create staging buffers for readback ---
 
 	const bytesPerPixel = 4
-	bufSize := uint64(width) * uint64(height) * bytesPerPixel
+	// Rows go out at WebGPU's 256-byte pitch, and packRows packs them back
+	// together after mapping.
+	const pitch = 256
+	bufSize := uint64(pitch) * uint64(height)
 
 	staging0, err := device.CreateBuffer(&wgpu.BufferDescriptor{
 		Label: "mrt-staging0",
@@ -203,7 +206,7 @@ func TestMRTTwoTargetRenderPass(t *testing.T) {
 
 	// --- Copy textures to staging buffers ---
 
-	bytesPerRow := width * bytesPerPixel
+	bytesPerRow := uint32(pitch)
 
 	enc.CopyTextureToBuffer(target0, staging0, []wgpu.BufferTextureCopy{{
 		BufferLayout: wgpu.ImageDataLayout{Offset: 0, BytesPerRow: bytesPerRow, RowsPerImage: height},
@@ -237,8 +240,7 @@ func TestMRTTwoTargetRenderPass(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MappedRange(staging0): %v", err)
 	}
-	px0 := make([]byte, len(rng0.Bytes()))
-	copy(px0, rng0.Bytes())
+	px0 := packRows(rng0.Bytes(), pitch, int(width)*bytesPerPixel, int(height))
 	staging0.Unmap()
 
 	if err := staging1.Map(context.Background(), wgpu.MapModeRead, 0, bufSize); err != nil {
@@ -248,8 +250,7 @@ func TestMRTTwoTargetRenderPass(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MappedRange(staging1): %v", err)
 	}
-	px1 := make([]byte, len(rng1.Bytes()))
-	copy(px1, rng1.Bytes())
+	px1 := packRows(rng1.Bytes(), pitch, int(width)*bytesPerPixel, int(height))
 	staging1.Unmap()
 
 	// --- Verify readback ---
@@ -287,6 +288,15 @@ func TestMRTTwoTargetRenderPass(t *testing.T) {
 
 	verifyMRTTarget(t, px0, bytesPerPixel, "target0", 254, 0, 0)
 	verifyMRTTarget(t, px1, bytesPerPixel, "target1", 0, 254, 0)
+}
+
+// packRows copies rows of rowBytes, pitch bytes apart, into one tight slice.
+func packRows(b []byte, pitch, rowBytes, rows int) []byte {
+	out := make([]byte, 0, rowBytes*rows)
+	for y := range rows {
+		out = append(out, b[y*pitch:y*pitch+rowBytes]...)
+	}
+	return out
 }
 
 func verifyMRTTarget(t *testing.T, pixels []byte, bpp int, name string, wantR, wantG, wantB byte) {
