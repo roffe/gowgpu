@@ -537,17 +537,19 @@ func generateTypes(registry *Registry, outDir string) error {
 	fmt.Fprintln(f, ")")
 	fmt.Fprintln(f, "")
 
-	// Union types
-	fmt.Fprintln(f, "// Union types (largest member size)")
-	fmt.Fprintln(f, "type ClearValue [16]byte // Union: ClearColorValue or ClearDepthStencilValue")
-	fmt.Fprintln(f, "type ClearColorValue [16]byte // Union: float32[4], int32[4], or uint32[4]")
-	fmt.Fprintln(f, "type PerformanceValueDataINTEL [8]byte // Union: value32, value64, valueFloat, valueBool, valueString")
-	fmt.Fprintln(f, "type PipelineExecutableStatisticValueKHR [8]byte // Union: b32, i64, u64, f64")
-	fmt.Fprintln(f, "type PerformanceCounterResultKHR [8]byte // Union: int32, int64, uint32, uint64, float32, float64")
+	// Union types. The element type gives each the alignment of its widest
+	// member, as in C: a byte array would be 1-aligned, so a struct holding
+	// one would lay out its fields differently than the driver expects.
+	fmt.Fprintln(f, "// Union types (largest member size, widest member's alignment)")
+	fmt.Fprintln(f, "type ClearValue [4]uint32 // Union: ClearColorValue or ClearDepthStencilValue")
+	fmt.Fprintln(f, "type ClearColorValue [4]uint32 // Union: float32[4], int32[4], or uint32[4]")
+	fmt.Fprintln(f, "type PerformanceValueDataINTEL [1]uint64 // Union: value32, value64, valueFloat, valueBool, valueString")
+	fmt.Fprintln(f, "type PipelineExecutableStatisticValueKHR [1]uint64 // Union: b32, i64, u64, f64")
+	fmt.Fprintln(f, "type PerformanceCounterResultKHR [1]uint64 // Union: int32, int64, uint32, uint64, float32, float64")
 	fmt.Fprintln(f, "type DeviceOrHostAddressKHR uintptr // Union: deviceAddress or hostAddress")
 	fmt.Fprintln(f, "type DeviceOrHostAddressConstKHR uintptr // Union: deviceAddress or hostAddress")
-	fmt.Fprintln(f, "type AccelerationStructureGeometryDataKHR [64]byte // Union: triangles, aabbs, instances")
-	fmt.Fprintln(f, "type AccelerationStructureMotionInstanceDataNV [144]byte // Union: static, matrix, srt instances")
+	fmt.Fprintln(f, "type AccelerationStructureGeometryDataKHR [8]uint64 // Union: triangles, aabbs, instances")
+	fmt.Fprintln(f, "type AccelerationStructureMotionInstanceDataNV [18]uint64 // Union: static, matrix, srt instances")
 	fmt.Fprintln(f, "type ClusterAccelerationStructureOpInputNV uintptr // Union: various cluster inputs")
 	fmt.Fprintln(f, "type DescriptorDataEXT uintptr // Union: descriptor data variants")
 	fmt.Fprintln(f, "")

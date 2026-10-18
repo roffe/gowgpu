@@ -275,18 +275,18 @@ type (
 	IOSurfaceRef              uintptr
 )
 
-// Union types (largest member size)
-type ClearValue [16]byte                                 // Union: ClearColorValue or ClearDepthStencilValue
-type ClearColorValue [16]byte                            // Union: float32[4], int32[4], or uint32[4]
-type PerformanceValueDataINTEL [8]byte                   // Union: value32, value64, valueFloat, valueBool, valueString
-type PipelineExecutableStatisticValueKHR [8]byte         // Union: b32, i64, u64, f64
-type PerformanceCounterResultKHR [8]byte                 // Union: int32, int64, uint32, uint64, float32, float64
-type DeviceOrHostAddressKHR uintptr                      // Union: deviceAddress or hostAddress
-type DeviceOrHostAddressConstKHR uintptr                 // Union: deviceAddress or hostAddress
-type AccelerationStructureGeometryDataKHR [64]byte       // Union: triangles, aabbs, instances
-type AccelerationStructureMotionInstanceDataNV [144]byte // Union: static, matrix, srt instances
-type ClusterAccelerationStructureOpInputNV uintptr       // Union: various cluster inputs
-type DescriptorDataEXT uintptr                           // Union: descriptor data variants
+// Union types (largest member size, widest member's alignment)
+type ClearValue [4]uint32                                 // Union: ClearColorValue or ClearDepthStencilValue
+type ClearColorValue [4]uint32                            // Union: float32[4], int32[4], or uint32[4]
+type PerformanceValueDataINTEL [1]uint64                  // Union: value32, value64, valueFloat, valueBool, valueString
+type PipelineExecutableStatisticValueKHR [1]uint64        // Union: b32, i64, u64, f64
+type PerformanceCounterResultKHR [1]uint64                // Union: int32, int64, uint32, uint64, float32, float64
+type DeviceOrHostAddressKHR uintptr                       // Union: deviceAddress or hostAddress
+type DeviceOrHostAddressConstKHR uintptr                  // Union: deviceAddress or hostAddress
+type AccelerationStructureGeometryDataKHR [8]uint64       // Union: triangles, aabbs, instances
+type AccelerationStructureMotionInstanceDataNV [18]uint64 // Union: static, matrix, srt instances
+type ClusterAccelerationStructureOpInputNV uintptr        // Union: various cluster inputs
+type DescriptorDataEXT uintptr                            // Union: descriptor data variants
 
 // Extension type aliases
 type AccelerationStructureTypeNV = AccelerationStructureTypeKHR
