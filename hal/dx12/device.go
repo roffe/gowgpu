@@ -602,12 +602,18 @@ func (d *Device) waitForFrameSlot(slot uint64) error {
 	return nil
 }
 
-// advanceFrame increments the frame index.
-// The actual wait for the old frame occupying the new slot is deferred to
-// recycleFrameSlot, which is called at the start of the next frame
-// (in AcquireTexture). This allows the CPU to begin preparing the next
-// frame immediately after Present, overlapping with GPU execution.
+// advanceFrame closes the frame: the fence value its last submit signaled is
+// what recycleFrameSlot waits for when the slot comes round again, two frames
+// on. The actual wait is deferred to recycleFrameSlot, called at the start
+// of the next frame (in AcquireTexture), so the CPU begins the next frame
+// right after Present, overlapping with GPU execution. Until 2026-10-18
+// signalFrameFence stamped the slot at every Submit, so with a frame that
+// submits, acquires and submits again the acquire waited for the frame's own
+// first submit: no overlap at all.
 func (d *Device) advanceFrame() {
+	d.fenceMu.Lock()
+	d.frames[d.frameIndex%maxFramesInFlight].fenceValue = d.fenceValue
+	d.fenceMu.Unlock()
 	d.frameIndex++
 }
 
@@ -635,26 +641,22 @@ func (d *Device) recycleFrameSlot() error {
 	return nil
 }
 
-// signalFrameFence signals the device fence from the queue and records the value
-// in the current frame slot. This enables per-frame fence tracking — advanceFrame
-// only needs to wait for the specific slot's fence value, not all GPU work.
+// signalFrameFence signals the device fence from the queue. advanceFrame
+// records the value a frame ends on in its slot.
 func (d *Device) signalFrameFence() error {
 	d.fenceMu.Lock()
 	d.fenceValue++
 	value := d.fenceValue
-	start := time.Now()
 	err := d.directQueue.Signal(d.fence, value)
-	d.frames[d.frameIndex%maxFramesInFlight].fenceValue = value
 	d.fenceMu.Unlock()
 
 	if err != nil {
 		return fmt.Errorf("dx12: frame fence Signal failed: %w", err)
 	}
 
-	hal.Logger().Debug("dx12: fence signaled",
-		"value", value,
-		"elapsed", time.Since(start),
-	)
+	if hal.DebugEnabled() {
+		hal.Logger().Debug("dx12: fence signaled", "value", value)
+	}
 
 	return nil
 }
