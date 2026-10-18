@@ -141,18 +141,22 @@ func AutoBreadcrumbOpName(op D3D12AutoBreadcrumbOp) string {
 //
 // Layout matches D3D12_AUTO_BREADCRUMB_NODE1 exactly:
 //
-//	WCHAR*                                pCommandListDebugNameW;   // +0
-//	WCHAR*                                pCommandQueueDebugNameW;  // +8
-//	ID3D12GraphicsCommandList*            pCommandList;             // +16
-//	ID3D12CommandQueue*                   pCommandQueue;            // +24
-//	UINT                                  BreadcrumbCount;          // +32
-//	const UINT*                           pLastBreadcrumbValue;     // +40
-//	const D3D12_AUTO_BREADCRUMB_OP*       pCommandHistory;          // +48
-//	D3D12_AUTO_BREADCRUMB_NODE1*          pNext;                    // +56
-//	UINT                                  BreadcrumbContextsCount;  // +64
-//	D3D12_DRED_BREADCRUMB_CONTEXT*        pBreadcrumbContexts;      // +72
+//	const char*                           pCommandListDebugNameA;   // +0
+//	WCHAR*                                pCommandListDebugNameW;   // +8
+//	const char*                           pCommandQueueDebugNameA;  // +16
+//	WCHAR*                                pCommandQueueDebugNameW;  // +24
+//	ID3D12GraphicsCommandList*            pCommandList;             // +32
+//	ID3D12CommandQueue*                   pCommandQueue;            // +40
+//	UINT                                  BreadcrumbCount;          // +48
+//	const UINT*                           pLastBreadcrumbValue;     // +56
+//	const D3D12_AUTO_BREADCRUMB_OP*       pCommandHistory;          // +64
+//	D3D12_AUTO_BREADCRUMB_NODE1*          pNext;                    // +72
+//	UINT                                  BreadcrumbContextsCount;  // +80
+//	D3D12_DRED_BREADCRUMB_CONTEXT*        pBreadcrumbContexts;      // +88
 type D3D12AutoBreadcrumbNode1 struct {
+	CommandListDebugNameA   *byte
 	CommandListDebugNameW   *uint16
+	CommandQueueDebugNameA  *byte
 	CommandQueueDebugNameW  *uint16
 	CommandList             uintptr
 	CommandQueue            uintptr
@@ -183,12 +187,14 @@ type D3D12DREDAutoBreadcrumbsOutput1 struct {
 //	const WCHAR*                         ObjectNameW;         // +8
 //	D3D12_DRED_ALLOCATION_TYPE           AllocationType;      // +16
 //	D3D12_DRED_ALLOCATION_NODE1*         pNext;               // +24
+//	const IUnknown*                      pObject;             // +32
 type D3D12DREDAllocationNode1 struct {
 	ObjectNameA    *byte
 	ObjectNameW    *uint16
 	AllocationType int32
 	_              [4]byte // padding
 	Next           *D3D12DREDAllocationNode1
+	Object         uintptr
 }
 
 // D3D12DREDPageFaultOutput1 is the output structure for DRED page fault information.
