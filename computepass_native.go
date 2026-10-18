@@ -241,8 +241,14 @@ func (p *ComputePassEncoder) dispatchIndirectValidated(
 	binary.LittleEndian.PutUint32(paramsData[4:8], srcOffset)
 
 	// Write params via the HAL queue's WriteBuffer. This is a CPU-side write
-	// that will be visible to the GPU before the next dispatch.
+	// that will be visible to the GPU before the next dispatch. The params
+	// buffer is shared by every validated dispatch, so the GPU has to be done
+	// with the previous one first: the HAL write itself no longer waits.
 	if p.encoder.device.queue != nil && p.encoder.device.queue.hal != nil {
+		if waitErr := halDevice.WaitIdle(); waitErr != nil {
+			p.core.DispatchIndirect(buffer.coreBuffer(), offset)
+			return
+		}
 		if writeErr := p.encoder.device.queue.hal.WriteBuffer(iv.ParamsBuffer(), 0, paramsData[:]); writeErr != nil {
 			// Params write failed -- fall back to unvalidated dispatch.
 			p.core.DispatchIndirect(buffer.coreBuffer(), offset)

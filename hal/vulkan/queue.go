@@ -576,22 +576,16 @@ func (q *Queue) SubmitForPresent(commandBuffers []hal.CommandBuffer, swapchain *
 	return nil
 }
 
-// WriteBuffer writes data to a buffer immediately.
-// Uses fence-based synchronization instead of vkQueueWaitIdle to avoid
-// stalling the entire GPU pipeline. Only waits for the last queue submission
-// to complete, which per Khronos benchmarks improves frame times by ~22%.
-//
-// Both paths use the unified deviceFence: timeline semaphore (VK-IMPL-001)
-// or binary fence pool (VK-IMPL-003).
+// WriteBuffer writes data to a host-visible buffer immediately, without
+// waiting for the GPU: the caller owns the ordering. The staging belt only
+// writes into chunks the GPU is done with, and it is the one caller on the
+// frame path; until 2026-10-18 this waited for the latest submission on every
+// call, which blocked the CPU on the previous frame's GPU work twice a frame.
 func (q *Queue) WriteBuffer(buffer hal.Buffer, offset uint64, data []byte) error {
 	vkBuffer, ok := buffer.(*Buffer)
 	if !ok || vkBuffer.memory == nil {
 		return fmt.Errorf("vulkan: WriteBuffer: invalid buffer")
 	}
-
-	// Wait for the last queue submission to complete before CPU writes.
-	// This prevents race conditions where GPU reads stale/partial data.
-	q.waitForGPU()
 
 	// Buffer must be mapped (host-visible) for direct CPU writes.
 	// Device-local buffers require staging at the public API level.
