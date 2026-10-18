@@ -345,3 +345,20 @@ func TestAllocationGranularity(t *testing.T) {
 		t.Errorf("allocationGranularity = %d, want 16 (Rust wgpu-hal parity)", allocationGranularity)
 	}
 }
+
+// TestPoolManagedResultsReused verifies that a pool-managed encoder hands its
+// own CommandBuffer structs out again after ResetAll, with no pool on them.
+func TestPoolManagedResultsReused(t *testing.T) {
+	enc := &CommandEncoder{device: &Device{}, poolManaged: true}
+	a, b := enc.result(), enc.result()
+	if a == b {
+		t.Fatal("two live command buffers share a struct")
+	}
+	enc.ResetAll([]hal.CommandBuffer{a, b})
+	if enc.result() != a || enc.result() != b {
+		t.Error("ResetAll did not make the structs reusable")
+	}
+	if c := enc.result(); c == a || c == b {
+		t.Error("third result reuses a live struct")
+	}
+}

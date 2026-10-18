@@ -16,7 +16,8 @@ import (
 )
 
 // CommandBuffer holds a recorded Vulkan command buffer.
-// Pooled via cmdBufferResultPool to avoid per-frame heap allocation (VK-PERF-004).
+// Standalone encoders take it from cmdBufferResultPool (VK-PERF-004);
+// pool-managed ones reuse their own (see CommandEncoder.result).
 type CommandBuffer struct {
 	handle vk.CommandBuffer
 	pool   vk.CommandPool
@@ -80,6 +81,11 @@ type CommandEncoder struct {
 	// DiscardEncoding. They could be in any Vulkan state except "pending".
 	// ResetAll moves them back to free after vkResetCommandPool.
 	discarded []vk.CommandBuffer
+
+	// results are the CommandBuffer structs a pool-managed encoder handed
+	// out; the first usedResults are live until the next ResetAll.
+	results     []*CommandBuffer
+	usedResults int
 
 	label       string
 	poolManaged bool // true when managed by wgpu-level encoder pool
@@ -170,7 +176,7 @@ func (e *CommandEncoder) BeginEncoding(label string) error {
 }
 
 // EndEncoding finishes command recording and returns a command buffer.
-// Uses sync.Pool for CommandBuffer struct reuse (VK-PERF-004).
+// Reuses CommandBuffer structs, see result (VK-PERF-004).
 //
 // In standalone mode (default): detaches pool to the result and
 // returns the encoder struct to encoderPool for reuse.
@@ -210,8 +216,7 @@ func (e *CommandEncoder) EndEncoding() (hal.CommandBuffer, error) {
 		return nil, fmt.Errorf("vulkan: vkEndCommandBuffer failed: %d", result)
 	}
 
-	// Reuse CommandBuffer struct from pool (VK-PERF-004).
-	cb := cmdBufferResultPool.Get().(*CommandBuffer)
+	cb := e.result()
 	cb.handle = e.active
 	e.active = 0
 
@@ -241,6 +246,24 @@ func (e *CommandEncoder) EndEncoding() (hal.CommandBuffer, error) {
 	}
 
 	return cb, nil
+}
+
+// result returns the struct for the command buffer EndEncoding hands out.
+// A pool-managed encoder reuses its own: ResetAll takes back every buffer of
+// the pool, so they are free again after it. They never leave the encoder,
+// so their pool stays 0 and a late FreeCommandBuffer on one stays a no-op,
+// where a struct from cmdBufferResultPool could already belong to a
+// standalone encoder by then.
+func (e *CommandEncoder) result() *CommandBuffer {
+	if !e.poolManaged {
+		return cmdBufferResultPool.Get().(*CommandBuffer)
+	}
+	if e.usedResults == len(e.results) {
+		e.results = append(e.results, new(CommandBuffer))
+	}
+	cb := e.results[e.usedResults]
+	e.usedResults++
+	return cb
 }
 
 // injectInlinePresentBarrier records a pipeline barrier inside the active
@@ -439,6 +462,7 @@ func (e *CommandEncoder) ResetAll(commandBuffers []hal.CommandBuffer) {
 	// Recycle discarded buffers.
 	e.free = append(e.free, e.discarded...)
 	e.discarded = e.discarded[:0]
+	e.usedResults = 0
 
 	// Batch reset entire pool — one call resets all command buffers to
 	// initial state. Much cheaper than N individual resets (NVIDIA, ARM docs).
@@ -466,6 +490,7 @@ func (e *CommandEncoder) Destroy() {
 	e.active = 0
 	e.free = nil
 	e.discarded = nil
+	e.results, e.usedResults = nil, 0
 	e.device = nil
 }
 
