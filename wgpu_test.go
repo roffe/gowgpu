@@ -37,12 +37,22 @@ func newAdapter(t *testing.T) (*wgpu.Instance, *wgpu.Adapter) {
 	inst := newInstance(t)
 	adapter, err := inst.RequestAdapter(nil)
 	if err != nil {
+		skipWithoutAdapter(t, err)
 		t.Fatalf("RequestAdapter: %v", err)
 	}
 	if adapter == nil {
 		t.Fatal("RequestAdapter returned nil")
 	}
 	return inst, adapter
+}
+
+// skipWithoutAdapter skips a test that needs a GPU on a machine that has
+// none. Any other RequestAdapter error is the test's to report.
+func skipWithoutAdapter(t *testing.T, err error) {
+	t.Helper()
+	if strings.Contains(err.Error(), "no adapters available") {
+		t.Skipf("no GPU adapter on this machine: %v", err)
+	}
 }
 
 // newDevice requests a device from a fresh adapter.
@@ -161,6 +171,7 @@ func TestInstanceRequestAdapter(t *testing.T) {
 
 	adapter, err := inst.RequestAdapter(nil)
 	if err != nil {
+		skipWithoutAdapter(t, err)
 		t.Fatalf("RequestAdapter: %v", err)
 	}
 	if adapter == nil {
@@ -1178,6 +1189,7 @@ func TestFullLifecycleCreateAndRelease(t *testing.T) {
 
 	adapter, err := inst.RequestAdapter(nil)
 	if err != nil {
+		skipWithoutAdapter(t, err)
 		t.Fatalf("RequestAdapter: %v", err)
 	}
 

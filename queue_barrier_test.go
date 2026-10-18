@@ -3,6 +3,7 @@
 package wgpu
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/roffe/gowgpu/core/track"
@@ -471,6 +472,9 @@ func newTestDevice(t *testing.T) (*Instance, *Adapter, *Device) {
 	}
 	adapter, err := inst.RequestAdapter(nil)
 	if err != nil {
+		if strings.Contains(err.Error(), "no adapters available") {
+			t.Skipf("no GPU adapter on this machine: %v", err)
+		}
 		t.Fatalf("RequestAdapter: %v", err)
 	}
 	device, err := adapter.RequestDevice(nil)

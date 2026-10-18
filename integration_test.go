@@ -82,6 +82,7 @@ func TestIntegrationRequestAdapter(t *testing.T) {
 
 	adapter, err := instance.RequestAdapter(nil)
 	if err != nil {
+		skipWithoutAdapter(t, err)
 		t.Fatalf("RequestAdapter: %v", err)
 	}
 	if adapter == nil {
