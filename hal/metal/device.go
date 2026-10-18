@@ -876,6 +876,9 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 	})
 
 	if pipelineState == 0 {
+		if depthStencilState != 0 {
+			Release(depthStencilState)
+		}
 		errMsg := unknownError
 		if errorPtr != 0 {
 			errDesc := MsgSend(errorPtr, Sel("localizedDescription"))
@@ -965,6 +968,10 @@ func (d *Device) DestroyRenderPipeline(pipeline hal.RenderPipeline) {
 	if mtlPipeline.raw != 0 {
 		Release(mtlPipeline.raw)
 		mtlPipeline.raw = 0
+	}
+	if mtlPipeline.depthStencil != 0 {
+		Release(mtlPipeline.depthStencil)
+		mtlPipeline.depthStencil = 0
 	}
 	mtlPipeline.device = nil
 }
