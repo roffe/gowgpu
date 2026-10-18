@@ -18,13 +18,17 @@ gowgpu split off from gogpu/wgpu v0.34.5 on 2026-10-17. Everything from [0.34.5]
 - **`gputypes` lives in this module**, as `github.com/roffe/gowgpu/gputypes` (from gogpu/gputypes v0.8.0, MIT). Breaking: import paths change. The only dependencies left are naga and `golang.org/x/sys`.
 - **OpenGL is registered by `hal/allbackends` again**, on Linux, Windows and Android, but stays out of the default instance. Ask for `gputypes.BackendsGL` to use it.
 - **The Vulkan application and engine names and the pipeline cache folder say gowgpu**, so caches go to `os.UserCacheDir()/gowgpu` instead of sharing gogpu's folder. An old cache just gets rebuilt.
-- **Fewer allocations and less CPU a frame.** On txlogger's glbench, gowgpu now allocates about 43 objects a frame on Vulkan and on GL, down from about 125 and 1000. Allocated bytes are down 35% on Vulkan and 60% on GL, and CPU a frame about 3%. The changes behind it:
+- **Fewer allocations and less CPU a frame.** On txlogger's glbench, gowgpu now allocates about 17 objects and 2.5 KiB a frame on Vulkan and 22 objects and 2.8 KiB on GL, down from about 125 and 1000 objects, and CPU a frame is down about 3%. The changes behind it:
   - GL records draws in an arena instead of one heap object per command.
   - Each resource is tracked once per command encoder instead of on every bind.
   - Submit stops building maps and lists a steady frame never reads.
   - The staging buffers of big writes are reused, and so are usage scopes and ref lists.
   - The Vulkan submit info stays off the heap.
   - GL only calls `glGetError` after every command when warnings get logged.
+  - Render passes begin without allocating their core and HAL descriptors, and the caller's attachment list stays on its stack.
+  - Submitted encoders and released views go to the destroy queue without a closure.
+  - A texture's default views share one HAL view, and a Vulkan swapchain image gets its view wrapper once instead of every frame.
+  - Pooled Vulkan encoders reuse their command buffer structs.
 - **New textures get CopyDst on the HAL side** when gowgpu zeroes them (see Fixed).
 - **CI builds with cgo** on Linux, Windows and macOS, cross builds for Android, iOS, Windows without cgo and the browser, checks that regenerating the Vulkan bindings changes nothing, and runs the tests on Mesa's lavapipe and llvmpipe, on WARP and on Metal, skipping the failures each one is known for. gogpu's workflow, with cgo off and the Rust backend, is gone.
 
