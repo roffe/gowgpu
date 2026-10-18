@@ -43,17 +43,6 @@ type ComputePassEncoder struct {
 	binder binder
 }
 
-// trackRef Clone()'s a ResourceRef and appends directly to the parent
-// CommandEncoder's trackedRefs. Eliminates intermediate pass-level slice
-// and the copy at End(). Matches Rust where trackers live in the command
-// encoder throughout recording — no per-pass intermediate storage.
-func (p *ComputePassEncoder) trackRef(ref *core.ResourceRef) {
-	if ref != nil {
-		ref.Clone()
-		p.encoder.trackedRefs = append(p.encoder.trackedRefs, ref)
-	}
-}
-
 // SetPipeline sets the active compute pipeline.
 func (p *ComputePassEncoder) SetPipeline(pipeline *ComputePipeline) {
 	if pipeline == nil {
@@ -65,7 +54,7 @@ func (p *ComputePassEncoder) SetPipeline(pipeline *ComputePipeline) {
 	p.currentPipeline = pipeline
 	p.binder.updateExpectations(pipeline.bindGroupLayouts)
 	p.binder.updateLateBufferBindingsFromPipeline(pipeline.lateSizedBufferGroups)
-	p.trackRef(pipeline.ref)
+	p.encoder.trackPipeline(&pipeline.mark, pipeline.ref)
 	raw := p.core.RawPass()
 	if raw != nil && pipeline.hal != nil {
 		raw.SetPipeline(pipeline.hal)
@@ -82,17 +71,8 @@ func (p *ComputePassEncoder) SetBindGroup(index uint32, group *BindGroup, offset
 	p.binder.assignBindGroup(index, group)
 	p.assignedBindGroups[index] = group
 	p.assignedDynOffsets[index] = offsets
-	p.trackRef(group.ref)
-	// Clone individual buffer ResourceRefs to keep them alive until GPU completes.
-	// Matches Rust wgpu merge_bind_group → ResourceMetadata.insert(Arc<Buffer>).
-	for _, buf := range group.boundBuffers {
-		if buf.core != nil && buf.core.Ref != nil {
-			p.trackRef(buf.core.Ref)
-		}
-	}
-	// Track bind group itself for submit-time validation (VAL-B5 and, via
-	// group.boundBuffers/boundTextures, VAL-A6). The group's own slices are
-	// walked at Submit, so there is nothing to fan out here.
+	// Keeps the group and its buffers alive and lists the group for
+	// submit-time validation, once per encoder.
 	p.encoder.trackBindGroup(group)
 	raw := p.core.RawPass()
 	if raw != nil && group.hal != nil {
@@ -191,7 +171,6 @@ func (p *ComputePassEncoder) DispatchIndirect(buffer *Buffer, offset uint64) {
 			offset, buffer.Size(), ErrDispatchIndirectBufferOverrun))
 		return
 	}
-	p.trackRef(buffer.core.Ref)
 	p.encoder.trackBuffer(buffer)
 
 	// FEAT-COMPUTE-004: GPU-side indirect dispatch validation.

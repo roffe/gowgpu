@@ -69,7 +69,7 @@ func TestInjectTextureBarriers_EmptyScope(t *testing.T) {
 	cb := &CommandBuffer{
 		core:         coreCB,
 		device:       device,
-		usedTextures: make(map[*Texture]struct{}),
+		usedTextures: []*Texture{},
 	}
 
 	barrierCB, err := q.injectBarriers([]*CommandBuffer{cb})
@@ -128,7 +128,7 @@ func TestInjectTextureBarriers_WithTransition(t *testing.T) {
 	cb := &CommandBuffer{
 		core:         coreCB,
 		device:       device,
-		usedTextures: map[*Texture]struct{}{tex: {}},
+		usedTextures: []*Texture{tex},
 	}
 
 	barrierCB, err := q.injectBarriers([]*CommandBuffer{cb})
@@ -179,7 +179,7 @@ func TestInjectTextureBarriers_NoTransitionSameState(t *testing.T) {
 	cb := &CommandBuffer{
 		core:         coreCB,
 		device:       device,
-		usedTextures: map[*Texture]struct{}{tex: {}},
+		usedTextures: []*Texture{tex},
 	}
 
 	barrierCB, err := q.injectBarriers([]*CommandBuffer{cb})
@@ -229,7 +229,7 @@ func TestInjectTextureBarriers_MultipleTextures(t *testing.T) {
 	cb1 := &CommandBuffer{
 		core:         coreCB1,
 		device:       device,
-		usedTextures: map[*Texture]struct{}{tex1: {}, tex2: {}},
+		usedTextures: []*Texture{tex1, tex2},
 	}
 
 	barrierCB, err := q.injectBarriers([]*CommandBuffer{cb1})
@@ -304,7 +304,7 @@ func TestInjectTextureBarriers_NoEncoderPool(t *testing.T) {
 	cb := &CommandBuffer{
 		core:         coreCB,
 		device:       device,
-		usedTextures: map[*Texture]struct{}{tex: {}},
+		usedTextures: []*Texture{tex},
 	}
 
 	barrierCB, err := q.injectBarriers([]*CommandBuffer{cb})
@@ -346,7 +346,7 @@ func TestInjectTextureBarriers_TextureWithoutCoreTexture(t *testing.T) {
 	cb := &CommandBuffer{
 		core:         coreCB,
 		device:       device,
-		usedTextures: map[*Texture]struct{}{tex: {}},
+		usedTextures: []*Texture{tex},
 	}
 
 	barrierCB, err := q.injectBarriers([]*CommandBuffer{cb})

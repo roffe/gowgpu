@@ -4,6 +4,7 @@ package wgpu
 
 import (
 	"fmt"
+	"sync/atomic"
 
 	"github.com/roffe/gowgpu/core"
 	"github.com/roffe/gowgpu/core/track"
@@ -21,9 +22,12 @@ type CommandEncoder struct {
 	core     *core.CoreCommandEncoder
 	device   *Device
 	released bool
-	// trackedRefs accumulates Clone'd ResourceRefs from render/compute passes.
-	// Transferred to the CommandBuffer on Finish(), then to the DestroyQueue
-	// on Submit(). Phase 2: per-command-buffer resource tracking.
+	// serial identifies this encoder in the encoderMarks of what it tracks;
+	// see id.
+	serial uint64
+	// trackedRefs accumulates Clone'd ResourceRefs from render/compute passes,
+	// one per resource. Transferred to the CommandBuffer on Finish(), then to
+	// the DestroyQueue on Submit(). Phase 2: per-command-buffer resource tracking.
 	trackedRefs []*core.ResourceRef
 
 	// halEncoder is the HAL command encoder acquired from the Device's pool.
@@ -33,14 +37,14 @@ type CommandEncoder struct {
 
 	// usedBuffers tracks root-level buffers referenced during encoding for
 	// submit-time validation (VAL-A6). At Submit, each buffer is checked for
-	// destroyed/mapped state. Using a map for O(1) deduplication — the same
-	// buffer may be set as vertex, index, and bind group buffer in a single pass.
-	usedBuffers map[*Buffer]struct{}
+	// destroyed/mapped state. Each buffer is listed once (see encoderMark);
+	// one a bind group already brought in is reached through the group.
+	usedBuffers []*Buffer
 
 	// usedTextures tracks root-level textures referenced during encoding for
 	// submit-time validation (VAL-A6). At Submit, each texture is checked for
 	// destroyed state.
-	usedTextures map[*Texture]struct{}
+	usedTextures []*Texture
 
 	// explicitTextureTransitions records the most recent explicit transition
 	// for each texture. When a following command uses that exact state, its
@@ -52,7 +56,42 @@ type CommandEncoder struct {
 	// submit-time validation (VAL-B5). At Submit, each bind group is checked
 	// for destroyed state. Matches Rust wgpu-core's cmd_buf_data.trackers.bind_groups
 	// (device/queue.rs:1815-1817).
-	usedBindGroups map[*BindGroup]struct{}
+	usedBindGroups []*BindGroup
+}
+
+// encoderSerials hands out CommandEncoder serials. Zero is never handed out,
+// so a zero encoderMark matches no encoder.
+var encoderSerials atomic.Uint64
+
+// encoderMark remembers the last command encoder that tracked a resource, so
+// an encoder clones a resource's ref and lists it for Submit once, not on
+// every SetPipeline or SetBindGroup a frame makes: fyne's painter binds the
+// same few pipelines and bind groups hundreds of times a frame.
+//
+// Serials are never reused, so a mark equal to an encoder's serial means that
+// encoder tracked the resource and holds it until its command buffer is
+// spent. Encoders recording on other goroutines just overwrite the mark,
+// which costs a repeated entry at most, never a missing one.
+type encoderMark struct {
+	last atomic.Uint64
+}
+
+// claim marks the resource as tracked by the encoder with this serial and
+// reports whether it was not already.
+func (m *encoderMark) claim(serial uint64) bool {
+	if m.last.Load() == serial {
+		return false
+	}
+	m.last.Store(serial)
+	return true
+}
+
+// id returns the encoder's serial, handing one out on first use.
+func (e *CommandEncoder) id() uint64 {
+	if e.serial == 0 {
+		e.serial = encoderSerials.Add(1)
+	}
+	return e.serial
 }
 
 // setError records a deferred error on the underlying command encoder.
@@ -64,51 +103,65 @@ func (e *CommandEncoder) setError(err error) {
 	}
 }
 
-// trackRef Clone()'s a ResourceRef and accumulates it for transfer to the
+// keepAlive Clone()'s a ResourceRef and accumulates it for transfer to the
 // CommandBuffer on Finish(). This keeps the resource alive until the GPU
-// completes the submission. Used for encoder-level operations (copy commands).
-func (e *CommandEncoder) trackRef(ref *core.ResourceRef) {
+// completes the submission. Callers go through an encoderMark first, so a
+// resource is cloned once per encoder.
+func (e *CommandEncoder) keepAlive(ref *core.ResourceRef) {
 	if ref != nil {
 		ref.Clone()
 		e.trackedRefs = append(e.trackedRefs, ref)
 	}
 }
 
-// trackBuffer records a buffer reference for submit-time validation (VAL-A6).
-// The map is lazily initialized to avoid allocation when no buffers are used.
+// trackPipeline keeps a render or compute pipeline alive until the GPU is
+// done with this encoder's commands.
+func (e *CommandEncoder) trackPipeline(mark *encoderMark, ref *core.ResourceRef) {
+	if mark.claim(e.id()) {
+		e.keepAlive(ref)
+	}
+}
+
+// trackBuffer keeps a buffer alive until the GPU is done with this encoder's
+// commands and records it for submit-time validation (VAL-A6).
 func (e *CommandEncoder) trackBuffer(buf *Buffer) {
-	if buf == nil {
+	if buf == nil || !buf.mark.claim(e.id()) {
 		return
 	}
-	if e.usedBuffers == nil {
-		e.usedBuffers = make(map[*Buffer]struct{})
+	if buf.core != nil {
+		e.keepAlive(buf.core.Ref)
 	}
-	e.usedBuffers[buf] = struct{}{}
+	e.usedBuffers = append(e.usedBuffers, buf)
 }
 
 // trackTexture records a texture reference for submit-time validation (VAL-A6).
-// The map is lazily initialized to avoid allocation when no textures are used.
 func (e *CommandEncoder) trackTexture(tex *Texture) {
-	if tex == nil {
+	if tex == nil || !tex.mark.claim(e.id()) {
 		return
 	}
-	if e.usedTextures == nil {
-		e.usedTextures = make(map[*Texture]struct{})
-	}
-	e.usedTextures[tex] = struct{}{}
+	e.usedTextures = append(e.usedTextures, tex)
 }
 
-// trackBindGroup records a bind group reference for submit-time validation (VAL-B5).
-// The map is lazily initialized to avoid allocation when no bind groups are used.
-// Matches Rust wgpu-core's cmd_buf_data.trackers.bind_groups (device/queue.rs:1815-1817).
+// trackBindGroup keeps a bind group and the buffers it binds alive until the
+// GPU is done with this encoder's commands, and records the group for
+// submit-time validation (VAL-B5, and VAL-A6 through its boundBuffers and
+// boundTextures). Matches Rust wgpu-core's cmd_buf_data.trackers.bind_groups
+// (device/queue.rs:1815-1817) and merge_bind_group's
+// ResourceMetadata.insert(Arc<Buffer>): without the buffer refs,
+// Buffer.Release() before Submit could HAL-destroy a buffer a pending command
+// buffer still binds. A bound buffer is not added to usedBuffers: Submit
+// reaches it through the group, which stays listed.
 func (e *CommandEncoder) trackBindGroup(bg *BindGroup) {
-	if bg == nil {
+	if bg == nil || !bg.mark.claim(e.id()) {
 		return
 	}
-	if e.usedBindGroups == nil {
-		e.usedBindGroups = make(map[*BindGroup]struct{})
+	e.keepAlive(bg.ref)
+	for _, buf := range bg.boundBuffers {
+		if buf.core != nil && buf.mark.claim(e.id()) {
+			e.keepAlive(buf.core.Ref)
+		}
 	}
-	e.usedBindGroups[bg] = struct{}{}
+	e.usedBindGroups = append(e.usedBindGroups, bg)
 }
 
 // copyTextureUsage describes one texture endpoint of a copy command.
@@ -397,8 +450,6 @@ func (e *CommandEncoder) CopyBufferToBuffer(src *Buffer, srcOffset uint64, dst *
 	}) {
 		return
 	}
-	e.trackRef(src.core.Ref)
-	e.trackRef(dst.core.Ref)
 	e.trackBuffer(src)
 	e.trackBuffer(dst)
 	raw.CopyBufferToBuffer(halSrc, halDst, []hal.BufferCopy{
@@ -451,7 +502,6 @@ func (e *CommandEncoder) CopyTextureToBuffer(src *Texture, dst *Buffer, regions 
 	}
 	e.trackTexture(src)
 	e.trackBuffer(dst)
-	e.trackRef(dst.core.Ref)
 	halRegions := make([]hal.BufferTextureCopy, len(regions))
 	for i, r := range regions {
 		halRegions[i] = r.toHAL()
@@ -582,7 +632,6 @@ func (e *CommandEncoder) CopyBufferToTexture(src *Buffer, dst *Texture, regions 
 	}
 	e.trackTexture(dst)
 	e.trackBuffer(src)
-	e.trackRef(src.core.Ref)
 	halRegions := make([]hal.BufferTextureCopy, len(regions))
 	for i, r := range regions {
 		halRegions[i] = hal.BufferTextureCopy{
@@ -872,23 +921,24 @@ type CommandBuffer struct {
 	// CommandEncoder -> CommandBuffer -> EncoderInFlight -> GPU done -> pool
 	halEncoder hal.CommandEncoder
 
-	// usedBuffers tracks all buffers referenced during encoding (VAL-A6).
+	// usedBuffers tracks the buffers referenced during encoding (VAL-A6),
+	// besides those its bind groups bind.
 	// Validated at Submit time: destroyed or mapped buffers cause an error.
 	// Matches Rust wgpu-core's cmd_buf_data.trackers.buffers.used_resources()
 	// (device/queue.rs:1780-1787).
-	usedBuffers map[*Buffer]struct{}
+	usedBuffers []*Buffer
 
 	// usedTextures tracks all textures referenced during encoding (VAL-A6).
 	// Validated at Submit time: destroyed textures cause an error.
 	// Matches Rust wgpu-core's cmd_buf_data.trackers.textures.used_resources()
 	// (device/queue.rs:1791-1808).
-	usedTextures map[*Texture]struct{}
+	usedTextures []*Texture
 
 	// usedBindGroups tracks all bind groups referenced during encoding (VAL-B5).
 	// Validated at Submit time: destroyed bind groups cause an error.
 	// Matches Rust wgpu-core's cmd_buf_data.trackers.bind_groups
 	// (device/queue.rs:1815-1817).
-	usedBindGroups map[*BindGroup]struct{}
+	usedBindGroups []*BindGroup
 
 	// submitted is set to true after this command buffer has been submitted
 	// to a queue. A command buffer cannot be submitted twice.

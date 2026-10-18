@@ -30,6 +30,9 @@ type Texture struct {
 	//
 	// Reference: Rust wgpu-core resource.rs Texture (holds TrackingData)
 	coreTexture *core.Texture
+
+	// mark is the last command encoder that tracked this texture.
+	mark encoderMark
 }
 
 // resolveHAL is the single boundary from a public texture wrapper to HAL.

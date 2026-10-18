@@ -89,6 +89,8 @@ type RenderPipeline struct {
 	// ref is the GPU-aware reference counter for this pipeline (Phase 2).
 	// Clone'd when used in a render pass, Drop'd when GPU completes submission.
 	ref *core.ResourceRef
+	// mark is the last command encoder that tracked this pipeline.
+	mark encoderMark
 }
 
 // Release drops the application's ownership reference to the render pipeline.
@@ -127,6 +129,8 @@ type ComputePipeline struct {
 	// ref is the GPU-aware reference counter for this pipeline (Phase 2).
 	// Clone'd when used in a compute pass, Drop'd when GPU completes submission.
 	ref *core.ResourceRef
+	// mark is the last command encoder that tracked this pipeline.
+	mark encoderMark
 }
 
 // Release drops the application's ownership reference to the compute pipeline.

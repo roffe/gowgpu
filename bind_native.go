@@ -196,6 +196,8 @@ type BindGroup struct {
 	// boundTextures holds references to textures bound in this bind group (VAL-A6).
 	// Used at Submit time to verify that referenced textures are still alive.
 	boundTextures []*Texture
+	// mark is the last command encoder that tracked this bind group.
+	mark encoderMark
 }
 
 // Release marks the bind group for destruction. Drops the application's

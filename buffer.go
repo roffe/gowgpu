@@ -35,6 +35,8 @@ type Buffer struct {
 	// pointer would make the Buffer reachable from the cleanup arg, preventing
 	// GC collection and causing the cleanup to never fire.
 	released *atomic.Bool
+	// mark is the last command encoder that tracked this buffer.
+	mark encoderMark
 }
 
 // Size returns the buffer size in bytes.

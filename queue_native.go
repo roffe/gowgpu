@@ -444,14 +444,14 @@ func validateCommandBufferForSubmit(cb *CommandBuffer, index int) error {
 	}
 
 	// 2. Check referenced buffers (matches Rust queue.rs:1780-1787).
-	for buf := range cb.usedBuffers {
+	for _, buf := range cb.usedBuffers {
 		if err := validateSubmitBuffer(buf, index); err != nil {
 			return err
 		}
 	}
 
 	// 3. Check referenced textures (matches Rust queue.rs:1791-1808).
-	for tex := range cb.usedTextures {
+	for _, tex := range cb.usedTextures {
 		if err := validateSubmitTexture(tex, index); err != nil {
 			return err
 		}
@@ -470,7 +470,7 @@ func validateCommandBufferForSubmit(cb *CommandBuffer, index int) error {
 	// checked in steps 2 and 3 ahead of any bind group, and folding the release
 	// check into this loop would make the winner depend on map iteration order
 	// whenever two bind groups are at fault.
-	for bg := range cb.usedBindGroups {
+	for _, bg := range cb.usedBindGroups {
 		for _, buf := range bg.boundBuffers {
 			if err := validateSubmitBuffer(buf, index); err != nil {
 				return err
@@ -484,7 +484,7 @@ func validateCommandBufferForSubmit(cb *CommandBuffer, index int) error {
 	}
 
 	// 5. Check the bind groups themselves (matches Rust queue.rs:1815-1817).
-	for bg := range cb.usedBindGroups {
+	for _, bg := range cb.usedBindGroups {
 		if bg.released != nil && bg.released.Load() {
 			return fmt.Errorf("wgpu: Submit: command buffer at index %d references released bind group: %w",
 				index, ErrSubmitBindGroupDestroyed)
@@ -592,7 +592,7 @@ func buildTrackerIndexResolver(commandBuffers []*CommandBuffer) map[track.Tracke
 			continue
 		}
 		collectTextureIndices(resolver, cb.usedTextures)
-		for bg := range cb.usedBindGroups {
+		for _, bg := range cb.usedBindGroups {
 			if bg == nil {
 				continue
 			}
@@ -603,9 +603,9 @@ func buildTrackerIndexResolver(commandBuffers []*CommandBuffer) map[track.Tracke
 }
 
 // collectTextureIndices adds TrackerIndex -> hal.Texture entries from
-// the used textures map.
-func collectTextureIndices(resolver map[track.TrackerIndex]hal.Texture, used map[*Texture]struct{}) {
-	for tex := range used {
+// the used textures.
+func collectTextureIndices(resolver map[track.TrackerIndex]hal.Texture, used []*Texture) {
+	for _, tex := range used {
 		addTrackedTexture(resolver, tex)
 	}
 }
@@ -681,10 +681,10 @@ func buildBufferTrackerIndexResolver(commandBuffers []*CommandBuffer) map[track.
 		if cb == nil {
 			continue
 		}
-		for buf := range cb.usedBuffers {
+		for _, buf := range cb.usedBuffers {
 			addTrackedBuffer(resolver, buf)
 		}
-		for bg := range cb.usedBindGroups {
+		for _, bg := range cb.usedBindGroups {
 			if bg == nil {
 				continue
 			}

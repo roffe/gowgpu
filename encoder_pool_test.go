@@ -148,9 +148,9 @@ func createNoopDeviceForTest(t *testing.T) (hal.Device, hal.Queue, func()) {
 // pinning every resource the frame touched.
 func TestCommandBufferReleaseDropsUsedSets(t *testing.T) {
 	cb := &CommandBuffer{
-		usedBuffers:    map[*Buffer]struct{}{{}: {}},
-		usedTextures:   map[*Texture]struct{}{{}: {}},
-		usedBindGroups: map[*BindGroup]struct{}{{}: {}},
+		usedBuffers:    []*Buffer{{}},
+		usedTextures:   []*Texture{{}},
+		usedBindGroups: []*BindGroup{{}},
 	}
 
 	cb.Release()
@@ -172,9 +172,9 @@ func TestPostSubmitDropsSetsWithoutDestroyQueue(t *testing.T) {
 	}
 
 	cb := &CommandBuffer{
-		usedBuffers:    map[*Buffer]struct{}{{}: {}},
-		usedTextures:   map[*Texture]struct{}{{}: {}},
-		usedBindGroups: map[*BindGroup]struct{}{{}: {}},
+		usedBuffers:    []*Buffer{{}},
+		usedTextures:   []*Texture{{}},
+		usedBindGroups: []*BindGroup{{}},
 	}
 
 	q.postSubmit(1, []*CommandBuffer{cb})

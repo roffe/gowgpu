@@ -55,15 +55,6 @@ type RenderPassEncoder struct {
 	blendConstantSet bool
 }
 
-// trackRef Clone()'s a ResourceRef and appends directly to the parent
-// CommandEncoder's trackedRefs. No intermediate pass-level slice.
-func (p *RenderPassEncoder) trackRef(ref *core.ResourceRef) {
-	if ref != nil {
-		ref.Clone()
-		p.encoder.trackedRefs = append(p.encoder.trackedRefs, ref)
-	}
-}
-
 // SetPipeline sets the active render pipeline.
 func (p *RenderPassEncoder) SetPipeline(pipeline *RenderPipeline) {
 	if pipeline == nil {
@@ -79,7 +70,7 @@ func (p *RenderPassEncoder) SetPipeline(pipeline *RenderPipeline) {
 	}
 	p.binder.updateExpectations(pipeline.bindGroupLayouts)
 	p.binder.updateLateBufferBindingsFromPipeline(pipeline.lateSizedBufferGroups)
-	p.trackRef(pipeline.ref)
+	p.encoder.trackPipeline(&pipeline.mark, pipeline.ref)
 	raw := p.core.RawPass()
 	if raw != nil && pipeline.hal != nil {
 		raw.SetPipeline(pipeline.hal)
@@ -94,19 +85,8 @@ func (p *RenderPassEncoder) SetBindGroup(index uint32, group *BindGroup, offsets
 	}
 	p.binder.assign(index, group.layout)
 	p.binder.assignBindGroup(index, group)
-	p.trackRef(group.ref)
-	// Clone individual buffer ResourceRefs to keep them alive until GPU completes.
-	// Matches Rust wgpu merge_bind_group → ResourceMetadata.insert(Arc<Buffer>).
-	// Without this, Buffer.Release() before Submit can HAL-destroy buffers
-	// that are still referenced by a pending command buffer.
-	for _, buf := range group.boundBuffers {
-		if buf.core != nil && buf.core.Ref != nil {
-			p.trackRef(buf.core.Ref)
-		}
-	}
-	// Track bind group itself for submit-time validation (VAL-B5 and, via
-	// group.boundBuffers/boundTextures, VAL-A6). The group's own slices are
-	// walked at Submit, so there is nothing to fan out here.
+	// Keeps the group and its buffers alive and lists the group for
+	// submit-time validation, once per encoder.
 	p.encoder.trackBindGroup(group)
 	raw := p.core.RawPass()
 	if raw != nil && group.hal != nil {
@@ -123,7 +103,6 @@ func (p *RenderPassEncoder) SetVertexBuffer(slot uint32, buffer *Buffer, offset 
 	if slot+1 > p.vertexBufferCount {
 		p.vertexBufferCount = slot + 1
 	}
-	p.trackRef(buffer.core.Ref)
 	p.encoder.trackBuffer(buffer)
 	p.core.SetVertexBuffer(slot, buffer.coreBuffer(), offset)
 }
@@ -136,7 +115,6 @@ func (p *RenderPassEncoder) SetIndexBuffer(buffer *Buffer, format gputypes.Index
 	}
 	p.indexBufferSet = true
 	p.indexBufferFormat = format
-	p.trackRef(buffer.core.Ref)
 	p.encoder.trackBuffer(buffer)
 	p.core.SetIndexBuffer(buffer.coreBuffer(), format, offset)
 }
@@ -296,7 +274,6 @@ func (p *RenderPassEncoder) MultiDrawIndirect(buffer *Buffer, offset uint64, dra
 			offset, drawCount, buffer.Size(), ErrDrawIndirectBufferOverrun))
 		return
 	}
-	p.trackRef(buffer.core.Ref)
 	p.encoder.trackBuffer(buffer)
 	p.core.MultiDrawIndirect(buffer.coreBuffer(), offset, drawCount)
 }
@@ -368,7 +345,6 @@ func (p *RenderPassEncoder) MultiDrawIndexedIndirect(buffer *Buffer, offset uint
 			offset, drawCount, buffer.Size(), ErrDrawIndirectBufferOverrun))
 		return
 	}
-	p.trackRef(buffer.core.Ref)
 	p.encoder.trackBuffer(buffer)
 	p.core.MultiDrawIndexedIndirect(buffer.coreBuffer(), offset, drawCount)
 }
