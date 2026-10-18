@@ -1854,11 +1854,19 @@ func (d *Device) CreateBindGroup(desc *hal.BindGroupDescriptor) (hal.BindGroup, 
 		device: d,
 	}
 
-	// Classify entries into CBV/SRV/UAV vs Sampler
+	// Classify entries into CBV/SRV/UAV vs Sampler, in the layout's order:
+	// that is how CreatePipelineLayout laid out the descriptor table and
+	// numbered the samplers, while WebGPU lets the caller list the entries
+	// in any order. Taking them as given put the caller's second texture in
+	// the layout's second slot whenever the orders differed.
+	ordered, err := layoutOrderedEntries(layout.entries, desc.Entries)
+	if err != nil {
+		return nil, err
+	}
 	var viewEntries []gputypes.BindGroupEntry // CBV, SRV, UAV
 	var samplerPoolIndices []uint32           // global sampler pool indices
 
-	for _, entry := range desc.Entries {
+	for _, entry := range ordered {
 		switch res := entry.Resource.(type) {
 		case gputypes.SamplerBinding:
 			sampler := fromHandle[Sampler](res.Sampler)
@@ -1916,6 +1924,26 @@ func (d *Device) CreateBindGroup(desc *hal.BindGroupDescriptor) (hal.BindGroup, 
 	}
 
 	return bg, nil
+}
+
+// layoutOrderedEntries returns entries in the order of the layout entries
+// they bind, matched by binding number. Every layout entry needs one.
+func layoutOrderedEntries(layout []BindGroupLayoutEntry, entries []gputypes.BindGroupEntry) ([]gputypes.BindGroupEntry, error) {
+	ordered := make([]gputypes.BindGroupEntry, 0, len(layout))
+	for _, le := range layout {
+		found := false
+		for _, e := range entries {
+			if e.Binding == le.Binding {
+				ordered = append(ordered, e)
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("dx12: bind group has no entry for binding %d of its layout", le.Binding)
+		}
+	}
+	return ordered, nil
 }
 
 // populateBindGroupDescriptors allocates view heap descriptors and writes CBV/SRV/UAV
