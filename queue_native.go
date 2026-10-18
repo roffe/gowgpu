@@ -111,16 +111,13 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (uint64, error) {
 	// Reference: wgpu-core device/queue.rs pre_submit_for_command_buffers
 	allBuffers, err := q.prependTextureBarriers(allBuffers, commandBuffers)
 	if err != nil {
+		q.cancelSubmit(pendingCmdBuf, flushedEncoder, flushedDstTextures)
 		return 0, err
 	}
 
 	subIdx, err := q.hal.Submit(allBuffers)
 	if err != nil {
-		if q.pending != nil && pendingCmdBuf != nil {
-			q.pending.mu.Lock()
-			q.pending.cancelFlush(pendingCmdBuf, flushedEncoder, flushedDstTextures)
-			q.pending.mu.Unlock()
-		}
+		q.cancelSubmit(pendingCmdBuf, flushedEncoder, flushedDstTextures)
 		return 0, fmt.Errorf("wgpu: submit failed: %w", err)
 	}
 
@@ -165,6 +162,22 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (uint64, error) {
 	}
 
 	return subIdx, nil
+}
+
+// cancelSubmit gives back what Submit set up before it failed: the flushed
+// pending writes, and the barrier encoder, which the next Submit would
+// otherwise overwrite without returning it to the pool.
+func (q *Queue) cancelSubmit(pendingCmdBuf hal.CommandBuffer, flushedEncoder hal.CommandEncoder, flushedDstTextures []hal.Texture) {
+	if q.pending != nil && pendingCmdBuf != nil {
+		q.pending.mu.Lock()
+		q.pending.cancelFlush(pendingCmdBuf, flushedEncoder, flushedDstTextures)
+		q.pending.mu.Unlock()
+	}
+	if q.barrierEncoder != nil {
+		q.barrierEncoder.ResetAll([]hal.CommandBuffer{q.barrierCB})
+		q.device.cmdEncoderPool.release(q.barrierEncoder)
+		q.barrierEncoder, q.barrierCB = nil, nil
+	}
 }
 
 // postSubmit handles bookkeeping after a successful HAL submit:
