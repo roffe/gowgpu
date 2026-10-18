@@ -209,7 +209,32 @@ func (e *CommandEncoder) trackBindGroup(bg *BindGroup) {
 			e.keepAlive(buf.core.Ref)
 		}
 	}
+	for i, tex := range bg.boundTextures {
+		if i < len(bg.boundTextureUses) {
+			e.recordBoundTextureUsage(tex, bg.boundTextureUses[i])
+		}
+	}
 	e.usedBindGroups = append(e.usedBindGroups, bg)
+}
+
+// recordBoundTextureUsage puts a bound texture's usage in the command buffer's
+// scope, so that Submit transitions it: a render target the next submit
+// samples, a copy destination sampled after. Within one command buffer the
+// usage has to agree with the texture's other uses, as for copies; an explicit
+// TransitionTextures to the bound state lets it replace them.
+func (e *CommandEncoder) recordBoundTextureUsage(tex *Texture, usage track.TextureUses) {
+	if e.core == nil || tex == nil || tex.coreTexture == nil {
+		return
+	}
+	err := e.core.RecordTextureUsage(tex.coreTexture, usage)
+	if err == nil {
+		return
+	}
+	if transitioned, ok := e.explicitTextureTransitions[tex]; ok && transitioned == usage.ToTextureUsage() {
+		e.core.ReplaceTextureUsage(tex.coreTexture, usage)
+		return
+	}
+	e.setError(fmt.Errorf("wgpu: SetBindGroup: texture usage conflict: %w", err))
 }
 
 // copyTextureUsage describes one texture endpoint of a copy command.

@@ -106,6 +106,7 @@ func (a *Adapter) requestDeviceHAL(desc *DeviceDescriptor) (*Device, error) {
 		halDevice: openDevice.Device,
 		pending:   newPendingWrites(openDevice.Device, openDevice.Queue, pool),
 	}
+	queue.pending.tracker = coreDevice.Tracker()
 
 	coreDevice.SetAssociatedQueue(&core.Queue{Label: label + " Queue"})
 

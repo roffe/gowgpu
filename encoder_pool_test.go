@@ -177,7 +177,7 @@ func TestPostSubmitDropsSetsWithoutDestroyQueue(t *testing.T) {
 		usedBindGroups: []*BindGroup{{}},
 	}
 
-	q.postSubmit(1, []*CommandBuffer{cb})
+	q.postSubmit(1, 1, []*CommandBuffer{cb})
 
 	if !cb.submitted {
 		t.Error("postSubmit left cb.submitted false — a double submit would not be caught")

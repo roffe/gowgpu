@@ -128,14 +128,24 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (uint64, error) {
 		allBuffers = allBuffers[1:]
 	}
 
-	subIdx, err := q.hal.Submit(allBuffers)
-	if err != nil {
-		q.cancelSubmit(pendingCmdBuf, flushedEncoder, flushedDstTextures)
-		return 0, fmt.Errorf("wgpu: submit failed: %w", err)
+	// Nothing to run (no command buffers and no queued writes) is not a
+	// submission: the HALs return index 0 for it, and a Release right after
+	// would defer its destroy at 0, to run while earlier work is still on the
+	// GPU. Keep the last real index and just do the housekeeping below.
+	subIdx := q.lastSubmissionIndex.Load()
+	if len(allBuffers) > 0 {
+		subIdx, err = q.hal.Submit(allBuffers)
+		if err != nil {
+			q.cancelSubmit(pendingCmdBuf, flushedEncoder, flushedDstTextures)
+			return 0, fmt.Errorf("wgpu: submit failed: %w", err)
+		}
+		// Track the latest submission index for deferred resource destruction.
+		q.lastSubmissionIndex.Store(subIdx)
 	}
 
-	// Track the latest submission index for deferred resource destruction.
-	q.lastSubmissionIndex.Store(subIdx)
+	// One completion query serves everything below: the belt, the destroy
+	// queue and the pending maps all ask the same question.
+	completed := q.hal.PollCompleted()
 
 	// Record inflight resources and clean up completed ones.
 	// dstTextures/dstBuffers prevent premature Release (BUG-DX12-006: use-after-free).
@@ -157,12 +167,12 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (uint64, error) {
 		if q.pending.belt != nil {
 			q.pending.belt.setLastSubmissionIndex(subIdx)
 		}
-		q.pending.maintain(q.hal.PollCompleted())
+		q.pending.maintain(completed)
 		q.pending.mu.Unlock()
 	}
 
 	// Post-submit bookkeeping: track refs, recycle encoders, triage destroys.
-	q.postSubmit(subIdx, commandBuffers)
+	q.postSubmit(subIdx, completed, commandBuffers)
 
 	// Auto-poll pending buffer map requests after each Submit. Mirrors
 	// Rust wgpu-core queue.rs:1429 which calls maintain() at the tail
@@ -171,7 +181,7 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (uint64, error) {
 	// Submit see the mapping resolve without having to call Device.Poll
 	// explicitly. (FEAT-WGPU-MAPPING-001)
 	if q.device != nil && q.device.core != nil && q.device.core.HasPendingMaps() {
-		q.device.core.PollMaps(q.hal.PollCompleted())
+		q.device.core.PollMaps(completed)
 	}
 
 	return subIdx, nil
@@ -197,7 +207,7 @@ func (q *Queue) cancelSubmit(pendingCmdBuf hal.CommandBuffer, flushedEncoder hal
 // 1. Tracks Clone'd ResourceRefs for Drop on GPU completion (Phase 2)
 // 2. Schedules HAL encoder recycling via DestroyQueue (BUG-DX12-004)
 // 3. Triages deferred resource destructions
-func (q *Queue) postSubmit(subIdx uint64, commandBuffers []*CommandBuffer) {
+func (q *Queue) postSubmit(subIdx, completed uint64, commandBuffers []*CommandBuffer) {
 	// Mark all command buffers as submitted to prevent double-submit (VAL-A6),
 	// and drop the encode-time reference sets. This runs before the DestroyQueue
 	// lookup below: the HAL submit has already succeeded, so these buffers are

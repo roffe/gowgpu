@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 
 	"github.com/roffe/gowgpu/core"
+	"github.com/roffe/gowgpu/core/track"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 )
@@ -196,6 +197,10 @@ type BindGroup struct {
 	// boundTextures holds references to textures bound in this bind group (VAL-A6).
 	// Used at Submit time to verify that referenced textures are still alive.
 	boundTextures []*Texture
+	// boundTextureUses is how each of boundTextures is used by the group:
+	// sampled, or storage read or write. Recorded in the command buffer's
+	// usage scope when the group is bound, so a submit transitions the texture.
+	boundTextureUses []track.TextureUses
 	// mark is the last command encoder that tracked this bind group.
 	mark encoderMark
 }

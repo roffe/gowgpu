@@ -10,6 +10,7 @@ import (
 	naga "github.com/gogpu/naga"
 	"github.com/gogpu/naga/ir"
 	"github.com/roffe/gowgpu/core"
+	"github.com/roffe/gowgpu/core/track"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 )
@@ -442,7 +443,7 @@ func (d *Device) CreateBindGroup(desc *BindGroupDescriptor) (*BindGroup, error) 
 	lateInfos := buildLateBufferBindingInfos(desc.Layout.entries, desc.Entries)
 
 	// Collect buffer and texture references for submit-time validation (VAL-A6).
-	boundBuffers, boundTextures := collectBindGroupResources(desc.Entries)
+	boundBuffers, boundTextures, boundTextureUses := collectBindGroupResources(desc.Layout.entries, desc.Entries)
 
 	// Initialize ResourceRef with onZero callback for refcount-driven destruction.
 	// When the last reference drops (either from explicit Release or Phase 2
@@ -470,6 +471,7 @@ func (d *Device) CreateBindGroup(desc *BindGroupDescriptor) (*BindGroup, error) 
 		ref:                    core.NewResourceRef("BindGroup:"+desc.Label, bgOnZero),
 		boundBuffers:           boundBuffers,
 		boundTextures:          boundTextures,
+		boundTextureUses:       boundTextureUses,
 	}
 
 	// Safety net: if the bind group is garbage collected without Release(),
@@ -543,21 +545,39 @@ func buildLateBufferBindingInfos(layoutEntries []gputypes.BindGroupLayoutEntry, 
 }
 
 // collectBindGroupResources extracts buffer and texture references from bind
-// group entries for submit-time validation (VAL-A6). Matches Rust wgpu-core
-// where bind group creation stores resource references that are later checked
-// via trackers.buffers/textures.used_resources() in validate_command_buffer.
-func collectBindGroupResources(entries []BindGroupEntry) ([]*Buffer, []*Texture) {
+// group entries for submit-time validation (VAL-A6), and how each texture is
+// used. Matches Rust wgpu-core where bind group creation stores resource
+// references that are later checked via trackers.buffers/textures.used_resources()
+// in validate_command_buffer.
+func collectBindGroupResources(layout []gputypes.BindGroupLayoutEntry, entries []BindGroupEntry) ([]*Buffer, []*Texture, []track.TextureUses) {
 	var buffers []*Buffer
 	var textures []*Texture
+	var uses []track.TextureUses
 	for i := range entries {
 		if entries[i].Buffer != nil {
 			buffers = append(buffers, entries[i].Buffer)
 		}
 		if entries[i].TextureView != nil && entries[i].TextureView.texture != nil {
 			textures = append(textures, entries[i].TextureView.texture)
+			uses = append(uses, bindingTextureUse(layout, entries[i].Binding))
 		}
 	}
-	return buffers, textures
+	return buffers, textures, uses
+}
+
+// bindingTextureUse is how a texture bound at binding is used: sampled,
+// unless the layout declares a storage texture there.
+func bindingTextureUse(layout []gputypes.BindGroupLayoutEntry, binding uint32) track.TextureUses {
+	for i := range layout {
+		if layout[i].Binding != binding || layout[i].StorageTexture == nil {
+			continue
+		}
+		if layout[i].StorageTexture.Access == gputypes.StorageTextureAccessReadOnly {
+			return track.TextureUsesStorageRead
+		}
+		return track.TextureUsesStorageWrite
+	}
+	return track.TextureUsesResource
 }
 
 // buildBindGroupEntryMap builds a lookup map from binding index to BindGroupEntry

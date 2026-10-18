@@ -604,10 +604,7 @@ func (s *Surface) Release() {
 // attempt to destroy the swapchain's HAL image.
 func (s *Surface) destroySwapchainTexture() {
 	if s.swapchainTexture != nil {
-		td := s.swapchainTexture.TrackingData()
-		if td != nil {
-			td.Release()
-		}
+		releaseTextureTracking(s.swapchainTexture)
 		s.swapchainTexture = nil
 	}
 }

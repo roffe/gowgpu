@@ -640,15 +640,19 @@ func TestPendingWrites_HasPendingWork(t *testing.T) {
 	}
 }
 
-func TestContainsTextureOwnerUsesWrapperIdentity(t *testing.T) {
+func TestHasOwnerUsesWrapperIdentity(t *testing.T) {
 	first := &Texture{}
 	second := &Texture{}
-	owners := []*Texture{nil, first}
-	if !containsTextureOwner(owners, first) {
-		t.Fatal("containsTextureOwner missed the retained wrapper")
+	raw := &stubTexture{}
+	pw := &pendingWrites{dstOwners: []dstOwner{{raw: raw, owner: first}}}
+	if !pw.hasOwner(raw, first) {
+		t.Fatal("hasOwner missed the retained wrapper")
 	}
-	if containsTextureOwner(owners, second) {
-		t.Fatal("containsTextureOwner matched a distinct wrapper")
+	if pw.hasOwner(raw, second) {
+		t.Fatal("hasOwner matched a distinct wrapper")
+	}
+	if pw.hasOwner(&stubTexture{}, first) {
+		t.Fatal("hasOwner matched a different raw texture")
 	}
 }
 
@@ -1167,3 +1171,13 @@ func TestPendingWrites_MaxStagingBufferSizerDefaultWhenNotImplemented(t *testing
 			pw.belt.maxStagingBufferSize, stagingBeltMaxOversizedSize)
 	}
 }
+
+// stubTexture is a hal.Texture with nothing behind it, for owner bookkeeping
+// tests. The field keeps two of them at different addresses.
+type stubTexture struct{ _ int }
+
+func (*stubTexture) Destroy()                            {}
+func (*stubTexture) NativeHandle() uintptr               { return 0 }
+func (*stubTexture) CurrentUsage() gputypes.TextureUsage { return 0 }
+func (*stubTexture) AddPendingRef()                      {}
+func (*stubTexture) DecPendingRef()                      {}

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/roffe/gowgpu/core"
+	"github.com/roffe/gowgpu/core/track"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 )
@@ -43,6 +45,15 @@ type pendingWrites struct {
 	// buffer writes. nil for non-batching backends.
 	belt *stagingBelt
 
+	// tracker is the device tracker: the state the last submit left a
+	// texture in, which is where a queue write's barrier starts, and where
+	// the write's own barriers leave it. Set by the device after creation.
+	tracker *core.DeviceTracker
+
+	// zeros is the zero-filled source of zeroTextureLocked, grown on demand
+	// and kept: the belt copies it into staging synchronously.
+	zeros []byte
+
 	// encoder is the shared command encoder for recording copy commands.
 	// nil until the first write in a batch. Acquired from pool by activate().
 	encoder hal.CommandEncoder
@@ -65,12 +76,19 @@ type pendingWrites struct {
 	// not on hal::Buffer). Used by flush() to compute COPY_DST → read-state barriers.
 	dstBuffers map[hal.Buffer]gputypes.BufferUsage
 
-	// dstTextures tracks textures that have pending writes. The wrapper list
-	// preserves every public lifetime that contributed commands for the raw
-	// texture. This matters for swapchains, which may reuse the same HAL texture
-	// across acquisitions: every recorded acquisition must still be live when
-	// the batch is flushed.
-	dstTextures map[hal.Texture][]*Texture
+	// dstTextures tracks textures that have pending writes, and dstOwners the
+	// public wrappers that contributed commands for them, so that every
+	// public lifetime is still live when the batch is flushed. This matters
+	// for swapchains, which may reuse the same HAL texture across
+	// acquisitions. A flat list rather than a list per texture, so a steady
+	// stream of glyph uploads allocates nothing.
+	dstTextures map[hal.Texture]struct{}
+	dstOwners   []dstOwner
+
+	// Scratch for writeTextureLocked, under pw.mu: what it hands the HAL by
+	// slice, which does not keep it.
+	texBarrier [1]hal.TextureBarrier
+	texCopy    [1]hal.BufferTextureCopy
 
 	// inflight tracks staging buffers and encoders from previous submissions,
 	// keyed by submission index. Cleaned up when PollCompleted advances past them.
@@ -106,7 +124,7 @@ type pendingWrites struct {
 
 // maxSpareDstLists caps how many emptied destination lists pendingWrites
 // keeps of each kind.
-const maxSpareDstLists = 4
+const maxSpareDstLists = 32
 
 // takeSpare returns a kept emptied list, or nil.
 func takeSpare[T any](spares *[][]T) []T {
@@ -127,6 +145,13 @@ func keepSpare[T any](spares *[][]T, l []T) {
 	}
 	clear(l)
 	*spares = append(*spares, l[:0])
+}
+
+// dstOwner is a public texture wrapper that wrote to a raw texture in the
+// batch being recorded.
+type dstOwner struct {
+	raw   hal.Texture
+	owner *Texture
 }
 
 // inflightSubmission tracks resources from a single submission that must
@@ -160,7 +185,7 @@ func newPendingWrites(halDevice hal.Device, halQueue hal.Queue, pool *encoderPoo
 		halDevice:    halDevice,
 		halQueue:     halQueue,
 		dstBuffers:   make(map[hal.Buffer]gputypes.BufferUsage),
-		dstTextures:  make(map[hal.Texture][]*Texture),
+		dstTextures:  make(map[hal.Texture]struct{}),
 		usesBatching: halQueue.SupportsCommandBufferCopies(),
 	}
 	if pw.usesBatching {
@@ -356,23 +381,32 @@ func (pw *pendingWrites) writeTextureLocked(
 		return fmt.Errorf("wgpu: pending writes: activate encoder: %w", err)
 	}
 
-	// Transition texture to COPY_DST using its actual tracked state.
+	// Transition texture to COPY_DST from the state the GPU has it in: what
+	// the last submit left (the device tracker), else what the backend tracks
+	// itself (DX12), else undefined, which is right for a new texture and
+	// nothing else: on Vulkan it lets the driver discard the contents.
 	currentUsage := dst.Texture.CurrentUsage()
+	idx, tracked := pw.trackedIndex(owner)
+	if tracked {
+		if uses := pw.tracker.TextureUsage(idx); uses != 0 {
+			currentUsage = uses.ToTextureUsage()
+		}
+	}
 	copyRange := textureCopyRange(owner, dst, size)
 	if currentUsage != gputypes.TextureUsageCopyDst {
-		barrier := [1]hal.TextureBarrier{{
+		pw.texBarrier[0] = hal.TextureBarrier{
 			Texture: dst.Texture,
 			Range:   copyRange,
 			Usage: hal.TextureUsageTransition{
 				OldUsage: currentUsage,
 				NewUsage: gputypes.TextureUsageCopyDst,
 			},
-		}}
-		enc.TransitionTextures(barrier[:])
+		}
+		enc.TransitionTextures(pw.texBarrier[:])
 	}
 
-	// Record copy command (stack-allocate to avoid slice heap escape).
-	texCopy := [1]hal.BufferTextureCopy{{
+	// Record copy command.
+	pw.texCopy[0] = hal.BufferTextureCopy{
 		BufferLayout: hal.ImageDataLayout{
 			Offset:       alloc.offset,
 			BytesPerRow:  alignedBytesPerRow,
@@ -380,35 +414,64 @@ func (pw *pendingWrites) writeTextureLocked(
 		},
 		TextureBase: *dst,
 		Size:        *size,
-	}}
-	enc.CopyBufferToTexture(alloc.buffer, dst.Texture, texCopy[:])
+	}
+	enc.CopyBufferToTexture(alloc.buffer, dst.Texture, pw.texCopy[:])
 
 	// Transition texture to SHADER_RESOURCE for rendering.
 	// ADR-060: The centralized TextureTracker now handles render pass -> submit barriers.
 	// These eager barriers remain for the pending_writes -> render path until the tracker
 	// also covers queue write operations (pending_writes integration, future work).
-	postBarrier := [1]hal.TextureBarrier{{
+	pw.texBarrier[0] = hal.TextureBarrier{
 		Texture: dst.Texture,
 		Range:   copyRange,
 		Usage: hal.TextureUsageTransition{
 			OldUsage: gputypes.TextureUsageCopyDst,
 			NewUsage: gputypes.TextureUsageTextureBinding,
 		},
-	}}
-	enc.TransitionTextures(postBarrier[:])
+	}
+	enc.TransitionTextures(pw.texBarrier[:])
+	pw.texBarrier[0], pw.texCopy[0] = hal.TextureBarrier{}, hal.BufferTextureCopy{}
+
+	// The write leaves the texture ready to sample; the barriers of the
+	// submits that follow start from there.
+	if tracked {
+		pw.tracker.InsertTexture(idx, track.TextureUsesResource)
+	}
 
 	// Track destination texture. AddPendingRef prevents premature Destroy (BUG-DX12-006).
 	// Staging buffer is managed by the belt (not tracked individually).
-	owners, already := pw.dstTextures[dst.Texture]
-	if !already {
+	if _, already := pw.dstTextures[dst.Texture]; !already {
 		dst.Texture.AddPendingRef()
+		pw.dstTextures[dst.Texture] = struct{}{}
 	}
-	if owner != nil && !containsTextureOwner(owners, owner) {
-		owners = append(owners, owner)
+	if owner != nil && !pw.hasOwner(dst.Texture, owner) {
+		pw.dstOwners = append(pw.dstOwners, dstOwner{raw: dst.Texture, owner: owner})
 	}
-	pw.dstTextures[dst.Texture] = owners
 
 	return nil
+}
+
+// hasOwner reports whether owner is already listed for raw in this batch.
+func (pw *pendingWrites) hasOwner(raw hal.Texture, owner *Texture) bool {
+	for _, o := range pw.dstOwners {
+		if o.raw == raw && o.owner == owner {
+			return true
+		}
+	}
+	return false
+}
+
+// trackedIndex is owner's index in the device tracker, when there is a
+// tracker and the texture has an index.
+func (pw *pendingWrites) trackedIndex(owner *Texture) (track.TrackerIndex, bool) {
+	if pw.tracker == nil || owner == nil || owner.coreTexture == nil {
+		return 0, false
+	}
+	td := owner.coreTexture.TrackingData()
+	if td == nil || !td.Index().IsValid() || td.IsReleased() {
+		return 0, false
+	}
+	return td.Index(), true
 }
 
 func textureCopyRange(owner *Texture, dst *hal.ImageCopyTexture, size *hal.Extent3D) hal.TextureRange {
@@ -428,15 +491,6 @@ func textureCopyRange(owner *Texture, dst *hal.ImageCopyTexture, size *hal.Exten
 		BaseArrayLayer:  baseLayer,
 		ArrayLayerCount: layerCount,
 	}
-}
-
-func containsTextureOwner(owners []*Texture, target *Texture) bool {
-	for _, owner := range owners {
-		if owner == target {
-			return true
-		}
-	}
-	return false
 }
 
 // zeroableTexture reports whether a texture made from desc gets zeroed through
@@ -489,7 +543,8 @@ func (pw *pendingWrites) zeroTextureLocked(t *Texture) error {
 	ct := t.coreTexture
 	s := ct.Size()
 	bpp := ct.Format().BlockCopySize()
-	var zeros []byte
+	zeros := pw.zeros
+	defer func() { pw.zeros = zeros }()
 	for mip := range max(ct.MipLevelCount(), 1) {
 		w, h, layers := max(s.Width>>mip, 1), max(s.Height>>mip, 1), max(s.DepthOrArrayLayers, 1)
 		if ct.Dimension() == gputypes.TextureDimension3D {
@@ -628,12 +683,10 @@ func (pw *pendingWrites) flush() (hal.CommandBuffer, hal.CommandEncoder, []hal.T
 	// between WriteTexture and Submit. Revalidate every contributing wrapper
 	// before any command buffer reaches HAL. The raw texture comparison also
 	// protects against a wrapper being rebound to a different resource.
-	for raw, owners := range pw.dstTextures {
-		for _, owner := range owners {
-			if owner.resolveHAL() != raw {
-				pw.discardRecording()
-				return nil, nil, nil, nil, fmt.Errorf("wgpu: pending writes: destination texture retired before submit: %w", ErrReleased)
-			}
+	for _, o := range pw.dstOwners {
+		if o.owner.resolveHAL() != o.raw {
+			pw.discardRecording()
+			return nil, nil, nil, nil, fmt.Errorf("wgpu: pending writes: destination texture retired before submit: %w", ErrReleased)
 		}
 	}
 
@@ -711,8 +764,15 @@ func (pw *pendingWrites) flush() (hal.CommandBuffer, hal.CommandEncoder, []hal.T
 	// buckets, so subsequent inserts in the next batch don't trigger growth allocations.
 	clear(pw.dstBuffers)
 	clear(pw.dstTextures)
+	pw.clearOwners()
 
 	return cmdBuf, flushedEncoder, flushedDstTextures, flushedDstBuffers, nil
+}
+
+// clearOwners empties the owner list, keeping its room.
+func (pw *pendingWrites) clearOwners() {
+	clear(pw.dstOwners)
+	pw.dstOwners = pw.dstOwners[:0]
 }
 
 // discardRecording abandons the current batch and restores every resource to
@@ -741,6 +801,7 @@ func (pw *pendingWrites) discardRecording() {
 	pw.encoder = nil
 	clear(pw.dstBuffers)
 	clear(pw.dstTextures)
+	pw.clearOwners()
 }
 
 // cancelFlush releases a batch that was closed but rejected by HAL Submit.
@@ -861,4 +922,5 @@ func (pw *pendingWrites) destroy() {
 
 	pw.dstBuffers = nil
 	pw.dstTextures = nil
+	pw.dstOwners = nil
 }

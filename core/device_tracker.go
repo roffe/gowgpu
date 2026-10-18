@@ -54,12 +54,17 @@ func (dt *DeviceTracker) Buffers() *track.BufferTracker {
 //
 // Reference: wgpu-core device/queue.rs pre_submit_for_command_buffers
 func (dt *DeviceTracker) MergeTextureScope(scope *track.TextureUsageScope) []track.TexturePendingTransition {
+	return dt.MergeTextureScopeInto(scope, nil)
+}
+
+// MergeTextureScopeInto is MergeTextureScope appending to dst.
+func (dt *DeviceTracker) MergeTextureScopeInto(scope *track.TextureUsageScope, dst []track.TexturePendingTransition) []track.TexturePendingTransition {
 	if scope == nil {
-		return nil
+		return dst
 	}
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
-	return dt.textures.Merge(scope)
+	return dt.textures.MergeInto(scope, dst)
 }
 
 // MergeBufferScope merges a command buffer's buffer usage scope into the
@@ -71,12 +76,17 @@ func (dt *DeviceTracker) MergeTextureScope(scope *track.TextureUsageScope) []tra
 //
 // Reference: wgpu-core device/queue.rs pre_submit_for_command_buffers
 func (dt *DeviceTracker) MergeBufferScope(scope *track.BufferUsageScope) []track.PendingTransition {
+	return dt.MergeBufferScopeInto(scope, nil)
+}
+
+// MergeBufferScopeInto is MergeBufferScope appending to dst.
+func (dt *DeviceTracker) MergeBufferScopeInto(scope *track.BufferUsageScope, dst []track.PendingTransition) []track.PendingTransition {
 	if scope == nil {
-		return nil
+		return dst
 	}
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
-	return dt.buffers.Merge(scope)
+	return dt.buffers.MergeInto(scope, dst)
 }
 
 // InsertBuffer registers a buffer in the device tracker with its initial usage.
@@ -111,6 +121,14 @@ func (dt *DeviceTracker) TrackPresentTexture(trackerIndex track.TrackerIndex) *t
 		return nil
 	}
 	return &transitions[0]
+}
+
+// TextureUsage returns the usage the device tracker last left a texture in,
+// or TextureUsesNone for one it does not track.
+func (dt *DeviceTracker) TextureUsage(index track.TrackerIndex) track.TextureUses {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	return dt.textures.GetUsage(index)
 }
 
 // InsertTexture registers a texture in the device tracker with its initial
@@ -148,6 +166,34 @@ func BarrierCBFromTransitions(
 	return BarrierCBFromAllTransitions(halEncoder, transitions, nil, resolveTexture, nil)
 }
 
+// BarrierResolver maps tracker indices to the HAL resources of a submit's
+// command buffers. A nil result means the resource is gone and its barrier
+// is skipped.
+type BarrierResolver interface {
+	ResolveTexture(track.TrackerIndex) hal.Texture
+	ResolveBuffer(track.TrackerIndex) hal.Buffer
+}
+
+// funcResolver adapts the function form of the resolvers.
+type funcResolver struct {
+	texture func(track.TrackerIndex) hal.Texture
+	buffer  func(track.TrackerIndex) hal.Buffer
+}
+
+func (r funcResolver) ResolveTexture(i track.TrackerIndex) hal.Texture {
+	if r.texture == nil {
+		return nil
+	}
+	return r.texture(i)
+}
+
+func (r funcResolver) ResolveBuffer(i track.TrackerIndex) hal.Buffer {
+	if r.buffer == nil {
+		return nil
+	}
+	return r.buffer(i)
+}
+
 // BarrierCBFromAllTransitions creates a HAL command buffer containing both
 // texture and buffer barriers. This is the generalized version that handles
 // all resource types in a single preamble command buffer.
@@ -162,40 +208,74 @@ func BarrierCBFromAllTransitions(
 	resolveTexture func(track.TrackerIndex) hal.Texture,
 	resolveBuffer func(track.TrackerIndex) hal.Buffer,
 ) (hal.CommandBuffer, error) {
+	return BarrierCB(halEncoder, textureTransitions, bufferTransitions, funcResolver{resolveTexture, resolveBuffer}, nil)
+}
+
+// BarrierScratch holds the barrier lists BarrierCB hands the HAL, between
+// calls, so that a queue submitting every frame allocates none. The backends
+// copy what they keep, and the lists are emptied after each use.
+type BarrierScratch struct {
+	Textures []hal.TextureBarrier
+	Buffers  []hal.BufferBarrier
+}
+
+// BarrierCB is BarrierCBFromAllTransitions with a BarrierResolver, which a
+// queue implements itself, and a scratch the queue keeps; scratch may be nil.
+func BarrierCB(
+	halEncoder hal.CommandEncoder,
+	textureTransitions []track.TexturePendingTransition,
+	bufferTransitions []track.PendingTransition,
+	resolve BarrierResolver,
+	scratch *BarrierScratch,
+) (hal.CommandBuffer, error) {
+	if scratch == nil {
+		scratch = &BarrierScratch{}
+	}
+	defer scratch.clear()
+
 	// Begin a short-lived encoding for the barrier commands
 	if err := halEncoder.BeginEncoding("barrier-inject"); err != nil {
 		return nil, err
 	}
 
 	// Emit texture barriers
-	if len(textureTransitions) > 0 && resolveTexture != nil {
-		barriers := make([]hal.TextureBarrier, 0, len(textureTransitions))
+	if len(textureTransitions) > 0 {
+		barriers := scratch.Textures[:0]
 		for _, t := range textureTransitions {
-			tex := resolveTexture(t.Index)
+			tex := resolve.ResolveTexture(t.Index)
 			if tex == nil {
 				continue // destroyed texture — skip
 			}
 			barriers = append(barriers, t.IntoHAL(tex))
 		}
+		scratch.Textures = barriers
 		if len(barriers) > 0 {
 			halEncoder.TransitionTextures(barriers)
 		}
 	}
 
 	// Emit buffer barriers
-	if len(bufferTransitions) > 0 && resolveBuffer != nil {
-		barriers := make([]hal.BufferBarrier, 0, len(bufferTransitions))
+	if len(bufferTransitions) > 0 {
+		barriers := scratch.Buffers[:0]
 		for _, t := range bufferTransitions {
-			buf := resolveBuffer(t.Index)
+			buf := resolve.ResolveBuffer(t.Index)
 			if buf == nil {
 				continue // destroyed buffer — skip
 			}
 			barriers = append(barriers, t.IntoHAL(buf))
 		}
+		scratch.Buffers = barriers
 		if len(barriers) > 0 {
 			halEncoder.TransitionBuffers(barriers)
 		}
 	}
 
 	return halEncoder.EndEncoding()
+}
+
+// clear empties the lists, so they pin no resource between submits.
+func (s *BarrierScratch) clear() {
+	clear(s.Textures)
+	clear(s.Buffers)
+	s.Textures, s.Buffers = s.Textures[:0], s.Buffers[:0]
 }

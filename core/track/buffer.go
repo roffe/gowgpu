@@ -173,7 +173,13 @@ func (t *BufferTracker) ensureSize(size int) {
 // This is called during queue submit to synchronize command buffer state
 // with device state.
 func (t *BufferTracker) Merge(scope *BufferUsageScope) []PendingTransition {
-	var transitions []PendingTransition
+	return t.MergeInto(scope, nil)
+}
+
+// MergeInto is Merge appending the transitions to dst, so a caller that
+// merges every submit can keep the list.
+func (t *BufferTracker) MergeInto(scope *BufferUsageScope, dst []PendingTransition) []PendingTransition {
+	transitions := dst
 
 	for i := range scope.states {
 		if i < 0 || i > int(^TrackerIndex(0)-1) {

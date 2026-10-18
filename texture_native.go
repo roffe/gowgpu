@@ -98,12 +98,7 @@ func (t *Texture) Release() {
 
 	// ADR-060: Release TrackerIndex to prevent monotonic growth (#307).
 	// Surface textures handle this in Surface.destroySwapchainTexture.
-	if t.coreTexture != nil {
-		td := t.coreTexture.TrackingData()
-		if td != nil {
-			td.Release()
-		}
-	}
+	releaseTextureTracking(t.coreTexture)
 
 	halDevice := t.device.halDevice()
 	if halDevice == nil {
@@ -134,6 +129,24 @@ func (t *Texture) Release() {
 	dq.Defer(subIdx, "Texture", func() {
 		halDevice.DestroyTexture(halTex)
 	})
+}
+
+// releaseTextureTracking gives a texture's tracker index back, after taking
+// its state out of the device tracker: the next texture to get the index
+// starts untracked instead of inheriting this one's last usage, which would
+// make its first submit transition it from a layout it was never in.
+func releaseTextureTracking(ct *core.Texture) {
+	if ct == nil {
+		return
+	}
+	td := ct.TrackingData()
+	if td == nil || !td.Index().IsValid() || td.IsReleased() {
+		return
+	}
+	if dev := ct.Device(); dev != nil && dev.Tracker() != nil {
+		dev.Tracker().RemoveTexture(td.Index())
+	}
+	td.Release()
 }
 
 // TextureView represents a view into a texture.

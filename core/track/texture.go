@@ -227,7 +227,13 @@ func (t *TextureTracker) ensureSize(size int) {
 //
 // Reference: wgpu-core track/texture.rs TextureTracker::set_from_usage_scope
 func (t *TextureTracker) Merge(scope *TextureUsageScope) []TexturePendingTransition {
-	var transitions []TexturePendingTransition
+	return t.MergeInto(scope, nil)
+}
+
+// MergeInto is Merge appending the transitions to dst, so a caller that
+// merges every submit can keep the list.
+func (t *TextureTracker) MergeInto(scope *TextureUsageScope, dst []TexturePendingTransition) []TexturePendingTransition {
+	transitions := dst
 
 	for i := range scope.states {
 		if i < 0 || i > int(^TrackerIndex(0)-1) {

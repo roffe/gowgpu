@@ -507,6 +507,9 @@ func (e *CommandEncoder) TransitionBuffers(barriers []hal.BufferBarrier) {
 	if len(barriers) > len(stack) {
 		bufferBarriers = make([]vk.BufferMemoryBarrier, 0, len(barriers))
 	}
+	// The barrier waits for the stages the old usages ran in and holds back
+	// the stages the new ones run in, not the whole pipeline.
+	var srcStages, dstStages vk.PipelineStageFlags
 	for _, b := range barriers {
 		buf, ok := b.Buffer.(*Buffer)
 		if !ok || buf.handle == 0 {
@@ -516,6 +519,8 @@ func (e *CommandEncoder) TransitionBuffers(barriers []hal.BufferBarrier) {
 
 		srcAccess, srcStage := bufferUsageToAccessAndStage(b.Usage.OldUsage)
 		dstAccess, dstStage := bufferUsageToAccessAndStage(b.Usage.NewUsage)
+		srcStages |= srcStage
+		dstStages |= dstStage
 
 		bufferBarriers = append(bufferBarriers, vk.BufferMemoryBarrier{
 			SType:               vk.StructureTypeBufferMemoryBarrier,
@@ -527,9 +532,6 @@ func (e *CommandEncoder) TransitionBuffers(barriers []hal.BufferBarrier) {
 			Offset:              0,
 			Size:                vk.DeviceSize(vk.WholeSize),
 		})
-
-		_ = srcStage
-		_ = dstStage
 	}
 
 	if len(bufferBarriers) == 0 {
@@ -539,13 +541,23 @@ func (e *CommandEncoder) TransitionBuffers(barriers []hal.BufferBarrier) {
 	vkCmdPipelineBarrier(
 		e.device.cmds,
 		e.active,
-		vk.PipelineStageFlags(vk.PipelineStageAllCommandsBit),
-		vk.PipelineStageFlags(vk.PipelineStageAllCommandsBit),
+		srcStages,
+		barrierDstStages(dstStages),
 		0,      // dependencyFlags
 		0, nil, // memory barriers
 		uint32(len(bufferBarriers)), &bufferBarriers[0],
 		0, nil, // image barriers
 	)
+}
+
+// barrierDstStages is the destination stage mask of a barrier whose new
+// usages ran in stages: nothing known (TOP_OF_PIPE alone, from a zero usage)
+// means every later command has to wait.
+func barrierDstStages(stages vk.PipelineStageFlags) vk.PipelineStageFlags {
+	if stages == 0 || stages == vk.PipelineStageFlags(vk.PipelineStageTopOfPipeBit) {
+		return vk.PipelineStageFlags(vk.PipelineStageAllCommandsBit)
+	}
+	return stages
 }
 
 // TransitionTextures transitions texture states for synchronization.
@@ -561,6 +573,7 @@ func (e *CommandEncoder) TransitionTextures(barriers []hal.TextureBarrier) {
 	if len(barriers) > len(stack) {
 		imageBarriers = make([]vk.ImageMemoryBarrier, 0, len(barriers))
 	}
+	var srcStages, dstStages vk.PipelineStageFlags
 	for _, b := range barriers {
 		tex, ok := b.Texture.(*Texture)
 		if !ok || tex.handle == 0 {
@@ -568,8 +581,10 @@ func (e *CommandEncoder) TransitionTextures(barriers []hal.TextureBarrier) {
 			continue
 		}
 
-		srcAccess, srcStage, oldLayout := textureUsageToAccessStageLayout(b.Usage.OldUsage)
-		dstAccess, dstStage, newLayout := textureUsageToAccessStageLayout(b.Usage.NewUsage)
+		srcAccess, srcStage, oldLayout := textureBarrierState(tex, b.Usage.OldUsage)
+		dstAccess, dstStage, newLayout := textureBarrierState(tex, b.Usage.NewUsage)
+		srcStages |= srcStage
+		dstStages |= dstStage
 
 		imageBarriers = append(imageBarriers, vk.ImageMemoryBarrier{
 			SType:               vk.StructureTypeImageMemoryBarrier,
@@ -588,9 +603,6 @@ func (e *CommandEncoder) TransitionTextures(barriers []hal.TextureBarrier) {
 				LayerCount:     arrayLayerCountOrRemaining(b.Range.ArrayLayerCount),
 			},
 		})
-
-		_ = srcStage
-		_ = dstStage
 	}
 
 	if len(imageBarriers) == 0 {
@@ -600,8 +612,8 @@ func (e *CommandEncoder) TransitionTextures(barriers []hal.TextureBarrier) {
 	vkCmdPipelineBarrier(
 		e.device.cmds,
 		e.active,
-		vk.PipelineStageFlags(vk.PipelineStageAllCommandsBit),
-		vk.PipelineStageFlags(vk.PipelineStageAllCommandsBit),
+		srcStages,
+		barrierDstStages(dstStages),
 		0,
 		0, nil,
 		0, nil,
@@ -1670,7 +1682,10 @@ func swapchainTargetView(view *TextureView, resolveView *TextureView, hasMSAARes
 	return nil
 }
 
-//nolint:unparam // stage will be used when barrier optimization is implemented
+// shaderStages are the stages a shader binding is read or written in. Which
+// shader a WebGPU binding is visible to is not known here, so all of them.
+const shaderStages = vk.PipelineStageFlags(vk.PipelineStageVertexShaderBit | vk.PipelineStageFragmentShaderBit | vk.PipelineStageComputeShaderBit)
+
 func bufferUsageToAccessAndStage(usage gputypes.BufferUsage) (vk.AccessFlags, vk.PipelineStageFlags) {
 	var access vk.AccessFlags
 	var stage vk.PipelineStageFlags
@@ -1693,11 +1708,11 @@ func bufferUsageToAccessAndStage(usage gputypes.BufferUsage) (vk.AccessFlags, vk
 	}
 	if usage&gputypes.BufferUsageUniform != 0 {
 		access |= vk.AccessFlags(vk.AccessUniformReadBit)
-		stage |= vk.PipelineStageFlags(vk.PipelineStageVertexShaderBit | vk.PipelineStageFragmentShaderBit)
+		stage |= shaderStages
 	}
 	if usage&gputypes.BufferUsageStorage != 0 {
 		access |= vk.AccessFlags(vk.AccessShaderReadBit | vk.AccessShaderWriteBit)
-		stage |= vk.PipelineStageFlags(vk.PipelineStageVertexShaderBit | vk.PipelineStageFragmentShaderBit | vk.PipelineStageComputeShaderBit)
+		stage |= shaderStages
 	}
 	if usage&gputypes.BufferUsageIndirect != 0 {
 		access |= vk.AccessFlags(vk.AccessIndirectCommandReadBit)
@@ -1711,8 +1726,13 @@ func bufferUsageToAccessAndStage(usage gputypes.BufferUsage) (vk.AccessFlags, vk
 	return access, stage
 }
 
-//nolint:unparam // stage will be used when barrier optimization is implemented
-func textureUsageToAccessStageLayout(usage gputypes.TextureUsage) (vk.AccessFlags, vk.PipelineStageFlags, vk.ImageLayout) {
+// textureBarrierState is the access, stage and layout a usage of tex means in
+// a barrier. The layout has to be the one every other path puts the image in:
+// a render pass ends a colour target that is also sampled in GENERAL
+// (offscreenFinalLayout) and a depth target in DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+// so a barrier to or from RenderAttachment names those, not
+// COLOR_ATTACHMENT_OPTIMAL. tex may be nil, for a swapchain image.
+func textureBarrierState(tex *Texture, usage gputypes.TextureUsage) (vk.AccessFlags, vk.PipelineStageFlags, vk.ImageLayout) {
 	// Usage 0 means "initial/undefined" — the image has no prior usage.
 	// Newly created Vulkan images start in VK_IMAGE_LAYOUT_UNDEFINED.
 	// Using ImageLayoutGeneral here would lie about the old layout,
@@ -1737,18 +1757,28 @@ func textureUsageToAccessStageLayout(usage gputypes.TextureUsage) (vk.AccessFlag
 	}
 	if usage&gputypes.TextureUsageTextureBinding != 0 {
 		access |= vk.AccessFlags(vk.AccessShaderReadBit)
-		stage |= vk.PipelineStageFlags(vk.PipelineStageFragmentShaderBit)
+		stage |= shaderStages
 		layout = vk.ImageLayoutShaderReadOnlyOptimal
 	}
 	if usage&gputypes.TextureUsageStorageBinding != 0 {
 		access |= vk.AccessFlags(vk.AccessShaderReadBit | vk.AccessShaderWriteBit)
-		stage |= vk.PipelineStageFlags(vk.PipelineStageComputeShaderBit)
+		stage |= shaderStages
 		layout = vk.ImageLayoutGeneral
 	}
 	if usage&gputypes.TextureUsageRenderAttachment != 0 {
-		access |= vk.AccessFlags(vk.AccessColorAttachmentWriteBit | vk.AccessColorAttachmentReadBit)
-		stage |= vk.PipelineStageFlags(vk.PipelineStageColorAttachmentOutputBit)
-		layout = vk.ImageLayoutColorAttachmentOptimal
+		switch {
+		case tex != nil && isDepthStencilFormat(tex.format):
+			access |= vk.AccessFlags(vk.AccessDepthStencilAttachmentWriteBit | vk.AccessDepthStencilAttachmentReadBit)
+			stage |= vk.PipelineStageFlags(vk.PipelineStageEarlyFragmentTestsBit | vk.PipelineStageLateFragmentTestsBit)
+			layout = vk.ImageLayoutDepthStencilAttachmentOptimal
+		default:
+			access |= vk.AccessFlags(vk.AccessColorAttachmentWriteBit | vk.AccessColorAttachmentReadBit)
+			stage |= vk.PipelineStageFlags(vk.PipelineStageColorAttachmentOutputBit)
+			layout = vk.ImageLayoutColorAttachmentOptimal
+			if tex != nil && tex.usage&gputypes.TextureUsageTextureBinding != 0 {
+				layout = vk.ImageLayoutGeneral
+			}
+		}
 	}
 
 	if stage == 0 {
@@ -1756,6 +1786,12 @@ func textureUsageToAccessStageLayout(usage gputypes.TextureUsage) (vk.AccessFlag
 	}
 
 	return access, stage, layout
+}
+
+// textureUsageToAccessStageLayout is textureBarrierState for an image whose
+// texture is not known.
+func textureUsageToAccessStageLayout(usage gputypes.TextureUsage) (vk.AccessFlags, vk.PipelineStageFlags, vk.ImageLayout) {
+	return textureBarrierState(nil, usage)
 }
 
 func mipLevelCountOrRemaining(count uint32) uint32 {
