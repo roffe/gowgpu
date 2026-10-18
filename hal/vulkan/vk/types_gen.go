@@ -98,26 +98,26 @@ type (
 	ShaderCorePropertiesFlagsAMD                         Flags
 	DeviceDiagnosticsConfigFlagsNV                       Flags
 	RefreshObjectFlagsKHR                                Flags
-	AccessFlags2                                         Flags
-	PipelineStageFlags2                                  Flags
+	AccessFlags2                                         Flags64
+	PipelineStageFlags2                                  Flags64
 	AccelerationStructureMotionInfoFlagsNV               Flags
 	AccelerationStructureMotionInstanceFlagsNV           Flags
-	FormatFeatureFlags2                                  Flags
+	FormatFeatureFlags2                                  Flags64
 	RenderingFlags                                       Flags
-	MemoryDecompressionMethodFlagsEXT                    Flags
+	MemoryDecompressionMethodFlagsEXT                    Flags64
 	BuildMicromapFlagsEXT                                Flags
 	MicromapCreateFlagsEXT                               Flags
 	IndirectCommandsLayoutUsageFlagsEXT                  Flags
 	IndirectCommandsInputModeFlagsEXT                    Flags
 	DirectDriverLoadingFlagsLUNARG                       Flags
-	PipelineCreateFlags2                                 Flags
-	BufferUsageFlags2                                    Flags
+	PipelineCreateFlags2                                 Flags64
+	BufferUsageFlags2                                    Flags64
 	AddressCopyFlagsKHR                                  Flags
-	TensorCreateFlagsARM                                 Flags
-	TensorUsageFlagsARM                                  Flags
-	TensorViewCreateFlagsARM                             Flags
-	DataGraphPipelineSessionCreateFlagsARM               Flags
-	DataGraphPipelineDispatchFlagsARM                    Flags
+	TensorCreateFlagsARM                                 Flags64
+	TensorUsageFlagsARM                                  Flags64
+	TensorViewCreateFlagsARM                             Flags64
+	DataGraphPipelineSessionCreateFlagsARM               Flags64
+	DataGraphPipelineDispatchFlagsARM                    Flags64
 	VideoEncodeRgbModelConversionFlagsVALVE              Flags
 	VideoEncodeRgbRangeCompressionFlagsVALVE             Flags
 	VideoEncodeRgbChromaOffsetFlagsVALVE                 Flags
@@ -198,7 +198,7 @@ type (
 	PresentGravityFlagsKHR                               Flags
 	ShaderCreateFlagsEXT                                 Flags
 	TileShadingRenderPassFlagsQCOM                       Flags
-	PhysicalDeviceSchedulingControlsFlagsARM             Flags
+	PhysicalDeviceSchedulingControlsFlagsARM             Flags64
 	SurfaceCreateFlagsOHOS                               Flags
 	PresentStageFlagsEXT                                 Flags
 	PastPresentationTimingFlagsEXT                       Flags
@@ -215,7 +215,7 @@ type (
 	VideoDecodeUsageFlagsKHR                             Flags
 	VideoDecodeCapabilityFlagsKHR                        Flags
 	VideoDecodeFlagsKHR                                  Flags
-	VideoDecodeH264PictureLayoutFlagsKHR                 Flags64
+	VideoDecodeH264PictureLayoutFlagsKHR                 Flags
 	VideoEncodeFlagsKHR                                  Flags
 	VideoEncodeUsageFlagsKHR                             Flags
 	VideoEncodeContentFlagsKHR                           Flags
@@ -226,9 +226,9 @@ type (
 	VideoEncodeIntraRefreshModeFlagsKHR                  Flags
 	VideoChromaSubsamplingFlagsKHR                       Flags
 	VideoComponentBitDepthFlagsKHR                       Flags
-	VideoEncodeH264CapabilityFlagsKHR                    Flags64
-	VideoEncodeH264StdFlagsKHR                           Flags64
-	VideoEncodeH264RateControlFlagsKHR                   Flags64
+	VideoEncodeH264CapabilityFlagsKHR                    Flags
+	VideoEncodeH264StdFlagsKHR                           Flags
+	VideoEncodeH264RateControlFlagsKHR                   Flags
 	VideoEncodeH265CapabilityFlagsKHR                    Flags
 	VideoEncodeH265StdFlagsKHR                           Flags
 	VideoEncodeH265RateControlFlagsKHR                   Flags
@@ -238,7 +238,7 @@ type (
 	VideoEncodeAV1StdFlagsKHR                            Flags
 	VideoEncodeAV1RateControlFlagsKHR                    Flags
 	VideoEncodeAV1SuperblockSizeFlagsKHR                 Flags
-	AccessFlags3KHR                                      Flags
+	AccessFlags3KHR                                      Flags64
 )
 
 // Platform-specific types (opaque pointers)

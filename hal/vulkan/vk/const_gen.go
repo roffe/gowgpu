@@ -2047,7 +2047,7 @@ const (
 )
 
 // VkMemoryDecompressionMethodFlagBitsEXT
-type MemoryDecompressionMethodFlagBitsEXT int32
+type MemoryDecompressionMethodFlagBitsEXT int64
 
 const (
 	MemoryDecompressionMethodGdeflate10BitExt MemoryDecompressionMethodFlagBitsEXT = 1 << 0
@@ -2455,7 +2455,7 @@ const (
 )
 
 // VkPhysicalDeviceSchedulingControlsFlagBitsARM
-type PhysicalDeviceSchedulingControlsFlagBitsARM int32
+type PhysicalDeviceSchedulingControlsFlagBitsARM int64
 
 const (
 	PhysicalDeviceSchedulingControlsShaderCoreCountArm PhysicalDeviceSchedulingControlsFlagBitsARM = 1 << 0
@@ -2534,7 +2534,7 @@ const (
 type VideoSessionParametersCreateFlagBitsKHR int32
 
 // VkVideoDecodeH264PictureLayoutFlagBitsKHR
-type VideoDecodeH264PictureLayoutFlagBitsKHR int64
+type VideoDecodeH264PictureLayoutFlagBitsKHR int32
 
 const (
 	VideoDecodeH264PictureLayoutProgressiveKhr                   VideoDecodeH264PictureLayoutFlagBitsKHR = 0
@@ -2650,7 +2650,7 @@ const (
 )
 
 // VkVideoEncodeH264CapabilityFlagBitsKHR
-type VideoEncodeH264CapabilityFlagBitsKHR int64
+type VideoEncodeH264CapabilityFlagBitsKHR int32
 
 const (
 	VideoEncodeH264CapabilityHrdComplianceBitKhr                  VideoEncodeH264CapabilityFlagBitsKHR = 1 << 0
@@ -2665,7 +2665,7 @@ const (
 )
 
 // VkVideoEncodeH264StdFlagBitsKHR
-type VideoEncodeH264StdFlagBitsKHR int64
+type VideoEncodeH264StdFlagBitsKHR int32
 
 const (
 	VideoEncodeH264StdSeparateColorPlaneFlagSetBitKhr          VideoEncodeH264StdFlagBitsKHR = 1 << 0
@@ -2691,7 +2691,7 @@ const (
 )
 
 // VkVideoEncodeH264RateControlFlagBitsKHR
-type VideoEncodeH264RateControlFlagBitsKHR int64
+type VideoEncodeH264RateControlFlagBitsKHR int32
 
 const (
 	VideoEncodeH264RateControlAttemptHrdComplianceBitKhr       VideoEncodeH264RateControlFlagBitsKHR = 1 << 0
@@ -3319,7 +3319,7 @@ const (
 )
 
 // VkAccessFlagBits3KHR
-type AccessFlagBits3KHR int32
+type AccessFlagBits3KHR int64
 
 const (
 	Access3NoneKhr AccessFlagBits3KHR = 0
@@ -3353,7 +3353,7 @@ const (
 )
 
 // VkTensorCreateFlagBitsARM
-type TensorCreateFlagBitsARM int32
+type TensorCreateFlagBitsARM int64
 
 const (
 	TensorCreateMutableFormatBitArm TensorCreateFlagBitsARM = 1 << 0
@@ -3361,7 +3361,7 @@ const (
 )
 
 // VkTensorUsageFlagBitsARM
-type TensorUsageFlagBitsARM int32
+type TensorUsageFlagBitsARM int64
 
 const (
 	TensorUsageShaderBitArm        TensorUsageFlagBitsARM = 1 << 1
@@ -3379,7 +3379,7 @@ const (
 )
 
 // VkTensorViewCreateFlagBitsARM
-type TensorViewCreateFlagBitsARM int32
+type TensorViewCreateFlagBitsARM int64
 
 // VkDefaultVertexAttributeValueKHR
 type DefaultVertexAttributeValueKHR int32
@@ -3390,7 +3390,7 @@ const (
 )
 
 // VkDataGraphPipelineSessionCreateFlagBitsARM
-type DataGraphPipelineSessionCreateFlagBitsARM int32
+type DataGraphPipelineSessionCreateFlagBitsARM int64
 
 const (
 	DataGraphPipelineSessionCreateProtectedBitArm DataGraphPipelineSessionCreateFlagBitsARM = 1 << 0
@@ -3419,7 +3419,7 @@ const (
 )
 
 // VkDataGraphPipelineDispatchFlagBitsARM
-type DataGraphPipelineDispatchFlagBitsARM int32
+type DataGraphPipelineDispatchFlagBitsARM int64
 
 // VkPhysicalDeviceDataGraphProcessingEngineTypeARM
 type PhysicalDeviceDataGraphProcessingEngineTypeARM int32

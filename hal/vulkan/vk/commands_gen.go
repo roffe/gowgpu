@@ -4364,7 +4364,7 @@ func (c *Commands) CmdResetEvent2(commandBuffer CommandBuffer, event Event, stag
 	if c.cmdResetEvent2 == nil {
 		return
 	}
-	C.gvk_v_hhi(C.uintptr_t(uintptr(c.cmdResetEvent2)), C.uint64_t(commandBuffer), C.uint64_t(event), C.uint32_t(stageMask))
+	C.gvk_v_hhq(C.uintptr_t(uintptr(c.cmdResetEvent2)), C.uint64_t(commandBuffer), C.uint64_t(event), C.uint64_t(stageMask))
 }
 
 // CmdPipelineBarrier2 wraps vkCmdPipelineBarrier2.

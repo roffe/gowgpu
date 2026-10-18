@@ -152,6 +152,7 @@ type Type struct {
 	Parent    string   `xml:"parent,attr"`
 	Members   []Member `xml:"member"`
 	InnerName string   `xml:"name"` // For types where name is element content
+	InnerType string   `xml:"type"` // The typedef'd type, VkFlags or VkFlags64 for a bitmask
 	Requires  string   `xml:"requires,attr"`
 }
 
@@ -166,10 +167,11 @@ type Member struct {
 }
 
 type EnumsGroup struct {
-	Name    string `xml:"name,attr"`
-	Type    string `xml:"type,attr"`
-	Comment string `xml:"comment,attr"`
-	Enums   []Enum `xml:"enum"`
+	Name     string `xml:"name,attr"`
+	Type     string `xml:"type,attr"`
+	BitWidth string `xml:"bitwidth,attr"` // "64" for the FlagBits of a VkFlags64 bitmask
+	Comment  string `xml:"comment,attr"`
+	Enums    []Enum `xml:"enum"`
 }
 
 type Enum struct {
@@ -283,9 +285,10 @@ func generateConstants(registry *Registry, outDir string) error {
 		// Generate enum/bitmask types
 		if group.Type == "enum" || group.Type == "bitmask" {
 			typeName := vkToGoType(group.Name)
-			// Use int64 for 64-bit flag types (ending in "2" like FlagBits2 or containing "64")
+			// int64 for the FlagBits vk.xml marks 64 bits wide, as the name
+			// does not tell (VkTensorUsageFlagBitsARM is, the H264 ones are not).
 			baseType := "int32"
-			if strings.HasSuffix(typeName, "2") || strings.Contains(typeName, "64") {
+			if group.BitWidth == "64" {
 				baseType = "int64"
 			}
 			fmt.Fprintf(f, "// %s\n", group.Name)
@@ -478,9 +481,11 @@ func generateTypes(registry *Registry, outDir string) error {
 				continue
 			}
 			seenBitmasks[goName] = true
-			// Determine base type (VkFlags or VkFlags64)
+			// Base type as vk.xml typedefs it: VkFlags or VkFlags64. The
+			// name says nothing (VkPipelineStageFlags2 is 64-bit,
+			// VkVideoEncodeH264StdFlagsKHR is not).
 			baseType := "Flags"
-			if strings.Contains(name, "64") || strings.Contains(t.Requires, "64") {
+			if t.InnerType == "VkFlags64" {
 				baseType = "Flags64"
 			}
 			bitmasks = append(bitmasks, struct {
