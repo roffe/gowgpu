@@ -105,7 +105,11 @@ func (p *MapPending) Wait(ctx context.Context) error {
 	// per-Wait allocation; MapAsync's zero-alloc guarantee applies to
 	// the hot path that polls Status() directly.
 	doneCh := make(chan *core.BufferMapError, 1)
-	go func() { doneCh <- p.waiter.Wait() }()
+	// The goroutine gets its own copy of the waiter: after a canceled ctx
+	// the caller may Release p, which clears p.waiter or hands p to the
+	// next MapAsync.
+	w := p.waiter
+	go func() { doneCh <- w.Wait() }()
 
 	select {
 	case cErr := <-doneCh:
