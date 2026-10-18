@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/roffe/gowgpu"
+	"github.com/roffe/gowgpu/core"
 	"github.com/roffe/gowgpu/gputypes"
 
 	// Import noop backend. The noop backend is intentionally ignored during real
@@ -67,6 +68,23 @@ func newDevice(t *testing.T) (*wgpu.Instance, *wgpu.Adapter, *wgpu.Device) {
 		t.Fatal("RequestDevice returned nil")
 	}
 	return inst, adapter, device
+}
+
+// newDeviceWithDefaultLimits requests a device with WebGPU's default limits.
+// A device asked for without limits gets the adapter's, which differ from GPU
+// to GPU, so a test of a limit check needs this one.
+func newDeviceWithDefaultLimits(t *testing.T) *wgpu.Device {
+	t.Helper()
+	inst, adapter := newAdapter(t)
+	t.Cleanup(func() {
+		adapter.Release()
+		inst.Release()
+	})
+	device, err := adapter.RequestDevice(&wgpu.DeviceDescriptor{RequiredLimits: gputypes.DefaultLimits()})
+	if err != nil {
+		t.Fatalf("RequestDevice: %v", err)
+	}
+	return device
 }
 
 // requireHAL skips the test when no real HAL provider supplied the device.
@@ -2479,7 +2497,7 @@ func TestComputePassDispatchZeroWorkgroupsAllowed(t *testing.T) {
 // =============================================================================
 
 func TestCreateComputePipelineWorkgroupSizeTooLarge(t *testing.T) {
-	_, _, device := newDevice(t)
+	device := newDeviceWithDefaultLimits(t)
 	defer device.Release()
 	requireHAL(t, device)
 
@@ -2499,13 +2517,14 @@ func TestCreateComputePipelineWorkgroupSizeTooLarge(t *testing.T) {
 		Module:     shader,
 		EntryPoint: "main",
 	})
-	if err == nil {
-		t.Fatal("CreateComputePipeline should reject workgroup_size(512) when limit is 256")
+	var pe *core.CreateComputePipelineError
+	if !errors.As(err, &pe) || pe.Kind != core.CreateComputePipelineErrorWorkgroupSizeExceeded {
+		t.Fatalf("CreateComputePipeline = %v, want the workgroup size limit error (512 > 256)", err)
 	}
 }
 
 func TestCreateComputePipelineTotalInvocationsExceeded(t *testing.T) {
-	_, _, device := newDevice(t)
+	device := newDeviceWithDefaultLimits(t)
 	defer device.Release()
 	requireHAL(t, device)
 
@@ -2526,13 +2545,14 @@ func TestCreateComputePipelineTotalInvocationsExceeded(t *testing.T) {
 		Module:     shader,
 		EntryPoint: "main",
 	})
-	if err == nil {
-		t.Fatal("CreateComputePipeline should reject when total invocations exceed limit")
+	var pe *core.CreateComputePipelineError
+	if !errors.As(err, &pe) || pe.Kind != core.CreateComputePipelineErrorTooManyInvocations {
+		t.Fatalf("CreateComputePipeline = %v, want the invocation limit error (1024 > 256)", err)
 	}
 }
 
 func TestCreateComputePipelineWorkgroupSizeValid(t *testing.T) {
-	_, _, device := newDevice(t)
+	device := newDeviceWithDefaultLimits(t)
 	defer device.Release()
 	requireHAL(t, device)
 
@@ -2546,13 +2566,21 @@ func TestCreateComputePipelineWorkgroupSizeValid(t *testing.T) {
 	}
 	defer shader.Release()
 
+	// An empty layout, since Vulkan and DX12 have no automatic ones.
+	layout, err := device.CreatePipelineLayout(&wgpu.PipelineLayoutDescriptor{})
+	if err != nil {
+		t.Fatalf("CreatePipelineLayout: %v", err)
+	}
+	defer layout.Release()
+
 	pipeline, err := device.CreateComputePipeline(&wgpu.ComputePipelineDescriptor{
 		Label:      "val010-valid-pipeline",
+		Layout:     layout,
 		Module:     shader,
 		EntryPoint: "main",
 	})
 	if err != nil {
-		t.Skipf("CreateComputePipeline not supported: %v", err)
+		t.Fatalf("CreateComputePipeline at the limit: %v", err)
 	}
 	pipeline.Release()
 }
