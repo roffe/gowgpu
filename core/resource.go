@@ -786,6 +786,18 @@ func (b *Buffer) Destroy() {
 		return
 	}
 
+	// Give the tracker index back, after clearing what the device tracker
+	// kept for it, so the next buffer that gets the index starts like a new
+	// one. Buffers never gave it back, so every buffer ever made took a new
+	// index, and each command encoder's usage scope and the device tracker
+	// grew as long as that count.
+	if b.trackingData != nil {
+		if b.device.tracker != nil {
+			b.device.tracker.RemoveBuffer(b.trackingData.Index())
+		}
+		b.trackingData.Release()
+	}
+
 	// Destroy the HAL buffer
 	halDevice.DestroyBuffer(*halBuffer)
 }
