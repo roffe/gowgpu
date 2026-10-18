@@ -1515,7 +1515,14 @@ func vkCreateImageViewSwapchain(d *Device, createInfo *vk.ImageViewCreateInfo, _
 	return d.cmds.CreateImageView(d.handle, createInfo, nil, view)
 }
 
+// vkDestroyImageViewSwapchain also drops the cached framebuffers made with the
+// view. Otherwise every reconfigure leaves one per image in the render pass
+// cache until the device goes, and a new view that gets the same handle back
+// from the driver could be handed a framebuffer of the dead one.
 func vkDestroyImageViewSwapchain(d *Device, view vk.ImageView, _ *vk.AllocationCallbacks) {
+	if d.renderPassCache != nil {
+		d.renderPassCache.InvalidateFramebuffer(view)
+	}
 	d.cmds.DestroyImageView(d.handle, view, nil)
 }
 
