@@ -150,22 +150,38 @@ type DescriptorHeap struct {
 	capacity      uint32
 	nextFree      uint32
 	freeList      []uint32 // Recycled descriptor indices (LIFO stack)
-	mu            sync.Mutex
+	// freeRanges holds the base index of each freed range of more than one
+	// descriptor, by its count, so a range is reused by the next allocation
+	// of the same size (a bind group with the same layout).
+	freeRanges map[uint32][]uint32
+	mu         sync.Mutex
+}
+
+// reuse takes a recycled slot (count 1) or a recycled range of exactly
+// count descriptors. The caller holds h.mu.
+func (h *DescriptorHeap) reuse(count uint32) (uint32, bool) {
+	if count == 1 && len(h.freeList) > 0 {
+		idx := h.freeList[len(h.freeList)-1]
+		h.freeList = h.freeList[:len(h.freeList)-1]
+		return idx, true
+	}
+	if bases := h.freeRanges[count]; len(bases) > 0 {
+		idx := bases[len(bases)-1]
+		h.freeRanges[count] = bases[:len(bases)-1]
+		return idx, true
+	}
+	return 0, false
 }
 
 // Allocate allocates descriptors from the heap.
 // Returns the CPU handle for the first allocated descriptor.
-// For single-descriptor allocations, recycled slots are preferred.
+// Recycled slots and ranges of the same size are preferred.
 func (h *DescriptorHeap) Allocate(count uint32) (d3d12.D3D12_CPU_DESCRIPTOR_HANDLE, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	// Recycle from free list for single-descriptor allocations
-	if count == 1 && len(h.freeList) > 0 {
-		idx := h.freeList[len(h.freeList)-1]
-		h.freeList = h.freeList[:len(h.freeList)-1]
-		handle := h.cpuStart.Offset(int(idx), h.incrementSize)
-		return handle, nil
+	if idx, ok := h.reuse(count); ok {
+		return h.cpuStart.Offset(int(idx), h.incrementSize), nil
 	}
 
 	if h.nextFree+count > h.capacity {
@@ -186,18 +202,13 @@ func (h *DescriptorHeap) Allocate(count uint32) (d3d12.D3D12_CPU_DESCRIPTOR_HAND
 }
 
 // AllocateGPU allocates descriptors and returns both CPU and GPU handles.
-// For single-descriptor allocations, recycled slots are preferred.
+// Recycled slots and ranges of the same size are preferred.
 func (h *DescriptorHeap) AllocateGPU(count uint32) (d3d12.D3D12_CPU_DESCRIPTOR_HANDLE, d3d12.D3D12_GPU_DESCRIPTOR_HANDLE, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	// Recycle from free list for single-descriptor allocations
-	if count == 1 && len(h.freeList) > 0 {
-		idx := h.freeList[len(h.freeList)-1]
-		h.freeList = h.freeList[:len(h.freeList)-1]
-		cpuHandle := h.cpuStart.Offset(int(idx), h.incrementSize)
-		gpuHandle := h.gpuStart.Offset(int(idx), h.incrementSize)
-		return cpuHandle, gpuHandle, nil
+	if idx, ok := h.reuse(count); ok {
+		return h.cpuStart.Offset(int(idx), h.incrementSize), h.gpuStart.Offset(int(idx), h.incrementSize), nil
 	}
 
 	if h.nextFree+count > h.capacity {
@@ -219,14 +230,23 @@ func (h *DescriptorHeap) AllocateGPU(count uint32) (d3d12.D3D12_CPU_DESCRIPTOR_H
 	return cpuHandle, gpuHandle, nil
 }
 
-// Free returns descriptor indices to the free list for reuse.
+// Free returns descriptors for reuse: a single slot goes on the free list,
+// a range on freeRanges. A range split into single slots could only be
+// reused by single allocations, so every bind group of two or more
+// descriptors took new ones until the heap ran out.
 // The descriptors must no longer be referenced by any in-flight GPU work.
 func (h *DescriptorHeap) Free(baseIndex, count uint32) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	for i := uint32(0); i < count; i++ {
-		h.freeList = append(h.freeList, baseIndex+i)
+	switch {
+	case count == 1:
+		h.freeList = append(h.freeList, baseIndex)
+	case count > 1:
+		if h.freeRanges == nil {
+			h.freeRanges = make(map[uint32][]uint32)
+		}
+		h.freeRanges[count] = append(h.freeRanges[count], baseIndex)
 	}
 }
 

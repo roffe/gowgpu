@@ -241,6 +241,28 @@ func TestDescriptorHeap(t *testing.T) {
 			t.Error("Offset calculation incorrect")
 		}
 	})
+
+	t.Run("freed range is reused", func(t *testing.T) {
+		// A bind group of two descriptors made and destroyed over and over
+		// must keep getting the same range, not walk the heap until it is full.
+		heap := &DescriptorHeap{incrementSize: 1, capacity: 4}
+		for i := 0; i < 10; i++ {
+			cpu, _, err := heap.AllocateGPU(2)
+			if err != nil {
+				t.Fatalf("allocation %d: %v", i, err)
+			}
+			if cpu.Ptr != 0 {
+				t.Fatalf("allocation %d at %d, want the freed range at 0", i, cpu.Ptr)
+			}
+			heap.Free(heap.HandleToIndex(cpu), 2)
+		}
+		if heap.nextFree != 2 {
+			t.Errorf("nextFree = %d, want 2", heap.nextFree)
+		}
+		if one, err := heap.Allocate(1); err != nil || one.Ptr != 2 {
+			t.Errorf("single allocation took %d (%v), want 2: a freed range is not split", one.Ptr, err)
+		}
+	})
 }
 
 // TestComputeHALInterface verifies HAL interface compliance.
