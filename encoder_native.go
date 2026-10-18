@@ -4,6 +4,7 @@ package wgpu
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -911,6 +912,7 @@ type corePassDescriptor struct {
 	views  []core.TextureView
 	depth  core.RenderPassDepthStencilAttachment
 	stamps core.RenderPassTimestampWrites
+	label  string
 }
 
 var passDescPool = sync.Pool{New: func() any { return new(corePassDescriptor) }}
@@ -921,7 +923,12 @@ func (c *corePassDescriptor) fill(desc *RenderPassDescriptor) *core.RenderPassDe
 	if desc == nil {
 		return &c.desc
 	}
-	c.desc.Label = desc.Label
+	// A copy, so nothing of desc itself reaches the heap: storing its label
+	// would move the caller's attachment slice there too.
+	if c.label != desc.Label {
+		c.label = strings.Clone(desc.Label)
+	}
+	c.desc.Label = c.label
 
 	// The attachments point into views, so it gets its full length before the
 	// first one is taken: growing it later would leave them behind.
