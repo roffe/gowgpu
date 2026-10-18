@@ -475,7 +475,13 @@ func (e *CommandEncoder) TransitionBuffers(barriers []hal.BufferBarrier) {
 		return
 	}
 
-	bufferBarriers := make([]vk.BufferMemoryBarrier, 0, len(barriers))
+	// Up to eight barriers, the usual case, stay on the stack:
+	// vkCmdPipelineBarrier does not keep them.
+	var stack [8]vk.BufferMemoryBarrier
+	bufferBarriers := stack[:0]
+	if len(barriers) > len(stack) {
+		bufferBarriers = make([]vk.BufferMemoryBarrier, 0, len(barriers))
+	}
 	for _, b := range barriers {
 		buf, ok := b.Buffer.(*Buffer)
 		if !ok || buf.handle == 0 {
@@ -523,7 +529,13 @@ func (e *CommandEncoder) TransitionTextures(barriers []hal.TextureBarrier) {
 		return
 	}
 
-	imageBarriers := make([]vk.ImageMemoryBarrier, 0, len(barriers))
+	// Up to eight barriers, the usual case, stay on the stack:
+	// vkCmdPipelineBarrier does not keep them.
+	var stack [8]vk.ImageMemoryBarrier
+	imageBarriers := stack[:0]
+	if len(barriers) > len(stack) {
+		imageBarriers = make([]vk.ImageMemoryBarrier, 0, len(barriers))
+	}
 	for _, b := range barriers {
 		tex, ok := b.Texture.(*Texture)
 		if !ok || tex.handle == 0 {
