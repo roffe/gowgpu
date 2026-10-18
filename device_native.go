@@ -956,6 +956,14 @@ func (d *Device) FreeCommandBuffer(cb *CommandBuffer) {
 	if d.released.Load() || cb == nil {
 		return
 	}
+	// A command buffer that was never submitted still holds its pooled
+	// encoder, which owns the HAL command buffers. Freeing those one by one
+	// never gave the encoder back (on Vulkan it is a no-op for pooled
+	// encoders, so the whole command pool leaked), so hand it back whole.
+	if cb.halEncoder != nil {
+		cb.Release()
+		return
+	}
 	halDevice := d.halDevice()
 	if halDevice == nil {
 		return
