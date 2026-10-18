@@ -225,16 +225,18 @@ type D3D12_SHADER_RESOURCE_VIEW_DESC struct {
 type D3D12_UNORDERED_ACCESS_VIEW_DESC struct {
 	Format        DXGI_FORMAT
 	ViewDimension D3D12_UAV_DIMENSION
-	// Union of different view types
-	Union [16]byte
+	// Union of different view types, as big as its largest, D3D12_BUFFER_UAV
+	// (32 bytes). The driver reads all of it.
+	Union [32]byte
 }
 
 // D3D12_RENDER_TARGET_VIEW_DESC describes a render target view.
 type D3D12_RENDER_TARGET_VIEW_DESC struct {
 	Format        DXGI_FORMAT
 	ViewDimension D3D12_RTV_DIMENSION
-	// Union of different view types
-	Union [12]byte
+	// Union of different view types, as big as its largest, D3D12_BUFFER_RTV
+	// and D3D12_TEX2D_ARRAY_RTV (16 bytes). The driver reads all of it.
+	Union [16]byte
 }
 
 // D3D12_DEPTH_STENCIL_VIEW_DESC describes a depth stencil view.
@@ -242,8 +244,9 @@ type D3D12_DEPTH_STENCIL_VIEW_DESC struct {
 	Format        DXGI_FORMAT
 	ViewDimension D3D12_DSV_DIMENSION
 	Flags         D3D12_DSV_FLAGS
-	// Union of different view types
-	Union [8]byte
+	// Union of different view types, as big as its largest,
+	// D3D12_TEX2D_ARRAY_DSV (12 bytes). The driver reads all of it.
+	Union [12]byte
 }
 
 // D3D12_SAMPLER_DESC describes a sampler state.
