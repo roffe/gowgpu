@@ -759,6 +759,11 @@ func (d *Device) Wait(fence hal.Fence, value uint64, timeout time.Duration) (boo
 	if !ok {
 		return false, fmt.Errorf("gles: invalid fence type")
 	}
+	// glClientWaitSync needs the context current on this thread.
+	if d.ctx != nil {
+		d.ctx.Lock()
+		defer d.ctx.Unlock()
+	}
 	return f.Wait(value, timeout), nil
 }
 

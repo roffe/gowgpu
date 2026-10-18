@@ -87,10 +87,15 @@ func (q *Queue) Submit(commandBuffers []hal.CommandBuffer) (uint64, error) {
 // Maintenance (cleanup of completed sync objects) happens in Submit(), not here
 // (matches Rust wgpu-hal device.rs:1564 get_fence_value).
 func (q *Queue) PollCompleted() uint64 {
-	if q.fence != nil {
-		return q.fence.GetLatest()
+	if q.fence == nil {
+		return q.submissionIndex
 	}
-	return q.submissionIndex
+	// glGetSynciv needs the context current on this thread, like every
+	// other GL call; without it the query answered nothing and completion
+	// lagged a submit behind.
+	q.ctx.Lock()
+	defer q.ctx.Unlock()
+	return q.fence.GetLatest()
 }
 
 // WriteBuffer writes data to a buffer immediately.
@@ -159,11 +164,13 @@ func (q *Queue) WriteTexture(dst *hal.ImageCopyTexture, data []byte, layout *hal
 
 	glCtx.BindTexture(tex.target, 0)
 
-	hal.Logger().Debug("gles: texture written",
-		"format", tex.format,
-		"width", size.Width,
-		"height", size.Height,
-	)
+	if hal.DebugEnabled() {
+		hal.Logger().Debug("gles: texture written",
+			"format", tex.format,
+			"width", size.Width,
+			"height", size.Height,
+		)
+	}
 
 	return nil
 }
@@ -189,6 +196,20 @@ func (q *Queue) Present(surface hal.Surface, _ hal.SurfaceTexture, damageRects [
 
 	glCtx := q.ctx.LockForSurface(surf.eglSurface)
 	defer q.ctx.Unlock()
+
+	// eglSwapInterval applies to the current draw surface, so it is set
+	// here, once per configuration: Immediate and Mailbox swap without
+	// waiting for vblank, FIFO waits. Before 2026-10-18 nothing set it and
+	// every mode swapped at the driver's default.
+	if !surf.swapIntervalSet && surf.config != nil {
+		interval := egl.EGLInt(1)
+		switch surf.config.PresentMode {
+		case hal.PresentModeImmediate, hal.PresentModeMailbox:
+			interval = 0
+		}
+		egl.SwapInterval(surf.eglDisplay, interval)
+		surf.swapIntervalSet = true
+	}
 
 	surf.blitSwapchainToDefaultWith(glCtx)
 

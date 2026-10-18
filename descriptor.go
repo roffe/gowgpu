@@ -270,10 +270,16 @@ func (e *BindGroupEntry) toHAL() gputypes.BindGroupEntry {
 	case e.Buffer != nil:
 		halBuf := e.Buffer.halBuffer()
 		if halBuf != nil {
+			// Size 0 means the rest of the buffer; the backends get it
+			// spelled out, GLES bound the whole buffer from 0 otherwise.
+			size := e.Size
+			if size == 0 && e.Offset < e.Buffer.Size() {
+				size = e.Buffer.Size() - e.Offset
+			}
 			entry.Resource = gputypes.BufferBinding{
 				Buffer: halBuf.NativeHandle(),
 				Offset: e.Offset,
-				Size:   e.Size,
+				Size:   size,
 			}
 		}
 	case e.Sampler != nil && e.Sampler.hal != nil:

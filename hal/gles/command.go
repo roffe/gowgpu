@@ -6,7 +6,6 @@
 package gles
 
 import (
-	"context"
 	"log/slog"
 	"unsafe"
 
@@ -376,6 +375,7 @@ func (e *CommandEncoder) setupSurfaceTarget(desc *hal.RenderPassDescriptor, tv *
 				height:   float32(cfg.Height),
 				maxDepth: 1,
 			}))
+			e.resetScissor(cfg.Width, cfg.Height)
 		}
 		// Attach depth/stencil to the swapchain FBO if requested.
 		// The swapchain FBO is a real GL FBO (not FBO 0), so glFramebufferTexture2D
@@ -393,6 +393,15 @@ func (e *CommandEncoder) setupSurfaceTarget(desc *hal.RenderPassDescriptor, tv *
 	// Fallback: no surface texture (shouldn't normally happen for isSurface=true
 	// views, but preserves prior behavior for tests / degenerate cases).
 	e.commands = append(e.commands, e.store().framebuffers.put(BindFramebufferCommand{fbo: 0}))
+}
+
+// resetScissor opens the scissor to the whole target at pass start, as a
+// WebGPU pass begins: GL keeps the last pass's scissor enabled otherwise, so
+// a frame's second pass was clipped to wherever its first one ended.
+func (e *CommandEncoder) resetScissor(width, height uint32) {
+	e.commands = append(e.commands, e.store().scissors.put(SetScissorCommand{
+		x: 0, y: 0, width: width, height: height,
+	}))
 }
 
 // setupOffscreenTarget configures an offscreen FBO with all color attachments,
@@ -437,6 +446,7 @@ func (e *CommandEncoder) setupOffscreenTarget(
 		height:   float32(tv.texture.size.Height),
 		maxDepth: 1,
 	}))
+	e.resetScissor(tv.texture.size.Width, tv.texture.size.Height)
 
 	// Record MSAA resolve target if present (attachment 0 only).
 	ca := desc.ColorAttachments[0]
@@ -492,6 +502,7 @@ type RenderPassEncoder struct {
 	vertexBuffers []*Buffer
 	indexBuffer   *Buffer
 	indexFormat   gputypes.IndexFormat
+	indexOffset   uint64 // where the index buffer starts, for the draws
 	stencilRef    uint32
 	fbHeight      uint32 // Framebuffer height for MSAA resolve blit Y-flip
 
@@ -653,6 +664,7 @@ func (e *RenderPassEncoder) SetIndexBuffer(buffer hal.Buffer, format gputypes.In
 	}
 	e.indexBuffer = buf
 	e.indexFormat = format
+	e.indexOffset = offset
 
 	e.encoder.commands = append(e.encoder.commands, e.encoder.store().indexBuffers.put(SetIndexBufferCommand{
 		buffer: buf,
@@ -727,6 +739,7 @@ func (e *RenderPassEncoder) DrawIndexed(args gputypes.DrawIndexedArgs) {
 		firstIndex:    args.FirstIndex,
 		baseVertex:    args.BaseVertex,
 		firstInstance: args.FirstInstance,
+		indexOffset:   e.indexOffset,
 		indexFormat:   e.indexFormat,
 		topology:      topology,
 	}))
@@ -1350,15 +1363,19 @@ func (c *SetBindGroupCommand) Execute(ctx *gl.Context) {
 			// so the sampler must be bound to the texture's unit — NOT the
 			// sampler's own WGSL binding. SamplerBindMap provides this mapping.
 			// Matches Rust wgpu-hal GLES SamplerBindMap (command.rs:247).
-			bindUnit := c.resolveSamplerUnit(glBinding)
-			if hal.Logger().Enabled(context.Background(), slog.LevelDebug) {
-				hal.Logger().Debug("gles: binding sampler",
-					"samplerBinding", glBinding,
-					"textureUnit", bindUnit,
-					"samplerID", samplerID,
-				)
+			// A sampler shared by several textures goes to every unit that
+			// samples with it; a sampler nothing maps goes to its own binding.
+			bound := false
+			for texUnit := range c.samplerBindMap {
+				if c.samplerBindMap[texUnit] != int8(glBinding) {
+					continue
+				}
+				ctx.BindSampler(uint32(texUnit), samplerID)
+				bound = true
 			}
-			ctx.BindSampler(bindUnit, samplerID)
+			if !bound {
+				ctx.BindSampler(glBinding, samplerID)
+			}
 		}
 	}
 }
@@ -1373,19 +1390,6 @@ func (c *SetBindGroupCommand) lookupSlot(binding uint32) uint32 {
 		}
 	}
 	return 0xFF
-}
-
-// resolveSamplerUnit finds the texture unit for a sampler via SamplerBindMap.
-func (c *SetBindGroupCommand) resolveSamplerUnit(glBinding uint32) uint32 {
-	if c.samplerBindMap == nil {
-		return glBinding
-	}
-	for texUnit := range c.samplerBindMap {
-		if c.samplerBindMap[texUnit] == int8(glBinding) {
-			return uint32(texUnit)
-		}
-	}
-	return glBinding
 }
 
 // resolveBufferTarget determines the GL buffer target (UNIFORM_BUFFER or SHADER_STORAGE_BUFFER)
@@ -1531,19 +1535,26 @@ type DrawCommand struct {
 
 func (c *DrawCommand) Execute(ctx *gl.Context) {
 	mode := primitiveTopologyToGL(c.topology)
-	if c.instanceCount <= 1 {
+	switch {
+	case c.instanceCount == 0:
+		// Nothing to draw, as in WebGPU; GL would draw one instance.
+	case c.instanceCount == 1:
 		ctx.DrawArrays(mode, int32(c.firstVertex), int32(c.vertexCount))
-	} else {
+	default:
 		ctx.DrawArraysInstanced(mode, int32(c.firstVertex), int32(c.vertexCount), int32(c.instanceCount))
 	}
 }
 
-// DrawIndexedCommand executes an indexed draw.
+// DrawIndexedCommand executes an indexed draw. indexOffset is where the bound
+// index buffer starts, from SetIndexBuffer. BaseVertex is not applied:
+// glDrawElementsBaseVertex is GL 3.2 / ES 3.2, which this backend does not
+// require.
 type DrawIndexedCommand struct {
 	indexCount, instanceCount uint32
 	firstIndex                uint32
 	baseVertex                int32
 	firstInstance             uint32
+	indexOffset               uint64
 	indexFormat               gputypes.IndexFormat
 	topology                  gputypes.PrimitiveTopology
 }
@@ -1556,12 +1567,15 @@ func (c *DrawIndexedCommand) Execute(ctx *gl.Context) {
 		indexSize = 4
 	}
 
-	offset := uintptr(c.firstIndex) * indexSize
+	offset := uintptr(c.indexOffset) + uintptr(c.firstIndex)*indexSize
 	mode := primitiveTopologyToGL(c.topology)
 
-	if c.instanceCount <= 1 {
+	switch {
+	case c.instanceCount == 0:
+		// Nothing to draw, as in WebGPU; GL would draw one instance.
+	case c.instanceCount == 1:
 		ctx.DrawElements(mode, int32(c.indexCount), indexType, offset)
-	} else {
+	default:
 		ctx.DrawElementsInstanced(mode, int32(c.indexCount), indexType, offset, int32(c.instanceCount))
 	}
 }

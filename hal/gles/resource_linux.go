@@ -28,7 +28,10 @@ type Surface struct {
 	version       string
 	renderer      string
 	configured    bool
-	config        *hal.SurfaceConfiguration
+	// swapIntervalSet is whether Present has set the swap interval the
+	// present mode asks for since the last Configure.
+	swapIntervalSet bool
+	config          *hal.SurfaceConfiguration
 
 	// Wayland-specific: wl_egl_window handle. On Wayland, EGL cannot use
 	// the raw wl_surface* directly — it needs a wl_egl_window wrapper.
@@ -151,6 +154,7 @@ func (s *Surface) Configure(_ hal.Device, config *hal.SurfaceConfiguration) erro
 
 	s.configured = true
 	s.config = config
+	s.swapIntervalSet = false
 	return nil
 }
 
