@@ -56,7 +56,9 @@ func newCommandStateTracker() commandStateTracker {
 }
 
 func (t *commandStateTracker) reset() {
-	t.resources = make(map[any]map[uint32]*subresourceState)
+	// Keeps the map's buckets for the next recording, which touches about
+	// the same resources.
+	clear(t.resources)
 }
 
 // transition records a local transition and reports whether an inline barrier

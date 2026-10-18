@@ -98,7 +98,9 @@ func (e *CommandEncoder) EndEncoding() (hal.CommandBuffer, error) {
 		return nil, fmt.Errorf("dx12: command encoder is not recording")
 	}
 
-	hal.Logger().Debug("dx12: command list close", "label", e.label)
+	if hal.DebugEnabled() {
+		hal.Logger().Debug("dx12: command list close", "label", e.label)
+	}
 	if err := e.cmdList.Close(); err != nil {
 		return nil, fmt.Errorf("dx12: command list close failed: %w", err)
 	}
@@ -223,7 +225,9 @@ func (e *CommandEncoder) emitStateBarrierPlans(plans []stateBarrierPlan) {
 		d3dBarriers = append(d3dBarriers, d3d12.NewTransitionBarrier(raw, plan.before, plan.after, plan.subresource))
 	}
 	if len(d3dBarriers) > 0 {
-		hal.Logger().Debug("dx12: resource barrier", "label", e.label, "count", len(d3dBarriers))
+		if hal.DebugEnabled() {
+			hal.Logger().Debug("dx12: resource barrier", "label", e.label, "count", len(d3dBarriers))
+		}
 		e.cmdList.ResourceBarrier(uint32(len(d3dBarriers)), &d3dBarriers[0])
 	}
 }
@@ -281,7 +285,9 @@ func (e *CommandEncoder) CopyBufferToBuffer(src, dst hal.Buffer, regions []hal.B
 	e.emitStateBarrierPlans(plans)
 
 	for _, r := range regions {
-		hal.Logger().Debug("dx12: copy buffer region", "label", e.label, "offset", r.DstOffset, "size", r.Size)
+		if hal.DebugEnabled() {
+			hal.Logger().Debug("dx12: copy buffer region", "label", e.label, "offset", r.DstOffset, "size", r.Size)
+		}
 		e.cmdList.CopyBufferRegion(dstBuf.raw, r.DstOffset, srcBuf.raw, r.SrcOffset, r.Size)
 	}
 }
@@ -400,7 +406,9 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 		desc:    desc,
 	}
 
-	hal.Logger().Debug("dx12: begin render pass", "label", e.label, "attachments", len(desc.ColorAttachments))
+	if hal.DebugEnabled() {
+		hal.Logger().Debug("dx12: begin render pass", "label", e.label, "attachments", len(desc.ColorAttachments))
+	}
 
 	if !e.isRecording {
 		return rpe
@@ -1158,13 +1166,16 @@ func textureViewSubresources(view *TextureView) []uint32 {
 	if view == nil || view.texture == nil {
 		return nil
 	}
-	return textureRangeSubresources(view.texture, hal.TextureRange{
-		Aspect:          view.aspect,
-		BaseMipLevel:    view.baseMip,
-		MipLevelCount:   view.mipCount,
-		BaseArrayLayer:  view.baseLayer,
-		ArrayLayerCount: view.layerCount,
+	view.subresOnce.Do(func() {
+		view.subresources = textureRangeSubresources(view.texture, hal.TextureRange{
+			Aspect:          view.aspect,
+			BaseMipLevel:    view.baseMip,
+			MipLevelCount:   view.mipCount,
+			BaseArrayLayer:  view.baseLayer,
+			ArrayLayerCount: view.layerCount,
+		})
 	})
+	return view.subresources
 }
 
 func textureViewSubresourcePlanes(view *TextureView) []textureSubresource {

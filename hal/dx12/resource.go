@@ -7,6 +7,7 @@ package dx12
 
 import (
 	"fmt"
+	"sync"
 	"unsafe"
 
 	"github.com/roffe/gowgpu/gputypes"
@@ -279,7 +280,6 @@ func (t *Texture) subresourceIndex(mipLevel, arrayLayer uint32) uint32 {
 // Called by PendingWrites when recording CopyBufferToTexture.
 func (t *Texture) AddPendingRef() {
 	t.pendingRefs++
-	hal.Logger().Debug("dx12: texture AddPendingRef", "refs", t.pendingRefs)
 }
 
 // DecPendingRef decrements the pending reference count.
@@ -296,7 +296,9 @@ func (t *Texture) DecPendingRef() {
 // deferred until all references are released. This prevents use-after-free when
 // the GPU is still executing CopyBufferToTexture (BUG-DX12-006).
 func (t *Texture) Destroy() {
-	hal.Logger().Debug("dx12: texture Destroy", "refs", t.pendingRefs, "deferred", t.pendingDeath)
+	if hal.DebugEnabled() {
+		hal.Logger().Debug("dx12: texture Destroy", "refs", t.pendingRefs, "deferred", t.pendingDeath)
+	}
 	if t.pendingRefs > 0 {
 		t.pendingDeath = true
 		hal.Logger().Debug("dx12: texture destroy deferred (pending refs)")
@@ -341,6 +343,11 @@ func (t *Texture) Dimension() gputypes.TextureDimension {
 
 // TextureView implements hal.TextureView for DirectX 12.
 type TextureView struct {
+	// subresources memoises textureViewSubresources: the view is immutable
+	// and every SetBindGroup that samples it asked for the list anew.
+	subresOnce   sync.Once
+	subresources []uint32
+
 	texture        *Texture
 	format         gputypes.TextureFormat
 	dimension      gputypes.TextureViewDimension

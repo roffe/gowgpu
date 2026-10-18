@@ -67,3 +67,10 @@ func SetLogger(l *slog.Logger) {
 func Logger() *slog.Logger {
 	return loggerPtr.Load()
 }
+
+// DebugEnabled reports whether the logger takes debug records. A Debug call
+// boxes its arguments before the handler can decline them, so a hot path
+// asks first.
+func DebugEnabled() bool {
+	return Logger().Enabled(context.Background(), slog.LevelDebug)
+}

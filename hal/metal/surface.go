@@ -225,12 +225,14 @@ func (s *Surface) AcquireTexture(_ hal.Fence) (*hal.AcquiredSurfaceTexture, erro
 		isExternal: true,
 	}
 
-	hal.Logger().Debug("metal: surface texture acquired",
-		"drawable", drawable,
-		"texture", texture,
-		"width", s.width,
-		"height", s.height,
-	)
+	if hal.DebugEnabled() {
+		hal.Logger().Debug("metal: surface texture acquired",
+			"drawable", drawable,
+			"texture", texture,
+			"width", s.width,
+			"height", s.height,
+		)
+	}
 
 	return &hal.AcquiredSurfaceTexture{
 		Texture: &SurfaceTexture{

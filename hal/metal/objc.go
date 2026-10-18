@@ -165,10 +165,21 @@ func cString(s string) []byte {
 // linked. It stays for Init's sake.
 func initObjCRuntime() error { return nil }
 
+// classCache keeps the classes looked up so far: a class does not move, and
+// a lookup made a C string every call on paths that run per pass.
+var classCache sync.Map // string -> Class
+
 // GetClass returns the Class for a given name.
 func GetClass(name string) Class {
+	if cached, ok := classCache.Load(name); ok {
+		return cached.(Class)
+	}
 	b := cString(name)
-	return Class(C.gm_class((*C.uint8_t)(&b[0])))
+	cls := Class(C.gm_class((*C.uint8_t)(&b[0])))
+	if cls != 0 {
+		classCache.Store(name, cls)
+	}
+	return cls
 }
 
 // RegisterSelector registers and returns a selector for the given name.
@@ -688,14 +699,18 @@ func gogpuMetalBlock(kind C.uint32_t, cid C.uint64_t) {
 			}
 		}
 	case blockFrame:
-		hal.Logger().Debug("metal: frame completion fired", "blockID", id)
+		if hal.DebugEnabled() {
+			hal.Logger().Debug("metal: frame completion fired", "blockID", id)
+		}
 		if val, ok := frameCompletionRegistry.LoadAndDelete(id); ok {
 			if ch := val.(chan<- struct{}); ch != nil {
 				ch <- struct{}{}
 			}
 		}
 	case blockGPU:
-		hal.Logger().Debug("metal: GPU completion tracking fired", "blockID", id)
+		if hal.DebugEnabled() {
+			hal.Logger().Debug("metal: GPU completion tracking fired", "blockID", id)
+		}
 		if val, ok := gpuCompletionRegistry.LoadAndDelete(id); ok {
 			entry := val.(*gpuCompletionEntry)
 			for {
