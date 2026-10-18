@@ -17,6 +17,8 @@ package vk
 #cgo nocallback gvk_r_hpq
 #cgo noescape gvk_v_hhiihqqi
 #cgo nocallback gvk_v_hhiihqqi
+#cgo noescape gvk_v_hhqhqii
+#cgo nocallback gvk_v_hhqhqii
 #cgo noescape gvk_v_hihi
 #cgo nocallback gvk_v_hihi
 #cgo noescape gvk_v_hipihi
@@ -31,6 +33,30 @@ import "C"
 import "unsafe"
 
 var _ = unsafe.Pointer(nil)
+
+// HasDrawIndirectCount reports whether the device gave out
+// vkCmdDrawIndirectCount and vkCmdDrawIndexedIndirectCount (Vulkan 1.2).
+func (c *Commands) HasDrawIndirectCount() bool {
+	return c.cmdDrawIndirectCount != nil && c.cmdDrawIndexedIndirectCount != nil
+}
+
+// CmdDrawIndirectCount wraps vkCmdDrawIndirectCount.
+// Manual: vk-gen leaves the Vulkan 1.2 draw-count commands out.
+func (c *Commands) CmdDrawIndirectCount(commandBuffer CommandBuffer, buffer Buffer, offset DeviceSize, countBuffer Buffer, countBufferOffset DeviceSize, maxDrawCount, stride uint32) {
+	if c.cmdDrawIndirectCount == nil {
+		return
+	}
+	C.gvk_v_hhqhqii(C.uintptr_t(uintptr(c.cmdDrawIndirectCount)), C.uint64_t(commandBuffer), C.uint64_t(buffer), C.uint64_t(offset), C.uint64_t(countBuffer), C.uint64_t(countBufferOffset), C.uint32_t(maxDrawCount), C.uint32_t(stride))
+}
+
+// CmdDrawIndexedIndirectCount wraps vkCmdDrawIndexedIndirectCount.
+// Manual: vk-gen leaves the Vulkan 1.2 draw-count commands out.
+func (c *Commands) CmdDrawIndexedIndirectCount(commandBuffer CommandBuffer, buffer Buffer, offset DeviceSize, countBuffer Buffer, countBufferOffset DeviceSize, maxDrawCount, stride uint32) {
+	if c.cmdDrawIndexedIndirectCount == nil {
+		return
+	}
+	C.gvk_v_hhqhqii(C.uintptr_t(uintptr(c.cmdDrawIndexedIndirectCount)), C.uint64_t(commandBuffer), C.uint64_t(buffer), C.uint64_t(offset), C.uint64_t(countBuffer), C.uint64_t(countBufferOffset), C.uint32_t(maxDrawCount), C.uint32_t(stride))
+}
 
 // CmdWriteTimestamp wraps vkCmdWriteTimestamp.
 // Manual: generator cannot handle mixed handle+u32+handle+u32 signature.

@@ -241,6 +241,8 @@ func (c *Commands) LoadDevice(device Device) error {
 	c.cmdDrawIndexed = GetDeviceProcAddr(device, "vkCmdDrawIndexed")
 	c.cmdDrawIndirect = GetDeviceProcAddr(device, "vkCmdDrawIndirect")
 	c.cmdDrawIndexedIndirect = GetDeviceProcAddr(device, "vkCmdDrawIndexedIndirect")
+	c.cmdDrawIndirectCount = GetDeviceProcAddr(device, "vkCmdDrawIndirectCount")               // Vulkan 1.2
+	c.cmdDrawIndexedIndirectCount = GetDeviceProcAddr(device, "vkCmdDrawIndexedIndirectCount") // Vulkan 1.2
 	c.cmdDispatch = GetDeviceProcAddr(device, "vkCmdDispatch")
 	c.cmdDispatchIndirect = GetDeviceProcAddr(device, "vkCmdDispatchIndirect")
 	c.cmdCopyBuffer = GetDeviceProcAddr(device, "vkCmdCopyBuffer")

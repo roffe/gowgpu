@@ -1373,10 +1373,9 @@ func (e *RenderPassEncoder) DrawIndirectCount(
 	maxDrawCount uint32,
 ) {
 	var native vulkanIndirectCountNativeCmd
-	if e.encoder.device.cmdDrawIndirectCount != nil {
-		cmd := e.encoder.device.cmdDrawIndirectCount
+	if dev := e.encoder.device; dev.supportsDrawIndirectCount && dev.cmds.HasDrawIndirectCount() {
 		native = func(cmdBuf vk.CommandBuffer, indirect vk.Buffer, off vk.DeviceSize, count vk.Buffer, countOff vk.DeviceSize, maxCount uint32) {
-			cmd(cmdBuf, indirect, off, count, countOff, maxCount)
+			dev.cmds.CmdDrawIndirectCount(cmdBuf, indirect, off, count, countOff, maxCount, drawIndirectStride)
 		}
 	}
 	e.drawIndirectCount(buffer, offset, countBuffer, countOffset, maxDrawCount, drawIndirectStride, native, vkCmdDrawIndirect)
@@ -1389,10 +1388,9 @@ func (e *RenderPassEncoder) DrawIndexedIndirectCount(
 	maxDrawCount uint32,
 ) {
 	var native vulkanIndirectCountNativeCmd
-	if e.encoder.device.cmdDrawIndexedIndirectCount != nil {
-		cmd := e.encoder.device.cmdDrawIndexedIndirectCount
+	if dev := e.encoder.device; dev.supportsDrawIndirectCount && dev.cmds.HasDrawIndirectCount() {
 		native = func(cmdBuf vk.CommandBuffer, indirect vk.Buffer, off vk.DeviceSize, count vk.Buffer, countOff vk.DeviceSize, maxCount uint32) {
-			cmd(cmdBuf, indirect, off, count, countOff, maxCount)
+			dev.cmds.CmdDrawIndexedIndirectCount(cmdBuf, indirect, off, count, countOff, maxCount, drawIndexedIndirectStride)
 		}
 	}
 	e.drawIndirectCount(buffer, offset, countBuffer, countOffset, maxDrawCount, drawIndexedIndirectStride, native, vkCmdDrawIndexedIndirect)

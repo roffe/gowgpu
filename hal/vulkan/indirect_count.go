@@ -10,24 +10,6 @@ import (
 	"github.com/roffe/gowgpu/internal/indirect"
 )
 
-type pfnCmdDrawIndirectCount func(
-	commandBuffer vk.CommandBuffer,
-	buffer vk.Buffer,
-	offset vk.DeviceSize,
-	countBuffer vk.Buffer,
-	countBufferOffset vk.DeviceSize,
-	maxDrawCount uint32,
-)
-
-type pfnCmdDrawIndexedIndirectCount func(
-	commandBuffer vk.CommandBuffer,
-	buffer vk.Buffer,
-	offset vk.DeviceSize,
-	countBuffer vk.Buffer,
-	countBufferOffset vk.DeviceSize,
-	maxDrawCount uint32,
-)
-
 type vulkanIndirectCountBuffers struct {
 	indirect *Buffer
 	count    *Buffer
@@ -41,18 +23,6 @@ type vulkanIndirectCountNativeCmd func(
 	countOffset vk.DeviceSize,
 	maxDrawCount uint32,
 )
-
-func loadDrawIndirectCountProcs(device *Device) {
-	if device == nil || !device.supportsDrawIndirectCount {
-		return
-	}
-	if ptr := vk.GetDeviceProcAddr(device.handle, "vkCmdDrawIndirectCount"); ptr != nil {
-		device.cmdDrawIndirectCount = *(*pfnCmdDrawIndirectCount)(ptr)
-	}
-	if ptr := vk.GetDeviceProcAddr(device.handle, "vkCmdDrawIndexedIndirectCount"); ptr != nil {
-		device.cmdDrawIndexedIndirectCount = *(*pfnCmdDrawIndexedIndirectCount)(ptr)
-	}
-}
 
 func supportsDrawIndirectCountFeature(apiVersion uint32) bool {
 	return apiVersion >= vkMakeVersion(1, 2, 0)

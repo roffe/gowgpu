@@ -93,6 +93,8 @@ typedef void (VKAPI_PTR *gvk_pfn_v_hhp)(uint64_t, uint64_t, const void *);
 static inline void gvk_v_hhp(uintptr_t fn, uint64_t a0, uint64_t a1, const uint8_t * a2) { ((gvk_pfn_v_hhp)fn)(a0, a1, a2); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hhq)(uint64_t, uint64_t, uint64_t);
 static inline void gvk_v_hhq(uintptr_t fn, uint64_t a0, uint64_t a1, uint64_t a2) { ((gvk_pfn_v_hhq)fn)(a0, a1, a2); }
+typedef void (VKAPI_PTR *gvk_pfn_v_hhqhqii)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint32_t, uint32_t);
+static inline void gvk_v_hhqhqii(uintptr_t fn, uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint32_t a5, uint32_t a6) { ((gvk_pfn_v_hhqhqii)fn)(a0, a1, a2, a3, a4, a5, a6); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hhqi)(uint64_t, uint64_t, uint64_t, uint32_t);
 static inline void gvk_v_hhqi(uintptr_t fn, uint64_t a0, uint64_t a1, uint64_t a2, uint32_t a3) { ((gvk_pfn_v_hhqi)fn)(a0, a1, a2, a3); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hhqii)(uint64_t, uint64_t, uint64_t, uint32_t, uint32_t);

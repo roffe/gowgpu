@@ -154,7 +154,6 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 		maxDrawIndirectCount:       a.properties.Limits.MaxDrawIndirectCount,
 		supportsIncrementalPresent: hasIncrementalPresent,
 	}
-	loadDrawIndirectCountProcs(dev)
 
 	// Initialize synchronization fence (VK-IMPL-001 / VK-IMPL-003).
 	// Prefer timeline semaphore (Vulkan 1.2+); fall back to fencePool of binary
