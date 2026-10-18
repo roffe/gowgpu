@@ -277,7 +277,8 @@ type id3d12DRED1Vtbl struct {
 	Release        uintptr
 
 	// ID3D12DeviceRemovedExtendedData
-	GetAutoBreadcrumbsOutput uintptr
+	GetAutoBreadcrumbsOutput     uintptr
+	GetPageFaultAllocationOutput uintptr
 
 	// ID3D12DeviceRemovedExtendedData1
 	GetAutoBreadcrumbsOutput1     uintptr
