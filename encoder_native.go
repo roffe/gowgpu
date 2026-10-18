@@ -25,8 +25,21 @@ type CommandEncoder struct {
 	device   *Device
 	released bool
 	// serial identifies this encoder in the encoderMarks of what it tracks;
-	// see id.
+	// see id. A new one every time the object is reused, so a command buffer
+	// handed out before the reuse can tell it is stale.
 	serial uint64
+
+	// coreEnc, pass, cpass and cb are the core encoder, the render pass, the
+	// compute pass and the command buffer this encoder hands out: one of each,
+	// so a frame allocates none of them. core points at coreEnc, except on the
+	// pool-less path. pooled encoders go back to cmdEncoderObjPool once the
+	// command buffer is spent, see recycle; after that every pointer handed
+	// out for them is stale, as the API says they are after Finish and Submit.
+	coreEnc core.CoreCommandEncoder
+	pass    RenderPassEncoder
+	cpass   ComputePassEncoder
+	cb      CommandBuffer
+	pooled  bool
 	// trackedRefs accumulates Clone'd ResourceRefs from render/compute passes,
 	// one per resource. Transferred to the CommandBuffer on Finish(), then to
 	// the DestroyQueue on Submit(). Phase 2: per-command-buffer resource tracking.
@@ -64,6 +77,24 @@ type CommandEncoder struct {
 // encoderSerials hands out CommandEncoder serials. Zero is never handed out,
 // so a zero encoderMark matches no encoder.
 var encoderSerials atomic.Uint64
+
+// cmdEncoderObjPool keeps spent CommandEncoder objects, with their core
+// encoder, pass and command buffer inside, for the next CreateCommandEncoder.
+var cmdEncoderObjPool = sync.Pool{New: func() any { return &CommandEncoder{} }}
+
+// recycle puts a spent pooled encoder back for reuse. Its lists and refs
+// have been moved out or dropped by then; the serial changes on reuse.
+func (e *CommandEncoder) recycle() {
+	if e == nil || !e.pooled {
+		return
+	}
+	e.pooled = false
+	e.core, e.device, e.halEncoder = nil, nil, nil
+	e.trackedRefs, e.usedBuffers, e.usedTextures, e.usedBindGroups = nil, nil, nil, nil
+	clear(e.explicitTextureTransitions)
+	e.cb = CommandBuffer{}
+	cmdEncoderObjPool.Put(e)
+}
 
 // encoderMark remembers the last command encoder that tracked a resource, so
 // an encoder clones a resource's ref and lists it for Submit once, not on
@@ -103,7 +134,7 @@ type usedListPool struct {
 }
 
 // maxFreeUsedLists caps how many sets of lists a device keeps for reuse.
-const maxFreeUsedLists = 8
+const maxFreeUsedLists = 32
 
 func (p *usedListPool) get() usedLists {
 	p.mu.Lock()
@@ -453,7 +484,8 @@ func (e *CommandEncoder) BeginRenderPass(desc *RenderPassDescriptor) (*RenderPas
 	}
 	forgetClearedTextures(e.device, desc)
 
-	return &RenderPassEncoder{core: corePass, encoder: e}, nil
+	e.pass.reset(corePass, e)
+	return &e.pass, nil
 }
 
 // forgetClearedTextures takes the textures this pass clears whole off the list
@@ -493,7 +525,8 @@ func (e *CommandEncoder) BeginComputePass(desc *ComputePassDescriptor) (*Compute
 		return nil, err
 	}
 
-	return &ComputePassEncoder{core: corePass, encoder: e}, nil
+	e.cpass.reset(corePass, e)
+	return &e.cpass, nil
 }
 
 // CopyBufferToBuffer copies data between buffers.
@@ -853,6 +886,7 @@ func (e *CommandEncoder) DiscardEncoding() {
 	}
 	// Return pooled encoder immediately — no GPU work was submitted.
 	e.returnEncoderToPool()
+	e.recycle()
 }
 
 // returnEncoderToPool resets and returns the HAL encoder to the device's pool.
@@ -901,6 +935,7 @@ func (e *CommandEncoder) Finish() (*CommandBuffer, error) {
 		}
 		// Return the pooled encoder on error — it won't be submitted.
 		e.returnEncoderToPool()
+		e.recycle()
 		return nil, err
 	}
 
@@ -912,7 +947,8 @@ func (e *CommandEncoder) Finish() (*CommandBuffer, error) {
 		e.core.TakeHALEncoder()
 	}
 
-	cb := &CommandBuffer{
+	cb := &e.cb
+	*cb = CommandBuffer{
 		core:           coreCmdBuffer,
 		device:         e.device,
 		trackedRefs:    e.trackedRefs,
@@ -920,6 +956,8 @@ func (e *CommandEncoder) Finish() (*CommandBuffer, error) {
 		usedBuffers:    e.usedBuffers,
 		usedTextures:   e.usedTextures,
 		usedBindGroups: e.usedBindGroups,
+		enc:            e,
+		serial:         e.id(),
 	}
 	e.trackedRefs = nil
 	e.halEncoder = nil     // ownership transferred
@@ -1084,25 +1122,50 @@ type CommandBuffer struct {
 	// the buffer, preventing reuse.
 	submitted bool
 
+	// enc is the encoder this command buffer lives in and serial the serial
+	// the encoder had when it was handed out: once they differ the encoder
+	// has been reused and this handle is stale.
+	enc    *CommandEncoder
+	serial uint64
+
 	// recycle gives the HAL encoder back to the pool after the GPU is done
 	// with this command buffer; Submit fills it.
 	recycle encoderRecycle
 }
 
-// encoderRecycle resets a submitted command buffer's HAL encoder and gives it
-// back to the pool. It lives in the CommandBuffer, so the destroy queue holds
-// it without a closure.
-type encoderRecycle struct {
-	enc  hal.CommandEncoder
-	bufs []hal.CommandBuffer
-	pool *encoderPool
+// stale reports whether cb was handed out by an encoder that has since been
+// reused, in which case it is someone else's command buffer now.
+func (cb *CommandBuffer) stale() bool {
+	return cb.enc != nil && cb.enc.serial != cb.serial
 }
+
+// encoderRecycle resets a submitted command buffer's HAL encoder and gives it
+// back to the pool. It lives in the CommandBuffer, or comes from recyclePool
+// for the barrier encoder, so the destroy queue holds it without a closure.
+type encoderRecycle struct {
+	enc    hal.CommandEncoder
+	bufs   []hal.CommandBuffer
+	pool   *encoderPool
+	owner  *CommandEncoder // the encoder to recycle with it, if pooled
+	pooled bool            // from recyclePool, goes back there
+}
+
+// recyclePool keeps encoderRecycle records for the barrier encoders.
+var recyclePool = sync.Pool{New: func() any { return &encoderRecycle{bufs: make([]hal.CommandBuffer, 0, 1)} }}
 
 // ReleaseDeferred implements core.Releaser.
 func (r *encoderRecycle) ReleaseDeferred() {
 	r.enc.ResetAll(r.bufs)
 	r.pool.release(r.enc)
+	if r.pooled {
+		clear(r.bufs)
+		r.enc, r.pool, r.bufs = nil, nil, r.bufs[:0]
+		recyclePool.Put(r)
+		return
+	}
+	owner := r.owner
 	*r = encoderRecycle{}
+	owner.recycle() // r lives in owner.cb and is gone with it
 }
 
 // Release releases a CommandBuffer that will NOT be submitted to the GPU.
@@ -1119,7 +1182,9 @@ func (r *encoderRecycle) ReleaseDeferred() {
 // A CommandBuffer MUST be either Submit()'d or Release()'d. Failing to do
 // either leaks the HAL encoder (DX12 ~64KB allocator, Vulkan VkCommandPool).
 func (cb *CommandBuffer) Release() {
-	if cb == nil {
+	// A submitted command buffer is the queue's: it recycles everything
+	// once the GPU is done, and a stale handle is someone else's buffer.
+	if cb == nil || cb.submitted || cb.stale() {
 		return
 	}
 	// Return encoder to pool (reset native allocator).
@@ -1137,6 +1202,7 @@ func (cb *CommandBuffer) Release() {
 	cb.trackedRefs = nil
 	cb.dropUsedSets()
 	cb.core.ReleaseScopes()
+	cb.enc.recycle()
 }
 
 // dropUsedSets releases the encode-time validation sets. usedBuffers,

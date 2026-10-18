@@ -19,7 +19,7 @@ func TestConvertBufferImageCopyRegionsUsesArrayLayersFor2DTextures(t *testing.T)
 		Size: hal.Extent3D{Width: 8, Height: 4, DepthOrArrayLayers: 2},
 	}}
 
-	converted := convertBufferImageCopyRegions(regions, gputypes.TextureFormatRGBA8Unorm, gputypes.TextureDimension2D)
+	converted := convertBufferImageCopyRegions(nil, regions, gputypes.TextureFormatRGBA8Unorm, gputypes.TextureDimension2D)
 	got := converted[0]
 	if got.ImageSubresource.BaseArrayLayer != 1 || got.ImageSubresource.LayerCount != 2 {
 		t.Fatalf("array range = %d+%d, want 1+2", got.ImageSubresource.BaseArrayLayer, got.ImageSubresource.LayerCount)
@@ -38,7 +38,7 @@ func TestConvertBufferImageCopyRegionsUsesDepthFor3DTextures(t *testing.T) {
 		Size: hal.Extent3D{Width: 8, Height: 4, DepthOrArrayLayers: 2},
 	}}
 
-	converted := convertBufferImageCopyRegions(regions, gputypes.TextureFormatRGBA8Unorm, gputypes.TextureDimension3D)
+	converted := convertBufferImageCopyRegions(nil, regions, gputypes.TextureFormatRGBA8Unorm, gputypes.TextureDimension3D)
 	got := converted[0]
 	if got.ImageSubresource.BaseArrayLayer != 0 || got.ImageSubresource.LayerCount != 1 {
 		t.Fatalf("array range = %d+%d, want 0+1", got.ImageSubresource.BaseArrayLayer, got.ImageSubresource.LayerCount)

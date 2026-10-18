@@ -40,13 +40,30 @@ type Queue struct {
 	barrierEncoder hal.CommandEncoder
 	barrierCB      hal.CommandBuffer
 
-	// Scratch for Submit, under mu: the HAL command buffer list and the
-	// tracker index resolvers for barrier injection. Cleared after each
-	// use so they pin nothing between submits.
-	submitBufs  []hal.CommandBuffer
-	texResolver map[track.TrackerIndex]hal.Texture
-	bufResolver map[track.TrackerIndex]hal.Buffer
+	// Scratch for Submit, under mu: the HAL command buffer list, the
+	// transitions of a submit and the tracker index resolvers for barrier
+	// injection. Cleared after each use so they pin nothing between submits.
+	submitBufs     []hal.CommandBuffer
+	texTransitions []track.TexturePendingTransition
+	bufTransitions []track.PendingTransition
+	texResolver    map[track.TrackerIndex]hal.Texture
+	bufResolver    map[track.TrackerIndex]hal.Buffer
+	barrierScratch core.BarrierScratch
+
+	// Scratch for WriteTexture, under mu: the HAL forms of its arguments,
+	// which travel by pointer and would otherwise be heap copies every call.
+	wtDst    hal.ImageCopyTexture
+	wtLayout hal.ImageDataLayout
+	wtSize   hal.Extent3D
 }
+
+// ResolveTexture implements core.BarrierResolver over the textures of the
+// command buffers being submitted.
+func (q *Queue) ResolveTexture(idx track.TrackerIndex) hal.Texture { return q.texResolver[idx] }
+
+// ResolveBuffer implements core.BarrierResolver over the buffers of the
+// command buffers being submitted.
+func (q *Queue) ResolveBuffer(idx track.TrackerIndex) hal.Buffer { return q.bufResolver[idx] }
 
 // Submit submits command buffers for execution. Non-blocking.
 // Returns a submission index that can be used with Poll() to track completion.
@@ -253,30 +270,29 @@ func (q *Queue) postSubmit(subIdx, completed uint64, commandBuffers []*CommandBu
 		if cb == nil || cb.halEncoder == nil {
 			continue
 		}
-		// All the HAL command buffers from this encoder go back with it.
-		cb.recycle = encoderRecycle{enc: cb.halEncoder, bufs: cb.halBufferList(), pool: q.device.cmdEncoderPool}
+		// All the HAL command buffers from this encoder go back with it, and
+		// the encoder object itself once the GPU is done.
+		cb.recycle = encoderRecycle{enc: cb.halEncoder, bufs: cb.halBufferList(), pool: q.device.cmdEncoderPool, owner: cb.enc}
 		cb.halEncoder = nil // ownership moves to the recycle the queue runs
 		dq.DeferRelease(subIdx, "CmdEncoder", &cb.recycle)
 	}
 
 	// ADR-060: Defer barrier encoder recycling with the CURRENT submission index.
 	// This was previously done in recordAndTrackAllBarriers with lastSubmissionIndex
-	// (stale — set before hal.Submit). Now uses the actual subIdx.
+	// (stale — set before hal.Submit). Now uses the actual subIdx. The recycle
+	// record comes from a pool, so a frame with barriers allocates nothing.
 	if q.barrierEncoder != nil && q.barrierCB != nil {
-		halEnc := q.barrierEncoder
-		barrierBuf := q.barrierCB
-		pool := q.device.cmdEncoderPool
-		dq.Defer(subIdx, "BarrierEncoder", func() {
-			halEnc.ResetAll([]hal.CommandBuffer{barrierBuf})
-			pool.release(halEnc)
-		})
+		r := recyclePool.Get().(*encoderRecycle)
+		r.enc, r.pool, r.pooled = q.barrierEncoder, q.device.cmdEncoderPool, true
+		r.bufs = append(r.bufs[:0], q.barrierCB)
+		dq.DeferRelease(subIdx, "BarrierEncoder", r)
 		q.barrierEncoder = nil
 		q.barrierCB = nil
 	}
 
 	// Triage deferred resource destructions from the DestroyQueue.
 	// Resources whose GPU submissions have completed are now safe to destroy.
-	dq.Triage(q.hal.PollCompleted())
+	dq.Triage(completed)
 }
 
 // Poll returns the last completed submission index. Non-blocking.
@@ -393,15 +409,16 @@ func (q *Queue) WriteTexture(dst *ImageCopyTexture, data []byte, layout *ImageDa
 		return fmt.Errorf("wgpu: WriteTexture: size is nil")
 	}
 
-	halDst := dst.toHAL()
-	halLayout := layout.toHAL()
-	halSize := size.toHAL()
+	// Into the queue's scratch: the HAL takes these by pointer and keeps
+	// none of them.
+	q.wtDst, q.wtLayout, q.wtSize = dst.halValue(), layout.toHAL(), size.toHAL()
+	defer func() { q.wtDst = hal.ImageCopyTexture{} }()
 
 	if q.pending != nil {
-		return q.pending.writeTextureFor(dst.Texture, halDst, data, &halLayout, &halSize)
+		return q.pending.writeTextureFor(dst.Texture, &q.wtDst, data, &q.wtLayout, &q.wtSize)
 	}
 
-	return q.hal.WriteTexture(halDst, data, &halLayout, &halSize)
+	return q.hal.WriteTexture(&q.wtDst, data, &q.wtLayout, &q.wtSize)
 }
 
 // SetSwapchainSuppressed temporarily disables swapchain semaphore binding
@@ -456,8 +473,8 @@ func (q *Queue) destroyQueue() *core.DestroyQueue {
 // The index parameter identifies which command buffer in the Submit() call
 // failed validation, for clearer error messages.
 func validateCommandBufferForSubmit(cb *CommandBuffer, index int) error {
-	// 1. Check double-submit.
-	if cb.submitted {
+	// 1. Check double-submit, and a handle whose encoder has been reused.
+	if cb.submitted || cb.stale() {
 		return fmt.Errorf("wgpu: Submit: command buffer at index %d: %w",
 			index, ErrSubmitCommandBufferInvalid)
 	}
@@ -566,13 +583,13 @@ func (q *Queue) injectBarriers(commandBuffers []*CommandBuffer) (hal.CommandBuff
 
 	// Merge each command buffer's textureScope into the device tracker,
 	// accumulating all pending transitions.
-	texTransitions := mergeTextureScopes(tracker, commandBuffers)
+	q.texTransitions = mergeTextureScopes(tracker, commandBuffers, q.texTransitions[:0])
 
 	// Merge each command buffer's bufferScope into the device tracker,
 	// accumulating all pending buffer transitions.
-	bufTransitions := mergeBufferScopes(tracker, commandBuffers)
+	q.bufTransitions = mergeBufferScopes(tracker, commandBuffers, q.bufTransitions[:0])
 
-	if len(texTransitions) == 0 && len(bufTransitions) == 0 {
+	if len(q.texTransitions) == 0 && len(q.bufTransitions) == 0 {
 		return nil, nil //nolint:nilnil // no transitions = no barriers needed
 	}
 
@@ -592,7 +609,7 @@ func (q *Queue) injectBarriers(commandBuffers []*CommandBuffer) (hal.CommandBuff
 	defer clear(q.bufResolver)
 	fillTextureResolver(q.texResolver, commandBuffers)
 	fillBufferResolver(q.bufResolver, commandBuffers)
-	return q.recordAndTrackAllBarriers(texTransitions, bufTransitions, q.texResolver, q.bufResolver)
+	return q.recordAndTrackAllBarriers(q.texTransitions, q.bufTransitions)
 }
 
 // fillTextureResolver walks all textures referenced by the submitted
@@ -648,9 +665,8 @@ func addTrackedTexture(resolver map[track.TrackerIndex]hal.Texture, tex *Texture
 }
 
 // mergeTextureScopes merges each command buffer's textureScope into the
-// device tracker, returning all pending transitions.
-func mergeTextureScopes(tracker *core.DeviceTracker, commandBuffers []*CommandBuffer) []track.TexturePendingTransition {
-	var allTransitions []track.TexturePendingTransition
+// device tracker, appending all pending transitions to dst.
+func mergeTextureScopes(tracker *core.DeviceTracker, commandBuffers []*CommandBuffer, dst []track.TexturePendingTransition) []track.TexturePendingTransition {
 	for _, cb := range commandBuffers {
 		if cb == nil || cb.core == nil {
 			continue
@@ -659,16 +675,14 @@ func mergeTextureScopes(tracker *core.DeviceTracker, commandBuffers []*CommandBu
 		if scope == nil || scope.IsEmpty() {
 			continue
 		}
-		transitions := tracker.MergeTextureScope(scope)
-		allTransitions = append(allTransitions, transitions...)
+		dst = tracker.MergeTextureScopeInto(scope, dst)
 	}
-	return allTransitions
+	return dst
 }
 
 // mergeBufferScopes merges each command buffer's bufferScope into the
-// device tracker, returning all pending buffer transitions.
-func mergeBufferScopes(tracker *core.DeviceTracker, commandBuffers []*CommandBuffer) []track.PendingTransition {
-	var allTransitions []track.PendingTransition
+// device tracker, appending all pending buffer transitions to dst.
+func mergeBufferScopes(tracker *core.DeviceTracker, commandBuffers []*CommandBuffer, dst []track.PendingTransition) []track.PendingTransition {
 	for _, cb := range commandBuffers {
 		if cb == nil || cb.core == nil {
 			continue
@@ -677,10 +691,9 @@ func mergeBufferScopes(tracker *core.DeviceTracker, commandBuffers []*CommandBuf
 		if scope == nil {
 			continue
 		}
-		transitions := tracker.MergeBufferScope(scope)
-		allTransitions = append(allTransitions, transitions...)
+		dst = tracker.MergeBufferScopeInto(scope, dst)
 	}
-	return allTransitions
+	return dst
 }
 
 // fillBufferResolver walks all buffers referenced by the submitted command
@@ -728,22 +741,12 @@ func addTrackedBuffer(resolver map[track.TrackerIndex]hal.Buffer, buf *Buffer) {
 func (q *Queue) recordAndTrackAllBarriers(
 	texTransitions []track.TexturePendingTransition,
 	bufTransitions []track.PendingTransition,
-	texResolver map[track.TrackerIndex]hal.Texture,
-	bufResolver map[track.TrackerIndex]hal.Buffer,
 ) (hal.CommandBuffer, error) {
-	texResolveFunc := func(idx track.TrackerIndex) hal.Texture {
-		return texResolver[idx]
-	}
-	bufResolveFunc := func(idx track.TrackerIndex) hal.Buffer {
-		return bufResolver[idx]
-	}
 	halEnc, err := q.device.cmdEncoderPool.acquire()
 	if err != nil {
 		return nil, fmt.Errorf("acquire barrier encoder: %w", err)
 	}
-	barrierCB, err := core.BarrierCBFromAllTransitions(
-		halEnc, texTransitions, bufTransitions, texResolveFunc, bufResolveFunc,
-	)
+	barrierCB, err := core.BarrierCB(halEnc, texTransitions, bufTransitions, q, &q.barrierScratch)
 	if err != nil {
 		halEnc.DiscardEncoding()
 		q.device.cmdEncoderPool.release(halEnc)

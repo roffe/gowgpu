@@ -77,7 +77,7 @@ type DestroyQueue struct {
 }
 
 // maxFreeRefs caps how many emptied ref lists the queue keeps for reuse.
-const maxFreeRefs = 8
+const maxFreeRefs = 32
 
 // NewDestroyQueue creates a new DestroyQueue.
 func NewDestroyQueue() *DestroyQueue {

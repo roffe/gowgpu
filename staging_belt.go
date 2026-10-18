@@ -307,6 +307,11 @@ func (b *stagingBelt) retireOversized(c stagingChunk) {
 	b.halDevice.DestroyBuffer(c.buffer)
 }
 
+// maxSpareChunkLists caps how many emptied chunk lists the belt keeps. A
+// frame that takes 35 µs on the CPU has a dozen submits in flight, each with
+// a list; a cap below that made the belt allocate a list a frame.
+const maxSpareChunkLists = 32
+
 // takeSpareList returns an emptied list kept by recall, or nil.
 func takeSpareList(spares *[][]stagingChunk) []stagingChunk {
 	n := len(*spares)
@@ -322,7 +327,7 @@ func takeSpareList(spares *[][]stagingChunk) []stagingChunk {
 // keepSpareList clears a list no submission references any more and keeps
 // it for reuse.
 func keepSpareList(spares *[][]stagingChunk, l []stagingChunk) {
-	if cap(l) == 0 || len(*spares) >= 4 {
+	if cap(l) == 0 || len(*spares) >= maxSpareChunkLists {
 		return
 	}
 	clear(l)

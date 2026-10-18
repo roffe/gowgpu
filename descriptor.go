@@ -606,8 +606,13 @@ func (i *ImageCopyTexture) toHAL() *hal.ImageCopyTexture {
 	if i == nil || i.Texture == nil {
 		return nil
 	}
+	h := i.halValue()
+	return &h
+}
 
-	return &hal.ImageCopyTexture{
+// halValue is toHAL by value, for a caller with somewhere to keep it.
+func (i *ImageCopyTexture) halValue() hal.ImageCopyTexture {
+	return hal.ImageCopyTexture{
 		Texture:  i.Texture.resolveHAL(),
 		MipLevel: i.MipLevel,
 		Origin:   i.Origin.toHAL(),

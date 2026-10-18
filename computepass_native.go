@@ -43,6 +43,15 @@ type ComputePassEncoder struct {
 	binder binder
 }
 
+// reset readies p, which lives in its encoder, for a new pass. The binder's
+// lists keep their room.
+func (p *ComputePassEncoder) reset(corePass *core.CoreComputePassEncoder, enc *CommandEncoder) {
+	b := p.binder
+	*p = ComputePassEncoder{core: corePass, encoder: enc}
+	b.reset()
+	p.binder = b
+}
+
 // SetPipeline sets the active compute pipeline.
 func (p *ComputePassEncoder) SetPipeline(pipeline *ComputePipeline) {
 	if pipeline == nil {

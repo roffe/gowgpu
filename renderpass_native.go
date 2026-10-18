@@ -55,6 +55,15 @@ type RenderPassEncoder struct {
 	blendConstantSet bool
 }
 
+// reset readies p, which lives in its encoder, for a new pass. The binder's
+// lists keep their room.
+func (p *RenderPassEncoder) reset(corePass *core.CoreRenderPassEncoder, enc *CommandEncoder) {
+	b := p.binder
+	*p = RenderPassEncoder{core: corePass, encoder: enc}
+	b.reset()
+	p.binder = b
+}
+
 // SetPipeline sets the active render pipeline.
 func (p *RenderPassEncoder) SetPipeline(pipeline *RenderPipeline) {
 	if pipeline == nil {

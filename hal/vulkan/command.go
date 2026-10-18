@@ -660,11 +660,16 @@ func (e *CommandEncoder) CopyBufferToBuffer(src, dst hal.Buffer, regions []hal.B
 	vkCmdCopyBuffer(e.device.cmds, e.active, srcBuf.handle, dstBuf.handle, uint32(len(vkRegions)), &vkRegions[0])
 }
 
-// convertBufferImageCopyRegions converts HAL BufferTextureCopy regions to Vulkan BufferImageCopy.
-// The format parameter is the texture format, used to determine block copy size
-// for correct bytes-to-texels conversion of bufferRowLength.
-func convertBufferImageCopyRegions(regions []hal.BufferTextureCopy, format gputypes.TextureFormat, dimension gputypes.TextureDimension) []vk.BufferImageCopy {
-	vkRegions := make([]vk.BufferImageCopy, len(regions))
+// convertBufferImageCopyRegions converts HAL BufferTextureCopy regions to Vulkan
+// BufferImageCopy, into dst. The format parameter is the texture format, used
+// to determine block copy size for correct bytes-to-texels conversion of
+// bufferRowLength.
+func convertBufferImageCopyRegions(dst []vk.BufferImageCopy, regions []hal.BufferTextureCopy, format gputypes.TextureFormat, dimension gputypes.TextureDimension) []vk.BufferImageCopy {
+	vkRegions := dst[:0]
+	if cap(vkRegions) < len(regions) {
+		vkRegions = make([]vk.BufferImageCopy, 0, len(regions))
+	}
+	vkRegions = vkRegions[:len(regions)]
 	blockSize := format.BlockCopySize()
 	if blockSize == 0 {
 		blockSize = 4
@@ -725,11 +730,14 @@ func (e *CommandEncoder) CopyBufferToTexture(src hal.Buffer, dst hal.Texture, re
 
 	srcBuf, srcOk := src.(*Buffer)
 	dstTex, dstOk := dst.(*Texture)
-	if !srcOk || !dstOk {
+	if !srcOk || !dstOk || len(regions) == 0 {
 		return
 	}
 
-	vkRegions := convertBufferImageCopyRegions(regions, dstTex.format, dstTex.dimension)
+	// The regions stay on the stack for the usual one-region copy: the
+	// command does not keep them.
+	var stack [4]vk.BufferImageCopy
+	vkRegions := convertBufferImageCopyRegions(stack[:0], regions, dstTex.format, dstTex.dimension)
 	vkCmdCopyBufferToImage(
 		e.device.cmds,
 		e.active,
@@ -749,11 +757,12 @@ func (e *CommandEncoder) CopyTextureToBuffer(src hal.Texture, dst hal.Buffer, re
 
 	srcTex, srcOk := src.(*Texture)
 	dstBuf, dstOk := dst.(*Buffer)
-	if !srcOk || !dstOk {
+	if !srcOk || !dstOk || len(regions) == 0 {
 		return
 	}
 
-	vkRegions := convertBufferImageCopyRegions(regions, srcTex.format, srcTex.dimension)
+	var stack [4]vk.BufferImageCopy
+	vkRegions := convertBufferImageCopyRegions(stack[:0], regions, srcTex.format, srcTex.dimension)
 	vkCmdCopyImageToBuffer(
 		e.device.cmds,
 		e.active,

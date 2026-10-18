@@ -24,17 +24,26 @@ import (
 // Thread-safe for concurrent use.
 type Snatchable[T any] struct {
 	mu       sync.RWMutex
-	value    *T
+	value    T
 	snatched bool
 }
 
-// NewSnatchable creates a new Snatchable wrapper for the given value.
-// The value is stored by pointer for efficient access.
+// NewSnatchable creates a new Snatchable wrapper for the given value. The
+// value lives inside the wrapper, so an owner that embeds the wrapper holds
+// the value without an allocation of its own.
 func NewSnatchable[T any](value T) *Snatchable[T] {
-	return &Snatchable[T]{
-		value:    &value,
-		snatched: false,
-	}
+	s := &Snatchable[T]{}
+	s.Set(value)
+	return s
+}
+
+// Set stores value in s, which must not have been snatched. It is how an
+// embedded wrapper is (re)initialised.
+func (s *Snatchable[T]) Set(value T) {
+	s.mu.Lock()
+	s.value = value
+	s.snatched = false
+	s.mu.Unlock()
 }
 
 // Get returns a pointer to the wrapped value if it hasn't been snatched.
@@ -52,11 +61,12 @@ func (s *Snatchable[T]) Get(_ SnatchGuard) *T {
 	if s.snatched {
 		return nil
 	}
-	return s.value
+	return &s.value
 }
 
 // Snatch takes ownership of the wrapped value for destruction.
-// Returns the value if it hasn't been snatched yet, nil otherwise.
+// Returns the value if it hasn't been snatched yet, nil otherwise. The
+// pointer is into the wrapper: read it before the wrapper is reused.
 //
 // This can only succeed once - subsequent calls return nil.
 //
@@ -74,9 +84,7 @@ func (s *Snatchable[T]) Snatch(_ ExclusiveSnatchGuard) *T {
 	}
 
 	s.snatched = true
-	result := s.value
-	s.value = nil
-	return result
+	return &s.value
 }
 
 // IsSnatched returns true if the value has been snatched.

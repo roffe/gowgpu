@@ -128,7 +128,7 @@ type scopePool struct {
 }
 
 // maxFreeScopes caps how many sets of scopes a device keeps for reuse.
-const maxFreeScopes = 8
+const maxFreeScopes = 32
 
 // get returns a kept set of scopes, or new ones. p may be nil.
 func (p *scopePool) get() *CommandBufferMutable {
@@ -221,10 +221,17 @@ const (
 // CoreCommandEncoder is thread-safe for concurrent access.
 type CoreCommandEncoder struct {
 	// raw is the HAL encoder wrapped for safe destruction.
-	raw *Snatchable[hal.CommandEncoder]
+	raw Snatchable[hal.CommandEncoder]
 
 	// device is the parent device.
 	device *Device
+
+	// pass, cpass and cb are the encoder's render pass, compute pass and
+	// command buffer. An encoder has one of each open at a time and is
+	// single-use, so they live here and a frame allocates none of them.
+	pass  CoreRenderPassEncoder
+	cpass CoreComputePassEncoder
+	cb    CoreCommandBuffer
 
 	// status is the current encoder status (atomic for lock-free reads).
 	status atomic.Int32
@@ -302,15 +309,8 @@ func (d *Device) CreateCommandEncoder(label string) (*CoreCommandEncoder, error)
 	}
 
 	// 5. Create core encoder
-	enc := &CoreCommandEncoder{
-		raw:     NewSnatchable(halEncoder),
-		device:  d,
-		mutable: d.scopes.get(),
-		label:   label,
-	}
-	enc.status.Store(int32(CommandEncoderStatusRecording))
-
-	trackResource(uintptr(unsafe.Pointer(enc)), "CommandEncoder") //nolint:gosec // debug tracking uses pointer as unique ID
+	enc := &CoreCommandEncoder{}
+	enc.init(d, halEncoder, label)
 	return enc, nil
 }
 
@@ -322,20 +322,39 @@ func (d *Device) CreateCommandEncoder(label string) (*CoreCommandEncoder, error)
 //
 // The caller is responsible for ensuring the HAL encoder is valid and recording.
 func (d *Device) CreateCommandEncoderWithHAL(halEncoder hal.CommandEncoder, label string) (*CoreCommandEncoder, error) {
-	if err := d.checkValid(); err != nil {
+	enc := &CoreCommandEncoder{}
+	if err := d.InitCommandEncoderWithHAL(enc, halEncoder, label); err != nil {
 		return nil, err
 	}
-
-	enc := &CoreCommandEncoder{
-		raw:     NewSnatchable(halEncoder),
-		device:  d,
-		mutable: d.scopes.get(),
-		label:   label,
-	}
-	enc.status.Store(int32(CommandEncoderStatusRecording))
-
-	trackResource(uintptr(unsafe.Pointer(enc)), "CommandEncoder") //nolint:gosec // debug tracking uses pointer as unique ID
 	return enc, nil
+}
+
+// InitCommandEncoderWithHAL is CreateCommandEncoderWithHAL into enc, which the
+// caller owns and may reuse once the command buffer it produced is spent.
+func (d *Device) InitCommandEncoderWithHAL(enc *CoreCommandEncoder, halEncoder hal.CommandEncoder, label string) error {
+	if err := d.checkValid(); err != nil {
+		return err
+	}
+	enc.init(d, halEncoder, label)
+	return nil
+}
+
+// init readies e to record with halEncoder. Whatever e did before is spent:
+// its command buffer handed its scopes back, its lists were moved out.
+func (e *CoreCommandEncoder) init(d *Device, halEncoder hal.CommandEncoder, label string) {
+	e.raw.Set(halEncoder)
+	e.device = d
+	e.mutable = d.scopes.get()
+	e.error = nil
+	e.label = label
+	e.cbList = e.cbList[:0]
+	e.cbListOpen = false
+	e.pass = CoreRenderPassEncoder{}
+	e.cpass = CoreComputePassEncoder{}
+	e.cb = CoreCommandBuffer{}
+	e.status.Store(int32(CommandEncoderStatusRecording))
+
+	trackResource(uintptr(unsafe.Pointer(e)), "CommandEncoder") //nolint:gosec // debug tracking uses pointer as unique ID
 }
 
 // TakeHALEncoder extracts the HAL command encoder from this core encoder,
@@ -441,7 +460,8 @@ func (e *CoreCommandEncoder) BeginRenderPass(desc *RenderPassDescriptor) (*CoreR
 	// Validate MRT rules: attachment count, sample count consistency,
 	// dimension consistency. This produces the RenderPassContext used
 	// for draw-time pipeline compatibility checks.
-	pass := &CoreRenderPassEncoder{encoder: e, device: e.device}
+	pass := &e.pass
+	*pass = CoreRenderPassEncoder{encoder: e, device: e.device}
 	if valErr := validateRenderPassDescriptor(desc, e.device.Limits, &pass.passCtx); valErr != nil {
 		e.setError(valErr)
 		return nil, valErr
@@ -558,7 +578,8 @@ func (e *CoreCommandEncoder) BeginComputePass(desc *CoreComputePassDescriptor) (
 	// Transition to locked state
 	e.status.Store(int32(CommandEncoderStatusLocked))
 
-	pass := &CoreComputePassEncoder{
+	pass := &e.cpass
+	*pass = CoreComputePassEncoder{
 		raw:     halPass,
 		encoder: e,
 		device:  e.device,
@@ -635,7 +656,8 @@ func (e *CoreCommandEncoder) Finish() (*CoreCommandBuffer, error) {
 		e.status.Store(int32(CommandEncoderStatusFinished))
 		untrackResource(uintptr(unsafe.Pointer(e))) //nolint:gosec // debug tracking uses pointer as unique ID
 
-		cb := &CoreCommandBuffer{
+		cb := &e.cb
+		*cb = CoreCommandBuffer{
 			device:     e.device,
 			mutable:    e.mutable,
 			label:      e.label,
@@ -664,7 +686,8 @@ func (e *CoreCommandEncoder) Finish() (*CoreCommandBuffer, error) {
 
 	untrackResource(uintptr(unsafe.Pointer(e))) //nolint:gosec // debug tracking uses pointer as unique ID
 
-	cb := &CoreCommandBuffer{
+	cb := &e.cb
+	*cb = CoreCommandBuffer{
 		raw:     halCmdBuffer,
 		rawList: [1]hal.CommandBuffer{halCmdBuffer},
 		device:  e.device,

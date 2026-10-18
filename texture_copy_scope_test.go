@@ -162,7 +162,7 @@ func TestCopyCommandTextureScopeDrivesBarriers(t *testing.T) {
 
 			probeTracker := core.NewDeviceTracker()
 			probeTracker.InsertTexture(idx, tt.before)
-			transitions := mergeTextureScopes(probeTracker, []*CommandBuffer{cb})
+			transitions := mergeTextureScopes(probeTracker, []*CommandBuffer{cb}, nil)
 			if len(transitions) != 1 {
 				t.Fatalf("copy scope produced %d transitions, want 1", len(transitions))
 			}

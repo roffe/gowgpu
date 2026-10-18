@@ -886,15 +886,17 @@ func (d *Device) CreateCommandEncoder(desc *CommandEncoderDescriptor) (*CommandE
 			return nil, fmt.Errorf("wgpu: begin encoding: %w", err)
 		}
 
-		coreEncoder, err := d.core.CreateCommandEncoderWithHAL(halEnc, label)
-		if err != nil {
+		// The encoder object, with its core encoder, pass and command buffer
+		// inside, is one a spent frame gave back, so a steady stream of
+		// frames allocates none. The ref and validation lists of spent
+		// command buffers come back the same way.
+		e := cmdEncoderObjPool.Get().(*CommandEncoder)
+		if err := d.core.InitCommandEncoderWithHAL(&e.coreEnc, halEnc, label); err != nil {
+			cmdEncoderObjPool.Put(e)
 			halEnc.DiscardEncoding()
 			d.cmdEncoderPool.release(halEnc)
 			return nil, err
 		}
-
-		// The ref and validation lists of spent command buffers come back,
-		// so a steady stream of frames does not grow new ones.
 		var refs []*core.ResourceRef
 		if dq := d.destroyQueue(); dq != nil {
 			refs = dq.RecycledRefs()
@@ -903,15 +905,15 @@ func (d *Device) CreateCommandEncoder(desc *CommandEncoderDescriptor) (*CommandE
 			refs = make([]*core.ResourceRef, 0, 64)
 		}
 		lists := d.usedLists.get()
-		return &CommandEncoder{
-			core:           coreEncoder,
-			device:         d,
-			halEncoder:     halEnc,
-			trackedRefs:    refs,
-			usedBuffers:    lists.buffers,
-			usedTextures:   lists.textures,
-			usedBindGroups: lists.bindGroups,
-		}, nil
+		e.core = &e.coreEnc
+		e.device = d
+		e.released = false
+		e.serial = encoderSerials.Add(1)
+		e.halEncoder = halEnc
+		e.trackedRefs = refs
+		e.usedBuffers, e.usedTextures, e.usedBindGroups = lists.buffers, lists.textures, lists.bindGroups
+		e.pooled = true
+		return e, nil
 	}
 
 	// Fallback: no pool available (e.g., non-HAL device). Use core's built-in
@@ -921,7 +923,7 @@ func (d *Device) CreateCommandEncoder(desc *CommandEncoderDescriptor) (*CommandE
 		return nil, err
 	}
 
-	return &CommandEncoder{core: coreEncoder, device: d}, nil
+	return &CommandEncoder{core: coreEncoder, device: d, serial: encoderSerials.Add(1)}, nil
 }
 
 // CreateFence creates a GPU synchronization fence.
