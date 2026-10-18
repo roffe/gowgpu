@@ -1576,7 +1576,7 @@ type CopyBufferCommand struct {
 func (c *CopyBufferCommand) Execute(ctx *gl.Context) {
 	ctx.BindBuffer(gl.COPY_READ_BUFFER, c.srcID)
 	ctx.BindBuffer(gl.COPY_WRITE_BUFFER, c.dstID)
-	// glCopyBufferSubData would go here
+	ctx.CopyBufferSubData(gl.COPY_READ_BUFFER, gl.COPY_WRITE_BUFFER, int(c.srcOffset), int(c.dstOffset), int(c.size))
 	ctx.BindBuffer(gl.COPY_READ_BUFFER, 0)
 	ctx.BindBuffer(gl.COPY_WRITE_BUFFER, 0)
 }
