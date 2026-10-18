@@ -17,8 +17,8 @@ extern char *dlerror(void);
 #define GVK_RTLD_NOW_LOCAL 0x2 // RTLD_LOCAL is 0 on glibc, musl and 64-bit bionic
 #endif
 
-static uintptr_t gvk_dlopen(uintptr_t name) { return (uintptr_t)dlopen((const char *)name, GVK_RTLD_NOW_LOCAL); }
-static uintptr_t gvk_dlsym(uintptr_t lib, uintptr_t name) { return (uintptr_t)dlsym((void *)lib, (const char *)name); }
+static uintptr_t gvk_dlopen(const char *name) { return (uintptr_t)dlopen(name, GVK_RTLD_NOW_LOCAL); }
+static uintptr_t gvk_dlsym(uintptr_t lib, const char *name) { return (uintptr_t)dlsym((void *)lib, name); }
 static int gvk_dlclose(uintptr_t lib) { return dlclose((void *)lib); }
 static uintptr_t gvk_dlerror(void) { return (uintptr_t)dlerror(); }
 */
@@ -26,7 +26,6 @@ import "C"
 
 import (
 	"errors"
-	"runtime"
 	"unsafe"
 )
 
@@ -50,10 +49,13 @@ func dlerror() error {
 	return errors.New(string(b))
 }
 
+// The names cross as pointers. As integers cgo did nothing for them, and a
+// short name's buffer sits on the stack, which can be copied elsewhere before
+// C reads it.
+
 func openLibrary(name string) (uintptr, error) {
 	n := cString(name)
-	lib := uintptr(C.gvk_dlopen(C.uintptr_t(uintptr(unsafe.Pointer(&n[0])))))
-	runtime.KeepAlive(n)
+	lib := uintptr(C.gvk_dlopen((*C.char)(unsafe.Pointer(&n[0]))))
 	if lib == 0 {
 		return 0, dlerror()
 	}
@@ -62,8 +64,7 @@ func openLibrary(name string) (uintptr, error) {
 
 func librarySymbol(lib uintptr, name string) (unsafe.Pointer, error) {
 	n := cString(name)
-	p := uintptr(C.gvk_dlsym(C.uintptr_t(lib), C.uintptr_t(uintptr(unsafe.Pointer(&n[0])))))
-	runtime.KeepAlive(n)
+	p := uintptr(C.gvk_dlsym(C.uintptr_t(lib), (*C.char)(unsafe.Pointer(&n[0]))))
 	if p == 0 {
 		return nil, dlerror()
 	}
