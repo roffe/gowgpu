@@ -114,12 +114,6 @@ type CommandBufferMutable struct {
 	// Reference: wgpu-core command/mod.rs CommandBufferMutable.usage_scope.buffers
 	bufferScope *track.BufferUsageScope
 
-	// usedBuffers tracks buffer usage within this command buffer.
-	usedBuffers map[*Buffer]BufferUses
-
-	// usedTextures tracks texture usage within this command buffer.
-	usedTextures map[*Texture]TextureUses
-
 	// activePass is the current pass encoder (if any).
 	// This is either *CoreRenderPassEncoder or *CoreComputePassEncoder.
 	activePass any
@@ -269,8 +263,6 @@ func (d *Device) CreateCommandEncoder(label string) (*CoreCommandEncoder, error)
 		mutable: &CommandBufferMutable{
 			textureScope: track.NewTextureUsageScope(),
 			bufferScope:  track.NewBufferUsageScope(),
-			usedBuffers:  make(map[*Buffer]BufferUses),
-			usedTextures: make(map[*Texture]TextureUses),
 		},
 		label: label,
 	}
@@ -298,8 +290,6 @@ func (d *Device) CreateCommandEncoderWithHAL(halEncoder hal.CommandEncoder, labe
 		mutable: &CommandBufferMutable{
 			textureScope: track.NewTextureUsageScope(),
 			bufferScope:  track.NewBufferUsageScope(),
-			usedBuffers:  make(map[*Buffer]BufferUses),
-			usedTextures: make(map[*Texture]TextureUses),
 		},
 		label: label,
 	}
