@@ -86,6 +86,13 @@ type pendingWrites struct {
 	// stride is not a multiple of pendingWritesRowPitchAlignment.
 	// Access is safe because writeTexture always holds pw.mu.
 	alignBuf []byte
+
+	// zero holds the textures created since the last flush that nothing has
+	// written yet. WebGPU hands out textures zeroed, the backends hand out
+	// whatever was in the memory before, so a partial write and flush zero
+	// them first. A write or render pass that covers the whole texture takes
+	// it off without zeroing.
+	zero map[*Texture]struct{}
 }
 
 // inflightSubmission tracks resources from a single submission that must
@@ -245,6 +252,25 @@ func (pw *pendingWrites) writeTextureFor(
 	pw.mu.Lock()
 	defer pw.mu.Unlock()
 
+	if _, ok := pw.zero[owner]; ok {
+		delete(pw.zero, owner)
+		if !coversTexture(owner, dst, size) {
+			if err := pw.zeroTextureLocked(owner); err != nil {
+				return err
+			}
+		}
+	}
+	return pw.writeTextureLocked(owner, dst, data, layout, size)
+}
+
+// writeTextureLocked is writeTextureFor with pw.mu held.
+func (pw *pendingWrites) writeTextureLocked(
+	owner *Texture,
+	dst *hal.ImageCopyTexture,
+	data []byte,
+	layout *hal.ImageDataLayout,
+	size *hal.Extent3D,
+) error {
 	if !pw.usesBatching {
 		return pw.halQueue.WriteTexture(dst, data, layout, size)
 	}
@@ -379,6 +405,82 @@ func containsTextureOwner(owners []*Texture, target *Texture) bool {
 	return false
 }
 
+// zeroableTexture reports whether a texture made from desc gets zeroed through
+// the pending writes: an uncompressed color format, one sample, and sampled
+// usage, the state those writes leave a texture in.
+// ponytail: depth, multisampled, compressed and unsampled textures still start
+// with old memory; they need a clear on the HAL side (a render pass or a fill).
+func zeroableTexture(desc *hal.TextureDescriptor) bool {
+	return desc.Format != gputypes.TextureFormatUndefined &&
+		desc.Format <= gputypes.TextureFormatRGBA32Sint && // the color formats in webgpu.h order
+		desc.SampleCount <= 1 &&
+		desc.Usage&gputypes.TextureUsageTextureBinding != 0
+}
+
+// queueZero puts a new texture on the list of textures to zero.
+func (pw *pendingWrites) queueZero(t *Texture) {
+	pw.mu.Lock()
+	defer pw.mu.Unlock()
+	if pw.zero == nil {
+		pw.zero = make(map[*Texture]struct{})
+	}
+	pw.zero[t] = struct{}{}
+}
+
+// forgetZero takes t off the list: it was released, or a pass cleared all of it.
+func (pw *pendingWrites) forgetZero(t *Texture) {
+	pw.mu.Lock()
+	defer pw.mu.Unlock()
+	delete(pw.zero, t)
+}
+
+// coversTexture reports whether a write of size at dst sets every texel of t.
+func coversTexture(t *Texture, dst *hal.ImageCopyTexture, size *hal.Extent3D) bool {
+	s := t.coreTexture.Size()
+	return t.coreTexture.MipLevelCount() <= 1 && dst.MipLevel == 0 && dst.Origin == (hal.Origin3D{}) &&
+		size.Width == s.Width && size.Height == s.Height &&
+		max(size.DepthOrArrayLayers, 1) == max(s.DepthOrArrayLayers, 1)
+}
+
+// zeroChunk caps one zeroing write, which goes through the staging belt like
+// any other, so a big texture is zeroed some rows at a time.
+const zeroChunk = 16 << 20
+
+// zeroTextureLocked writes zeros over every mip and layer of t. pw.mu is held.
+func (pw *pendingWrites) zeroTextureLocked(t *Texture) error {
+	raw := t.resolveHAL()
+	if raw == nil {
+		return nil
+	}
+	ct := t.coreTexture
+	s := ct.Size()
+	bpp := ct.Format().BlockCopySize()
+	var zeros []byte
+	for mip := range max(ct.MipLevelCount(), 1) {
+		w, h, layers := max(s.Width>>mip, 1), max(s.Height>>mip, 1), max(s.DepthOrArrayLayers, 1)
+		if ct.Dimension() == gputypes.TextureDimension3D {
+			layers = max(layers>>mip, 1)
+		}
+		bytesPerRow := alignUp(w*bpp, pendingWritesRowPitchAlignment)
+		rows := min(h, max(zeroChunk/bytesPerRow, 1))
+		if n := int(bytesPerRow * rows); len(zeros) < n {
+			zeros = make([]byte, n)
+		}
+		for z := range layers {
+			for y := uint32(0); y < h; y += rows {
+				n := min(rows, h-y)
+				dst := hal.ImageCopyTexture{Texture: raw, MipLevel: mip, Origin: hal.Origin3D{Y: y, Z: z}, Aspect: gputypes.TextureAspectAll}
+				layout := hal.ImageDataLayout{BytesPerRow: bytesPerRow, RowsPerImage: n}
+				size := hal.Extent3D{Width: w, Height: n, DepthOrArrayLayers: 1}
+				if err := pw.writeTextureLocked(t, &dst, zeros[:bytesPerRow*n], &layout, &size); err != nil {
+					return fmt.Errorf("wgpu: zero new texture: %w", err)
+				}
+			}
+		}
+	}
+	return nil
+}
+
 // copyTextureDataAligned copies texture data with row pitch alignment padding.
 // If no padding is needed (alignedBytesPerRow == bytesPerRow), returns data directly.
 // Callers that can supply a reusable scratch buffer should use alignTextureDataInto
@@ -475,6 +577,15 @@ func (pw *pendingWrites) activate() (hal.CommandEncoder, error) {
 // maintain() calls ResetAll and returns it to the pool.
 // Must be called with pw.mu held.
 func (pw *pendingWrites) flush() (hal.CommandBuffer, hal.CommandEncoder, []hal.Texture, []hal.Buffer, error) {
+	// Textures nothing wrote since they were made are zeroed now, in the
+	// batch that runs ahead of the command buffers that could read them.
+	for t := range pw.zero {
+		if err := pw.zeroTextureLocked(t); err != nil {
+			Logger().Warn("wgpu: texture keeps its old memory", "err", err)
+		}
+	}
+	clear(pw.zero)
+
 	if !pw.isRecording {
 		return nil, nil, nil, nil, nil
 	}

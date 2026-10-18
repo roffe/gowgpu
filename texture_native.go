@@ -64,6 +64,9 @@ func (t *Texture) Release() {
 		return
 	}
 	t.released = true
+	if q := t.device.queue; q != nil && q.pending != nil {
+		q.pending.forgetZero(t)
+	}
 
 	// ADR-060: Release TrackerIndex to prevent monotonic growth (#307).
 	// Surface textures handle this in Surface.destroySwapchainTexture.

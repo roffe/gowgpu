@@ -120,6 +120,10 @@ func (d *Device) CreateTexture(desc *TextureDescriptor) (*Texture, error) {
 	if err := core.ValidateTextureDescriptor(halDesc, d.core.Limits, d.core.Features); err != nil {
 		return nil, err
 	}
+	zero := d.queue != nil && d.queue.pending != nil && zeroableTexture(halDesc)
+	if zero {
+		halDesc.Usage |= gputypes.TextureUsageCopyDst // for the copy that zeroes it
+	}
 
 	halTexture, err := halDevice.CreateTexture(halDesc)
 	if err != nil {
@@ -140,7 +144,11 @@ func (d *Device) CreateTexture(desc *TextureDescriptor) (*Texture, error) {
 		halDesc.MipLevelCount, halDesc.SampleCount, desc.Label,
 	)
 
-	return &Texture{hal: halTexture, device: d, format: desc.Format, coreTexture: coreTexture}, nil
+	tex := &Texture{hal: halTexture, device: d, format: desc.Format, coreTexture: coreTexture}
+	if zero {
+		d.queue.pending.queueZero(tex)
+	}
+	return tex, nil
 }
 
 // CreateTextureView creates a view into a texture.

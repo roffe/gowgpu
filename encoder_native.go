@@ -323,8 +323,28 @@ func (e *CommandEncoder) BeginRenderPass(desc *RenderPassDescriptor) (*RenderPas
 	if err != nil {
 		return nil, err
 	}
+	forgetClearedTextures(e.device, desc)
 
 	return &RenderPassEncoder{core: corePass, encoder: e}, nil
+}
+
+// forgetClearedTextures takes the textures this pass clears whole off the list
+// of new textures to zero: the clear does it.
+// ponytail: decided when the pass is recorded, not when it runs, so a command
+// buffer submitted before this one that samples the texture still sees old
+// memory.
+func forgetClearedTextures(d *Device, desc *RenderPassDescriptor) {
+	if desc == nil || d == nil || d.queue == nil || d.queue.pending == nil {
+		return
+	}
+	for _, ca := range desc.ColorAttachments {
+		if ca.LoadOp != gputypes.LoadOpClear || ca.View == nil || ca.View.texture == nil {
+			continue
+		}
+		if ct := ca.View.texture.coreTexture; ct != nil && ct.MipLevelCount() <= 1 && ct.Size().DepthOrArrayLayers <= 1 {
+			d.queue.pending.forgetZero(ca.View.texture)
+		}
+	}
 }
 
 // BeginComputePass begins a compute pass.
