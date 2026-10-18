@@ -17,6 +17,14 @@ gowgpu split off from gogpu/wgpu v0.34.5 on 2026-10-17. Everything from [0.34.5]
 - **`gputypes` lives in this module**, as `github.com/roffe/gowgpu/gputypes` (from gogpu/gputypes v0.8.0, MIT). Breaking: import paths change. The only dependencies left are naga and `golang.org/x/sys`.
 - **OpenGL is registered by `hal/allbackends` again**, on Linux, Windows and Android, but stays out of the default instance. Ask for `gputypes.BackendsGL` to use it.
 - **The Vulkan application and engine names and the pipeline cache folder say gowgpu**, so caches go to `os.UserCacheDir()/gowgpu` instead of sharing gogpu's folder. An old cache just gets rebuilt.
+- **Fewer allocations and less CPU a frame.** On txlogger's glbench, gowgpu now allocates about 43 objects a frame on Vulkan and on GL, down from about 125 and 1000. Allocated bytes are down 35% on Vulkan and 60% on GL, and CPU a frame about 3%. The changes behind it:
+  - GL records draws in an arena instead of one heap object per command.
+  - Each resource is tracked once per command encoder instead of on every bind.
+  - Submit stops building maps and lists a steady frame never reads.
+  - The staging buffers of big writes are reused, and so are usage scopes and ref lists.
+  - The Vulkan submit info stays off the heap.
+  - GL only calls `glGetError` after every command when warnings get logged.
+- **New textures get CopyDst on the HAL side** when gowgpu zeroes them (see Fixed).
 
 ### Deprecated
 
@@ -49,11 +57,25 @@ gowgpu split off from gogpu/wgpu v0.34.5 on 2026-10-17. Everything from [0.34.5]
 - **Vulkan `dlopen` and `dlsym` could read freed stack**: the library and symbol names went to C as integers, so their buffer could stay on the goroutine stack, and a stack move before the call left C reading the old copy. They're `const char *` now, like in `internal/dl`.
 - **GL `CopyBufferToTexture` killed the process under `-race`**: the PBO offset went through `unsafe.Pointer`, and checkptr throws on any value from 1 to 4095.
 - **`hal/noop` counted submissions with a plain integer**, which `-race` caught when several goroutines submitted.
+- **New textures weren't zeroed.** WebGPU hands them out zeroed, the backends hand out whatever the memory held. A texture that was only partly written, or read before it was written, showed old memory: in fyne it made glyph edges change from frame to frame. Sampled color textures get zeroed now, unless a write or a clearing render pass covers all of them first.
+- **GL `CopyBufferToBuffer` copied nothing**: the `glCopyBufferSubData` call was missing.
+- **GL `SetBindGroup` kept the caller's dynamic offsets** until Submit, so a reused slice gave every draw its last offsets.
+- **`MapPending.Wait`** read the waiter from a goroutine after `Release` could have cleared it or handed it to the next map.
+- **Leaks:**
+  - Vulkan kept the framebuffers of every swapchain view it destroyed on a reconfigure (98 after 93 resizes under the validation layer, 2 to 4 now).
+  - A failed `Finish` put a still recording encoder back in the pool. Vulkan lost a command buffer each time, and on Metal and DX12 every later `CreateCommandEncoder` failed.
+  - `FreeCommandBuffer` never gave back the pooled encoder: a `VkCommandPool` and 16 command buffers each time.
+  - Buffers never gave back their tracker index, so a frame cost more the more buffers had ever been made: 101 KB of allocations an iteration at 10k buffers, 785 KB at 40k, about 3.5 KB now.
+  - DX12 leaked a command list on every discard, never reused freed descriptor ranges of two or more slots (a fyne texture is two, so the heap ran out), and kept the descriptors of a bind group that failed to create.
+  - Metal never released a pipeline's depth-stencil state, and a Present without a command buffer kept the drawable's IOSurface alive.
+  - A render pass refused for a usage conflict had already begun on the HAL and was never ended (on Metal its descriptor and attachments leaked).
+  - A failed Submit lost the flushed pending writes or the barrier encoder.
+- **GL contexts stayed current on whichever thread made them**, so `Lock` on another thread failed with `EGL_BAD_ACCESS` and ran its GL calls without a context: 35 failures in 10 runs of 20 headless cycles, none now.
 
 ### Removed
 
 - **The `-tags rust` backend** (wgpu-native through go-webgpu/webgpu).
-- **The software backend** (`hal/software`). It didn't run the shaders: draws without a vertex buffer blitted the first bound texture over the target, pipelines without vertex layouts were dropped and fragments got a guessed colour, at seconds per frame. Use Mesa's lavapipe on Linux or WARP on Windows for a CPU device. `cmd/sw-test`, `cmd/sw-triangle` and the `software-test` and `raytracing-headless` examples went with it.
+- **The software backend** (`hal/software`). It didn't run the shaders: draws without a vertex buffer blitted the first bound texture over the target, pipelines without vertex layouts were dropped and fragments got a guessed color, at seconds per frame. Use Mesa's lavapipe on Linux or WARP on Windows for a CPU device. `cmd/sw-test`, `cmd/sw-triangle` and the `software-test` and `raytracing-headless` examples went with it.
 - **goffi** and the **gpucontext** handle helpers (`DeviceFromHandle`, `DeviceToHandle` and the rest).
 
 ## [0.34.5] - 2026-09-07

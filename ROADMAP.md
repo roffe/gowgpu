@@ -13,10 +13,11 @@ gowgpu runs fyne's WebGPU painter on Linux, Windows, macOS, iOS and Android, thr
 3. **Dead API out.** `HeadlessSurfaceTarget`, `Surface.ReadPixels` and `WritePixels` and the HAL framebuffer extensions behind them only ever worked on the software backend.
 4. **DX12.** Honour dynamic bind group offsets, and take the vertex stride from the pipeline that draws instead of the one set at `SetVertexBuffer`.
 5. **`gl_` names in GLSL.** naga keeps WGSL identifiers that start with `gl_`, which GLSL reserves. Rename them on the way out, either in naga or before the GLSL reaches the driver.
-6. **Vulkan image layouts.** The validation layer reports layout errors from the state tracking gogpu wrote.
-7. **Real Apple hardware.** Metal has only run on GitHub's macOS runners and in the iOS simulator.
-8. **The browser backend.** Get `examples/browser-compute` building against the current API again and run it in a browser.
-9. **The lint backlog**, then a first tagged release.
+6. **Vulkan image layouts.** The validation layer reports layout errors from the state tracking gogpu wrote, and every queue write starts from `UNDEFINED`, which allows a driver to throw away what's in the texture.
+7. **What the vet left open.** `DispatchIndirect` validation has to keep its bind group alive until the GPU is done with it and give every dispatch its own params. Depth, multisampled and compressed textures need zeroing on the HAL side. Render bundles crash on Vulkan.
+8. **Real Apple hardware.** Metal has only run on GitHub's macOS runners and in the iOS simulator.
+9. **The browser backend.** Get `examples/browser-compute` building against the current API again and run it in a browser.
+10. **The lint backlog**, then a first tagged release.
 
 ## Not planned
 

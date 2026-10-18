@@ -137,6 +137,10 @@ Not run yet: the browser backend, the BSDs, GL on Windows and real Apple hardwar
 - On Vulkan, pipelines need an explicit layout (there are no automatic layouts). And `Map` doesn't see a `WriteBuffer` until something is submitted, an empty `Queue.Submit()` is enough. 10 tests in the root package fail because of those two, same as on gogpu v0.34.5.
 - DX12 ignores dynamic bind group offsets, and takes the vertex stride from whatever pipeline was set when `SetVertexBuffer` ran.
 - naga keeps identifiers that start with `gl_` when it writes GLSL, and strict drivers like Mali refuse them. Don't name things `gl_*` in WGSL.
+- New textures are zeroed only when they have a color format, one sample and `TextureBinding`. Depth, multisampled and compressed textures start with whatever the memory held, so clear them in their first render pass or write all of them.
+- On Vulkan every queue write moves the texture from `UNDEFINED`, which allows a driver to drop what's already in it. NVIDIA keeps it, AMD might not.
+- `DispatchIndirect` validation destroys its bind group before the GPU runs it, and indirect dispatches recorded before one `Submit` share one set of params.
+- Render bundles crash on Vulkan in `vkBeginCommandBuffer`.
 - `HeadlessSurfaceTarget` and `Surface.ReadPixels` and `WritePixels` are still in the API, but nothing implements them since the software backend went. They'll go.
 - `examples/browser-compute` doesn't build, it was written against an older API.
 - CI is still gogpu's and fails. It needs a rewrite for cgo.

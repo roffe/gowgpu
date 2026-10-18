@@ -24,6 +24,7 @@ Things that are the same everywhere:
 - Every native backend puts a barrier after each dispatch, so later dispatches in the pass and copies after it see the writes.
 - There are no automatic pipeline layouts on the native backends, so pass one. Vulkan and GL fail without it.
 - `ComputePipelineDescriptor.Constants` and `ZeroInitializeWorkgroupMemory` aren't passed on by any backend yet.
+- `DispatchIndirect` first runs a small shader that checks the workgroup counts and turns a dispatch over the device limit into zero workgroups. It destroys its bind group before the GPU runs it, and every indirect dispatch recorded before one `Submit` gets the params of the last one, so submit after each indirect dispatch until that's fixed.
 
 ## Vulkan
 
