@@ -223,8 +223,9 @@ func (a *DescriptorAllocator) createPool(counts DescriptorCounts) (*DescriptorPo
 	// Every pool includes all types to avoid allocation failures when
 	// different bind group layouts (e.g., uniform-only vs sampler+texture)
 	// share the same pool. Requested counts scale the primary types;
-	// all other types get a reasonable baseline allocation.
-	// Dynamic buffer types are included when any dynamic offsets are used.
+	// all other types get a reasonable baseline allocation. The dynamic
+	// buffer types too: NVIDIA hands out a set with one from a pool made
+	// without them, where the validation layer says it should fail.
 	poolSizes := []vk.DescriptorPoolSize{
 		{Type: vk.DescriptorTypeSampler, DescriptorCount: max(counts.Samplers, 1) * poolSize},
 		{Type: vk.DescriptorTypeSampledImage, DescriptorCount: max(counts.SampledImages, 1) * poolSize},
@@ -232,18 +233,8 @@ func (a *DescriptorAllocator) createPool(counts DescriptorCounts) (*DescriptorPo
 		{Type: vk.DescriptorTypeUniformBuffer, DescriptorCount: max(counts.UniformBuffers, 1) * poolSize},
 		{Type: vk.DescriptorTypeStorageBuffer, DescriptorCount: max(counts.StorageBuffers*poolSize, poolSize/2)},
 		{Type: vk.DescriptorTypeCombinedImageSampler, DescriptorCount: max(counts.Samplers, 1) * poolSize},
-	}
-	if counts.UniformBuffersDynamic > 0 {
-		poolSizes = append(poolSizes, vk.DescriptorPoolSize{
-			Type:            vk.DescriptorTypeUniformBufferDynamic,
-			DescriptorCount: counts.UniformBuffersDynamic * poolSize,
-		})
-	}
-	if counts.StorageBuffersDynamic > 0 {
-		poolSizes = append(poolSizes, vk.DescriptorPoolSize{
-			Type:            vk.DescriptorTypeStorageBufferDynamic,
-			DescriptorCount: counts.StorageBuffersDynamic * poolSize,
-		})
+		{Type: vk.DescriptorTypeUniformBufferDynamic, DescriptorCount: max(counts.UniformBuffersDynamic*poolSize, poolSize/4)},
+		{Type: vk.DescriptorTypeStorageBufferDynamic, DescriptorCount: max(counts.StorageBuffersDynamic*poolSize, poolSize/4)},
 	}
 
 	createInfo := vk.DescriptorPoolCreateInfo{
