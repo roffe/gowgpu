@@ -142,6 +142,7 @@ Not run yet: the browser backend, the BSDs, GL on Windows and real Apple hardwar
 - On GL, new depth, multisampled and compressed textures start with whatever the memory held, so clear them in their first render pass or write all of them. Every other new texture starts zeroed, and on Vulkan, DX12 and Metal all of them do. One catch on Metal with an Apple GPU: a `WriteTexture` into part of a new depth or stencil texture before its first `Submit` gets the zeroing clear on top of it.
 - GL binds bind groups and vertex buffers against the pipeline set at the time, so set the pipeline first; integer vertex formats, index base vertex, `CopyBufferToTexture` row pitch and anything but 2D textures are not done on GL.
 - Render bundles crash on Vulkan in `vkBeginCommandBuffer`.
+- Metal has no compressed texture formats yet, so it doesn't offer `TextureCompressionBC`. It used to offer it, and a BC texture aborted the app.
 - `examples/browser-compute` doesn't build, it was written against an older API.
 
 What's next is in [ROADMAP.md](ROADMAP.md).

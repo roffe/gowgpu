@@ -78,7 +78,9 @@ func (i *Instance) EnumerateAdapters(surfaceHint hal.Surface) []hal.ExposedAdapt
 			features.Insert(gputypes.FeatureTimestampQuery)
 		}
 		features.Insert(gputypes.FeatureDepthClipControl)
-		features.Insert(gputypes.FeatureTextureCompressionBC)
+		// ponytail: no TextureCompressionBC, textureFormatToMTL maps no BC
+		// format and Metal aborts on pixel format 0. Map them (MTLPixelFormat
+		// 130-153) and check supportsBCTextureCompression to offer it.
 
 		adapter := &Adapter{
 			instance:              i,
