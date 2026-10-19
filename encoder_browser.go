@@ -79,10 +79,14 @@ func (e *CommandEncoder) CopyBufferToTexture(src *Buffer, dst *Texture, regions 
 	}
 }
 
-// ClearBuffer clears a buffer region to zero.
+// ClearBuffer zeroes size bytes of buffer from offset on, or the rest of the
+// buffer from offset on when size is 0, as clearBuffer without a size does.
 func (e *CommandEncoder) ClearBuffer(buffer *Buffer, offset, size uint64) {
 	if e.released || buffer == nil {
 		return
+	}
+	if size == 0 && offset <= buffer.Size() {
+		size = buffer.Size() - offset
 	}
 	e.browser.ClearBuffer(buffer.browser.Ref(), offset, size)
 }

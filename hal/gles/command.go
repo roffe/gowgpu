@@ -864,9 +864,19 @@ type ClearBufferCommand struct {
 	size   uint64
 }
 
-func (c *ClearBufferCommand) Execute(_ *gl.Context) {
-	// Note: glClearBufferSubData requires GL 4.3+ / GLES 3.1+.
-	// For older versions, map buffer and memset, or use compute shader.
+// glZeros is what ClearBufferCommand uploads, a piece at a time: GLES 3.0 has
+// no glClearBufferSubData (GL 4.3 / GLES 3.1).
+var glZeros [64 << 10]byte
+
+func (c *ClearBufferCommand) Execute(ctx *gl.Context) {
+	if c.buffer == nil || c.buffer.id == 0 {
+		return
+	}
+	ctx.BindBuffer(gl.COPY_WRITE_BUFFER, c.buffer.id)
+	for off, end := c.offset, c.offset+c.size; off < end; off += uint64(len(glZeros)) {
+		ctx.BufferSubData(gl.COPY_WRITE_BUFFER, int(off), int(min(end-off, uint64(len(glZeros)))), unsafe.Pointer(&glZeros[0]))
+	}
+	ctx.BindBuffer(gl.COPY_WRITE_BUFFER, 0)
 }
 
 // BindVAOCommand binds a vertex array object.

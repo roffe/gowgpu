@@ -968,17 +968,48 @@ func trackRenderPassTextureViews(e *CommandEncoder, desc *RenderPassDescriptor) 
 	}
 }
 
-// ClearBuffer clears a buffer region to zero.
+// ClearBuffer zeroes size bytes of buffer from offset on, or the rest of the
+// buffer from offset on when size is 0, as clearBuffer without a size does.
+// The buffer needs CopyDst, and offset and size are multiples of 4.
 // WebGPU spec: GPUCommandEncoder.clearBuffer.
 func (e *CommandEncoder) ClearBuffer(buffer *Buffer, offset, size uint64) {
-	if e.released || buffer == nil {
+	if e.released {
+		return
+	}
+	if buffer == nil {
+		e.setError(fmt.Errorf("wgpu: CommandEncoder.ClearBuffer: buffer is nil"))
 		return
 	}
 	raw := e.core.RecordingEncoder()
 	if raw == nil {
 		return
 	}
-	raw.ClearBuffer(buffer.halBuffer(), offset, size)
+	halBuffer := buffer.halBuffer()
+	if halBuffer == nil {
+		e.setError(fmt.Errorf("wgpu: CommandEncoder.ClearBuffer: buffer is released: %w", ErrReleased))
+		return
+	}
+	if size == 0 && offset <= buffer.Size() {
+		size = buffer.Size() - offset
+	}
+	switch {
+	case buffer.Usage()&BufferUsageCopyDst == 0:
+		e.setError(fmt.Errorf("wgpu: CommandEncoder.ClearBuffer: buffer missing CopyDst usage"))
+		return
+	case offset%4 != 0 || size%4 != 0:
+		e.setError(fmt.Errorf("wgpu: CommandEncoder.ClearBuffer: offset %d and size %d must be multiples of 4", offset, size))
+		return
+	case offset > buffer.Size() || size > buffer.Size()-offset:
+		e.setError(fmt.Errorf("wgpu: CommandEncoder.ClearBuffer: offset %d + size %d exceeds buffer size %d", offset, size, buffer.Size()))
+		return
+	case size == 0:
+		return // offset is the end of the buffer, nothing to clear
+	}
+	if !e.recordCopyUsages(raw, nil, []copyBufferUsage{{buffer: buffer, usage: track.BufferUsesCopyDst}}) {
+		return
+	}
+	e.trackBuffer(buffer)
+	raw.ClearBuffer(halBuffer, offset, size)
 }
 
 // ResolveQuerySet copies query results into a buffer.

@@ -84,6 +84,10 @@ type Device struct {
 	// across all pipelines that don't provide an explicit PipelineLayout.
 	emptyRootSignature *d3d12.ID3D12RootSignature
 
+	// zeroBuf is what ClearBuffer copies zeros from, see zeroBuffer.
+	zeroBuf   *Buffer
+	zeroBufMu sync.Mutex
+
 	// Debug info queue for validation messages (nil when debug layer is off).
 	infoQueue *d3d12.ID3D12InfoQueue
 
@@ -712,6 +716,26 @@ func (d *Device) getOrCreateEmptyRootSignature() (*d3d12.ID3D12RootSignature, er
 	return rootSig, nil
 }
 
+// zeroBufferSize is the size of the zero buffer ClearBuffer copies from.
+const zeroBufferSize = 256 << 10
+
+// zeroBuffer returns a GPU buffer of zeroBufferSize zeros, made on first use.
+// Nothing writes the zeros: a committed resource made without
+// D3D12_HEAP_FLAG_CREATE_NOT_ZEROED starts zeroed, which Rust's wgpu-hal
+// counts on for its zero buffer too.
+func (d *Device) zeroBuffer() (*Buffer, error) {
+	d.zeroBufMu.Lock()
+	defer d.zeroBufMu.Unlock()
+	if d.zeroBuf == nil {
+		buf, err := d.CreateBuffer(&hal.BufferDescriptor{Label: "(wgpu internal) zero buffer", Size: zeroBufferSize, Usage: gputypes.BufferUsageCopySrc})
+		if err != nil {
+			return nil, err
+		}
+		d.zeroBuf = buf.(*Buffer)
+	}
+	return d.zeroBuf, nil
+}
+
 // checkHealth verifies the device is still alive and logs the current step.
 // Returns an error if the device has been removed.
 func (d *Device) checkHealth(operation string) error {
@@ -942,6 +966,10 @@ func (d *Device) cleanup() {
 	if d.emptyRootSignature != nil {
 		d.emptyRootSignature.Release()
 		d.emptyRootSignature = nil
+	}
+	if d.zeroBuf != nil {
+		d.zeroBuf.Destroy()
+		d.zeroBuf = nil
 	}
 
 	// Release indirect command signatures.

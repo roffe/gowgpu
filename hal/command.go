@@ -44,7 +44,9 @@ type CommandEncoder interface {
 	// This is required on some backends (Vulkan, DX12) but no-op on others (Metal).
 	TransitionTextures(barriers []TextureBarrier)
 
-	// ClearBuffer clears a buffer region to zero.
+	// ClearBuffer clears a buffer region to zero. The core has checked the
+	// range: offset and size are multiples of 4, size is not 0, and the
+	// buffer is in the copy destination state.
 	ClearBuffer(buffer Buffer, offset, size uint64)
 
 	// CopyBufferToBuffer copies data between buffers.
