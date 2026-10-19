@@ -209,3 +209,26 @@ func TestBlockCopySizeCoversAllFormats(t *testing.T) {
 		}
 	}
 }
+
+func TestTextureFormat_BlockDimensions(t *testing.T) {
+	for _, tt := range []struct {
+		format TextureFormat
+		w, h   uint32
+	}{
+		{TextureFormatRGBA8Unorm, 1, 1},
+		{TextureFormatDepth24PlusStencil8, 1, 1},
+		{TextureFormatBC1RGBAUnorm, 4, 4},
+		{TextureFormatBC7RGBAUnormSrgb, 4, 4},
+		{TextureFormatETC2RGB8Unorm, 4, 4},
+		{TextureFormatEACRG11Snorm, 4, 4},
+		{TextureFormatASTC4x4Unorm, 4, 4},
+		{TextureFormatASTC5x4UnormSrgb, 5, 4},
+		{TextureFormatASTC8x6Unorm, 8, 6},
+		{TextureFormatASTC10x8UnormSrgb, 10, 8},
+		{TextureFormatASTC12x12UnormSrgb, 12, 12},
+	} {
+		if w, h := tt.format.BlockDimensions(); w != tt.w || h != tt.h {
+			t.Errorf("TextureFormat(%s).BlockDimensions() = %dx%d, want %dx%d", tt.format, w, h, tt.w, tt.h)
+		}
+	}
+}

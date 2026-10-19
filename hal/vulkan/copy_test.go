@@ -47,3 +47,27 @@ func TestConvertBufferImageCopyRegionsUsesDepthFor3DTextures(t *testing.T) {
 		t.Fatalf("depth offset+extent = %d+%d, want 1+2", got.ImageOffset.Z, got.ImageExtent.Depth)
 	}
 }
+
+// bufferRowLength counts texels: a row of 256 bytes of BC1 is 32 blocks of
+// 8 bytes, 128 texels, not 32.
+func TestConvertBufferImageCopyRegionsCompressedRowLength(t *testing.T) {
+	regions := []hal.BufferTextureCopy{{
+		BufferLayout: hal.ImageDataLayout{BytesPerRow: 256},
+		TextureBase:  hal.ImageCopyTexture{Aspect: gputypes.TextureAspectAll},
+		Size:         hal.Extent3D{Width: 64, Height: 8, DepthOrArrayLayers: 1},
+	}}
+	for _, tc := range []struct {
+		format gputypes.TextureFormat
+		want   uint32
+	}{
+		{gputypes.TextureFormatRGBA8Unorm, 64},
+		{gputypes.TextureFormatBC1RGBAUnorm, 128},
+		{gputypes.TextureFormatBC7RGBAUnorm, 64},
+		{gputypes.TextureFormatASTC10x8Unorm, 160},
+	} {
+		got := convertBufferImageCopyRegions(nil, regions, tc.format, gputypes.TextureDimension2D)[0].BufferRowLength
+		if got != tc.want {
+			t.Errorf("%s: bufferRowLength = %d, want %d", tc.format, got, tc.want)
+		}
+	}
+}

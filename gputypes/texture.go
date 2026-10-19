@@ -678,6 +678,29 @@ func (f TextureFormat) BlockCopySize() uint32 {
 	}
 }
 
+// astcBlocks are the block sizes of the ASTC formats, in their order, each
+// with a Unorm and a UnormSrgb format.
+var astcBlocks = [...][2]uint32{
+	{4, 4}, {5, 4}, {5, 5}, {6, 5}, {6, 6}, {8, 5}, {8, 6},
+	{8, 8}, {10, 5}, {10, 6}, {10, 8}, {10, 10}, {12, 10}, {12, 12},
+}
+
+// BlockDimensions returns the width and height in texels of one texel block
+// of this format: 4x4 for BC and ETC2/EAC, the format's block for ASTC and
+// 1x1 for everything else.
+//
+// Reference: Rust wgpu-types TextureFormat::block_dimensions().
+func (f TextureFormat) BlockDimensions() (width, height uint32) {
+	switch {
+	case f >= TextureFormatBC1RGBAUnorm && f <= TextureFormatEACRG11Snorm:
+		return 4, 4
+	case f >= TextureFormatASTC4x4Unorm && f <= TextureFormatASTC12x12UnormSrgb:
+		b := astcBlocks[(f-TextureFormatASTC4x4Unorm)/2]
+		return b[0], b[1]
+	}
+	return 1, 1
+}
+
 // TextureDimension describes texture dimensions.
 type TextureDimension uint32
 

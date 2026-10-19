@@ -699,6 +699,7 @@ func TestTextureAspectToVk(t *testing.T) {
 			vk.ImageAspectFlags(vk.ImageAspectDepthBit) | vk.ImageAspectFlags(vk.ImageAspectStencilBit),
 		},
 		{"All depth only", gputypes.TextureAspectAll, gputypes.TextureFormatDepth32Float, vk.ImageAspectFlags(vk.ImageAspectDepthBit)},
+		{"All stencil only", gputypes.TextureAspectAll, gputypes.TextureFormatStencil8, vk.ImageAspectFlags(vk.ImageAspectStencilBit)},
 		{"Unknown defaults to Color", gputypes.TextureAspect(99), gputypes.TextureFormatRGBA8Unorm, vk.ImageAspectFlags(vk.ImageAspectColorBit)},
 	}
 

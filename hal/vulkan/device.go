@@ -561,9 +561,10 @@ func (d *Device) CreateTexture(desc *hal.TextureDescriptor) (hal.Texture, error)
 		vkUsage |= vk.ImageUsageFlags(vk.ImageUsageDepthStencilAttachmentBit)
 	}
 
-	// Determine depth/array layers
+	// Determine depth/array layers. A 1D or 2D image is one texel deep, its
+	// layers are array layers.
 	depth := desc.Size.DepthOrArrayLayers
-	if depth == 0 {
+	if depth == 0 || desc.Dimension != gputypes.TextureDimension3D {
 		depth = 1
 	}
 	mipLevels := desc.MipLevelCount
@@ -810,6 +811,10 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 		isSwapchain = true
 	}
 
+	// A pass renders a view at the size of its first mip level: the
+	// framebuffer may not be bigger than its attachments.
+	textureSize.Width = max(textureSize.Width>>desc.BaseMipLevel, 1)
+	textureSize.Height = max(textureSize.Height>>desc.BaseMipLevel, 1)
 	tv := &TextureView{
 		handle:      imageView,
 		texture:     texRef,

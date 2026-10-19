@@ -797,14 +797,16 @@ func convertBufferImageCopyRegions(dst []vk.BufferImageCopy, regions []hal.Buffe
 	if blockSize == 0 {
 		blockSize = 4
 	}
+	blockWidth, _ := format.BlockDimensions()
 	for i, r := range regions {
 		// Vulkan bufferRowLength is in TEXELS, not bytes.
 		// Convert from WebGPU's BytesPerRow (bytes) to Vulkan's bufferRowLength (texels)
 		// using the format's known block size — NOT inference from BytesPerRow/Width,
-		// which gives wrong results when BytesPerRow is padded to alignment.
+		// which gives wrong results when BytesPerRow is padded to alignment. A
+		// block of a compressed format is blockWidth texels wide.
 		bufferRowLength := uint32(0)
 		if r.BufferLayout.BytesPerRow > 0 {
-			bufferRowLength = r.BufferLayout.BytesPerRow / blockSize
+			bufferRowLength = r.BufferLayout.BytesPerRow / blockSize * blockWidth
 		}
 		baseArrayLayer := uint32(0)
 		layerCount := uint32(1)

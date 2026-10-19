@@ -573,7 +573,10 @@ func textureAspectToVk(aspect gputypes.TextureAspect, format gputypes.TextureFor
 		// TextureAspectAll and TextureAspectUndefined both derive
 		// the correct aspect mask from the texture format.
 		if isDepthStencilFormat(format) {
-			flags := vk.ImageAspectFlags(vk.ImageAspectDepthBit)
+			var flags vk.ImageAspectFlags
+			if format.HasDepth() { // not Stencil8
+				flags |= vk.ImageAspectFlags(vk.ImageAspectDepthBit)
+			}
 			if hasStencilAspect(format) {
 				flags |= vk.ImageAspectFlags(vk.ImageAspectStencilBit)
 			}
