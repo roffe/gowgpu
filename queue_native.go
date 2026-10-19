@@ -189,8 +189,10 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (uint64, error) {
 				encoder:         flushedEncoder,
 				dstTextures:     flushedDstTextures,
 				dstBuffers:      flushedDstBuffers,
+				views:           q.pending.flushedViews,
 			})
 		}
+		q.pending.flushedViews = nil
 		// Update the staging belt with the actual submission index
 		// (belt.finish() was called during flush() before Submit).
 		if q.pending.belt != nil {

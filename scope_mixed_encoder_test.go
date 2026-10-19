@@ -30,7 +30,8 @@ func TestReleasedTextureIndexReuseBeforeSubmit(t *testing.T) {
 		SampleCount:   1,
 		Dimension:     TextureDimension2D,
 		Format:        TextureFormatRGBA8Unorm,
-		// No TextureBinding: nothing queues a zeroing write for it.
+		// No TextureBinding: a pass zeroes it at the next flush, which the
+		// rejected Submit below never gets to.
 		Usage: TextureUsageRenderAttachment | TextureUsageCopySrc,
 	}
 	a, err := device.CreateTexture(desc)

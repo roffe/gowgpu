@@ -125,8 +125,14 @@ func (d *Device) CreateTexture(desc *TextureDescriptor) (*Texture, error) {
 	if err := core.ValidateTextureDescriptor(halDesc, d.core.Limits, d.core.Features); err != nil {
 		return nil, err
 	}
-	zero := d.queue != nil && d.queue.pending != nil && zeroableTexture(halDesc)
-	if zero {
+	var zero, pass bool
+	if d.queue != nil && d.queue.pending != nil {
+		zero, pass = zeroableTexture(halDesc, d.queue.pending.usesBatching)
+	}
+	switch {
+	case zero && pass:
+		halDesc.Usage |= gputypes.TextureUsageRenderAttachment // for the pass that clears it
+	case zero:
 		halDesc.Usage |= gputypes.TextureUsageCopyDst // for the copy that zeroes it
 	}
 

@@ -115,6 +115,12 @@ type pendingWrites struct {
 	// it off without zeroing.
 	zero map[*Texture]struct{}
 
+	// views are what the passes that zero textures in the batch render to
+	// (clearTextureLocked). flush hands them to flushedViews, which Submit
+	// puts in flight with the batch, and they are destroyed once the GPU is
+	// done with it.
+	views, flushedViews []hal.TextureView
+
 	// Scratch reused under pw.mu, so a steady stream of flushes allocates
 	// nothing: flush's barrier list, maintain's one element command buffer
 	// list for ResetAll, and the destination lists of completed inflight
@@ -177,6 +183,9 @@ type inflightSubmission struct {
 	// executing commands that reference them. Root cause of DX12 TDR (BUG-DX12-006).
 	dstTextures []hal.Texture
 	dstBuffers  []hal.Buffer
+	// views are the views of the passes that zeroed textures, see
+	// pendingWrites.views.
+	views []hal.TextureView
 }
 
 // newPendingWrites creates a pendingWrites for the given HAL device and queue.
@@ -503,17 +512,22 @@ func (pw *pendingWrites) copyToTextureLocked(
 		}
 	}
 
-	// Track destination texture. AddPendingRef prevents premature Destroy (BUG-DX12-006).
 	// Staging buffer is managed by the belt (not tracked individually).
-	if _, already := pw.dstTextures[dst.Texture]; !already {
-		dst.Texture.AddPendingRef()
-		pw.dstTextures[dst.Texture] = struct{}{}
-	}
-	if owner != nil && !pw.hasOwner(dst.Texture, owner) {
-		pw.dstOwners = append(pw.dstOwners, dstOwner{raw: dst.Texture, owner: owner})
-	}
-
+	pw.trackDst(owner, dst.Texture)
 	return nil
+}
+
+// trackDst keeps raw, a texture the batch writes, alive until the GPU is done
+// with the batch: AddPendingRef prevents premature Destroy (BUG-DX12-006). And
+// it lists owner for the check at flush.
+func (pw *pendingWrites) trackDst(owner *Texture, raw hal.Texture) {
+	if _, already := pw.dstTextures[raw]; !already {
+		raw.AddPendingRef()
+		pw.dstTextures[raw] = struct{}{}
+	}
+	if owner != nil && !pw.hasOwner(raw, owner) {
+		pw.dstOwners = append(pw.dstOwners, dstOwner{raw: raw, owner: owner})
+	}
 }
 
 // textureUsage is the usage the texture was made with, or the surface
@@ -582,15 +596,36 @@ func textureCopyRange(owner *Texture, dst *hal.ImageCopyTexture, size *hal.Exten
 }
 
 // zeroableTexture reports whether a texture made from desc gets zeroed through
-// the pending writes: an uncompressed color format, one sample, and sampled
-// usage, the state those writes leave a texture in.
-// ponytail: depth, multisampled, compressed and unsampled textures still start
-// with old memory; they need a clear on the HAL side (a render pass or a fill).
-func zeroableTexture(desc *hal.TextureDescriptor) bool {
-	return desc.Format != gputypes.TextureFormatUndefined &&
-		desc.Format <= gputypes.TextureFormatRGBA32Sint && // the color formats in webgpu.h order
-		desc.SampleCount <= 1 &&
-		desc.Usage&gputypes.TextureUsageTextureBinding != 0
+// the pending writes, and whether by a pass (zeroByPass) rather than by
+// copies, which take a color format with a copy size and one sample.
+// ponytail: GL writes to textures straight away instead of recording the
+// writes, so it zeroes uncompressed color textures from the CPU and leaves
+// depth, multisampled and compressed ones with old memory: the GL HAL has no
+// depth-only passes and no compressed uploads, and a clear pass would need
+// an encoder of its own, submitted ahead of the rest.
+func zeroableTexture(desc *hal.TextureDescriptor, batching bool) (zero, pass bool) {
+	f := desc.Format
+	color := !f.IsDepthStencil() && desc.SampleCount <= 1 && f.BlockCopySize() != 0
+	pass = zeroByPass(f, desc.Dimension, desc.SampleCount, desc.Usage)
+	switch {
+	case !batching:
+		return color && f <= gputypes.TextureFormatRGBA32Sint, pass // the uncompressed ones, in webgpu.h order
+	case pass:
+		return desc.Dimension == gputypes.TextureDimension2D, true
+	}
+	return color, false
+}
+
+// zeroByPass reports whether a new texture is zeroed by a render pass that
+// clears it and stores, as Rust wgpu-core clears render attachments: depth
+// and stencil, which a copy takes an aspect at a time if at all, multisampled
+// textures, which no copy reaches, and 2D render targets nothing samples or
+// copies into, which then needn't become copy destinations. Anything else is
+// zeroed by copies.
+func zeroByPass(f gputypes.TextureFormat, dim gputypes.TextureDimension, samples uint32, usage gputypes.TextureUsage) bool {
+	return f.IsDepthStencil() || samples > 1 ||
+		dim == gputypes.TextureDimension2D && usage&gputypes.TextureUsageRenderAttachment != 0 &&
+			usage&(gputypes.TextureUsageTextureBinding|gputypes.TextureUsageCopyDst) == 0
 }
 
 // queueZero puts a new texture on the list of textures to zero.
@@ -611,11 +646,13 @@ func (pw *pendingWrites) forgetZero(t *Texture) {
 }
 
 // coversTexture reports whether a write of size at dst sets every texel of t.
+// A write sets one aspect of a depth/stencil format, never both.
 func coversTexture(t *Texture, dst *hal.ImageCopyTexture, size *hal.Extent3D) bool {
-	s := t.coreTexture.Size()
+	s, f := t.coreTexture.Size(), t.coreTexture.Format()
 	return t.coreTexture.MipLevelCount() <= 1 && dst.MipLevel == 0 && dst.Origin == (hal.Origin3D{}) &&
 		size.Width == s.Width && size.Height == s.Height &&
-		max(size.DepthOrArrayLayers, 1) == max(s.DepthOrArrayLayers, 1)
+		max(size.DepthOrArrayLayers, 1) == max(s.DepthOrArrayLayers, 1) &&
+		(!f.HasDepth() || !f.HasStencil())
 }
 
 // zeroBand is how many bytes of a texture are zeroed at a time, some rows of
@@ -630,21 +667,34 @@ func (pw *pendingWrites) zeroTextureLocked(t *Texture) error {
 		return nil
 	}
 	// A host-writable texture takes writes on the CPU straight away, which a
-	// copy made at the submit would land on top of.
+	// copy made at the submit would land on top of, and GL writes nothing any
+	// other way. Both zero a color render target from the CPU too.
+	// ponytail: a depth texture gets its clear pass even when it is
+	// host-writable (Metal on Apple GPUs), so a WriteTexture into part of
+	// one before its first submit lands under the clear.
 	hw, ok := raw.(interface{ IsHostWritable() bool })
-	copyZeros := pw.usesBatching && !(ok && hw.IsHostWritable())
+	cpu := !pw.usesBatching || ok && hw.IsHostWritable()
 	ct := t.coreTexture
+	f := ct.Format()
+	if zeroByPass(f, ct.Dimension(), ct.SampleCount(), ct.Usage()) && (!cpu || f.IsDepthStencil()) {
+		return pw.clearTextureLocked(t, raw)
+	}
 	s := ct.Size()
-	bpp := ct.Format().BlockCopySize()
+	// The copies go by rows of blocks, which a compressed format makes 4 or
+	// more texels high, and stop at the edge of the mip level, where a block
+	// may stick out.
+	bw, bh := f.BlockDimensions()
+	blockSize := f.BlockCopySize()
 	for mip := range max(ct.MipLevelCount(), 1) {
 		w, h, layers := max(s.Width>>mip, 1), max(s.Height>>mip, 1), max(s.DepthOrArrayLayers, 1)
 		if ct.Dimension() == gputypes.TextureDimension3D {
 			layers = max(layers>>mip, 1)
 		}
-		bytesPerRow := alignUp(w*bpp, pendingWritesRowPitchAlignment)
-		rows := min(h, max(zeroBand/bytesPerRow, 1))
+		blockRows := (h + bh - 1) / bh
+		bytesPerRow := alignUp((w+bw-1)/bw*blockSize, pendingWritesRowPitchAlignment)
+		rows := min(blockRows, max(zeroBand/bytesPerRow, 1))
 		var zeroBuf hal.Buffer
-		if copyZeros && bytesPerRow <= zeroBand {
+		if !cpu && bytesPerRow <= zeroBand {
 			var err error
 			if zeroBuf, err = pw.zeroBuffer(); err != nil {
 				return fmt.Errorf("wgpu: zero new texture: %w", err)
@@ -653,13 +703,22 @@ func (pw *pendingWrites) zeroTextureLocked(t *Texture) error {
 			pw.zeros = make([]byte, n)
 		}
 		for z := range layers {
-			for y := uint32(0); y < h; y += rows {
-				n := min(rows, h-y)
+			// The tracker knows the texture as a whole, which the copies of
+			// the levels and layers before moved on, while this one is still
+			// as the texture was made, where its first copy starts. A level
+			// of a 3D texture is one subresource, every slice of it.
+			if idx, ok := pw.trackedIndex(t); ok && !cpu && (z == 0 || ct.Dimension() != gputypes.TextureDimension3D) {
+				pw.tracker.InsertTexture(idx, track.TextureUsesUninitialized)
+			}
+			for r := uint32(0); r < blockRows; r += rows {
+				n, y := min(rows, blockRows-r), r*bh
 				dst := hal.ImageCopyTexture{Texture: raw, MipLevel: mip, Origin: hal.Origin3D{Y: y, Z: z}, Aspect: gputypes.TextureAspectAll}
-				size := hal.Extent3D{Width: w, Height: n, DepthOrArrayLayers: 1}
+				size := hal.Extent3D{Width: w, Height: min(n*bh, h-y), DepthOrArrayLayers: 1}
 				var err error
 				if zeroBuf != nil {
-					err = pw.copyToTextureLocked(t, &dst, zeroBuf, 0, bytesPerRow, n, &size)
+					// RowsPerImage 0: the copy is one image, and the HALs
+					// don't count the rows of a compressed format alike.
+					err = pw.copyToTextureLocked(t, &dst, zeroBuf, 0, bytesPerRow, 0, &size)
 				} else {
 					layout := hal.ImageDataLayout{BytesPerRow: bytesPerRow, RowsPerImage: n}
 					err = pw.writeTextureLocked(t, &dst, pw.zeros[:bytesPerRow*n], &layout, &size)
@@ -671,6 +730,72 @@ func (pw *pendingWrites) zeroTextureLocked(t *Texture) error {
 		}
 	}
 	return nil
+}
+
+// clearTextureLocked zeroes t, a 2D texture, with a render pass per mip level
+// and layer that clears it (color 0, depth 0, stencil 0) and stores, as Rust
+// wgpu-core's clear_texture_via_render_passes does. A texture on the zero
+// list was made after the last submit and nothing in the batch touched it, so
+// the passes start from the state it was made in. pw.mu is held and
+// usesBatching is set.
+func (pw *pendingWrites) clearTextureLocked(t *Texture, raw hal.Texture) error {
+	enc, err := pw.activate()
+	if err != nil {
+		return fmt.Errorf("wgpu: pending writes: activate encoder: %w", err)
+	}
+	ct := t.coreTexture
+	f := ct.Format()
+	layers := max(ct.Size().DepthOrArrayLayers, 1)
+	dim := gputypes.TextureViewDimension2D
+	if layers > 1 {
+		dim = gputypes.TextureViewDimension2DArray // a 2D view is the first layer on DX12
+	}
+	for mip := range max(ct.MipLevelCount(), 1) {
+		for layer := range layers {
+			view, err := pw.halDevice.CreateTextureView(raw, &hal.TextureViewDescriptor{
+				Label:     "(wgpu internal) clear view",
+				Dimension: dim, BaseMipLevel: mip, MipLevelCount: 1, BaseArrayLayer: layer, ArrayLayerCount: 1,
+			})
+			if err != nil {
+				return fmt.Errorf("wgpu: zero new texture: %w", err)
+			}
+			pw.views = append(pw.views, view)
+			desc := &hal.RenderPassDescriptor{Label: "(wgpu internal) clear pass"}
+			if f.IsDepthStencil() {
+				ds := &hal.RenderPassDepthStencilAttachment{View: view}
+				if f.HasDepth() {
+					ds.DepthLoadOp, ds.DepthStoreOp = gputypes.LoadOpClear, gputypes.StoreOpStore
+				}
+				if f.HasStencil() {
+					ds.StencilLoadOp, ds.StencilStoreOp = gputypes.LoadOpClear, gputypes.StoreOpStore
+				}
+				desc.DepthStencilAttachment = ds
+			} else {
+				desc.ColorAttachments = []hal.RenderPassColorAttachment{{View: view, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore}}
+			}
+			if pass := enc.BeginRenderPass(desc); pass != nil {
+				pass.End()
+			}
+		}
+	}
+	// The passes leave it an attachment, which is where the barriers of the
+	// writes and submits that follow start.
+	if idx, ok := pw.trackedIndex(t); ok {
+		uses := track.TextureUsesColorTarget
+		if f.IsDepthStencil() {
+			uses = track.TextureUsesDepthStencilWrite
+		}
+		pw.tracker.InsertTexture(idx, uses)
+	}
+	pw.trackDst(t, raw)
+	return nil
+}
+
+// destroyViews destroys views the GPU is done with, or never got.
+func (pw *pendingWrites) destroyViews(views []hal.TextureView) {
+	for _, v := range views {
+		pw.halDevice.DestroyTextureView(v)
+	}
 }
 
 // zeroBuffer returns the zeroBand bytes of zeros that textures are zeroed
@@ -925,6 +1050,7 @@ func (pw *pendingWrites) flush() (hal.CommandBuffer, hal.CommandEncoder, []hal.T
 	clear(pw.dstBuffers)
 	clear(pw.dstTextures)
 	pw.clearOwners()
+	pw.flushedViews, pw.views = pw.views, nil
 
 	return cmdBuf, flushedEncoder, flushedDstTextures, flushedDstBuffers, nil
 }
@@ -950,6 +1076,8 @@ func (pw *pendingWrites) discardRecording() {
 		}
 	}
 
+	pw.destroyViews(pw.views)
+	pw.views = nil
 	for raw := range pw.dstTextures {
 		raw.DecPendingRef()
 	}
@@ -983,6 +1111,8 @@ func (pw *pendingWrites) cancelFlush(cmdBuf hal.CommandBuffer, encoder hal.Comma
 	} else if cmdBuf != nil {
 		pw.halDevice.FreeCommandBuffer(cmdBuf)
 	}
+	pw.destroyViews(pw.flushedViews)
+	pw.flushedViews = nil
 }
 
 // maintain frees staging buffers and returns encoders to the pool from
@@ -1005,6 +1135,7 @@ func (pw *pendingWrites) maintain(completedIndex uint64) {
 		for _, buf := range sub.staging {
 			pw.halDevice.DestroyBuffer(buf)
 		}
+		pw.destroyViews(sub.views)
 		// Release pending refs on destination textures/buffers (BUG-DX12-006).
 		// This allows deferred Destroy to proceed now that GPU is done.
 		for _, tex := range sub.dstTextures {
@@ -1065,6 +1196,7 @@ func (pw *pendingWrites) destroy() {
 		} else if sub.cmdBuf != nil {
 			pw.halDevice.FreeCommandBuffer(sub.cmdBuf)
 		}
+		pw.destroyViews(sub.views)
 		for _, tex := range sub.dstTextures {
 			tex.DecPendingRef()
 		}

@@ -557,12 +557,21 @@ func forgetClearedTextures(d *Device, desc *RenderPassDescriptor) {
 	if desc == nil || d == nil || d.queue == nil || d.queue.pending == nil {
 		return
 	}
-	for _, ca := range desc.ColorAttachments {
-		if ca.LoadOp != gputypes.LoadOpClear || ca.View == nil || ca.View.texture == nil {
-			continue
+	forget := func(t *Texture) {
+		if ct := t.coreTexture; ct != nil && ct.MipLevelCount() <= 1 && ct.Size().DepthOrArrayLayers <= 1 {
+			d.queue.pending.forgetZero(t)
 		}
-		if ct := ca.View.texture.coreTexture; ct != nil && ct.MipLevelCount() <= 1 && ct.Size().DepthOrArrayLayers <= 1 {
-			d.queue.pending.forgetZero(ca.View.texture)
+	}
+	for _, ca := range desc.ColorAttachments {
+		if ca.LoadOp == gputypes.LoadOpClear && ca.View != nil && ca.View.texture != nil {
+			forget(ca.View.texture)
+		}
+	}
+	// A depth/stencil attachment, when the pass clears each aspect it has.
+	if ds := desc.DepthStencilAttachment; ds != nil && ds.View != nil && ds.View.texture != nil {
+		f := ds.View.texture.format
+		if (!f.HasDepth() || ds.DepthLoadOp == gputypes.LoadOpClear) && (!f.HasStencil() || ds.StencilLoadOp == gputypes.LoadOpClear) {
+			forget(ds.View.texture)
 		}
 	}
 }

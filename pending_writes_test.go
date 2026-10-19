@@ -1215,3 +1215,43 @@ func (*stubTexture) NativeHandle() uintptr               { return 0 }
 func (*stubTexture) CurrentUsage() gputypes.TextureUsage { return 0 }
 func (*stubTexture) AddPendingRef()                      {}
 func (*stubTexture) DecPendingRef()                      {}
+
+// Which new textures get zeroed, and how: copies for color, a clearing pass
+// for what copies can't reach and for render targets nothing samples or
+// copies into. GL has no passes and no compressed uploads.
+func TestZeroableTexture(t *testing.T) {
+	const (
+		rt      = gputypes.TextureUsageRenderAttachment
+		sampled = gputypes.TextureUsageTextureBinding
+		dst     = gputypes.TextureUsageCopyDst
+	)
+	for _, tc := range []struct {
+		name       string
+		format     gputypes.TextureFormat
+		dim        gputypes.TextureDimension
+		samples    uint32
+		usage      gputypes.TextureUsage
+		batching   bool
+		zero, pass bool
+	}{
+		{"sampled", gputypes.TextureFormatRGBA8Unorm, gputypes.TextureDimension2D, 1, sampled, true, true, false},
+		{"storage", gputypes.TextureFormatRGBA8Unorm, gputypes.TextureDimension2D, 1, gputypes.TextureUsageStorageBinding, true, true, false},
+		{"render target", gputypes.TextureFormatRGBA8Unorm, gputypes.TextureDimension2D, 1, rt, true, true, true},
+		{"sampled render target", gputypes.TextureFormatRGBA8Unorm, gputypes.TextureDimension2D, 1, rt | sampled, true, true, false},
+		{"render target copied into", gputypes.TextureFormatRGBA8Unorm, gputypes.TextureDimension2D, 1, rt | dst, true, true, false},
+		{"3D render target", gputypes.TextureFormatRGBA8Unorm, gputypes.TextureDimension3D, 1, rt, true, true, false},
+		{"multisampled", gputypes.TextureFormatRGBA8Unorm, gputypes.TextureDimension2D, 4, rt, true, true, true},
+		{"depth", gputypes.TextureFormatDepth24PlusStencil8, gputypes.TextureDimension2D, 1, sampled, true, true, true},
+		{"compressed", gputypes.TextureFormatBC7RGBAUnorm, gputypes.TextureDimension2D, 1, sampled | dst, true, true, false},
+		{"GL sampled", gputypes.TextureFormatRGBA8Unorm, gputypes.TextureDimension2D, 1, sampled, false, true, false},
+		{"GL render target", gputypes.TextureFormatRGBA8Unorm, gputypes.TextureDimension2D, 1, rt, false, true, true},
+		{"GL multisampled", gputypes.TextureFormatRGBA8Unorm, gputypes.TextureDimension2D, 4, rt, false, false, true},
+		{"GL depth", gputypes.TextureFormatDepth32Float, gputypes.TextureDimension2D, 1, rt, false, false, true},
+		{"GL compressed", gputypes.TextureFormatBC1RGBAUnorm, gputypes.TextureDimension2D, 1, sampled, false, false, false},
+	} {
+		desc := &hal.TextureDescriptor{Format: tc.format, Dimension: tc.dim, SampleCount: tc.samples, Usage: tc.usage}
+		if zero, pass := zeroableTexture(desc, tc.batching); zero != tc.zero || zero && pass != tc.pass {
+			t.Errorf("%s: zero, pass = %v, %v, want %v, %v", tc.name, zero, pass, tc.zero, tc.pass)
+		}
+	}
+}

@@ -86,6 +86,13 @@ func testBackends() (gputypes.Backends, bool) {
 // captured. Without the validation layer installed the capture stays empty.
 func newValidatedDevice(t *testing.T) (*Device, *captureHandler) {
 	t.Helper()
+	return newValidatedDeviceWith(t, 0)
+}
+
+// newValidatedDeviceWith is newValidatedDevice with features turned on. It
+// skips when the adapter lacks them.
+func newValidatedDeviceWith(t *testing.T, features gputypes.Features) (*Device, *captureHandler) {
+	t.Helper()
 	h := &captureHandler{}
 	prev := hal.Logger()
 	hal.SetLogger(slog.New(h))
@@ -103,7 +110,10 @@ func newValidatedDevice(t *testing.T) (*Device, *captureHandler) {
 		}
 		t.Fatalf("RequestAdapter: %v", err)
 	}
-	device, err := adapter.RequestDevice(nil)
+	if !adapter.Features().ContainsAll(features) {
+		t.Skipf("%s on %s lacks features %#x", adapter.Info().Backend, adapter.Info().Name, uint64(features&^adapter.Features()))
+	}
+	device, err := adapter.RequestDevice(&DeviceDescriptor{RequiredFeatures: features})
 	if err != nil {
 		t.Fatalf("RequestDevice: %v", err)
 	}
@@ -256,17 +266,16 @@ var (
 // prove the HAL command buffers execute in [before, transit, pass, after]
 // order with the barriers in the right places.
 //
-// "unzeroed" gives U no TextureBinding, so nothing zeroes it and its first
-// use is the copy: the submit barrier takes it there from the uninitialized
-// state it was tracked in since creation. "zeroed" has the zeroing leave it
-// sampled first.
+// "unsampled" gives U no TextureBinding: the zeroing in the same submit
+// leaves it a copy destination, and the copy into it waits for the zeroing's.
+// "sampled" is zeroed in a submit of its own first, which leaves it sampled.
 func TestRenderCopyRenderPixels(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		midUsage gputypes.TextureUsage
 	}{
-		{"unzeroed", TextureUsageCopyDst | TextureUsageCopySrc},
-		{"zeroed", TextureUsageCopyDst | TextureUsageCopySrc | TextureUsageTextureBinding},
+		{"unsampled", TextureUsageCopyDst | TextureUsageCopySrc},
+		{"sampled", TextureUsageCopyDst | TextureUsageCopySrc | TextureUsageTextureBinding},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			device, h := newValidatedDevice(t)
@@ -277,7 +286,7 @@ func TestRenderCopyRenderPixels(t *testing.T) {
 			defer releaseTextureView(mid, midView)
 			stT := readbackBuffer(t, device, "rcr-stT")
 			stU := readbackBuffer(t, device, "rcr-stU")
-			if tc.name == "zeroed" {
+			if tc.name == "sampled" {
 				// Flush the zeroing in a submit of its own, so the barriers
 				// below are all tracker barriers.
 				device.Queue().Submit()
@@ -316,17 +325,18 @@ func TestRenderCopyRenderPixels(t *testing.T) {
 
 // TestUploadThenLoadPassPreservesPixels: CopyBufferToTexture into T, then a
 // LoadOp Load pass on T (split, CopyDst -> ColorTarget ahead of it), then
-// copy out. The pass must see the upload. "unzeroed" (no TextureBinding)
-// gets its submit barrier from the uninitialized state into the copy;
-// "zeroed" from the sampled state the zeroing leaves, and its Load pass
-// starts in GENERAL, the layout a sampled colour target ends in.
+// copy out. The pass must see the upload. "unsampled" (no TextureBinding)
+// is zeroed in the same submit, which leaves it a copy destination, so its
+// submit barrier is between that copy and the upload; "sampled" starts from
+// the sampled state the zeroing in a submit of its own leaves, and its Load
+// pass starts in GENERAL, the layout a sampled color target ends in.
 func TestUploadThenLoadPassPreservesPixels(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		usage gputypes.TextureUsage
 	}{
-		{"unzeroed", TextureUsageRenderAttachment | TextureUsageCopyDst | TextureUsageCopySrc},
-		{"zeroed", TextureUsageRenderAttachment | TextureUsageCopyDst | TextureUsageCopySrc | TextureUsageTextureBinding},
+		{"unsampled", TextureUsageRenderAttachment | TextureUsageCopyDst | TextureUsageCopySrc},
+		{"sampled", TextureUsageRenderAttachment | TextureUsageCopyDst | TextureUsageCopySrc | TextureUsageTextureBinding},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			device, h := newValidatedDevice(t)
@@ -352,7 +362,7 @@ func TestUploadThenLoadPassPreservesPixels(t *testing.T) {
 				t.Fatalf("WriteBuffer: %v", err)
 			}
 			st := readbackBuffer(t, device, "upload-load-st")
-			if tc.name == "zeroed" {
+			if tc.name == "sampled" {
 				device.Queue().Submit()
 			}
 
