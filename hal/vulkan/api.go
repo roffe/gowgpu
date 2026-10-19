@@ -7,6 +7,7 @@ package vulkan
 
 import (
 	"fmt"
+	"os"
 	"runtime"
 	"strings"
 	"unsafe"
@@ -27,6 +28,22 @@ type Backend struct{}
 // NewBackend returns a Vulkan backend instance.
 func NewBackend() Backend { return Backend{} }
 
+// disableRTSSLayer switches off RivaTuner's implicit Vulkan layer for this
+// process on Windows, unless DISABLE_RTSS_LAYER is already set. The layer
+// crashed vkCreateDevice in every gowgpu app on a Windows 11 machine with an
+// RTX 5080 (RTSSVkLayer64.dll, read of address 0), and an FPS overlay has no
+// business here anyway. The loader reads the variable through
+// GetEnvironmentVariableW when it builds the layer list at instance creation,
+// so setting it now is enough, and any value disables the layer.
+func disableRTSSLayer() {
+	if runtime.GOOS != "windows" {
+		return
+	}
+	if _, set := os.LookupEnv("DISABLE_RTSS_LAYER"); !set {
+		_ = os.Setenv("DISABLE_RTSS_LAYER", "1")
+	}
+}
+
 // Variant returns the backend type identifier.
 func (Backend) Variant() gputypes.Backend {
 	return gputypes.BackendVulkan
@@ -34,6 +51,7 @@ func (Backend) Variant() gputypes.Backend {
 
 // CreateInstance creates a new Vulkan instance.
 func (Backend) CreateInstance(desc *hal.InstanceDescriptor) (hal.Instance, error) {
+	disableRTSSLayer()
 	platform, err := newPlatformInstanceState(desc)
 	if err != nil {
 		return nil, err

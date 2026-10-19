@@ -153,6 +153,7 @@ What's next is in [ROADMAP.md](ROADMAP.md).
 | `GOGPU_DX12_DXIL=1` | DX12 compiles shaders to DXIL with naga instead of going HLSL through FXC (`d3dcompiler_47.dll`) |
 | `GOGPU_DX12_DXIL_VALIDATE=1` | runs the DXC validator on every DXIL blob, so the real error ends up in the log |
 | `GOGPU_DX12_FORCE_HWND=1` | skips DirectComposition so RenderDoc can capture, at the cost of premultiplied alpha |
+| `DISABLE_RTSS_LAYER` | gowgpu sets it to 1 on Windows before creating a Vulkan instance, unless it's already set. It switches off RivaTuner's Vulkan layer, which crashed `vkCreateDevice` |
 
 Picking a backend is up to the app. fyne reads `FYNE_WGPU_BACKEND=vulkan|dx12|metal|gl`.
 
