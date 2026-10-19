@@ -615,12 +615,7 @@ func (e *RenderPassEncoder) replayPendingState() {
 	if e.pending == nil {
 		return
 	}
-	for i := range e.pending.bindGroups {
-		state := &e.pending.bindGroups[i]
-		if state.set {
-			e.applyBindGroup(uint32(i), state.group, state.offsets[:state.offsetCount])
-		}
-	}
+	e.applyPendingBindGroups()
 	for i := range e.pending.vertexBuffers {
 		state := &e.pending.vertexBuffers[i]
 		if state.set {
@@ -638,6 +633,20 @@ func (e *RenderPassEncoder) replayPendingState() {
 	}
 	if e.pending.stencilSet {
 		_ = MsgSend(e.raw, Sel("setStencilReferenceValue:"), uintptr(e.pending.stencil))
+	}
+}
+
+// applyPendingBindGroups binds the groups set so far, at the slots of the
+// current pipeline's layout.
+func (e *RenderPassEncoder) applyPendingBindGroups() {
+	if e.pending == nil {
+		return
+	}
+	for i := range e.pending.bindGroups {
+		state := &e.pending.bindGroups[i]
+		if state.set {
+			e.applyBindGroup(uint32(i), state.group, state.offsets[:state.offsetCount])
+		}
 	}
 }
 
@@ -661,12 +670,18 @@ func (e *RenderPassEncoder) SetPipeline(pipeline hal.RenderPipeline) {
 	if !ok || p == nil {
 		return
 	}
+	prev := e.pipeline
 	e.pipeline = p
 	e.currentLayout = p.layout // store for SetBindGroup slot offset lookup
 	if e.raw == 0 {
 		return
 	}
 	e.applyPipeline(p)
+	// A group's slots come from the layout: groups set before the first
+	// pipeline waited for it, and another layout moves them.
+	if prev == nil || prev.layout != p.layout {
+		e.applyPendingBindGroups()
+	}
 }
 
 func (e *RenderPassEncoder) applyPipeline(p *RenderPipeline) {
@@ -730,6 +745,9 @@ func (e *RenderPassEncoder) SetBindGroup(index uint32, group hal.BindGroup, offs
 		state.set = true
 		copy(state.offsets[:], offsets)
 		clear(state.offsets[len(offsets):])
+		if e.pipeline == nil {
+			return // SetPipeline binds it, at its layout's slots
+		}
 	}
 	if e.raw == 0 {
 		return
@@ -1009,6 +1027,9 @@ type ComputePassEncoder struct {
 	device        *Device
 	pipeline      *ComputePipeline
 	currentLayout *PipelineLayout // set by SetPipeline for SetBindGroup slot offsets
+	// groups are the bind groups set so far, bound again when a pipeline
+	// brings another layout, as in RenderPassEncoder.
+	groups [maxRenderBindGroups]renderBindGroupState
 
 	// bindingSizes holds the usable byte size of each bound buffer, by group
 	// and binding. A dispatch copies these sizes into naga's `_buffer_sizes`
@@ -1031,9 +1052,19 @@ func (e *ComputePassEncoder) SetPipeline(pipeline hal.ComputePipeline) {
 	if !ok || p == nil {
 		return
 	}
+	prev := e.pipeline
 	e.pipeline = p
 	e.currentLayout = p.layout // store for SetBindGroup slot offset lookup
 	_ = MsgSend(e.raw, Sel("setComputePipelineState:"), uintptr(p.raw))
+	// A group's slots come from the layout: groups set before the first
+	// pipeline waited for it, and another layout moves them.
+	if prev == nil || prev.layout != p.layout {
+		for i := range e.groups {
+			if state := &e.groups[i]; state.set {
+				e.applyBindGroup(uint32(i), state.group, state.offsets[:state.offsetCount])
+			}
+		}
+	}
 }
 
 // SetBindGroup sets a bind group by binding each resource directly on the compute encoder.
@@ -1044,7 +1075,21 @@ func (e *ComputePassEncoder) SetBindGroup(index uint32, group hal.BindGroup, off
 	if !ok || bg == nil {
 		return
 	}
+	if index < maxRenderBindGroups && len(offsets) <= maxRenderDynamicOffsets {
+		state := &e.groups[index]
+		state.group = bg
+		state.offsetCount = uint8(len(offsets))
+		state.set = true
+		copy(state.offsets[:], offsets)
+		clear(state.offsets[len(offsets):])
+		if e.pipeline == nil {
+			return // SetPipeline binds it, at its layout's slots
+		}
+	}
+	e.applyBindGroup(index, bg, offsets)
+}
 
+func (e *ComputePassEncoder) applyBindGroup(index uint32, bg *BindGroup, offsets []uint32) {
 	// Metal uses per-type sequential indices across all bind groups.
 	// See RenderPassEncoder.SetBindGroup for detailed explanation.
 	var bufferSlot, textureSlot, samplerSlot uintptr

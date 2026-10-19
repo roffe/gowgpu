@@ -696,7 +696,7 @@ func TestQueueWriteTextureIsOrdered(t *testing.T) {
 // shader, in the colour of its uniform.
 const bindFirstShader = `
 @group(0) @binding(0) var<uniform> color: vec4<f32>;
-@group(0) @binding(1) var<storage, read_write> out: vec4<f32>;
+@group(1) @binding(0) var<storage, read_write> out: vec4<f32>;
 @vertex fn vs_main(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
 	return vec4<f32>(f32(i32(vi & 1u) * 4 - 1), f32(i32(vi >> 1u) * 4 - 1), 0.0, 1.0);
 }
@@ -704,10 +704,11 @@ const bindFirstShader = `
 @compute @workgroup_size(1) fn cs_main() { out = color; }
 `
 
-// TestBindGroupBeforePipeline sets the bind group before the pipeline, which
+// TestBindGroupBeforePipeline sets the bind groups before the pipeline, which
 // WebGPU allows. DX12 set the group's tables before there was a root
 // signature to take them, which WARP crashed on and which the root
-// signature dropped anyway, so the draw and the dispatch read nothing.
+// signature dropped anyway, so the draw and the dispatch read nothing. Metal
+// bound group 1 at the slots of group 0, which only the layout knows.
 func TestBindGroupBeforePipeline(t *testing.T) {
 	device, h := newValidatedDevice(t)
 	if h.backend == gputypes.BackendGL {
@@ -718,16 +719,21 @@ func TestBindGroupBeforePipeline(t *testing.T) {
 		t.Fatalf("CreateShaderModule: %v", err)
 	}
 	defer module.Release()
-	vis := ShaderStageFragment | ShaderStageCompute
 	layout, err := device.CreateBindGroupLayout(&BindGroupLayoutDescriptor{Entries: []gputypes.BindGroupLayoutEntry{
-		{Binding: 0, Visibility: vis, Buffer: &gputypes.BufferBindingLayout{Type: gputypes.BufferBindingTypeUniform}},
-		{Binding: 1, Visibility: ShaderStageCompute, Buffer: &gputypes.BufferBindingLayout{Type: gputypes.BufferBindingTypeStorage}},
+		{Binding: 0, Visibility: ShaderStageFragment | ShaderStageCompute, Buffer: &gputypes.BufferBindingLayout{Type: gputypes.BufferBindingTypeUniform}},
 	}})
 	if err != nil {
 		t.Fatalf("CreateBindGroupLayout: %v", err)
 	}
 	defer layout.Release()
-	pl, err := device.CreatePipelineLayout(&PipelineLayoutDescriptor{BindGroupLayouts: []*BindGroupLayout{layout}})
+	outLayout, err := device.CreateBindGroupLayout(&BindGroupLayoutDescriptor{Entries: []gputypes.BindGroupLayoutEntry{
+		{Binding: 0, Visibility: ShaderStageCompute, Buffer: &gputypes.BufferBindingLayout{Type: gputypes.BufferBindingTypeStorage}},
+	}})
+	if err != nil {
+		t.Fatalf("CreateBindGroupLayout: %v", err)
+	}
+	defer outLayout.Release()
+	pl, err := device.CreatePipelineLayout(&PipelineLayoutDescriptor{BindGroupLayouts: []*BindGroupLayout{layout, outLayout}})
 	if err != nil {
 		t.Fatalf("CreatePipelineLayout: %v", err)
 	}
@@ -746,11 +752,16 @@ func TestBindGroupBeforePipeline(t *testing.T) {
 	if err := device.Queue().WriteBuffer(color, 0, unsafe.Slice((*byte)(unsafe.Pointer(&green[0])), 16)); err != nil {
 		t.Fatalf("WriteBuffer: %v", err)
 	}
-	group, err := device.CreateBindGroup(&BindGroupDescriptor{Layout: layout, Entries: []BindGroupEntry{{Binding: 0, Buffer: color}, {Binding: 1, Buffer: out}}})
+	group, err := device.CreateBindGroup(&BindGroupDescriptor{Layout: layout, Entries: []BindGroupEntry{{Binding: 0, Buffer: color}}})
 	if err != nil {
 		t.Fatalf("CreateBindGroup: %v", err)
 	}
 	defer group.Release()
+	outGroup, err := device.CreateBindGroup(&BindGroupDescriptor{Layout: outLayout, Entries: []BindGroupEntry{{Binding: 0, Buffer: out}}})
+	if err != nil {
+		t.Fatalf("CreateBindGroup: %v", err)
+	}
+	defer outGroup.Release()
 	pipe, err := device.CreateRenderPipeline(&RenderPipelineDescriptor{
 		Label:     "bind-first",
 		Layout:    pl,
@@ -780,6 +791,7 @@ func TestBindGroupBeforePipeline(t *testing.T) {
 	}
 	clearPass(t, enc, view, gputypes.LoadOpClear, gputypes.Color{}, func(p *RenderPassEncoder) {
 		p.SetBindGroup(0, group, nil)
+		p.SetBindGroup(1, outGroup, nil)
 		p.SetPipeline(pipe)
 		p.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1})
 	})
@@ -788,6 +800,7 @@ func TestBindGroupBeforePipeline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BeginComputePass: %v", err)
 	}
+	cp.SetBindGroup(1, outGroup, nil)
 	cp.SetBindGroup(0, group, nil)
 	cp.SetPipeline(cpipe)
 	cp.Dispatch(1, 1, 1)
