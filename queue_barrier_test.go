@@ -461,7 +461,11 @@ func newTestDeviceWithTracker(t *testing.T) (*Instance, *Adapter, *Device) {
 // newTestDevice creates a test device (internal package wgpu access).
 func newTestDevice(t *testing.T) (*Instance, *Adapter, *Device) {
 	t.Helper()
-	inst, err := CreateInstance(nil)
+	var desc *InstanceDescriptor // the default instance, unless GOWGPU_TEST_BACKEND names one
+	if backends, named := testBackends(); named {
+		desc = &InstanceDescriptor{Backends: backends}
+	}
+	inst, err := CreateInstance(desc)
 	if err != nil {
 		t.Fatalf("CreateInstance: %v", err)
 	}

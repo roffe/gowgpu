@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/roffe/gowgpu/core/track"
 	"github.com/roffe/gowgpu/gputypes"
@@ -66,6 +67,20 @@ func (h *captureHandler) validation() []string {
 	return out
 }
 
+// testBackends is the backend GOWGPU_TEST_BACKEND (gl, dx12, vulkan) names,
+// and whether it names one; all of them when it doesn't.
+func testBackends() (gputypes.Backends, bool) {
+	switch os.Getenv("GOWGPU_TEST_BACKEND") {
+	case "gl":
+		return gputypes.BackendsGL, true
+	case "dx12":
+		return gputypes.BackendsDX12, true
+	case "vulkan":
+		return gputypes.BackendsVulkan, true
+	}
+	return gputypes.BackendsAll, false
+}
+
 // newValidatedDevice makes a device on a debug instance, with the logger
 // captured. Without the validation layer installed the capture stays empty.
 func newValidatedDevice(t *testing.T) (*Device, *captureHandler) {
@@ -75,15 +90,7 @@ func newValidatedDevice(t *testing.T) (*Device, *captureHandler) {
 	hal.SetLogger(slog.New(h))
 	t.Cleanup(func() { hal.SetLogger(prev) })
 
-	backends := gputypes.BackendsAll
-	switch os.Getenv("GOWGPU_TEST_BACKEND") {
-	case "gl":
-		backends = gputypes.BackendsGL
-	case "dx12":
-		backends = gputypes.BackendsDX12
-	case "vulkan":
-		backends = gputypes.BackendsVulkan
-	}
+	backends, _ := testBackends()
 	inst, err := CreateInstance(&InstanceDescriptor{Backends: backends, Flags: gputypes.InstanceFlagsDebug})
 	if err != nil {
 		t.Fatalf("CreateInstance: %v", err)
@@ -682,6 +689,119 @@ func TestQueueWriteTextureIsOrdered(t *testing.T) {
 		t.Fatalf("Submit: %v", err)
 	}
 	device.Poll(PollWait)
+	assertNoValidation(t, h)
+}
+
+// bindFirstShader draws a full-screen triangle, or stores from a compute
+// shader, in the colour of its uniform.
+const bindFirstShader = `
+@group(0) @binding(0) var<uniform> color: vec4<f32>;
+@group(0) @binding(1) var<storage, read_write> out: vec4<f32>;
+@vertex fn vs_main(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
+	return vec4<f32>(f32(i32(vi & 1u) * 4 - 1), f32(i32(vi >> 1u) * 4 - 1), 0.0, 1.0);
+}
+@fragment fn fs_main() -> @location(0) vec4<f32> { return color; }
+@compute @workgroup_size(1) fn cs_main() { out = color; }
+`
+
+// TestBindGroupBeforePipeline sets the bind group before the pipeline, which
+// WebGPU allows. DX12 set the group's tables before there was a root
+// signature to take them, which WARP crashed on and which the root
+// signature dropped anyway, so the draw and the dispatch read nothing.
+func TestBindGroupBeforePipeline(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	if h.backend == gputypes.BackendGL {
+		t.Skip("GL binds a group against the pipeline set at the time, see the README's known issues")
+	}
+	module, err := device.CreateShaderModule(&ShaderModuleDescriptor{Label: "bind-first", WGSL: bindFirstShader})
+	if err != nil {
+		t.Fatalf("CreateShaderModule: %v", err)
+	}
+	defer module.Release()
+	vis := ShaderStageFragment | ShaderStageCompute
+	layout, err := device.CreateBindGroupLayout(&BindGroupLayoutDescriptor{Entries: []gputypes.BindGroupLayoutEntry{
+		{Binding: 0, Visibility: vis, Buffer: &gputypes.BufferBindingLayout{Type: gputypes.BufferBindingTypeUniform}},
+		{Binding: 1, Visibility: ShaderStageCompute, Buffer: &gputypes.BufferBindingLayout{Type: gputypes.BufferBindingTypeStorage}},
+	}})
+	if err != nil {
+		t.Fatalf("CreateBindGroupLayout: %v", err)
+	}
+	defer layout.Release()
+	pl, err := device.CreatePipelineLayout(&PipelineLayoutDescriptor{BindGroupLayouts: []*BindGroupLayout{layout}})
+	if err != nil {
+		t.Fatalf("CreatePipelineLayout: %v", err)
+	}
+	defer pl.Release()
+	color, err := device.CreateBuffer(&BufferDescriptor{Label: "color", Size: 16, Usage: BufferUsageUniform | BufferUsageCopyDst})
+	if err != nil {
+		t.Fatalf("CreateBuffer: %v", err)
+	}
+	defer color.Release()
+	out, err := device.CreateBuffer(&BufferDescriptor{Label: "out", Size: 16, Usage: BufferUsageStorage | BufferUsageCopySrc})
+	if err != nil {
+		t.Fatalf("CreateBuffer: %v", err)
+	}
+	defer out.Release()
+	green := []float32{0, 1, 0, 1}
+	if err := device.Queue().WriteBuffer(color, 0, unsafe.Slice((*byte)(unsafe.Pointer(&green[0])), 16)); err != nil {
+		t.Fatalf("WriteBuffer: %v", err)
+	}
+	group, err := device.CreateBindGroup(&BindGroupDescriptor{Layout: layout, Entries: []BindGroupEntry{{Binding: 0, Buffer: color}, {Binding: 1, Buffer: out}}})
+	if err != nil {
+		t.Fatalf("CreateBindGroup: %v", err)
+	}
+	defer group.Release()
+	pipe, err := device.CreateRenderPipeline(&RenderPipelineDescriptor{
+		Label:     "bind-first",
+		Layout:    pl,
+		Vertex:    VertexState{Module: module, EntryPoint: "vs_main"},
+		Primitive: gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList},
+		Fragment: &FragmentState{Module: module, EntryPoint: "fs_main",
+			Targets: []gputypes.ColorTargetState{{Format: gputypes.TextureFormatRGBA8Unorm, WriteMask: gputypes.ColorWriteMaskAll}}},
+	})
+	if err != nil {
+		t.Fatalf("CreateRenderPipeline: %v", err)
+	}
+	defer pipe.Release()
+	cpipe, err := device.CreateComputePipeline(&ComputePipelineDescriptor{Label: "bind-first", Layout: pl, Module: module, EntryPoint: "cs_main"})
+	if err != nil {
+		t.Fatalf("CreateComputePipeline: %v", err)
+	}
+	defer cpipe.Release()
+
+	tex, view := pixTexture(t, device, "bind-first", TextureUsageRenderAttachment|TextureUsageCopySrc)
+	defer releaseTextureView(tex, view)
+	st := readbackBuffer(t, device, "bind-first-st")
+	outSt := readbackBuffer(t, device, "bind-first-out")
+
+	enc, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	clearPass(t, enc, view, gputypes.LoadOpClear, gputypes.Color{}, func(p *RenderPassEncoder) {
+		p.SetBindGroup(0, group, nil)
+		p.SetPipeline(pipe)
+		p.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1})
+	})
+	copyOut(enc, tex, st)
+	cp, err := enc.BeginComputePass(nil)
+	if err != nil {
+		t.Fatalf("BeginComputePass: %v", err)
+	}
+	cp.SetBindGroup(0, group, nil)
+	cp.SetPipeline(cpipe)
+	cp.Dispatch(1, 1, 1)
+	if err := cp.End(); err != nil {
+		t.Fatalf("ComputePass.End: %v", err)
+	}
+	enc.CopyBufferToBuffer(out, 0, outSt, 0, 16)
+	finishAndSubmit(t, device, enc)
+	device.Poll(PollWait)
+
+	expectPixels(t, "draw", readback(t, st), 0, 255, 0, 255)
+	if got := readback(t, outSt)[:16]; !bytes.Equal(got, unsafe.Slice((*byte)(unsafe.Pointer(&green[0])), 16)) {
+		t.Errorf("dispatch stored % x, want the uniform's green", got)
+	}
 	assertNoValidation(t, h)
 }
 

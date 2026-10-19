@@ -1661,6 +1661,9 @@ type ComputePassEncoder struct {
 	encoder         *CommandEncoder
 	pipeline        *ComputePipeline
 	timestampWrites *hal.ComputePassTimestampWrites
+	// pending holds the bind groups set before any pipeline, as in
+	// RenderPassEncoder.
+	pending [maxBindGroupSlots]pendingBindGroup
 }
 
 // End finishes the compute pass.
@@ -1714,6 +1717,7 @@ func (e *ComputePassEncoder) End() {
 	e.encoder = nil
 	e.pipeline = nil
 	e.timestampWrites = nil
+	e.pending = [maxBindGroupSlots]pendingBindGroup{}
 	computePassPool.Put(e)
 }
 
@@ -1726,12 +1730,25 @@ func (e *ComputePassEncoder) SetPipeline(pipeline hal.ComputePipeline) {
 	e.pipeline = p
 
 	vkCmdBindPipeline(e.encoder.device.cmds, e.encoder.active, vk.PipelineBindPointCompute, p.handle)
+	for i := range e.pending {
+		if pending := e.pending[i]; pending.group != nil {
+			e.pending[i] = pendingBindGroup{}
+			e.SetBindGroup(uint32(i), pending.group, pending.offsets) //nolint:gosec // slot index
+		}
+	}
 }
 
-// SetBindGroup sets a bind group.
+// SetBindGroup sets a bind group. Before a pipeline is set there is no
+// layout to bind it with, so it waits for SetPipeline.
 func (e *ComputePassEncoder) SetBindGroup(index uint32, group hal.BindGroup, offsets []uint32) {
 	bg, ok := group.(*BindGroup)
-	if !ok || e.encoder.active == 0 || e.pipeline == nil {
+	if !ok || e.encoder.active == 0 {
+		return
+	}
+	if e.pipeline == nil {
+		if index < maxBindGroupSlots {
+			e.pending[index] = pendingBindGroup{group: bg, offsets: append([]uint32(nil), offsets...)}
+		}
 		return
 	}
 

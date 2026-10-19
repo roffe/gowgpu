@@ -522,6 +522,7 @@ type RenderPassEncoder struct {
 	pipeline           *RenderPipeline
 	indexFormat        gputypes.IndexFormat
 	descriptorHeapsSet bool // Tracks whether descriptor heaps have been bound
+	groups             boundGroups
 
 	// endOfPassTimerQuery stores the query heap and index for the end-of-pass
 	// timestamp write. Set during BeginRenderPass, consumed in End().
@@ -621,6 +622,7 @@ func (e *RenderPassEncoder) SetPipeline(pipeline hal.RenderPipeline) {
 	if !ok || !e.encoder.isRecording {
 		return
 	}
+	prev := e.pipeline
 	e.pipeline = p
 
 	e.encoder.cmdList.SetPipelineState(p.pso)
@@ -628,6 +630,9 @@ func (e *RenderPassEncoder) SetPipeline(pipeline hal.RenderPipeline) {
 		e.encoder.cmdList.SetGraphicsRootSignature(p.rootSignature)
 	}
 	e.encoder.cmdList.IASetPrimitiveTopology(p.topology)
+	if prev == nil || prev.rootSignature != p.rootSignature {
+		e.groups.bind(e.encoder, false, p.groupMappings)
+	}
 
 	// Bind the global sampler descriptor heap to the sampler root parameter.
 	// This is the ONE root parameter that covers all 2048+2048 sampler slots.
@@ -657,14 +662,10 @@ func (e *RenderPassEncoder) SetBindGroup(index uint32, group hal.BindGroup, offs
 		e.descriptorHeapsSet = true
 	}
 
-	// Get group mappings from the current pipeline.
-	var mappings []rootParamMapping
+	e.groups.set(index, bg)
 	if e.pipeline != nil {
-		mappings = e.pipeline.groupMappings
+		e.encoder.bindGroupToRootTables(index, bg, false, e.pipeline.groupMappings)
 	}
-
-	// Bind the group using graphics root descriptor tables.
-	e.encoder.bindGroupToRootTables(index, bg, false, mappings)
 	e.encoder.trackBindGroupState(bg)
 
 	// TODO(#343): DX12 dynamic uniform buffer offsets require root CBV descriptors
@@ -880,6 +881,7 @@ type ComputePassEncoder struct {
 	encoder            *CommandEncoder
 	pipeline           *ComputePipeline
 	descriptorHeapsSet bool // Tracks whether descriptor heaps have been bound
+	groups             boundGroups
 
 	// boundStorageBuffers tracks storage buffers from SetBindGroup calls.
 	// Dispatch records them as UNORDERED_ACCESS in the command-local tracker so
@@ -915,11 +917,15 @@ func (e *ComputePassEncoder) SetPipeline(pipeline hal.ComputePipeline) {
 	if !ok || !e.encoder.isRecording {
 		return
 	}
+	prev := e.pipeline
 	e.pipeline = p
 
 	e.encoder.cmdList.SetPipelineState(p.pso)
 	if p.rootSignature != nil {
 		e.encoder.cmdList.SetComputeRootSignature(p.rootSignature)
+	}
+	if prev == nil || prev.rootSignature != p.rootSignature {
+		e.groups.bind(e.encoder, true, p.groupMappings)
 	}
 
 	// Bind the global sampler descriptor heap to the sampler root parameter.
@@ -949,14 +955,10 @@ func (e *ComputePassEncoder) SetBindGroup(index uint32, group hal.BindGroup, off
 		e.descriptorHeapsSet = true
 	}
 
-	// Get group mappings from the current pipeline.
-	var mappings []rootParamMapping
+	e.groups.set(index, bg)
 	if e.pipeline != nil {
-		mappings = e.pipeline.groupMappings
+		e.encoder.bindGroupToRootTables(index, bg, true, e.pipeline.groupMappings)
 	}
-
-	// Bind the group using compute root descriptor tables.
-	e.encoder.bindGroupToRootTables(index, bg, true, mappings)
 	e.encoder.trackBindGroupState(bg)
 
 	// Track storage buffers from this bind group for state tracking.
@@ -1104,12 +1106,35 @@ func (e *CommandEncoder) ensureDescriptorHeapsBound() {
 // Samplers are handled separately via the global sampler heap (bound in SetPipeline).
 // isCompute determines whether to use compute or graphics root descriptor tables.
 // groupMappings provides the actual root parameter indices.
-func (e *CommandEncoder) bindGroupToRootTables(bindGroupIndex uint32, bg *BindGroup, isCompute bool, groupMappings []rootParamMapping) {
-	// Use mapping if available; fall back to bindGroupIndex for backwards compatibility.
-	cbvIdx := int(bindGroupIndex)
-	if int(bindGroupIndex) < len(groupMappings) {
-		cbvIdx = groupMappings[bindGroupIndex].cbvSrvUavIndex
+// boundGroups are the bind groups a pass has set, by index. A root
+// descriptor table needs a root signature to go in, and a new one drops
+// every table set before it, so SetPipeline binds them again under its
+// own: WebGPU lets a group be set before the pipeline and keeps it across
+// pipeline changes. Rust's wgpu-hal keeps its root elements the same way.
+type boundGroups [4]*BindGroup // MaxBindGroups
+
+func (g *boundGroups) set(index uint32, bg *BindGroup) {
+	if int(index) < len(g) {
+		g[index] = bg
 	}
+}
+
+func (g *boundGroups) bind(e *CommandEncoder, isCompute bool, mappings []rootParamMapping) {
+	for i, bg := range g {
+		if bg != nil {
+			e.bindGroupToRootTables(uint32(i), bg, isCompute, mappings)
+		}
+	}
+}
+
+func (e *CommandEncoder) bindGroupToRootTables(bindGroupIndex uint32, bg *BindGroup, isCompute bool, groupMappings []rootParamMapping) {
+	// A group the pipeline's layout has no slot for has no root parameter
+	// to go in: a group left from an earlier pipeline, bound again by
+	// boundGroups, would land on whatever parameter has its index.
+	if int(bindGroupIndex) >= len(groupMappings) {
+		return
+	}
+	cbvIdx := groupMappings[bindGroupIndex].cbvSrvUavIndex
 
 	// Set CBV/SRV/UAV descriptor table (includes sampler index buffer SRV).
 	if bg.gpuDescHandle.Ptr != 0 && cbvIdx >= 0 {
