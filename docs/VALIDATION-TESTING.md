@@ -221,8 +221,6 @@ The root package (`go test .`, and `go test ./...` which includes it) runs on wh
 
 State on Vulkan right now (NVIDIA, Linux):
 
-- Render pipeline tests that pass no layout fail, because Vulkan has no automatic layouts: `TestDeviceCreateRenderPipeline`, `TestRenderPipelineWithVertexBuffers`, `TestRenderPipelineHasRef`, `TestRenderPipeline_ReleaseUsesRefDrop`, `TestRenderPipelineReleaseIdempotent`, `TestMRTTwoTargetRenderPass` and `TestMixedResourceLifecycle_TrackedSubmission`.
-- `TestBufferMapRoundTrip`, `TestBufferMapAsyncStatus` and `TestIntegrationQueueReadBuffer` fail because `Map` doesn't see a `WriteBuffer` until something is submitted (see [COMPUTE-SHADERS.md](COMPUTE-SHADERS.md#writebuffer-then-map-submit-in-between)).
 - `TestFeatureGate_CreateQuerySet_WithFeature` skips, because the Vulkan adapter doesn't report `FeatureTimestampQuery`.
 
 ### Vulkan validation layer and lavapipe, without root

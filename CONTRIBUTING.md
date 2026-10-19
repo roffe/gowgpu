@@ -13,7 +13,7 @@ go build ./...
 go test ./...
 ```
 
-`go test ./...` runs the root package tests on whatever GPU your machine has, and skips them when there's no adapter. On Vulkan 10 of them fail today, same as on gogpu v0.34.5: 7 because Vulkan has no automatic pipeline layouts and 3 because `Map` doesn't see a `WriteBuffer` that was never submitted. Don't add to that list.
+`go test ./...` runs the root package tests on whatever GPU your machine has, and skips them when there's no adapter. None of them fail today, keep it that way.
 
 No GPU? Install Mesa's lavapipe and Vulkan runs on the CPU. You don't even need root for it, see [Vulkan without a GPU or root](#vulkan-without-a-gpu-or-root).
 

@@ -22,14 +22,13 @@ Compute has been run on Vulkan (NVIDIA RTX 4080 SUPER on Linux): compute-copy, c
 Things that are the same everywhere:
 
 - Every native backend puts a barrier after each dispatch, so later dispatches in the pass and copies after it see the writes.
-- There are no automatic pipeline layouts on the native backends, so pass one. Vulkan and GL fail without it.
+- A pipeline without a `Layout` gets the one its shader implies, and `GetBindGroupLayout` hands out its groups. On DX12 and Metal a pipeline whose module declares bindings it doesn't use needs an explicit layout with all of them, see the README's known issues.
 - `ComputePipelineDescriptor.Constants` and `ZeroInitializeWorkgroupMemory` aren't passed on by any backend yet.
 - `DispatchIndirect` first runs a small shader that checks the workgroup counts and turns a dispatch over the device limit into zero workgroups. It destroys its bind group before the GPU runs it, and every indirect dispatch recorded before one `Submit` gets the params of the last one, so submit after each indirect dispatch until that's fixed.
 
 ## Vulkan
 
 - naga compiles the WGSL to SPIR-V in `CreateShaderModule`. SPIR-V in `ShaderModuleDescriptor.SPIRV` goes to the driver as is.
-- A nil pipeline layout fails with "compute pipeline layout is required (automatic layouts are not supported)".
 - After every `Dispatch` and `DispatchIndirect` there's a compute-to-compute memory barrier. `End` adds a global barrier from compute writes to later compute, transfer and host access, so a `CopyBufferToBuffer` after the pass sees the result.
 - Limits come from `VkPhysicalDeviceLimits` (`maxComputeWorkGroupInvocations`, `maxComputeWorkGroupSize`, `maxComputeSharedMemorySize`, `maxComputeWorkGroupCount`).
 - `Queue.WriteBuffer` is staged and only goes out with the next `Submit`, and `Buffer.Map` doesn't flush it. See [WriteBuffer, then Map](COMPUTE-SHADERS.md#writebuffer-then-map-submit-in-between).
@@ -37,7 +36,7 @@ Things that are the same everywhere:
 ## DX12
 
 - Shaders are compiled when the pipeline is created: WGSL -> HLSL -> DXBC with FXC (`d3dcompiler_47.dll`) by default, or WGSL -> DXIL straight from naga with `GOGPU_DX12_DXIL=1`. `GOGPU_DX12_DXIL_VALIDATE=1` also runs the DXC validator on every DXIL blob so real errors reach the log.
-- The root signature comes from the pipeline layout. A nil layout gets an empty root signature, which only works for a shader without bindings.
+- The root signature comes from the pipeline layout. A module's WGSL is compiled once, for all its entry points, with the layout of the first pipeline made from it.
 - Descriptor heaps get bound the first time `SetBindGroup` (or `SetPipeline` for a pipeline with samplers) needs them.
 - A uniform buffer with a dynamic offset gets a root CBV instead of a descriptor in its group's table, and a storage buffer with one gets its offset in root constants that naga's HLSL adds to every address, as in Rust's wgpu-hal. `arrayLength()` on such a storage buffer counts to the end of the buffer, and with `GOGPU_DX12_DXIL=1` its offset is ignored.
 - Before each dispatch the bound storage buffers are moved to `UNORDERED_ACCESS`, and after it there's a global UAV barrier.
@@ -49,7 +48,7 @@ Things that are the same everywhere:
 
 - naga compiles the WGSL to MSL.
 - The compute encoder is an `MTLComputeCommandEncoder` from the command buffer, retained so it survives the autorelease pool drain.
-- Bind groups go in with `setBuffer:offset:atIndex:`, `setTexture:atIndex:` and `setSamplerState:atIndex:`. Slots are counted per resource type across all groups, and dynamic offsets are added to the buffer offset.
+- Bind groups go in with `setBuffer:offset:atIndex:`, `setTexture:atIndex:` and `setSamplerState:atIndex:`. Slots are counted per resource type across all groups, and dynamic offsets are added to the buffer offset. naga numbers the slots over every binding the module declares, so the layout has to have all of them.
 - `arrayLength()` needs the buffer sizes in MSL, so before each dispatch the backend binds naga's `_buffer_sizes` argument with `setBytes`.
 - `Dispatch` is `dispatchThreadgroups:threadsPerThreadgroup:` with the shader's workgroup size, `DispatchIndirect` is `dispatchThreadgroupsWithIndirectBuffer:indirectBufferOffset:threadsPerThreadgroup:`. Each one is followed by `memoryBarrierWithScope:` for buffers and textures.
 - Limits are fixed: 1024 per dimension and 1024 invocations per workgroup, 32 KB workgroup storage.
@@ -72,7 +71,7 @@ Things that are the same everywhere:
 
 - Built with `GOOS=js GOARCH=wasm`. The root package talks to `navigator.gpu` through `syscall/js`: no hal, no naga, no cgo.
 - The WGSL string goes to `createShaderModule` as is.
-- A nil pipeline layout becomes `"auto"`, and `ComputePipeline.GetBindGroupLayout` exists here (browser build only).
+- A nil pipeline layout becomes `"auto"`, which the browser derives.
 - `Map` awaits the `mapAsync` promise on a goroutine. `MappedRange.Bytes()` is a Go copy made with `getMappedRange` and `js.CopyBytesToGo`, not a view.
 - `DispatchIndirect` is `dispatchWorkgroupsIndirect`.
 - There are no query sets in the browser build.

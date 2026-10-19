@@ -40,6 +40,7 @@ gowgpu split off from gogpu/wgpu v0.34.5 on 2026-10-17. Everything from [0.34.5]
 
 ### Added
 
+- **A pipeline created without a `Layout` gets one from its shaders**, WebGPU's `"auto"` layout, on every native backend. The bind group layouts come out of the naga IR of the shader modules the way Rust's wgpu-core derives them: an entry for every resource the entry points use, visible to the stages that use it, typed by the WGSL declaration. A buffer's minimum binding size is the size of its type, and a float texture is filterable when the stage samples it with a sampler. `GetBindGroupLayout` on a render or compute pipeline hands them out to make bind groups with, as in the browser. They belong to the pipeline and go with it. Vulkan refused a pipeline without a layout and DX12 couldn't compile its shaders, so the 7 root tests CI skipped for that run on both now.
 - **DX12 falls back to WARP** when no hardware adapter works, so Windows VMs and CI runners get a device.
 - **GLES on Android**: a GLES 3.0 context on the Instance and EGL window surfaces on `ANativeWindow`, so a device survives the window Android replaces on every resume.
 - **`cmd/cgocheck`** type checks a cgo package for a target this machine has no SDK for (darwin, ios, android, windows/arm64).

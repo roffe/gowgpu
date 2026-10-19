@@ -32,6 +32,9 @@ type BindGroupLayout struct {
 	// This matches Rust wgpu-core's pattern where binder.check_compatibility()
 	// compares layouts by their entries, not by pointer identity.
 	entries []gputypes.BindGroupLayoutEntry
+	// auto is set on the layouts of a pipeline's automatic layout. They are
+	// the pipeline's and go with it, so Release leaves them alone.
+	auto bool
 }
 
 // isCompatibleWith returns true if two layouts have identical entries.
@@ -94,7 +97,18 @@ func optionalEqual[T comparable](a, b *T) bool {
 
 // Release destroys the bind group layout. Destruction is deferred until the
 // GPU completes any submission that may reference this layout.
+//
+// A layout GetBindGroupLayout returns from a pipeline created without a
+// Layout belongs to the pipeline and is released with it: Release does
+// nothing to it.
 func (l *BindGroupLayout) Release() {
+	if l.auto {
+		return
+	}
+	l.release()
+}
+
+func (l *BindGroupLayout) release() {
 	if l.released {
 		return
 	}

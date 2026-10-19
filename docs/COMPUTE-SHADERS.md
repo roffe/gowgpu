@@ -143,7 +143,7 @@ if err != nil {
 defer pipeline.Release()
 ```
 
-Always pass a `Layout`. The native backends have no automatic layouts: Vulkan and GL refuse a nil `Layout` (Vulkan says "compute pipeline layout is required (automatic layouts are not supported)"), and there's no `GetBindGroupLayout` to get one back. The browser build does turn a nil `Layout` into `"auto"` and has `ComputePipeline.GetBindGroupLayout`, but that's browser only.
+The `Layout` can also be left out. The pipeline then gets the one its shader implies, WebGPU's `"auto"`: an entry for every binding the entry point uses, in the group it's declared in, and `pipeline.GetBindGroupLayout(0)` hands out group 0 to make the bind group with. Those layouts belong to the pipeline and are released with it. On DX12 and Metal a pipeline whose module declares bindings it doesn't use needs an explicit layout with all of them (see the README's known issues), which a module with several entry points often does.
 
 `ComputePipelineDescriptor` also has `Constants` (values for WGSL `override` declarations) and `ZeroInitializeWorkgroupMemory`. No backend passes either of them on yet (there's a TODO for it in each hal backend), so don't build on override constants.
 

@@ -93,6 +93,17 @@ type RenderPipeline struct {
 	mark encoderMark
 }
 
+// GetBindGroupLayout returns the bind group layout at index of the pipeline's
+// layout, or nil past its last group. For a pipeline created without a
+// Layout these are the layouts derived from its shaders, to make its bind
+// groups with. They belong to the pipeline and are released with it.
+func (p *RenderPipeline) GetBindGroupLayout(index uint32) *BindGroupLayout {
+	if int(index) >= len(p.bindGroupLayouts) {
+		return nil
+	}
+	return p.bindGroupLayouts[index]
+}
+
 // Release drops the application's ownership reference to the render pipeline.
 //
 // If the pipeline is still referenced by in-flight GPU submissions (Clone'd
@@ -131,6 +142,17 @@ type ComputePipeline struct {
 	ref *core.ResourceRef
 	// mark is the last command encoder that tracked this pipeline.
 	mark encoderMark
+}
+
+// GetBindGroupLayout returns the bind group layout at index of the pipeline's
+// layout, or nil past its last group. For a pipeline created without a
+// Layout these are the layouts derived from its shader, to make its bind
+// groups with. They belong to the pipeline and are released with it.
+func (p *ComputePipeline) GetBindGroupLayout(index uint32) *BindGroupLayout {
+	if int(index) >= len(p.bindGroupLayouts) {
+		return nil
+	}
+	return p.bindGroupLayouts[index]
 }
 
 // Release drops the application's ownership reference to the compute pipeline.

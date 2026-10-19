@@ -645,17 +645,31 @@ func (d *Device) CreateRenderPipeline(desc *RenderPipelineDescriptor) (*RenderPi
 		return nil, err
 	}
 
+	// Without a Layout the pipeline gets the one its shaders imply, and
+	// owns it.
+	layout := desc.Layout
+	var autoLayout *PipelineLayout
+	if layout == nil {
+		stages := []autoStage{{desc.Vertex.Module, desc.Vertex.EntryPoint, ir.StageVertex, ShaderStageVertex}}
+		if desc.Fragment != nil {
+			stages = append(stages, autoStage{desc.Fragment.Module, desc.Fragment.EntryPoint, ir.StageFragment, ShaderStageFragment})
+		}
+		var err error
+		if autoLayout, err = d.createAutoLayout(desc.Label, stages...); err != nil {
+			return nil, err
+		}
+		layout = autoLayout
+		halDesc.Layout = layout.hal
+	}
+
 	halPipeline, err := halDevice.CreateRenderPipeline(halDesc)
 	if err != nil {
+		autoLayout.releaseAuto()
 		return nil, fmt.Errorf("wgpu: failed to create render pipeline: %w", err)
 	}
 
-	var bgCount uint32
-	var bgLayouts []*BindGroupLayout
-	if desc.Layout != nil {
-		bgCount = desc.Layout.bindGroupCount
-		bgLayouts = desc.Layout.bindGroupLayouts
-	}
+	bgCount := layout.bindGroupCount
+	bgLayouts := layout.bindGroupLayouts
 	// Check if any color target uses blend constant factors.
 	// Matches Rust wgpu-core PipelineFlags::BLEND_CONSTANT (resource.rs:4562-4569).
 	var needsBlendConstant bool
@@ -695,6 +709,7 @@ func (d *Device) CreateRenderPipeline(desc *RenderPipelineDescriptor) (*RenderPi
 		} else {
 			halDevice.DestroyRenderPipeline(halRP)
 		}
+		autoLayout.releaseAuto()
 	}
 
 	return &RenderPipeline{
@@ -778,17 +793,25 @@ func (d *Device) CreateComputePipeline(desc *ComputePipelineDescriptor) (*Comput
 		}
 	}
 
+	layout := desc.Layout
+	var autoLayout *PipelineLayout
+	if layout == nil {
+		var err error
+		if autoLayout, err = d.createAutoLayout(desc.Label, autoStage{desc.Module, desc.EntryPoint, ir.StageCompute, ShaderStageCompute}); err != nil {
+			return nil, err
+		}
+		layout = autoLayout
+		halDesc.Layout = layout.hal
+	}
+
 	halPipeline, err := halDevice.CreateComputePipeline(halDesc)
 	if err != nil {
+		autoLayout.releaseAuto()
 		return nil, fmt.Errorf("wgpu: failed to create compute pipeline: %w", err)
 	}
 
-	var bgCount uint32
-	var bgLayouts []*BindGroupLayout
-	if desc.Layout != nil {
-		bgCount = desc.Layout.bindGroupCount
-		bgLayouts = desc.Layout.bindGroupLayouts
-	}
+	bgCount := layout.bindGroupCount
+	bgLayouts := layout.bindGroupLayouts
 
 	// Build shader binding sizes for the compute stage.
 	var shaderBindingSizes map[ir.ResourceBinding]uint64
@@ -811,6 +834,7 @@ func (d *Device) CreateComputePipeline(desc *ComputePipelineDescriptor) (*Comput
 		} else {
 			halDevice.DestroyComputePipeline(halCP)
 		}
+		autoLayout.releaseAuto()
 	}
 
 	return &ComputePipeline{

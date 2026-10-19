@@ -134,9 +134,9 @@ Not run yet: the browser backend, the BSDs, GL on Windows and real Apple hardwar
 
 ## Known issues
 
-- On Vulkan and DX12, pipelines need an explicit layout (there are no automatic layouts; Metal takes pipelines without one). 7 tests in the root package fail on Vulkan and DX12 because of it.
 - The DXIL compute test in `hal/dx12` (`TestComputePairSumIntegration/DXIL`) fails under wine: vkd3d takes FXC blobs, not naga's DXIL, so `CreateComputePipelineState` returns E_FAIL there. Run it on Windows.
 - A storage buffer with a dynamic offset on DX12: `arrayLength()` on it counts to the end of the buffer, not of the binding, as in Rust's wgpu, and with `GOGPU_DX12_DXIL=1` the offset is ignored, naga's DXIL backend doesn't add it.
+- On DX12 and Metal a shader module's bindings are numbered for the whole module: DX12 compiles it once, for the layout of the first pipeline made from it, and Metal counts every binding the module declares. A pipeline without a `Layout` only gets the bindings its own entry points use, so when a module declares bindings a pipeline doesn't use (a module with several entry points often does), give its pipelines one explicit layout that has all of them.
 - naga keeps identifiers that start with `gl_` when it writes GLSL, and strict drivers like Mali refuse them. Don't name things `gl_*` in WGSL.
 - On GL a `texture_depth_2d` only works with a comparison sampler: naga declares it `sampler2DShadow`, so `textureSample` with a plain sampler and `textureLoad` on it don't compile.
 - New textures are zeroed only when they have a color format, one sample and `TextureBinding`. Depth, multisampled and compressed textures start with whatever the memory held, so clear them in their first render pass or write all of them.
