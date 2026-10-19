@@ -3006,3 +3006,167 @@ func TestIsRenderPassCompatibilityError(t *testing.T) {
 		t.Error("expected IsRenderPassCompatibilityError to return false for unrelated error")
 	}
 }
+
+// --- RP10: vertex buffer layout validation ---
+
+func vertexStrideDesc(buffers ...gputypes.VertexBufferLayout) *hal.RenderPipelineDescriptor {
+	return &hal.RenderPipelineDescriptor{
+		Label: "test",
+		Vertex: hal.VertexState{
+			Module:     mockShaderModule{},
+			EntryPoint: "vs_main",
+			Buffers:    buffers,
+		},
+		Fragment: &hal.FragmentState{
+			Module:     mockShaderModule{},
+			EntryPoint: "fs_main",
+			Targets:    []gputypes.ColorTargetState{{}},
+		},
+		Multisample: gputypes.MultisampleState{Count: 1},
+	}
+}
+
+func TestValidateRenderPipelineDescriptor_VertexBuffers(t *testing.T) {
+	float32x4 := func(offset uint64) gputypes.VertexAttribute {
+		return gputypes.VertexAttribute{Format: gputypes.VertexFormatFloat32x4, Offset: offset}
+	}
+	layout := func(stride uint64, attrs ...gputypes.VertexAttribute) gputypes.VertexBufferLayout {
+		return gputypes.VertexBufferLayout{ArrayStride: stride, StepMode: gputypes.VertexStepModeVertex, Attributes: attrs}
+	}
+
+	tests := []struct {
+		name    string
+		buffers []gputypes.VertexBufferLayout
+		limits  func(*gputypes.Limits)
+		// wantKind is checked only when wantErr is true.
+		wantErr     bool
+		wantKind    CreateRenderPipelineErrorKind
+		wantBuffer  uint32
+		wantStride  uint64
+		wantAttrIdx uint32
+	}{
+		{name: "no vertex buffers"},
+		{name: "stride 4", buffers: []gputypes.VertexBufferLayout{layout(4, gputypes.VertexAttribute{Format: gputypes.VertexFormatFloat32})}},
+		{name: "stride 2048 (default limit)", buffers: []gputypes.VertexBufferLayout{layout(2048, float32x4(0))}},
+		{name: "attribute exactly fills the stride", buffers: []gputypes.VertexBufferLayout{layout(32, float32x4(0), float32x4(16))}},
+		{
+			name:    "stride above an unset limit is not checked",
+			buffers: []gputypes.VertexBufferLayout{layout(4096, float32x4(0))},
+			limits:  func(l *gputypes.Limits) { l.MaxVertexBufferArrayStride = 0 },
+		},
+		{
+			name:       "stride 0 is rejected",
+			buffers:    []gputypes.VertexBufferLayout{layout(0, float32x4(0))},
+			wantErr:    true,
+			wantKind:   CreateRenderPipelineErrorVertexStrideZero,
+			wantBuffer: 0,
+		},
+		{
+			name:       "stride 30 is misaligned",
+			buffers:    []gputypes.VertexBufferLayout{layout(32, float32x4(0)), layout(30, float32x4(0))},
+			wantErr:    true,
+			wantKind:   CreateRenderPipelineErrorVertexStrideMisaligned,
+			wantBuffer: 1,
+			wantStride: 30,
+		},
+		{
+			name:       "stride 2052 exceeds the limit",
+			buffers:    []gputypes.VertexBufferLayout{layout(2052, float32x4(0))},
+			wantErr:    true,
+			wantKind:   CreateRenderPipelineErrorVertexStrideTooLarge,
+			wantStride: 2052,
+		},
+		{
+			name:        "attribute runs past the stride",
+			buffers:     []gputypes.VertexBufferLayout{layout(28, float32x4(0), float32x4(16))},
+			wantErr:     true,
+			wantKind:    CreateRenderPipelineErrorVertexAttributeOutOfStride,
+			wantStride:  28,
+			wantAttrIdx: 1,
+		},
+		{
+			name:        "stride 0 attribute is bounded by the limit",
+			buffers:     []gputypes.VertexBufferLayout{layout(0, float32x4(2040))},
+			wantErr:     true,
+			wantKind:    CreateRenderPipelineErrorVertexAttributeOutOfStride,
+			wantStride:  0,
+			wantAttrIdx: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			limits := gputypes.DefaultLimits()
+			if tt.limits != nil {
+				tt.limits(&limits)
+			}
+			err := ValidateRenderPipelineDescriptor(vertexStrideDesc(tt.buffers...), limits, gputypes.Features(0))
+			if !tt.wantErr {
+				if err != nil {
+					t.Fatalf("expected nil error, got: %v", err)
+				}
+				return
+			}
+			var crpe *CreateRenderPipelineError
+			if !errors.As(err, &crpe) {
+				t.Fatalf("expected CreateRenderPipelineError, got %T (%v)", err, err)
+			}
+			if crpe.Kind != tt.wantKind {
+				t.Fatalf("expected kind %v, got %v (%v)", tt.wantKind, crpe.Kind, err)
+			}
+			if crpe.BufferIndex != tt.wantBuffer {
+				t.Errorf("BufferIndex = %d, want %d", crpe.BufferIndex, tt.wantBuffer)
+			}
+			if crpe.ArrayStride != tt.wantStride {
+				t.Errorf("ArrayStride = %d, want %d", crpe.ArrayStride, tt.wantStride)
+			}
+			if crpe.AttributeIndex != tt.wantAttrIdx {
+				t.Errorf("AttributeIndex = %d, want %d", crpe.AttributeIndex, tt.wantAttrIdx)
+			}
+			if crpe.Error() == "" {
+				t.Error("Error message should not be empty")
+			}
+		})
+	}
+}
+
+func TestCreateRenderPipelineError_VertexBufferMessages(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      *CreateRenderPipelineError
+		contains string
+	}{
+		{
+			name:     "misaligned stride",
+			err:      &CreateRenderPipelineError{Kind: CreateRenderPipelineErrorVertexStrideMisaligned, Label: "test", BufferIndex: 1, ArrayStride: 30},
+			contains: "arrayStride 30 is not a multiple of 4",
+		},
+		{
+			name:     "stride too large",
+			err:      &CreateRenderPipelineError{Kind: CreateRenderPipelineErrorVertexStrideTooLarge, Label: "test", ArrayStride: 2052, MaxArrayStride: 2048},
+			contains: "exceeds maxVertexBufferArrayStride 2048",
+		},
+		{
+			name:     "attribute out of stride",
+			err:      &CreateRenderPipelineError{Kind: CreateRenderPipelineErrorVertexAttributeOutOfStride, Label: "test", ArrayStride: 28, AttributeIndex: 1, AttributeOffset: 16, AttributeFormat: "Float32x4"},
+			contains: "does not fit in arrayStride 28",
+		},
+		{
+			name:     "attribute out of limit at stride 0",
+			err:      &CreateRenderPipelineError{Kind: CreateRenderPipelineErrorVertexAttributeOutOfStride, Label: "test", MaxArrayStride: 2048, AttributeOffset: 2040, AttributeFormat: "Float32x4"},
+			contains: "exceeds maxVertexBufferArrayStride 2048",
+		},
+		{
+			name:     "stride zero",
+			err:      &CreateRenderPipelineError{Kind: CreateRenderPipelineErrorVertexStrideZero, Label: "test"},
+			contains: "broadcast) is not supported on native backends",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if msg := tt.err.Error(); !strings.Contains(msg, tt.contains) {
+				t.Errorf("expected error to contain %q, got %q", tt.contains, msg)
+			}
+		})
+	}
+}

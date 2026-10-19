@@ -553,6 +553,24 @@ const (
 	CreateRenderPipelineErrorDepthFormatNoStencilAspect
 	// CreateRenderPipelineErrorHAL indicates the HAL backend failed to create the pipeline.
 	CreateRenderPipelineErrorHAL
+	// CreateRenderPipelineErrorVertexStrideMisaligned indicates a vertex buffer
+	// arrayStride that is not a multiple of 4.
+	// WebGPU spec: GPUVertexBufferLayout arrayStride must be a multiple of 4.
+	// Rust: pipeline::CreateRenderPipelineError::UnalignedVertexStride
+	CreateRenderPipelineErrorVertexStrideMisaligned
+	// CreateRenderPipelineErrorVertexStrideTooLarge indicates a vertex buffer
+	// arrayStride above Limits.MaxVertexBufferArrayStride.
+	// Rust: pipeline::CreateRenderPipelineError::VertexStrideTooLarge
+	CreateRenderPipelineErrorVertexStrideTooLarge
+	// CreateRenderPipelineErrorVertexAttributeOutOfStride indicates a vertex
+	// attribute whose offset plus format size runs past its buffer's arrayStride
+	// (or past Limits.MaxVertexBufferArrayStride when arrayStride is 0).
+	CreateRenderPipelineErrorVertexAttributeOutOfStride
+	// CreateRenderPipelineErrorVertexStrideZero indicates a vertex buffer with
+	// arrayStride 0. WebGPU allows it (every vertex reads the same element), but
+	// the native backends do not emulate it yet and disagree about what 0 means,
+	// so it is rejected until they do.
+	CreateRenderPipelineErrorVertexStrideZero
 )
 
 // CreateRenderPipelineError represents an error during render pipeline creation.
@@ -565,8 +583,23 @@ type CreateRenderPipelineError struct {
 	// TargetIndex is the color target index for format errors.
 	TargetIndex uint32
 	// Format is the texture format that caused the error.
-	Format   string
-	HALError error
+	Format string
+	// BufferIndex is the vertex buffer index for vertex layout errors.
+	BufferIndex uint32
+	// ArrayStride is the offending vertex buffer arrayStride for vertex layout errors.
+	ArrayStride uint64
+	// MaxArrayStride is Limits.MaxVertexBufferArrayStride for vertex layout errors.
+	MaxArrayStride uint32
+	// AttributeIndex is the attribute index within the vertex buffer for
+	// CreateRenderPipelineErrorVertexAttributeOutOfStride.
+	AttributeIndex uint32
+	// AttributeOffset is the attribute byte offset for
+	// CreateRenderPipelineErrorVertexAttributeOutOfStride.
+	AttributeOffset uint64
+	// AttributeFormat is the attribute vertex format for
+	// CreateRenderPipelineErrorVertexAttributeOutOfStride.
+	AttributeFormat string
+	HALError        error
 }
 
 // Error implements the error interface.
@@ -607,6 +640,22 @@ func (e *CreateRenderPipelineError) Error() string {
 			label, e.Format)
 	case CreateRenderPipelineErrorHAL:
 		return fmt.Sprintf("render pipeline %q: HAL error: %v", label, e.HALError)
+	case CreateRenderPipelineErrorVertexStrideMisaligned:
+		return fmt.Sprintf("render pipeline %q: vertex buffer [%d] arrayStride %d is not a multiple of 4",
+			label, e.BufferIndex, e.ArrayStride)
+	case CreateRenderPipelineErrorVertexStrideTooLarge:
+		return fmt.Sprintf("render pipeline %q: vertex buffer [%d] arrayStride %d exceeds maxVertexBufferArrayStride %d",
+			label, e.BufferIndex, e.ArrayStride, e.MaxArrayStride)
+	case CreateRenderPipelineErrorVertexAttributeOutOfStride:
+		if e.ArrayStride == 0 {
+			return fmt.Sprintf("render pipeline %q: vertex buffer [%d] attribute [%d] (%s at offset %d) exceeds maxVertexBufferArrayStride %d",
+				label, e.BufferIndex, e.AttributeIndex, e.AttributeFormat, e.AttributeOffset, e.MaxArrayStride)
+		}
+		return fmt.Sprintf("render pipeline %q: vertex buffer [%d] attribute [%d] (%s at offset %d) does not fit in arrayStride %d",
+			label, e.BufferIndex, e.AttributeIndex, e.AttributeFormat, e.AttributeOffset, e.ArrayStride)
+	case CreateRenderPipelineErrorVertexStrideZero:
+		return fmt.Sprintf("render pipeline %q: vertex buffer [%d] arrayStride 0 (broadcast) is not supported on native backends yet",
+			label, e.BufferIndex)
 	default:
 		return fmt.Sprintf("render pipeline %q: unknown error", label)
 	}

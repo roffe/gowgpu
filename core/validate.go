@@ -418,6 +418,11 @@ func ValidateRenderPipelineDescriptor(desc *hal.RenderPipelineDescriptor, limits
 		}
 	}
 
+	// RP10: Vertex buffer layouts.
+	if err := validateVertexBuffers(desc.Vertex.Buffers, label, limits); err != nil {
+		return err
+	}
+
 	// RP3-RP6: Fragment stage validation (if present).
 	if desc.Fragment != nil {
 		if err := validateFragmentStage(desc.Fragment, label, limits); err != nil {
@@ -483,6 +488,81 @@ func ValidateRenderPipelineDescriptor(desc *hal.RenderPipelineDescriptor, limits
 	}
 
 	return validateRenderPipelineFormatFeatures(desc, features)
+}
+
+// validateVertexBuffers checks RP10 vertex buffer layout constraints.
+//
+// WebGPU spec (GPUVertexBufferLayout validation):
+//   - arrayStride must be a multiple of 4;
+//   - arrayStride must not exceed maxVertexBufferArrayStride;
+//   - every attribute's offset + format size must fit in arrayStride, or in
+//     maxVertexBufferArrayStride when arrayStride is 0.
+//
+// arrayStride 0 is legal WebGPU and means every vertex reads the same element.
+// The native backends do not emulate it and disagree about what 0 means
+// (software drops the draw, GLES reads it as tightly packed, Metal sets a zero
+// stride without a constant step function), so it is rejected here until a
+// backend emulates it. The attribute check above already handles stride 0 the
+// way the spec does, so lifting this rejection needs no other change.
+func validateVertexBuffers(buffers []gputypes.VertexBufferLayout, label string, limits gputypes.Limits) error {
+	maxStride := uint64(limits.MaxVertexBufferArrayStride)
+	for i := range buffers {
+		vb := &buffers[i]
+		bufferIndex := uint32(i)
+
+		// RP10a: arrayStride must be a multiple of 4.
+		if vb.ArrayStride%4 != 0 {
+			return &CreateRenderPipelineError{
+				Kind:        CreateRenderPipelineErrorVertexStrideMisaligned,
+				Label:       label,
+				BufferIndex: bufferIndex,
+				ArrayStride: vb.ArrayStride,
+			}
+		}
+
+		// RP10b: arrayStride must not exceed the device limit (skipped when the limit is unset).
+		if maxStride > 0 && vb.ArrayStride > maxStride {
+			return &CreateRenderPipelineError{
+				Kind:           CreateRenderPipelineErrorVertexStrideTooLarge,
+				Label:          label,
+				BufferIndex:    bufferIndex,
+				ArrayStride:    vb.ArrayStride,
+				MaxArrayStride: limits.MaxVertexBufferArrayStride,
+			}
+		}
+
+		// RP10c: each attribute must fit in the stride, or in the limit when the stride is 0.
+		bound := vb.ArrayStride
+		if bound == 0 {
+			bound = maxStride
+		}
+		if bound > 0 {
+			for j, attr := range vb.Attributes {
+				if attr.Offset+attr.Format.Size() > bound {
+					return &CreateRenderPipelineError{
+						Kind:            CreateRenderPipelineErrorVertexAttributeOutOfStride,
+						Label:           label,
+						BufferIndex:     bufferIndex,
+						ArrayStride:     vb.ArrayStride,
+						MaxArrayStride:  limits.MaxVertexBufferArrayStride,
+						AttributeIndex:  uint32(j),
+						AttributeOffset: attr.Offset,
+						AttributeFormat: attr.Format.String(),
+					}
+				}
+			}
+		}
+
+		// RP10d: arrayStride 0 (broadcast) is not supported on native backends yet.
+		if vb.ArrayStride == 0 {
+			return &CreateRenderPipelineError{
+				Kind:        CreateRenderPipelineErrorVertexStrideZero,
+				Label:       label,
+				BufferIndex: bufferIndex,
+			}
+		}
+	}
+	return nil
 }
 
 // validateFragmentStage checks RP3-RP6 fragment stage constraints.
