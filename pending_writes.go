@@ -50,9 +50,11 @@ type pendingWrites struct {
 	// the write's own barriers leave it. Set by the device after creation.
 	tracker *core.DeviceTracker
 
-	// zeros is the zero-filled source of zeroTextureLocked, grown on demand
-	// and kept: the belt copies it into staging synchronously.
-	zeros []byte
+	// zeroBuf is what zeroTextureLocked copies zeros from, see zeroBuffer.
+	// zeros is its source where it can't copy (no batching, host-writable
+	// textures, rows wider than the buffer), grown on demand up to a band.
+	zeroBuf hal.Buffer
+	zeros   []byte
 
 	// encoder is the shared command encoder for recording copy commands.
 	// nil until the first write in a batch. Acquired from pool by activate().
@@ -374,8 +376,20 @@ func (pw *pendingWrites) writeTextureLocked(
 	if err != nil {
 		return fmt.Errorf("wgpu: pending writes: staging belt allocate texture: %w", err)
 	}
+	return pw.copyToTextureLocked(owner, dst, alloc.buffer, alloc.offset, alignedBytesPerRow, rowsPerImage, size)
+}
 
-	// Activate encoder.
+// copyToTextureLocked records a copy from src at offset into dst, between the
+// barriers that make the texture a copy destination and take it back to what
+// it is used as. pw.mu is held and usesBatching is set.
+func (pw *pendingWrites) copyToTextureLocked(
+	owner *Texture,
+	dst *hal.ImageCopyTexture,
+	src hal.Buffer,
+	offset uint64,
+	bytesPerRow, rowsPerImage uint32,
+	size *hal.Extent3D,
+) error {
 	enc, err := pw.activate()
 	if err != nil {
 		return fmt.Errorf("wgpu: pending writes: activate encoder: %w", err)
@@ -416,14 +430,14 @@ func (pw *pendingWrites) writeTextureLocked(
 	// Record copy command.
 	pw.texCopy[0] = hal.BufferTextureCopy{
 		BufferLayout: hal.ImageDataLayout{
-			Offset:       alloc.offset,
-			BytesPerRow:  alignedBytesPerRow,
+			Offset:       offset,
+			BytesPerRow:  bytesPerRow,
 			RowsPerImage: rowsPerImage,
 		},
 		TextureBase: *dst,
 		Size:        *size,
 	}
-	enc.CopyBufferToTexture(alloc.buffer, dst.Texture, pw.texCopy[:])
+	enc.CopyBufferToTexture(src, dst.Texture, pw.texCopy[:])
 
 	// A texture that is never sampled, a surface texture (presented or
 	// rendered over) or one made without TextureBinding, stays a copy
@@ -563,9 +577,10 @@ func coversTexture(t *Texture, dst *hal.ImageCopyTexture, size *hal.Extent3D) bo
 		max(size.DepthOrArrayLayers, 1) == max(s.DepthOrArrayLayers, 1)
 }
 
-// zeroChunk caps one zeroing write, which goes through the staging belt like
-// any other, so a big texture is zeroed some rows at a time.
-const zeroChunk = 16 << 20
+// zeroBand is how many bytes of a texture are zeroed at a time, some rows of
+// it: the size of the zero buffer, and the cap on the CPU zeros. It holds a
+// row of a 16384 texel wide texture of the widest format.
+const zeroBand = 256 << 10
 
 // zeroTextureLocked writes zeros over every mip and layer of t. pw.mu is held.
 func (pw *pendingWrites) zeroTextureLocked(t *Texture) error {
@@ -573,34 +588,74 @@ func (pw *pendingWrites) zeroTextureLocked(t *Texture) error {
 	if raw == nil {
 		return nil
 	}
+	// A host-writable texture takes writes on the CPU straight away, which a
+	// copy made at the submit would land on top of.
+	hw, ok := raw.(interface{ IsHostWritable() bool })
+	copyZeros := pw.usesBatching && !(ok && hw.IsHostWritable())
 	ct := t.coreTexture
 	s := ct.Size()
 	bpp := ct.Format().BlockCopySize()
-	zeros := pw.zeros
-	defer func() { pw.zeros = zeros }()
 	for mip := range max(ct.MipLevelCount(), 1) {
 		w, h, layers := max(s.Width>>mip, 1), max(s.Height>>mip, 1), max(s.DepthOrArrayLayers, 1)
 		if ct.Dimension() == gputypes.TextureDimension3D {
 			layers = max(layers>>mip, 1)
 		}
 		bytesPerRow := alignUp(w*bpp, pendingWritesRowPitchAlignment)
-		rows := min(h, max(zeroChunk/bytesPerRow, 1))
-		if n := int(bytesPerRow * rows); len(zeros) < n {
-			zeros = make([]byte, n)
+		rows := min(h, max(zeroBand/bytesPerRow, 1))
+		var zeroBuf hal.Buffer
+		if copyZeros && bytesPerRow <= zeroBand {
+			var err error
+			if zeroBuf, err = pw.zeroBuffer(); err != nil {
+				return fmt.Errorf("wgpu: zero new texture: %w", err)
+			}
+		} else if n := int(bytesPerRow * rows); len(pw.zeros) < n {
+			pw.zeros = make([]byte, n)
 		}
 		for z := range layers {
 			for y := uint32(0); y < h; y += rows {
 				n := min(rows, h-y)
 				dst := hal.ImageCopyTexture{Texture: raw, MipLevel: mip, Origin: hal.Origin3D{Y: y, Z: z}, Aspect: gputypes.TextureAspectAll}
-				layout := hal.ImageDataLayout{BytesPerRow: bytesPerRow, RowsPerImage: n}
 				size := hal.Extent3D{Width: w, Height: n, DepthOrArrayLayers: 1}
-				if err := pw.writeTextureLocked(t, &dst, zeros[:bytesPerRow*n], &layout, &size); err != nil {
+				var err error
+				if zeroBuf != nil {
+					err = pw.copyToTextureLocked(t, &dst, zeroBuf, 0, bytesPerRow, n, &size)
+				} else {
+					layout := hal.ImageDataLayout{BytesPerRow: bytesPerRow, RowsPerImage: n}
+					err = pw.writeTextureLocked(t, &dst, pw.zeros[:bytesPerRow*n], &layout, &size)
+				}
+				if err != nil {
 					return fmt.Errorf("wgpu: zero new texture: %w", err)
 				}
 			}
 		}
 	}
 	return nil
+}
+
+// zeroBuffer returns the zeroBand bytes of zeros that textures are zeroed
+// from, made on first use and kept. Zeroing a texture by copies from it keeps
+// a texture's worth of zeros out of the Go heap and out of the staging belt,
+// which would keep a buffer that size mapped for good.
+func (pw *pendingWrites) zeroBuffer() (hal.Buffer, error) {
+	if pw.zeroBuf != nil {
+		return pw.zeroBuf, nil
+	}
+	buf, err := pw.halDevice.CreateBuffer(&hal.BufferDescriptor{
+		Label:            "(wgpu internal) zero buffer",
+		Size:             zeroBand,
+		Usage:            gputypes.BufferUsageCopySrc | gputypes.BufferUsageMapWrite,
+		MappedAtCreation: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	// Mapped memory comes with whatever was in it.
+	if err := pw.halQueue.WriteBuffer(buf, 0, make([]byte, zeroBand)); err != nil {
+		pw.halDevice.DestroyBuffer(buf)
+		return nil, err
+	}
+	pw.zeroBuf = buf
+	return buf, nil
 }
 
 // copyTextureDataAligned copies texture data with row pitch alignment padding.
@@ -947,6 +1002,10 @@ func (pw *pendingWrites) destroy() {
 	// Destroy the staging belt (releases all chunk buffers).
 	if pw.belt != nil {
 		pw.belt.destroy()
+	}
+	if pw.zeroBuf != nil {
+		pw.halDevice.DestroyBuffer(pw.zeroBuf)
+		pw.zeroBuf = nil
 	}
 
 	// Clear pool reference — pool is owned by Device, not PendingWrites.

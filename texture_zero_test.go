@@ -5,6 +5,7 @@ package wgpu_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/roffe/gowgpu"
@@ -15,13 +16,21 @@ import (
 // promises. The backends hand out whatever the memory held before, so the
 // test leaves some 0xab textures behind for the new one to land on.
 func TestNewTextureIsZeroed(t *testing.T) {
+	// 1024x200 is zeroed in bands of rows, see zeroBand.
+	for _, sz := range []struct{ w, h uint32 }{{64, 64}, {1024, 200}} {
+		t.Run(fmt.Sprintf("%dx%d", sz.w, sz.h), func(t *testing.T) { testNewTextureIsZeroed(t, sz.w, sz.h) })
+	}
+}
+
+func testNewTextureIsZeroed(t *testing.T, w, h uint32) {
 	inst, adapter, device := newDevice(t)
 	defer inst.Release()
 	defer adapter.Release()
 	defer device.Release()
 	q := device.Queue()
 
-	const w, h, row = 64, 64, 3
+	const row = 3
+	size := uint64(w * h * 4)
 	desc := &wgpu.TextureDescriptor{
 		Size:          wgpu.Extent3D{Width: w, Height: h, DepthOrArrayLayers: 1},
 		MipLevelCount: 1,
@@ -33,7 +42,7 @@ func TestNewTextureIsZeroed(t *testing.T) {
 	write := func(tex *wgpu.Texture, y, rows uint32, b byte) {
 		t.Helper()
 		err := q.WriteTexture(&wgpu.ImageCopyTexture{Texture: tex, Origin: wgpu.Origin3D{Y: y}},
-			bytes.Repeat([]byte{b}, w*4*int(rows)),
+			bytes.Repeat([]byte{b}, int(w*4*rows)),
 			&wgpu.ImageDataLayout{BytesPerRow: w * 4, RowsPerImage: rows},
 			&wgpu.Extent3D{Width: w, Height: rows, DepthOrArrayLayers: 1})
 		if err != nil {
@@ -63,7 +72,7 @@ func TestNewTextureIsZeroed(t *testing.T) {
 	defer tex.Release()
 	write(tex, row, 1, 0xff) // a partial write, the rest is never touched
 
-	buf, err := device.CreateBuffer(&wgpu.BufferDescriptor{Size: w * h * 4, Usage: gputypes.BufferUsageMapRead | gputypes.BufferUsageCopyDst})
+	buf, err := device.CreateBuffer(&wgpu.BufferDescriptor{Size: size, Usage: gputypes.BufferUsageMapRead | gputypes.BufferUsageCopyDst})
 	if err != nil {
 		t.Fatalf("CreateBuffer: %v", err)
 	}
@@ -85,20 +94,20 @@ func TestNewTextureIsZeroed(t *testing.T) {
 	if _, err := q.Submit(cb); err != nil {
 		t.Fatalf("Submit: %v", err)
 	}
-	if err := buf.Map(context.Background(), wgpu.MapModeRead, 0, w*h*4); err != nil {
+	if err := buf.Map(context.Background(), wgpu.MapModeRead, 0, size); err != nil {
 		t.Fatalf("Map: %v", err)
 	}
-	rng, err := buf.MappedRange(0, w*h*4)
+	rng, err := buf.MappedRange(0, size)
 	if err != nil {
 		t.Fatalf("MappedRange: %v", err)
 	}
 	px := rng.Bytes()
-	for y := range h {
+	for y := range int(h) {
 		want := byte(0)
 		if y == row {
 			want = 0xff
 		}
-		for x, b := range px[y*w*4 : (y+1)*w*4] {
+		for x, b := range px[y*int(w)*4 : (y+1)*int(w)*4] {
 			if b != want {
 				t.Fatalf("byte %d of row %d is %#x, want %#x", x, y, b, want)
 			}
