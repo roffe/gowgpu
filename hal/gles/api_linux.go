@@ -8,6 +8,7 @@ package gles
 import (
 	"fmt"
 	"runtime"
+	"sync"
 
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
@@ -98,11 +99,21 @@ func (Backend) CreateInstance(_ *hal.InstanceDescriptor) (hal.Instance, error) {
 }
 
 // Instance implements hal.Instance for the OpenGL backend on Linux.
-// ctx is non-nil when an instance-level EGL context was created successfully
-// (X11/headless). On Wayland it may be nil — CreateSurface provides a
-// Surface-owned AdapterContext when a window handle is available.
+// ctx is non-nil when an EGL context is available: either made at instance
+// init (X11/headless) or adopted from the first CreateSurface on Wayland,
+// where no instance context could be made. The Instance owns ctx for its
+// whole lifetime and destroys it last, in Destroy.
 type Instance struct {
+	mu  sync.Mutex
 	ctx *AdapterContext
+}
+
+// context returns the instance AdapterContext. Safe to call while
+// CreateSurface adopts the context it made on another goroutine.
+func (i *Instance) context() *AdapterContext {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	return i.ctx
 }
 
 // CreateSurface creates an OpenGL surface from window handles.
@@ -116,8 +127,10 @@ type Instance struct {
 // is lightweight (just HWND + reference to shared ctx).
 //
 // When Instance has no context (Wayland — no wl_display* at init), CreateSurface
-// creates a new EGL context with the caller's displayHandle and wraps it in a
-// Surface-owned AdapterContext (intentional Wayland divergence).
+// creates a new EGL context with the caller's displayHandle and hands it to the
+// Instance, which owns it from then on. The Surface only shares it: the Adapter,
+// Device and Queue made from the Surface use the same context and outlive the
+// window, so the Surface must not free it.
 func (i *Instance) CreateSurface(target hal.SurfaceTarget) (hal.Surface, error) {
 	var targetWindowKind egl.WindowKind
 	switch target.Kind {
@@ -135,17 +148,17 @@ func (i *Instance) CreateSurface(target hal.SurfaceTarget) (hal.Surface, error) 
 	// Path A: share Instance AdapterContext (X11 — context matches window system).
 	// Do NOT share if Instance context is surfaceless (headless/Wayland fallback)
 	// and Surface needs a window — the EGL display won't support eglCreateWindowSurface.
-	if i.ctx != nil && i.ctx.EGL() != nil && i.ctx.GL() != nil && i.ctx.EGL().WindowKind() == targetWindowKind {
+	if instCtx := i.context(); instCtx != nil && instCtx.EGL() != nil && instCtx.GL() != nil && instCtx.EGL().WindowKind() == targetWindowKind {
 		hal.Logger().Info("gles: surface sharing Instance AdapterContext")
-		glCtx := i.ctx.Lock()
+		glCtx := instCtx.Lock()
 		version := glCtx.GetString(gl.VERSION)
 		renderer := glCtx.GetString(gl.RENDERER)
-		i.ctx.Unlock()
+		instCtx.Unlock()
 		return &Surface{
 			displayHandle: displayHandle,
 			windowHandle:  windowHandle,
-			ctx:           i.ctx,
-			eglDisplay:    i.ctx.EGL().Display(),
+			ctx:           instCtx,
+			eglDisplay:    instCtx.EGL().Display(),
 			ownsContext:   false,
 			version:       version,
 			renderer:      renderer,
@@ -187,19 +200,44 @@ func (i *Instance) CreateSurface(target hal.SurfaceTarget) (hal.Surface, error) 
 
 	version := glCtx.GetString(gl.VERSION)
 	renderer := glCtx.GetString(gl.RENDERER)
-	hal.Logger().Info("gles: surface created with owned AdapterContext",
+	hal.Logger().Info("gles: surface created with AdapterContext",
 		"version", version, "renderer", renderer, "gles", config.GLES)
 
 	egl.MakeCurrent(eglCtx.Display(), egl.NoSurface, egl.NoSurface, egl.NoContext)
+
+	// The Adapter, Device and Queue made from this Surface share this context
+	// and outlive the Surface, so the Instance owns it, not the Surface. With
+	// the Surface owning it, closing the window freed the EGL context first and
+	// the Device.Destroy that followed locked a nil EGL context and ran its GL
+	// calls on a nil *gl.Context, a panic on shutdown.
+	adapterCtx := NewAdapterContext(eglCtx, glCtx, true)
+	if prev := i.adoptContext(adapterCtx); prev != nil {
+		prev.Destroy()
+	}
+
 	return &Surface{
 		displayHandle: displayHandle,
 		windowHandle:  windowHandle,
-		ctx:           NewAdapterContext(eglCtx, glCtx, true),
+		ctx:           adapterCtx,
 		eglDisplay:    eglCtx.Display(),
-		ownsContext:   true,
+		ownsContext:   false,
 		version:       version,
 		renderer:      renderer,
 	}, nil
+}
+
+// adoptContext makes ctx the instance AdapterContext and returns the one it
+// replaces, if any, for the caller to destroy. The Instance owns the context
+// from here on, so it lives as long as the Surface and the Device that share it.
+func (i *Instance) adoptContext(ctx *AdapterContext) (prev *AdapterContext) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	prev = i.ctx
+	i.ctx = ctx
+	if prev == ctx {
+		return nil
+	}
+	return prev
 }
 
 // EnumerateAdapters returns available OpenGL adapters.
@@ -210,10 +248,11 @@ func (i *Instance) EnumerateAdapters(surfaceHint hal.Surface) []hal.ExposedAdapt
 		return []hal.ExposedAdapter{surface.GetAdapterInfo()}
 	}
 
-	// Priority 2: instance-level AdapterContext (created in CreateInstance via pbuffer/surfaceless)
-	if i.ctx != nil && i.ctx.GL() != nil {
+	// Priority 2: instance-level AdapterContext (created in CreateInstance via
+	// pbuffer/surfaceless, or adopted from the first CreateSurface on Wayland)
+	if instCtx := i.context(); instCtx != nil && instCtx.GL() != nil {
 		return []hal.ExposedAdapter{
-			makeAdapterFromContext(i.ctx),
+			makeAdapterFromContext(instCtx),
 		}
 	}
 
@@ -277,10 +316,15 @@ func makeAdapterFromContext(ctx *AdapterContext) hal.ExposedAdapter {
 	}
 }
 
-// Destroy releases the instance resources.
+// Destroy releases the instance resources. The Instance owns its AdapterContext,
+// made at init or adopted from a Surface, and is released after the Device and
+// the Surface, so this is the last destroy of the shared EGL context.
 func (i *Instance) Destroy() {
-	if i.ctx != nil {
-		i.ctx.Destroy()
-		i.ctx = nil
+	i.mu.Lock()
+	ctx := i.ctx
+	i.ctx = nil
+	i.mu.Unlock()
+	if ctx != nil {
+		ctx.Destroy()
 	}
 }

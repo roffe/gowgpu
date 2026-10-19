@@ -14,17 +14,19 @@ import (
 )
 
 // Surface implements hal.Surface for OpenGL on Linux.
-// When Instance has a pre-created AdapterContext (X11/headless), ownsContext=false —
-// Surface shares Instance's context (Windows AdapterContext parity).
-// When Instance has no context (Wayland), ownsContext=true — Surface owns its own
-// AdapterContext (intentional Wayland divergence).
+// A Surface never owns its AdapterContext: it shares the instance context
+// (X11/headless), or the context it makes for Wayland, or for a window kind
+// the instance context does not match, is adopted by the Instance in
+// CreateSurface. The Adapter, Device and Queue made from the Surface share
+// that context and outlive the window, so it must stay alive past
+// Surface.Destroy. ownsContext stays for the tests and is always false now.
 type Surface struct {
 	displayHandle uintptr
 	windowHandle  uintptr
 	ctx           *AdapterContext
 	eglDisplay    egl.EGLDisplay
 	eglSurface    egl.EGLSurface
-	ownsContext   bool // true = Surface owns AdapterContext, false = shared from Instance
+	ownsContext   bool // always false: the Instance owns the AdapterContext
 	version       string
 	renderer      string
 	configured    bool
