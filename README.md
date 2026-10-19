@@ -126,11 +126,11 @@ fyne needs cgo anyway for GLFW and its mobile drivers, so there it costs nothing
 | Linux | GL | NVIDIA through EGL, Wayland and X11 |
 | Windows | DX12 | a Windows VM, and WARP on GitHub Actions under `-race` |
 | Windows | Vulkan | wine (winevulkan) |
-| macOS | Metal | GitHub Actions macos-15 |
+| macOS | Metal | Apple M2 Pro, GitHub Actions macos-15 |
 | iOS | Metal | the simulator |
 | Android 12 | Vulkan, GLES | Lenovo Tab M10, Mali-G52 |
 
-Not run yet: the browser backend, the BSDs, GL on Windows and real Apple hardware. If you try one of those, open an issue and tell me how it went.
+Not run yet: the browser backend, the BSDs, GL on Windows and a real iOS device. If you try one of those, open an issue and tell me how it went.
 
 ## Known issues
 
