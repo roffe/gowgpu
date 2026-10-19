@@ -283,44 +283,13 @@ func (e *CommandEncoder) result() *CommandBuffer {
 // layout to PRESENT_SRC_KHR. Called from EndEncoding to avoid a separate
 // vkQueueSubmit in ensurePresentLayout.
 //
-// The source access mask and pipeline stage are determined by the layout the
-// render pass left the image in, matching ensurePresentLayout's switch logic.
+// The source access mask and pipeline stage come from the layout the command
+// buffer leaves the image in: what the render pass left, or a copy after it
+// (layoutAccess), the same as ensurePresentLayout uses.
 func (e *CommandEncoder) injectInlinePresentBarrier() {
-	// Determine source access mask and pipeline stage based on the tracked layout.
-	var srcAccess vk.AccessFlags
-	var srcStage vk.PipelineStageFlags
-	switch e.swapchainLayout {
-	case vk.ImageLayoutColorAttachmentOptimal:
-		srcAccess = vk.AccessFlags(vk.AccessColorAttachmentWriteBit)
-		srcStage = vk.PipelineStageFlags(vk.PipelineStageColorAttachmentOutputBit)
-	case vk.ImageLayoutTransferDstOptimal:
-		srcAccess = vk.AccessFlags(vk.AccessTransferWriteBit)
-		srcStage = vk.PipelineStageFlags(vk.PipelineStageTransferBit)
-	case vk.ImageLayoutTransferSrcOptimal:
-		srcAccess = vk.AccessFlags(vk.AccessTransferReadBit)
-		srcStage = vk.PipelineStageFlags(vk.PipelineStageTransferBit)
-	default:
-		srcAccess = 0
-		srcStage = vk.PipelineStageFlags(vk.PipelineStageTopOfPipeBit)
-	}
-
-	barrier := vk.ImageMemoryBarrier{
-		SType:               vk.StructureTypeImageMemoryBarrier,
-		SrcAccessMask:       srcAccess,
-		DstAccessMask:       0, // Present engine does not need explicit access
-		OldLayout:           e.swapchainLayout,
-		NewLayout:           vk.ImageLayoutPresentSrcKhr,
-		SrcQueueFamilyIndex: vk.QueueFamilyIgnored,
-		DstQueueFamilyIndex: vk.QueueFamilyIgnored,
-		Image:               e.swapchainImage,
-		SubresourceRange: vk.ImageSubresourceRange{
-			AspectMask:     vk.ImageAspectFlags(vk.ImageAspectColorBit),
-			BaseMipLevel:   0,
-			LevelCount:     1,
-			BaseArrayLayer: 0,
-			LayerCount:     1,
-		},
-	}
+	srcAccess, srcStage := layoutAccess(e.swapchainLayout)
+	// The present engine does not need explicit access.
+	barrier := swapchainImageBarrier(e.swapchainImage, e.swapchainLayout, vk.ImageLayoutPresentSrcKhr, srcAccess, 0)
 
 	e.device.cmds.CmdPipelineBarrier(
 		e.active,
@@ -367,13 +336,25 @@ func (e *CommandEncoder) setupInlinePresentBarrier(
 	sc := swapView.swapchain
 	idx := sc.currentImage
 
-	// Reverse barrier for multi-submit LoadOp::Load: if a previous submit's
-	// EndEncoding transitioned the image to PRESENT_SRC_KHR, we must
-	// transition back to COLOR_ATTACHMENT_OPTIMAL before the render pass.
-	if int(idx) < len(sc.imageLayouts) &&
-		sc.imageLayouts[idx] == vk.ImageLayoutPresentSrcKhr &&
-		loadOpToVk(loadOp) == vk.AttachmentLoadOpLoad {
-		e.injectReverseBarrier(sc, idx)
+	// A barrier ahead of the pass takes the image to COLOR_ATTACHMENT_OPTIMAL
+	// from the layout the swapchain tracks it in when the pass cannot do it
+	// itself: from PRESENT_SRC_KHR, left by an earlier submit of the frame
+	// (its inline present barrier), when the pass loads the image, which
+	// needs it in COLOR_ATTACHMENT_OPTIMAL already; and from a transfer or
+	// shader layout, left by a copy, a queue write or an explicit barrier,
+	// loading or clearing, since the pass's implicit dependency waits for
+	// nothing and the transfer has to be done before the pass writes. From
+	// UNDEFINED and COLOR_ATTACHMENT_OPTIMAL the pass's own layouts do.
+	if int(idx) < len(sc.imageLayouts) {
+		switch cur := sc.imageLayouts[idx]; cur {
+		case vk.ImageLayoutPresentSrcKhr:
+			if loadOpToVk(loadOp) == vk.AttachmentLoadOpLoad {
+				e.injectReverseBarrier(sc, idx, cur)
+			}
+		case vk.ImageLayoutTransferSrcOptimal, vk.ImageLayoutTransferDstOptimal,
+			vk.ImageLayoutShaderReadOnlyOptimal, vk.ImageLayoutGeneral:
+			e.injectReverseBarrier(sc, idx, cur)
+		}
 	}
 
 	// Record the swapchain image for EndEncoding's forward barrier.
@@ -382,21 +363,120 @@ func (e *CommandEncoder) setupInlinePresentBarrier(
 	e.swapchain = sc
 }
 
-// injectReverseBarrier transitions a swapchain image from PRESENT_SRC_KHR
-// back to COLOR_ATTACHMENT_OPTIMAL inside the active command buffer. This is
-// needed in multi-submit frames when a previous submit's EndEncoding injected
-// an inline forward barrier, but the current submit uses LoadOp::Load which
-// requires the image in COLOR_ATTACHMENT_OPTIMAL.
-func (e *CommandEncoder) injectReverseBarrier(sc *Swapchain, idx uint32) {
-	barrier := vk.ImageMemoryBarrier{
+// injectReverseBarrier transitions a swapchain image from oldLayout, the
+// layout the swapchain tracks it in, to COLOR_ATTACHMENT_OPTIMAL inside the
+// active command buffer, ahead of a render pass on it: back from
+// PRESENT_SRC_KHR in a multi-submit frame whose earlier submit injected the
+// inline present barrier and whose later pass loads the image, or from the
+// transfer layout a copy or queue write left it in.
+func (e *CommandEncoder) injectReverseBarrier(sc *Swapchain, idx uint32, oldLayout vk.ImageLayout) {
+	srcAccess, srcStage := layoutAccess(oldLayout)
+	dstAccess, dstStage := layoutAccess(vk.ImageLayoutColorAttachmentOptimal)
+	barrier := swapchainImageBarrier(sc.images[idx], oldLayout, vk.ImageLayoutColorAttachmentOptimal, srcAccess, dstAccess)
+	e.device.cmds.CmdPipelineBarrier(
+		e.active,
+		srcStage,
+		dstStage,
+		0,      // dependencyFlags
+		0, nil, // memory barriers
+		0, nil, // buffer barriers
+		1, &barrier,
+	)
+	sc.SetImageLayout(idx, vk.ImageLayoutColorAttachmentOptimal)
+}
+
+// imageOf is the VkImage a copy works on, with its format and dimension: a
+// texture of this device, or a swapchain image, which is 2D. ok is false for
+// anything else and for a destroyed texture.
+func imageOf(t hal.Texture) (image vk.Image, format gputypes.TextureFormat, dimension gputypes.TextureDimension, ok bool) {
+	switch t := t.(type) {
+	case *Texture:
+		if t != nil && t.handle != 0 {
+			return t.handle, t.format, t.dimension, true
+		}
+	case *SwapchainTexture:
+		if t != nil && t.handle != 0 {
+			return t.handle, t.format, gputypes.TextureDimension2D, true
+		}
+	}
+	return 0, 0, 0, false
+}
+
+// transitionSwapchainUsage is a barrier on a swapchain image into usage, from
+// the layout the swapchain tracks the image in. The barrier's old usage does
+// not name that layout: one tracker index stands for every image of the
+// swapchain in the core, so the usage it last saw was another image's, and
+// it never sees the present. A barrier into RenderAttachment is left to the
+// render pass, which transitions the image itself (BeginRenderPass and the
+// render pass's layouts), and so is one into no usage.
+func (e *CommandEncoder) transitionSwapchainUsage(st *SwapchainTexture, usage gputypes.TextureUsage) {
+	if usage == 0 || usage&gputypes.TextureUsageRenderAttachment != 0 {
+		return
+	}
+	_, _, layout := textureBarrierState(nil, textureUses(nil, 0, usage))
+	e.transitionSwapchainImage(st, layout)
+}
+
+// ensureSwapchainLayout puts the swapchain image a copy is about to use in
+// layout when nothing has: the core skips a barrier into the usage it last
+// saw the surface texture in, which was another image of the swapchain, and
+// the first use of an image in a command buffer has no barrier in it at all.
+// A texture of this device is left alone, its barriers are the core's.
+func (e *CommandEncoder) ensureSwapchainLayout(t hal.Texture, layout vk.ImageLayout) {
+	st, ok := t.(*SwapchainTexture)
+	if !ok || st.swapchain == nil || int(st.index) >= len(st.swapchain.imageLayouts) {
+		return
+	}
+	if st.swapchain.imageLayouts[st.index] != layout {
+		e.transitionSwapchainImage(st, layout)
+	}
+}
+
+// transitionSwapchainImage records the barrier that takes a swapchain image
+// from the layout the swapchain tracks it in to layout, and tracks the new
+// one: in the swapchain, so present and the next render pass start from it,
+// and in the encoder when a render pass of this command buffer targets the
+// image, so the inline present barrier at EndEncoding does too. The tracking
+// follows recording order, which has to be the order of execution, as it
+// does for the render pass and present barriers: the core records no
+// submit-time barrier on a surface texture for that reason.
+func (e *CommandEncoder) transitionSwapchainImage(st *SwapchainTexture, layout vk.ImageLayout) {
+	sc := st.swapchain
+	if sc == nil || int(st.index) >= len(sc.imageLayouts) {
+		return
+	}
+	oldLayout := sc.imageLayouts[st.index]
+	srcAccess, srcStage := layoutAccess(oldLayout)
+	dstAccess, dstStage := layoutAccess(layout)
+	barrier := swapchainImageBarrier(st.handle, oldLayout, layout, srcAccess, dstAccess)
+	vkCmdPipelineBarrier(
+		e.device.cmds,
+		e.active,
+		srcStage,
+		barrierDstStages(dstStage),
+		0,
+		0, nil,
+		0, nil,
+		1, &barrier,
+	)
+	sc.SetImageLayout(st.index, layout)
+	if e.swapchainImage == st.handle {
+		e.swapchainLayout = layout
+	}
+}
+
+// swapchainImageBarrier is the image barrier that takes a swapchain image,
+// one colour level and layer, from oldLayout to newLayout.
+func swapchainImageBarrier(image vk.Image, oldLayout, newLayout vk.ImageLayout, srcAccess, dstAccess vk.AccessFlags) vk.ImageMemoryBarrier {
+	return vk.ImageMemoryBarrier{
 		SType:               vk.StructureTypeImageMemoryBarrier,
-		SrcAccessMask:       0, // Present engine has no pending writes
-		DstAccessMask:       vk.AccessFlags(vk.AccessColorAttachmentWriteBit | vk.AccessColorAttachmentReadBit),
-		OldLayout:           vk.ImageLayoutPresentSrcKhr,
-		NewLayout:           vk.ImageLayoutColorAttachmentOptimal,
+		SrcAccessMask:       srcAccess,
+		DstAccessMask:       dstAccess,
+		OldLayout:           oldLayout,
+		NewLayout:           newLayout,
 		SrcQueueFamilyIndex: vk.QueueFamilyIgnored,
 		DstQueueFamilyIndex: vk.QueueFamilyIgnored,
-		Image:               sc.images[idx],
+		Image:               image,
 		SubresourceRange: vk.ImageSubresourceRange{
 			AspectMask:     vk.ImageAspectFlags(vk.ImageAspectColorBit),
 			BaseMipLevel:   0,
@@ -405,16 +485,32 @@ func (e *CommandEncoder) injectReverseBarrier(sc *Swapchain, idx uint32) {
 			LayerCount:     1,
 		},
 	}
-	e.device.cmds.CmdPipelineBarrier(
-		e.active,
-		vk.PipelineStageFlags(vk.PipelineStageBottomOfPipeBit),
-		vk.PipelineStageFlags(vk.PipelineStageColorAttachmentOutputBit),
-		0,      // dependencyFlags
-		0, nil, // memory barriers
-		0, nil, // buffer barriers
-		1, &barrier,
-	)
-	sc.SetImageLayout(idx, vk.ImageLayoutColorAttachmentOptimal)
+}
+
+// layoutAccess is the access and stage of the work that uses a swapchain
+// image in layout: the source side of a barrier out of the layout, the
+// destination side of one into it. PRESENT_SRC_KHR is the present engine's,
+// which has no access of its own; a barrier out of it chains behind the one
+// that put it there, at the bottom of the pipe. UNDEFINED has nothing before
+// it.
+func layoutAccess(layout vk.ImageLayout) (vk.AccessFlags, vk.PipelineStageFlags) {
+	switch layout {
+	case vk.ImageLayoutColorAttachmentOptimal:
+		return vk.AccessFlags(vk.AccessColorAttachmentWriteBit | vk.AccessColorAttachmentReadBit),
+			vk.PipelineStageFlags(vk.PipelineStageColorAttachmentOutputBit)
+	case vk.ImageLayoutTransferDstOptimal:
+		return vk.AccessFlags(vk.AccessTransferWriteBit), vk.PipelineStageFlags(vk.PipelineStageTransferBit)
+	case vk.ImageLayoutTransferSrcOptimal:
+		return vk.AccessFlags(vk.AccessTransferReadBit), vk.PipelineStageFlags(vk.PipelineStageTransferBit)
+	case vk.ImageLayoutShaderReadOnlyOptimal:
+		return vk.AccessFlags(vk.AccessShaderReadBit), shaderStages
+	case vk.ImageLayoutGeneral:
+		return vk.AccessFlags(vk.AccessShaderReadBit | vk.AccessShaderWriteBit), shaderStages
+	case vk.ImageLayoutPresentSrcKhr:
+		return 0, vk.PipelineStageFlags(vk.PipelineStageBottomOfPipeBit)
+	default:
+		return 0, vk.PipelineStageFlags(vk.PipelineStageTopOfPipeBit)
+	}
 }
 
 // DiscardEncoding discards the current recording without creating a command buffer.
@@ -598,6 +694,10 @@ func (e *CommandEncoder) TransitionTextures(barriers []hal.TextureBarrier) {
 	}
 	var srcStages, dstStages vk.PipelineStageFlags
 	for _, b := range barriers {
+		if st, ok := b.Texture.(*SwapchainTexture); ok {
+			e.transitionSwapchainUsage(st, b.Usage.NewUsage)
+			continue
+		}
 		tex, ok := b.Texture.(*Texture)
 		if !ok || tex.handle == 0 {
 			hal.Logger().Warn("TransitionTextures: skipping invalid texture (nil or destroyed)")
@@ -752,20 +852,21 @@ func (e *CommandEncoder) CopyBufferToTexture(src hal.Buffer, dst hal.Texture, re
 	}
 
 	srcBuf, srcOk := src.(*Buffer)
-	dstTex, dstOk := dst.(*Texture)
+	dstImage, dstFormat, dstDimension, dstOk := imageOf(dst)
 	if !srcOk || !dstOk || len(regions) == 0 {
 		return
 	}
+	e.ensureSwapchainLayout(dst, vk.ImageLayoutTransferDstOptimal)
 
 	// The regions stay on the stack for the usual one-region copy: the
 	// command does not keep them.
 	var stack [4]vk.BufferImageCopy
-	vkRegions := convertBufferImageCopyRegions(stack[:0], regions, dstTex.format, dstTex.dimension)
+	vkRegions := convertBufferImageCopyRegions(stack[:0], regions, dstFormat, dstDimension)
 	vkCmdCopyBufferToImage(
 		e.device.cmds,
 		e.active,
 		srcBuf.handle,
-		dstTex.handle,
+		dstImage,
 		vk.ImageLayoutTransferDstOptimal,
 		uint32(len(vkRegions)),
 		&vkRegions[0],
@@ -778,18 +879,19 @@ func (e *CommandEncoder) CopyTextureToBuffer(src hal.Texture, dst hal.Buffer, re
 		return
 	}
 
-	srcTex, srcOk := src.(*Texture)
+	srcImage, srcFormat, srcDimension, srcOk := imageOf(src)
 	dstBuf, dstOk := dst.(*Buffer)
 	if !srcOk || !dstOk || len(regions) == 0 {
 		return
 	}
+	e.ensureSwapchainLayout(src, vk.ImageLayoutTransferSrcOptimal)
 
 	var stack [4]vk.BufferImageCopy
-	vkRegions := convertBufferImageCopyRegions(stack[:0], regions, srcTex.format, srcTex.dimension)
+	vkRegions := convertBufferImageCopyRegions(stack[:0], regions, srcFormat, srcDimension)
 	vkCmdCopyImageToBuffer(
 		e.device.cmds,
 		e.active,
-		srcTex.handle,
+		srcImage,
 		vk.ImageLayoutTransferSrcOptimal,
 		dstBuf.handle,
 		uint32(len(vkRegions)),
@@ -803,17 +905,19 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst hal.Texture, regions []ha
 		return
 	}
 
-	srcTex, srcOk := src.(*Texture)
-	dstTex, dstOk := dst.(*Texture)
+	srcImage, srcFormat, _, srcOk := imageOf(src)
+	dstImage, dstFormat, _, dstOk := imageOf(dst)
 	if !srcOk || !dstOk || len(regions) == 0 {
 		return
 	}
+	e.ensureSwapchainLayout(src, vk.ImageLayoutTransferSrcOptimal)
+	e.ensureSwapchainLayout(dst, vk.ImageLayoutTransferDstOptimal)
 
 	vkRegions := make([]vk.ImageCopy, len(regions))
 	for i, r := range regions {
 		vkRegions[i] = vk.ImageCopy{
 			SrcSubresource: vk.ImageSubresourceLayers{
-				AspectMask:     textureAspectToVk(r.SrcBase.Aspect, srcTex.format),
+				AspectMask:     textureAspectToVk(r.SrcBase.Aspect, srcFormat),
 				MipLevel:       r.SrcBase.MipLevel,
 				BaseArrayLayer: 0,
 				LayerCount:     1,
@@ -824,7 +928,7 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst hal.Texture, regions []ha
 				Z: int32(r.SrcBase.Origin.Z),
 			},
 			DstSubresource: vk.ImageSubresourceLayers{
-				AspectMask:     textureAspectToVk(r.DstBase.Aspect, dstTex.format),
+				AspectMask:     textureAspectToVk(r.DstBase.Aspect, dstFormat),
 				MipLevel:       r.DstBase.MipLevel,
 				BaseArrayLayer: 0,
 				LayerCount:     1,
@@ -845,9 +949,9 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst hal.Texture, regions []ha
 	vkCmdCopyImage(
 		e.device.cmds,
 		e.active,
-		srcTex.handle,
+		srcImage,
 		vk.ImageLayoutTransferSrcOptimal,
-		dstTex.handle,
+		dstImage,
 		vk.ImageLayoutTransferDstOptimal,
 		uint32(len(vkRegions)),
 		&vkRegions[0],

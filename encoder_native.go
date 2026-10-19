@@ -658,6 +658,10 @@ func (e *CommandEncoder) CopyTextureToBuffer(src *Texture, dst *Buffer, regions 
 		e.setError(fmt.Errorf("wgpu: CommandEncoder.CopyTextureToBuffer: destination buffer is released: %w", ErrReleased))
 		return
 	}
+	if err := checkCopyTextureUsage("CopyTextureToBuffer", "source", src, gputypes.TextureUsageCopySrc); err != nil {
+		e.setError(err)
+		return
+	}
 	if err := checkCopyRowPitch("CopyTextureToBuffer", regions); err != nil {
 		e.setError(err)
 		return
@@ -714,6 +718,14 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst *Texture, regions []Textu
 			e.setError(fmt.Errorf("wgpu: CommandEncoder.CopyTextureToTexture: region texture is released: %w", ErrReleased))
 			return
 		}
+	}
+	if err := checkCopyTextureUsage("CopyTextureToTexture", "source", src, gputypes.TextureUsageCopySrc); err != nil {
+		e.setError(err)
+		return
+	}
+	if err := checkCopyTextureUsage("CopyTextureToTexture", "destination", dst, gputypes.TextureUsageCopyDst); err != nil {
+		e.setError(err)
+		return
 	}
 	raw := e.core.RecordingEncoder()
 	if raw == nil {
@@ -782,6 +794,22 @@ func (e *CommandEncoder) TransitionTextures(barriers []TextureBarrier) {
 // copyBytesPerRowAlignment is what WebGPU asks of bytesPerRow on the buffer
 // side of a copy between a buffer and a texture in a command encoder.
 const copyBytesPerRowAlignment = 256
+
+// checkCopyTextureUsage is the usage check of a copy: the texture was made,
+// or the surface configured, with the usage the copy needs. A texture
+// without core state (a test stub) is not checked.
+//
+// Rust: texture.check_usage(COPY_SRC / COPY_DST) in command/transfer.rs
+func checkCopyTextureUsage(op, role string, t *Texture, usage gputypes.TextureUsage) error {
+	if t == nil || t.coreTexture == nil || t.coreTexture.Usage()&usage != 0 {
+		return nil
+	}
+	name := "CopyDst"
+	if usage == gputypes.TextureUsageCopySrc {
+		name = "CopySrc"
+	}
+	return fmt.Errorf("wgpu: CommandEncoder.%s: %s texture is missing %s usage", op, role, name)
+}
 
 // checkCopyRowPitch rejects a bytesPerRow that isn't a multiple of 256. DX12
 // can't copy any other pitch and used to drop such a copy without an error,
@@ -860,6 +888,10 @@ func (e *CommandEncoder) CopyBufferToTexture(src *Buffer, dst *Texture, regions 
 	halSrc := src.halBuffer()
 	if halSrc == nil {
 		e.setError(fmt.Errorf("wgpu: CommandEncoder.CopyBufferToTexture: source buffer is released: %w", ErrReleased))
+		return
+	}
+	if err := checkCopyTextureUsage("CopyBufferToTexture", "destination", dst, gputypes.TextureUsageCopyDst); err != nil {
+		e.setError(err)
 		return
 	}
 	if err := checkCopyRowPitch("CopyBufferToTexture", regions); err != nil {

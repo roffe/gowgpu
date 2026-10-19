@@ -9,6 +9,7 @@ import (
 
 	"github.com/roffe/gowgpu/core"
 	"github.com/roffe/gowgpu/core/track"
+	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 )
 
@@ -416,6 +417,11 @@ func (q *Queue) WriteTexture(dst *ImageCopyTexture, data []byte, layout *ImageDa
 	if dst.Texture == nil {
 		return fmt.Errorf("wgpu: WriteTexture: destination texture is invalid")
 	}
+	// The texture was made, or the surface configured, with CopyDst.
+	// Rust: dst.check_usage(wgt::TextureUsages::COPY_DST)
+	if ct := dst.Texture.coreTexture; ct != nil && ct.Usage()&gputypes.TextureUsageCopyDst == 0 {
+		return fmt.Errorf("wgpu: WriteTexture: destination texture is missing CopyDst usage")
+	}
 	if layout == nil {
 		return fmt.Errorf("wgpu: WriteTexture: layout is nil")
 	}
@@ -678,8 +684,15 @@ func collectBoundTextureIndices(resolver map[track.TrackerIndex]hal.Texture, bou
 
 // addTrackedTexture adds a single texture to the resolver if it has a
 // valid coreTexture and TrackerIndex.
+//
+// A surface texture is left out, so it gets no submit-time barrier: that
+// barrier would be recorded here, after the command buffer it runs ahead of,
+// while the backend tracks the swapchain image's layout in recording order
+// (hal/vulkan), and the device state it would start from is another image's
+// anyway, every image of the swapchain sharing one tracker index. The copies
+// and render passes of the command buffer transition the image themselves.
 func addTrackedTexture(resolver map[track.TrackerIndex]hal.Texture, tex *Texture) {
-	if tex == nil || tex.coreTexture == nil {
+	if tex == nil || tex.coreTexture == nil || tex.surface != nil {
 		return
 	}
 	td := tex.coreTexture.TrackingData()

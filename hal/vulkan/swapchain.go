@@ -62,11 +62,15 @@ type Swapchain struct {
 
 	// ADR-059: barrierPending tracks whether a barrier command buffer from
 	// ensurePresentLayout is still potentially in-flight on the GPU. The pool
-	// reset is deferred to acquireNextImage, where the acquire fence wait
-	// guarantees the previous frame (including its barrier) has completed.
-	// This eliminates the synchronous vkWaitForFences that was previously
-	// required in ensurePresentLayout.
-	barrierPending bool
+	// reset is deferred to acquireNextImage, which first waits for the
+	// barrier's submission, barrierFenceValue on the device fence: the
+	// acquire alone does not mean the last present's barrier is done, with
+	// three images the acquire returns while it can still be pending
+	// (VUID-vkResetCommandPool-commandPool-00040). The wait is almost always
+	// already satisfied. This eliminates the synchronous vkWaitForFences
+	// that was previously required in ensurePresentLayout.
+	barrierPending    bool
+	barrierFenceValue uint64
 
 	// broken is set after a synchronization, layout, or presentation failure.
 	// A broken swapchain cannot safely reuse its binary semaphores; callers must
@@ -1136,10 +1140,16 @@ func (sc *Swapchain) acquireNextImage() (*SwapchainTexture, bool, error) {
 		return nil, false, err
 	}
 
-	// ADR-059: Deferred barrier pool reset. The previous frame's barrier CB is
-	// guaranteed complete because acquireNextImage waits on the acquire fence,
-	// which requires the previous present (and therefore the barrier) to finish.
+	// ADR-059: Deferred barrier pool reset, once the barrier's submission is
+	// done. The acquire fence does not stand for it: with three images the
+	// acquire returns while the last present's barrier can still be running.
 	if sc.barrierPending && sc.barrierPool != 0 {
+		if err := sc.device.timelineFence.waitForValue(
+			sc.device.cmds, sc.device.handle, sc.barrierFenceValue, timeout,
+		); err != nil {
+			sc.markBroken(fmt.Errorf("vulkan: wait for present barrier: %w", err))
+			return nil, false, sc.failureErr
+		}
 		resetResult := sc.device.cmds.ResetCommandPool(sc.device.handle, sc.barrierPool, 0)
 		if resetResult != vk.Success {
 			sc.markBroken(mapVulkanResult("vkResetCommandPool (deferred barrier)", resetResult))
@@ -1306,8 +1316,9 @@ func (sc *Swapchain) SetImageLayout(imageIndex uint32, layout vk.ImageLayout) {
 // ADR-060: In the common case (render pass targeting swapchain), the inline barrier
 // in CommandEncoder.EndEncoding() already transitions to PRESENT_SRC_KHR. This
 // function serves as a FALLBACK for edge cases where no render pass targeted the
-// swapchain (blit-only, offscreen-only paths) or when the inline barrier was not
-// injected.
+// swapchain (blit-only, offscreen-only paths), when the inline barrier was not
+// injected, or when a copy or queue write in a later command buffer took the
+// image out of PRESENT_SRC_KHR again.
 //
 // ADR-059: The barrier CB is submitted without a fence -- the command pool reset is
 // deferred to acquireNextImage, where the acquire fence wait guarantees the
@@ -1372,48 +1383,14 @@ func (sc *Swapchain) ensurePresentLayout(queue *Queue) error {
 		return fmt.Errorf("vulkan: vkBeginCommandBuffer (barrier) failed: %d", result)
 	}
 
-	// Determine source access mask and pipeline stage based on the tracked layout.
-	// The oldLayout must match what the GPU actually sees when this barrier executes.
-	var srcAccess vk.AccessFlags
-	var srcStage vk.PipelineStageFlags
-	switch currentLayout {
-	case vk.ImageLayoutColorAttachmentOptimal:
-		srcAccess = vk.AccessFlags(vk.AccessColorAttachmentWriteBit)
-		srcStage = vk.PipelineStageFlags(vk.PipelineStageColorAttachmentOutputBit)
-	case vk.ImageLayoutTransferDstOptimal:
-		srcAccess = vk.AccessFlags(vk.AccessTransferWriteBit)
-		srcStage = vk.PipelineStageFlags(vk.PipelineStageTransferBit)
-	case vk.ImageLayoutTransferSrcOptimal:
-		srcAccess = vk.AccessFlags(vk.AccessTransferReadBit)
-		srcStage = vk.PipelineStageFlags(vk.PipelineStageTransferBit)
-	default:
-		// UNDEFINED or unknown: no prior access to synchronize.
-		// OldLayout = UNDEFINED is safe here because either:
-		// 1. The image was never written to this frame (content is undefined anyway)
-		// 2. The image is in an untracked layout (conservative: may discard, but
-		//    this path only fires when no render pass targeted the swapchain,
-		//    meaning nothing meaningful was rendered to it)
-		srcAccess = 0
-		srcStage = vk.PipelineStageFlags(vk.PipelineStageTopOfPipeBit)
-	}
-
-	barrier := vk.ImageMemoryBarrier{
-		SType:               vk.StructureTypeImageMemoryBarrier,
-		SrcAccessMask:       srcAccess,
-		DstAccessMask:       0, // Present engine does not need explicit access
-		OldLayout:           currentLayout,
-		NewLayout:           vk.ImageLayoutPresentSrcKhr,
-		SrcQueueFamilyIndex: vk.QueueFamilyIgnored,
-		DstQueueFamilyIndex: vk.QueueFamilyIgnored,
-		Image:               sc.images[idx],
-		SubresourceRange: vk.ImageSubresourceRange{
-			AspectMask:     vk.ImageAspectFlags(vk.ImageAspectColorBit),
-			BaseMipLevel:   0,
-			LevelCount:     1,
-			BaseArrayLayer: 0,
-			LayerCount:     1,
-		},
-	}
+	// The source access and stage are the tracked layout's (layoutAccess):
+	// the colour writes of a render pass, the transfer of a copy or queue
+	// write that came after it or stood alone. The old layout has to be the
+	// one the GPU sees when this barrier runs, and from UNDEFINED, an image
+	// nothing this frame touched, there is no prior access to wait for.
+	srcAccess, srcStage := layoutAccess(currentLayout)
+	// The present engine does not need explicit access.
+	barrier := swapchainImageBarrier(sc.images[idx], currentLayout, vk.ImageLayoutPresentSrcKhr, srcAccess, 0)
 
 	sc.device.cmds.CmdPipelineBarrier(
 		cmdBuf,
@@ -1437,26 +1414,46 @@ func (sc *Swapchain) ensurePresentLayout(queue *Queue) error {
 	// calls ensurePresentLayout BEFORE presentWaitSemaphores, so this
 	// semaphore is included in the wait list.
 	//
-	// The command pool reset is deferred to acquireNextImage, where the acquire
-	// fence wait guarantees the previous frame (including this barrier) has
-	// completed. This eliminates the synchronous vkWaitForFences that was
-	// previously required here.
+	// The command pool reset is deferred to acquireNextImage, which waits
+	// for this submission on the device fence first: it signals the next
+	// value, on the timeline semaphore or a fence of the pool, the way
+	// Queue.Submit does. This eliminates the synchronous vkWaitForFences
+	// that was previously required here.
 	barrierSem, err := sc.allocPresentSemaphore()
 	if err != nil {
 		return fmt.Errorf("vulkan: barrier present semaphore alloc: %w", err)
 	}
+	tf := sc.device.timelineFence
+	signalValue := tf.nextSignalValue()
+	signalSems := [2]vk.Semaphore{barrierSem}
+	signalValues := [2]uint64{0, signalValue}
 	submitInfo := vk.SubmitInfo{
 		SType:                vk.StructureTypeSubmitInfo,
 		CommandBufferCount:   1,
 		PCommandBuffers:      &cmdBuf,
 		SignalSemaphoreCount: 1,
-		PSignalSemaphores:    &barrierSem,
+		PSignalSemaphores:    &signalSems[0],
 	}
-	result = sc.device.cmds.QueueSubmit(queue.handle, 1, &submitInfo, vk.Fence(0))
+	fence := vk.Fence(0)
+	var timelineInfo vk.TimelineSemaphoreSubmitInfo
+	if tf.isTimeline {
+		signalSems[1] = tf.timelineSemaphore
+		submitInfo.SignalSemaphoreCount = 2
+		timelineInfo = vk.TimelineSemaphoreSubmitInfo{
+			SType:                     vk.StructureTypeTimelineSemaphoreSubmitInfo,
+			SignalSemaphoreValueCount: 2,
+			PSignalSemaphoreValues:    &signalValues[0],
+		}
+		submitInfo.PNext = (*uintptr)(unsafe.Pointer(&timelineInfo))
+	} else if fence, err = tf.pool.signal(sc.device.cmds, sc.device.handle, signalValue); err != nil {
+		return fmt.Errorf("vulkan: barrier fence: %w", err)
+	}
+	result = sc.device.cmds.QueueSubmit(queue.handle, 1, &submitInfo, fence)
 	if result != vk.Success {
 		return fmt.Errorf("vulkan: vkQueueSubmit (barrier) failed: %d", result)
 	}
 	sc.barrierPending = true
+	sc.barrierFenceValue = signalValue
 
 	// Update tracked layout — the barrier transitions to PRESENT_SRC_KHR.
 	sc.imageLayouts[idx] = vk.ImageLayoutPresentSrcKhr

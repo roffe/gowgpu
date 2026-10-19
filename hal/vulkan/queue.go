@@ -148,6 +148,12 @@ type Queue struct {
 	}
 }
 
+// acquireWaitStages are the stages the first submit of a frame holds until
+// the acquire semaphore signals: the colour writes of a render pass on the
+// swapchain image, and the transfer of a copy or queue write into it, which
+// can be the first thing a frame does to the image.
+const acquireWaitStages = vk.PipelineStageFlags(vk.PipelineStageColorAttachmentOutputBit | vk.PipelineStageTransferBit)
+
 func validateSwapchainSubmission(swapchain *Swapchain, device *Device) error {
 	if swapchain == nil {
 		return nil
@@ -304,7 +310,7 @@ func (q *Queue) Submit(commandBuffers []hal.CommandBuffer) (uint64, error) {
 			return 0, err
 		}
 		waitSems[waitCount] = q.activeSwapchain.currentAcquireSem
-		waitStages[waitCount] = vk.PipelineStageFlags(vk.PipelineStageColorAttachmentOutputBit)
+		waitStages[waitCount] = acquireWaitStages
 		waitCount++
 		q.acquireUsed = true
 		consumedAcquire = true
@@ -473,7 +479,7 @@ func (q *Queue) SubmitForPresent(commandBuffers []hal.CommandBuffer, swapchain *
 	// ADR-058: Acquire wait — only on first submit (same as Submit()).
 	if q.activeSwapchain != swapchain || !q.acquireUsed {
 		waitSems[waitCount] = swapchain.currentAcquireSem
-		waitStages[waitCount] = vk.PipelineStageFlags(vk.PipelineStageColorAttachmentOutputBit)
+		waitStages[waitCount] = acquireWaitStages
 		waitCount++
 	}
 

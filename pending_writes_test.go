@@ -350,6 +350,12 @@ func TestPendingWrites_WriteTextureBatching(t *testing.T) {
 }
 
 func captureTextureWriteBarriers(t *testing.T, dimension gputypes.TextureDimension, origin hal.Origin3D, size hal.Extent3D) []hal.TextureBarrier {
+	return captureTextureWriteBarriersFor(t, dimension, gputypes.TextureUsageCopyDst|gputypes.TextureUsageTextureBinding, nil, origin, size)
+}
+
+// captureTextureWriteBarriersFor is captureTextureWriteBarriers for a texture
+// of the given usage, a surface texture when surface is not nil.
+func captureTextureWriteBarriersFor(t *testing.T, dimension gputypes.TextureDimension, usage gputypes.TextureUsage, surface *core.Surface, origin hal.Origin3D, size hal.Extent3D) []hal.TextureBarrier {
 	t.Helper()
 	dev := &barrierCaptureDevice{}
 	q := &mockBatchingQueue{}
@@ -363,11 +369,11 @@ func captureTextureWriteBarriers(t *testing.T, dimension gputypes.TextureDimensi
 	halTexture := &noop.Texture{}
 	coreTexture := core.NewTexture(
 		halTexture, nil, gputypes.TextureFormatRGBA8Unorm,
-		dimension, gputypes.TextureUsageCopyDst,
+		dimension, usage,
 		gputypes.Extent3D{Width: 16, Height: 16, DepthOrArrayLayers: 2},
 		1, 1, "texture",
 	)
-	texture := &Texture{hal: halTexture, coreTexture: coreTexture}
+	texture := &Texture{hal: halTexture, coreTexture: coreTexture, surface: surface}
 	dst := &hal.ImageCopyTexture{
 		Texture: halTexture,
 		Origin:  origin,
@@ -393,6 +399,34 @@ func TestPendingWrites_WriteTextureTransitionsArrayLayers(t *testing.T) {
 		if barrier.Range.BaseArrayLayer != 1 || barrier.Range.ArrayLayerCount != 1 {
 			t.Errorf("barrier %d array range = %d+%d, want 1+1", i, barrier.Range.BaseArrayLayer, barrier.Range.ArrayLayerCount)
 		}
+	}
+}
+
+// A texture nothing samples stays a copy destination after the write: the
+// barrier into TextureBinding named a sampled layout the image has no usage
+// for (VUID-VkImageMemoryBarrier-oldLayout-01211 on Vulkan). The same for a
+// surface texture, whatever the surface was configured with.
+func TestPendingWrites_WriteTextureUnsampledStaysCopyDst(t *testing.T) {
+	size := hal.Extent3D{Width: 1, Height: 1, DepthOrArrayLayers: 1}
+	for _, tc := range []struct {
+		name    string
+		usage   gputypes.TextureUsage
+		surface *core.Surface
+	}{
+		{"copy destination only", gputypes.TextureUsageCopyDst | gputypes.TextureUsageCopySrc, nil},
+		{"render attachment", gputypes.TextureUsageCopyDst | gputypes.TextureUsageRenderAttachment, nil},
+		{"surface texture", gputypes.TextureUsageCopyDst | gputypes.TextureUsageRenderAttachment, &core.Surface{}},
+	} {
+		barriers := captureTextureWriteBarriersFor(t, gputypes.TextureDimension2D, tc.usage, tc.surface, hal.Origin3D{}, size)
+		if len(barriers) != 1 {
+			t.Fatalf("%s: texture barriers = %d, want 1", tc.name, len(barriers))
+		}
+		if got := barriers[0].Usage.NewUsage; got != gputypes.TextureUsageCopyDst {
+			t.Errorf("%s: barrier into %v, want CopyDst", tc.name, got)
+		}
+	}
+	if n := len(captureTextureWriteBarriersFor(t, gputypes.TextureDimension2D, gputypes.TextureUsageCopyDst|gputypes.TextureUsageTextureBinding, nil, hal.Origin3D{}, size)); n != 2 {
+		t.Fatalf("sampled texture: texture barriers = %d, want 2", n)
 	}
 }
 

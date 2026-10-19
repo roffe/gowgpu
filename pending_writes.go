@@ -425,27 +425,40 @@ func (pw *pendingWrites) writeTextureLocked(
 	}
 	enc.CopyBufferToTexture(alloc.buffer, dst.Texture, pw.texCopy[:])
 
-	// Transition texture to SHADER_RESOURCE for rendering.
-	// ADR-060: The centralized TextureTracker now handles render pass -> submit barriers.
-	// These eager barriers remain for the pending_writes -> render path until the tracker
-	// also covers queue write operations (pending_writes integration, future work).
-	pw.texBarrier[0] = hal.TextureBarrier{
-		Texture: dst.Texture,
-		Range:   copyRange,
-		Usage: hal.TextureUsageTransition{
-			OldUsage: gputypes.TextureUsageCopyDst,
-			NewUsage: gputypes.TextureUsageTextureBinding,
-			Old:      hal.TextureUsesCopyDst,
-			New:      hal.TextureUsesResource,
-		},
-	}
-	enc.TransitionTextures(pw.texBarrier[:])
-	pw.texBarrier[0], pw.texCopy[0] = hal.TextureBarrier{}, hal.BufferTextureCopy{}
+	// A texture that is never sampled, a surface texture (presented or
+	// rendered over) or one made without TextureBinding, stays a copy
+	// destination, and the present, the render pass or the next copy takes
+	// it from there: a barrier into TextureBinding names a sampled layout
+	// the image has no usage for (VUID-VkImageMemoryBarrier-oldLayout-01211
+	// on Vulkan).
+	if owner.textureUsage()&gputypes.TextureUsageTextureBinding == 0 {
+		pw.texBarrier[0], pw.texCopy[0] = hal.TextureBarrier{}, hal.BufferTextureCopy{}
+		if tracked {
+			pw.tracker.InsertTexture(idx, track.TextureUsesCopyDst)
+		}
+	} else {
+		// Transition texture to SHADER_RESOURCE for rendering.
+		// ADR-060: The centralized TextureTracker now handles render pass -> submit barriers.
+		// These eager barriers remain for the pending_writes -> render path until the tracker
+		// also covers queue write operations (pending_writes integration, future work).
+		pw.texBarrier[0] = hal.TextureBarrier{
+			Texture: dst.Texture,
+			Range:   copyRange,
+			Usage: hal.TextureUsageTransition{
+				OldUsage: gputypes.TextureUsageCopyDst,
+				NewUsage: gputypes.TextureUsageTextureBinding,
+				Old:      hal.TextureUsesCopyDst,
+				New:      hal.TextureUsesResource,
+			},
+		}
+		enc.TransitionTextures(pw.texBarrier[:])
+		pw.texBarrier[0], pw.texCopy[0] = hal.TextureBarrier{}, hal.BufferTextureCopy{}
 
-	// The write leaves the texture ready to sample; the barriers of the
-	// submits that follow start from there.
-	if tracked {
-		pw.tracker.InsertTexture(idx, track.TextureUsesResource)
+		// The write leaves the texture ready to sample; the barriers of the
+		// submits that follow start from there.
+		if tracked {
+			pw.tracker.InsertTexture(idx, track.TextureUsesResource)
+		}
 	}
 
 	// Track destination texture. AddPendingRef prevents premature Destroy (BUG-DX12-006).
@@ -459,6 +472,16 @@ func (pw *pendingWrites) writeTextureLocked(
 	}
 
 	return nil
+}
+
+// textureUsage is the usage the texture was made with, or the surface
+// configured with; every usage for a wrapper without core state, so a
+// test stub is treated as before.
+func (t *Texture) textureUsage() gputypes.TextureUsage {
+	if t == nil || t.coreTexture == nil {
+		return ^gputypes.TextureUsage(0)
+	}
+	return t.coreTexture.Usage()
 }
 
 // hasOwner reports whether owner is already listed for raw in this batch.

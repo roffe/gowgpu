@@ -142,7 +142,6 @@ Not run yet: the browser backend, the BSDs, GL on Windows and real Apple hardwar
 - `DispatchIndirect` validation destroys its bind group before the GPU runs it, waits for the GPU before writing its params, and indirect dispatches recorded before one `Submit` share one set of params.
 - GL binds bind groups and vertex buffers against the pipeline set at the time, so set the pipeline first; integer vertex formats, index base vertex, `CopyBufferToTexture` row pitch and anything but 2D textures are not done on GL.
 - Render bundles crash on Vulkan in `vkBeginCommandBuffer`.
-- On Vulkan a copy to or from a surface texture does nothing, and so does a barrier on one: render into your own texture and copy or blit from that.
 - `examples/browser-compute` doesn't build, it was written against an older API.
 
 What's next is in [ROADMAP.md](ROADMAP.md).
