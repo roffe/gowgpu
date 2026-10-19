@@ -136,7 +136,6 @@ Not run yet: the browser backend, the BSDs, GL on Windows and real Apple hardwar
 
 - On Vulkan and DX12, pipelines need an explicit layout (there are no automatic layouts; Metal takes pipelines without one). 7 tests in the root package fail on Vulkan and DX12 because of it.
 - The DXIL compute test in `hal/dx12` (`TestComputePairSumIntegration/DXIL`) fails under wine: vkd3d takes FXC blobs, not naga's DXIL, so `CreateComputePipelineState` returns E_FAIL there. Run it on Windows.
-- DX12 takes the vertex stride from whatever pipeline was set when `SetVertexBuffer` ran.
 - A storage buffer with a dynamic offset on DX12: `arrayLength()` on it counts to the end of the buffer, not of the binding, as in Rust's wgpu, and with `GOGPU_DX12_DXIL=1` the offset is ignored, naga's DXIL backend doesn't add it.
 - naga keeps identifiers that start with `gl_` when it writes GLSL, and strict drivers like Mali refuse them. Don't name things `gl_*` in WGSL.
 - On GL a `texture_depth_2d` only works with a comparison sampler: naga declares it `sampler2DShadow`, so `textureSample` with a plain sampler and `textureLoad` on it don't compile.

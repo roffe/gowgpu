@@ -185,3 +185,94 @@ func TestDynamicOffsetsDispatch(t *testing.T) {
 	}
 	assertNoValidation(t, h)
 }
+
+// strideShader draws its vertex buffer's positions in green.
+const strideShader = `
+@vertex fn vs_main(@location(0) pos: vec2<f32>) -> @builtin(position) vec4<f32> {
+	return vec4<f32>(pos, 0.0, 1.0);
+}
+@fragment fn fs_main() -> @location(0) vec4<f32> { return vec4<f32>(0.0, 1.0, 0.0, 1.0); }
+`
+
+// TestVertexStrideFollowsPipeline draws from a vertex buffer that has every
+// position twice, so a 16-byte stride reads a full-screen triangle and an
+// 8-byte or 0 stride a flat one that draws nothing. DX12 put the stride of
+// the pipeline set at SetVertexBuffer in the buffer view: 0 when the buffer
+// came before the pipeline, the old pipeline's when the pipeline changed.
+func TestVertexStrideFollowsPipeline(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	if h.backend == gputypes.BackendGL {
+		t.Skip("GL binds vertex buffers against the pipeline set at the time, see the README's known issues")
+	}
+	module, err := device.CreateShaderModule(&ShaderModuleDescriptor{Label: "stride", WGSL: strideShader})
+	if err != nil {
+		t.Fatalf("CreateShaderModule: %v", err)
+	}
+	defer module.Release()
+	pl, err := device.CreatePipelineLayout(&PipelineLayoutDescriptor{})
+	if err != nil {
+		t.Fatalf("CreatePipelineLayout: %v", err)
+	}
+	defer pl.Release()
+	pipeline := func(stride uint64) *RenderPipeline {
+		pipe, err := device.CreateRenderPipeline(&RenderPipelineDescriptor{
+			Label:  "stride",
+			Layout: pl,
+			Vertex: VertexState{Module: module, EntryPoint: "vs_main", Buffers: []gputypes.VertexBufferLayout{{
+				ArrayStride: stride, StepMode: gputypes.VertexStepModeVertex,
+				Attributes: []gputypes.VertexAttribute{{Format: gputypes.VertexFormatFloat32x2, ShaderLocation: 0}},
+			}}},
+			Primitive: gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList},
+			Fragment: &FragmentState{Module: module, EntryPoint: "fs_main",
+				Targets: []gputypes.ColorTargetState{{Format: gputypes.TextureFormatRGBA8Unorm, WriteMask: gputypes.ColorWriteMaskAll}}},
+		})
+		if err != nil {
+			t.Fatalf("CreateRenderPipeline(stride %d): %v", stride, err)
+		}
+		t.Cleanup(pipe.Release)
+		return pipe
+	}
+	wide, narrow := pipeline(16), pipeline(8)
+	pos := []float32{-1, -1, -1, -1, 3, -1, 3, -1, -1, 3, -1, 3}
+	vb, err := device.CreateBuffer(&BufferDescriptor{Label: "positions", Size: uint64(len(pos) * 4), Usage: BufferUsageVertex | BufferUsageCopyDst})
+	if err != nil {
+		t.Fatalf("CreateBuffer: %v", err)
+	}
+	defer vb.Release()
+	if err := device.Queue().WriteBuffer(vb, 0, unsafe.Slice((*byte)(unsafe.Pointer(&pos[0])), len(pos)*4)); err != nil {
+		t.Fatalf("WriteBuffer: %v", err)
+	}
+
+	first, firstView := pixTexture(t, device, "stride-first", TextureUsageRenderAttachment|TextureUsageCopySrc)
+	defer releaseTextureView(first, firstView)
+	changed, changedView := pixTexture(t, device, "stride-changed", TextureUsageRenderAttachment|TextureUsageCopySrc)
+	defer releaseTextureView(changed, changedView)
+	firstSt := readbackBuffer(t, device, "stride-first-st")
+	changedSt := readbackBuffer(t, device, "stride-changed-st")
+
+	enc, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	draw := gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1}
+	clearPass(t, enc, firstView, gputypes.LoadOpClear, gputypes.Color{}, func(p *RenderPassEncoder) {
+		p.SetVertexBuffer(0, vb, 0)
+		p.SetPipeline(wide)
+		p.Draw(draw)
+	})
+	copyOut(enc, first, firstSt)
+	clearPass(t, enc, changedView, gputypes.LoadOpClear, gputypes.Color{}, func(p *RenderPassEncoder) {
+		p.SetPipeline(narrow)
+		p.SetVertexBuffer(0, vb, 0)
+		p.Draw(draw) // flat
+		p.SetPipeline(wide)
+		p.Draw(draw)
+	})
+	copyOut(enc, changed, changedSt)
+	finishAndSubmit(t, device, enc)
+	device.Poll(PollWait)
+
+	expectPixels(t, "vertex buffer set before the pipeline", readback(t, firstSt), 0, 255, 0, 255)
+	expectPixels(t, "vertex buffer kept across a stride change", readback(t, changedSt), 0, 255, 0, 255)
+	assertNoValidation(t, h)
+}
