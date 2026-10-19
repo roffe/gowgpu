@@ -31,8 +31,14 @@ type AllocatorConfig struct {
 }
 
 // firstBlockSize is the size of a pool's first block; each block after it is
-// twice the size, up to AllocatorConfig.BlockSize.
-const firstBlockSize = 8 << 20
+// twice the size, up to AllocatorConfig.BlockSize. Host-visible pools start
+// at firstHostBlockSize: drivers map and pin the whole block in system memory
+// (NVIDIA does), so all of it counts in the process' RSS, used or not, where
+// device-local memory costs none.
+const (
+	firstBlockSize     = 8 << 20
+	firstHostBlockSize = 2 << 20
+)
 
 // DefaultConfig returns sensible default configuration.
 func DefaultConfig() AllocatorConfig {
@@ -48,6 +54,7 @@ func DefaultConfig() AllocatorConfig {
 type MemoryPool struct {
 	memoryTypeIndex uint32
 	blockSize       uint64
+	firstBlockSize  uint64
 	minAllocSize    uint64
 	maxBlocks       int
 
@@ -163,10 +170,15 @@ func NewGpuAllocator(device vk.Device, cmds *vk.Commands, props DeviceMemoryProp
 
 	// Create pools for each memory type
 	pools := make([]*MemoryPool, len(props.MemoryTypes))
-	for i := range props.MemoryTypes {
+	for i, mt := range props.MemoryTypes {
+		first := uint64(firstBlockSize)
+		if mt.PropertyFlags&vk.MemoryPropertyFlags(vk.MemoryPropertyHostVisibleBit) != 0 {
+			first = firstHostBlockSize
+		}
 		pools[i] = &MemoryPool{
 			memoryTypeIndex: uint32(i),
 			blockSize:       config.BlockSize,
+			firstBlockSize:  first,
 			minAllocSize:    config.MinAllocationSize,
 			maxBlocks:       config.MaxBlocksPerHeap,
 			blocks:          make([]*poolBlock, 0),
@@ -295,7 +307,7 @@ func (a *GpuAllocator) allocPooled(size uint64, memTypeIndex uint32) (*MemoryBlo
 	// Blocks start small and double up to the configured size, so an app
 	// that needs a few MB of each memory type does not commit 64 MB of it
 	// up front. A request bigger than the next block gets a block that fits.
-	blockSize := min(pool.blockSize, firstBlockSize<<uint(min(len(pool.blocks), 8)))
+	blockSize := min(pool.blockSize, pool.firstBlockSize<<uint(min(len(pool.blocks), 8)))
 	for blockSize < size {
 		blockSize <<= 1
 	}
