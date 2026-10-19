@@ -140,7 +140,6 @@ Not run yet: the browser backend, the BSDs, GL on Windows and real Apple hardwar
 - naga keeps identifiers that start with `gl_` when it writes GLSL, and strict drivers like Mali refuse them. Don't name things `gl_*` in WGSL.
 - On GL a `texture_depth_2d` only works with a comparison sampler: naga declares it `sampler2DShadow`, so `textureSample` with a plain sampler and `textureLoad` on it don't compile.
 - New textures are zeroed only when they have a color format, one sample and `TextureBinding`. Depth, multisampled and compressed textures start with whatever the memory held, so clear them in their first render pass or write all of them.
-- `DispatchIndirect` validation destroys its bind group before the GPU runs it, waits for the GPU before writing its params, and indirect dispatches recorded before one `Submit` share one set of params.
 - GL binds bind groups and vertex buffers against the pipeline set at the time, so set the pipeline first; integer vertex formats, index base vertex, `CopyBufferToTexture` row pitch and anything but 2D textures are not done on GL.
 - Render bundles crash on Vulkan in `vkBeginCommandBuffer`.
 - `examples/browser-compute` doesn't build, it was written against an older API.

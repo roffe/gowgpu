@@ -464,6 +464,12 @@ func (d *Device) CreateBuffer(desc *gputypes.BufferDescriptor) (*Buffer, error) 
 		Usage:            desc.Usage,
 		MappedAtCreation: desc.MappedAtCreation,
 	}
+	// The indirect dispatch validation reads an indirect buffer as storage,
+	// which Vulkan only allows on a buffer created for it. Rust's wgpu-core
+	// adds STORAGE_READ_ONLY the same way.
+	if d.indirectValidation != nil && desc.Usage.Contains(gputypes.BufferUsageIndirect) {
+		halDesc.Usage |= gputypes.BufferUsageStorage
+	}
 
 	// 8. Acquire snatch guard for HAL access
 	guard := d.snatchLock.Read()

@@ -49,9 +49,8 @@ func TestDispatchIndirectValidationWGSL(t *testing.T) {
 			// Verify the shader has the expected structure.
 			requiredParts := []string{
 				"@group(0) @binding(0) var<storage, read_write> dst",
-				"@group(0) @binding(1) var<uniform> params",
 				"@group(1) @binding(0) var<storage, read> src",
-				"struct Params",
+				"arrayLength(&src)",
 				"@compute @workgroup_size(1)",
 				"fn main()",
 				"dst[0] = 0u",
@@ -159,8 +158,5 @@ func TestIndirectValidationAccessors(t *testing.T) {
 	}
 	if iv.DstBindGroup() != nil {
 		t.Error("DstBindGroup() should return nil for zero-value IV")
-	}
-	if iv.ParamsBuffer() != nil {
-		t.Error("ParamsBuffer() should return nil for zero-value IV")
 	}
 }

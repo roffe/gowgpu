@@ -5,6 +5,7 @@ package wgpu
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"log/slog"
 	"os"
 	"strings"
@@ -814,6 +815,109 @@ func TestBindGroupBeforePipeline(t *testing.T) {
 	expectPixels(t, "draw", readback(t, st), 0, 255, 0, 255)
 	if got := readback(t, outSt)[:16]; !bytes.Equal(got, unsafe.Slice((*byte)(unsafe.Pointer(&green[0])), 16)) {
 		t.Errorf("dispatch stored % x, want the uniform's green", got)
+	}
+	assertNoValidation(t, h)
+}
+
+const countShader = `
+@group(0) @binding(0) var<storage, read_write> count: atomic<u32>;
+@compute @workgroup_size(1) fn main() { atomicAdd(&count, 1u); }
+`
+
+// TestDispatchIndirectValidated records validated indirect dispatches at
+// offsets on both sides of the storage alignment, one over the limit, in one
+// submit. They used to share one params buffer, so every validation read the
+// counts of the last dispatch recorded, and the validation's bind group was
+// destroyed before the submit.
+func TestDispatchIndirectValidated(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	if device.core.IndirectValidation() == nil {
+		t.Skip("no indirect dispatch validation on this device")
+	}
+	module, err := device.CreateShaderModule(&ShaderModuleDescriptor{Label: "count", WGSL: countShader})
+	if err != nil {
+		t.Fatalf("CreateShaderModule: %v", err)
+	}
+	defer module.Release()
+	layout, err := device.CreateBindGroupLayout(&BindGroupLayoutDescriptor{Entries: []gputypes.BindGroupLayoutEntry{
+		{Binding: 0, Visibility: ShaderStageCompute, Buffer: &gputypes.BufferBindingLayout{Type: gputypes.BufferBindingTypeStorage}},
+	}})
+	if err != nil {
+		t.Fatalf("CreateBindGroupLayout: %v", err)
+	}
+	defer layout.Release()
+	pl, err := device.CreatePipelineLayout(&PipelineLayoutDescriptor{BindGroupLayouts: []*BindGroupLayout{layout}})
+	if err != nil {
+		t.Fatalf("CreatePipelineLayout: %v", err)
+	}
+	defer pl.Release()
+	pipe, err := device.CreateComputePipeline(&ComputePipelineDescriptor{Label: "count", Layout: pl, Module: module, EntryPoint: "main"})
+	if err != nil {
+		t.Fatalf("CreateComputePipeline: %v", err)
+	}
+	defer pipe.Release()
+	count, err := device.CreateBuffer(&BufferDescriptor{Label: "count", Size: 4, Usage: BufferUsageStorage | BufferUsageCopySrc | BufferUsageCopyDst})
+	if err != nil {
+		t.Fatalf("CreateBuffer: %v", err)
+	}
+	defer count.Release()
+	group, err := device.CreateBindGroup(&BindGroupDescriptor{Layout: layout, Entries: []BindGroupEntry{{Binding: 0, Buffer: count}}})
+	if err != nil {
+		t.Fatalf("CreateBindGroup: %v", err)
+	}
+	defer group.Release()
+
+	const argsSize = 1024
+	args, err := device.CreateBuffer(&BufferDescriptor{Label: "args", Size: argsSize, Usage: BufferUsageIndirect | BufferUsageCopyDst})
+	if err != nil {
+		t.Fatalf("CreateBuffer: %v", err)
+	}
+	defer args.Release()
+	dispatches := []struct {
+		offset uint64
+		x      uint32
+	}{
+		{0, 2},
+		{268, 3},
+		{520, device.core.Limits.MaxComputeWorkgroupsPerDimension + 1}, // zeroed
+		{argsSize - 12, 5},
+	}
+	data := make([]byte, argsSize)
+	for _, d := range dispatches {
+		binary.LittleEndian.PutUint32(data[d.offset:], d.x)
+		binary.LittleEndian.PutUint32(data[d.offset+4:], 1)
+		binary.LittleEndian.PutUint32(data[d.offset+8:], 1)
+	}
+	if err := device.Queue().WriteBuffer(args, 0, data); err != nil {
+		t.Fatalf("WriteBuffer: %v", err)
+	}
+	if err := device.Queue().WriteBuffer(count, 0, make([]byte, 4)); err != nil {
+		t.Fatalf("WriteBuffer: %v", err)
+	}
+	st := readbackBuffer(t, device, "count-st")
+
+	enc, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	cp, err := enc.BeginComputePass(nil)
+	if err != nil {
+		t.Fatalf("BeginComputePass: %v", err)
+	}
+	cp.SetPipeline(pipe)
+	cp.SetBindGroup(0, group, nil)
+	for _, d := range dispatches {
+		cp.DispatchIndirect(args, d.offset)
+	}
+	if err := cp.End(); err != nil {
+		t.Fatalf("ComputePass.End: %v", err)
+	}
+	enc.CopyBufferToBuffer(count, 0, st, 0, 4)
+	finishAndSubmit(t, device, enc)
+	device.Poll(PollWait)
+
+	if got := binary.LittleEndian.Uint32(readback(t, st)); got != 2+3+5 {
+		t.Errorf("%d workgroups ran, want %d", got, 2+3+5)
 	}
 	assertNoValidation(t, h)
 }

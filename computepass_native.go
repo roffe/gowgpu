@@ -3,7 +3,6 @@
 package wgpu
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 
@@ -244,18 +243,17 @@ func (p *ComputePassEncoder) DispatchIndirect(buffer *Buffer, offset uint64) {
 }
 
 // dispatchIndirectValidated runs the GPU-side validation shader before the
-// actual indirect dispatch. It saves/restores the user's compute pipeline
-// and bind group state around the validation, matching Rust wgpu-core's
-// approach in compute.rs:928-1059.
+// actual indirect dispatch, in a pass of its own, and restores the user's
+// pipeline and bind groups after it, matching Rust wgpu-core's approach in
+// compute.rs:928-1059.
 //
 // Flow:
-//  1. Write params (max_workgroups, src_offset) to uniform buffer
-//  2. Set validation pipeline + bind groups
-//  3. Transition src buffer for storage read, dst buffer for storage write
-//  4. Dispatch(1,1,1) -- validation shader
-//  5. Transition dst buffer back to INDIRECT usage
-//  6. Restore user pipeline + bind groups
-//  7. DispatchIndirect from validated dst buffer at offset 0
+//  1. End the user's pass
+//  2. Transition the dst buffer from INDIRECT to STORAGE
+//  3. Dispatch(1,1,1) the validation shader in its own pass
+//  4. Transition the dst buffer back to INDIRECT
+//  5. Begin a new pass with the user's pipeline and bind groups
+//  6. DispatchIndirect from the validated dst buffer at offset 0
 func (p *ComputePassEncoder) dispatchIndirectValidated(
 	buffer *Buffer,
 	offset uint64,
@@ -263,123 +261,63 @@ func (p *ComputePassEncoder) dispatchIndirectValidated(
 	raw hal.ComputePassEncoder,
 ) {
 	halDevice := p.encoder.device.halDevice()
-	if halDevice == nil {
-		p.core.DispatchIndirect(buffer.coreBuffer(), offset)
-		return
-	}
-
-	// Create source bind group for the user's indirect buffer.
 	halSrcBuf := buffer.halBuffer()
-	if halSrcBuf == nil {
+	parentEncoder := p.encoder.core.RawEncoder()
+	if halDevice == nil || halSrcBuf == nil || parentEncoder == nil {
 		p.core.DispatchIndirect(buffer.coreBuffer(), offset)
 		return
 	}
-
-	srcBindGroup, err := iv.CreateSrcBindGroup(halDevice, halSrcBuf, buffer.Size())
+	srcBindGroup, err := iv.CreateSrcBindGroup(halDevice, halSrcBuf, offset)
 	if err != nil {
 		// Validation resource creation failed -- fall back to unvalidated dispatch.
 		p.core.DispatchIndirect(buffer.coreBuffer(), offset)
 		return
 	}
-	// Schedule cleanup of the ephemeral src bind group.
-	defer halDevice.DestroyBindGroup(srcBindGroup)
+	// The group is this dispatch's own. It goes with the encoder's refs, so
+	// it's destroyed once the GPU is done with the submit, or right away
+	// when the command buffer is dropped without one.
+	p.encoder.trackedRefs = append(p.encoder.trackedRefs, core.NewResourceRef("IndirectValidationSrc", func() {
+		halDevice.DestroyBindGroup(srcBindGroup)
+	}))
 
-	// Write params to the uniform buffer. The params struct is:
-	//   max_workgroups: u32 (baked into shader, but also in uniform for flexibility)
-	//   src_offset:     u32 (byte offset / 4, since shader indexes u32 array)
-	srcOffset := uint32(offset / 4) //nolint:gosec // offset is validated to be < buffer.Size()
-	var paramsData [8]byte
-	binary.LittleEndian.PutUint32(paramsData[0:4], iv.MaxWorkgroups())
-	binary.LittleEndian.PutUint32(paramsData[4:8], srcOffset)
-
-	// Write params via the HAL queue's WriteBuffer. This is a CPU-side write
-	// that will be visible to the GPU before the next dispatch. The params
-	// buffer is shared by every validated dispatch, so the GPU has to be done
-	// with the previous one first: the HAL write itself no longer waits.
-	if p.encoder.device.queue != nil && p.encoder.device.queue.hal != nil {
-		if waitErr := halDevice.WaitIdle(); waitErr != nil {
-			p.core.DispatchIndirect(buffer.coreBuffer(), offset)
-			return
-		}
-		if writeErr := p.encoder.device.queue.hal.WriteBuffer(iv.ParamsBuffer(), 0, paramsData[:]); writeErr != nil {
-			// Params write failed -- fall back to unvalidated dispatch.
-			p.core.DispatchIndirect(buffer.coreBuffer(), offset)
-			return
-		}
-	} else {
-		p.core.DispatchIndirect(buffer.coreBuffer(), offset)
-		return
-	}
-
-	// Step 1: Set validation compute pipeline.
-	raw.SetPipeline(iv.Pipeline())
-
-	// Step 2: Bind destination group (group 0: dst buffer + params uniform).
-	raw.SetBindGroup(0, iv.DstBindGroup(), nil)
-
-	// Step 3: Bind source group (group 1: user's indirect buffer).
-	raw.SetBindGroup(1, srcBindGroup, nil)
-
-	// Step 4: Transition dst buffer from INDIRECT to STORAGE_READ_WRITE.
-	// The compute pass encoder needs the parent command encoder for barriers.
-	parentEncoder := p.encoder.core.RawEncoder()
-	if parentEncoder != nil {
-		// End the current compute pass temporarily to insert barriers.
-		raw.End()
-
-		parentEncoder.TransitionBuffers([]hal.BufferBarrier{
-			{
-				Buffer: iv.DstBuffer(),
-				Usage: hal.BufferUsageTransition{
-					OldUsage: gputypes.BufferUsageIndirect,
-					NewUsage: gputypes.BufferUsageStorage,
-				},
+	raw.End()
+	parentEncoder.TransitionBuffers([]hal.BufferBarrier{
+		{
+			Buffer: iv.DstBuffer(),
+			Usage: hal.BufferUsageTransition{
+				OldUsage: gputypes.BufferUsageIndirect,
+				NewUsage: gputypes.BufferUsageStorage,
 			},
-		})
+		},
+	})
 
-		// Re-begin compute pass for the validation dispatch.
-		validationPass := parentEncoder.BeginComputePass(&hal.ComputePassDescriptor{
-			Label: "indirect_dispatch_validation",
-		})
+	validationPass := parentEncoder.BeginComputePass(&hal.ComputePassDescriptor{
+		Label: "indirect_dispatch_validation",
+	})
+	validationPass.SetPipeline(iv.Pipeline())
+	validationPass.SetBindGroup(0, iv.DstBindGroup(), nil)
+	validationPass.SetBindGroup(1, srcBindGroup, nil)
+	validationPass.Dispatch(1, 1, 1)
+	validationPass.End()
 
-		// Set validation pipeline and bind groups in the new pass.
-		validationPass.SetPipeline(iv.Pipeline())
-		validationPass.SetBindGroup(0, iv.DstBindGroup(), nil)
-		validationPass.SetBindGroup(1, srcBindGroup, nil)
-
-		// Step 5: Dispatch validation shader (single workgroup).
-		validationPass.Dispatch(1, 1, 1)
-		validationPass.End()
-
-		// Step 6: Transition dst buffer back from STORAGE to INDIRECT.
-		parentEncoder.TransitionBuffers([]hal.BufferBarrier{
-			{
-				Buffer: iv.DstBuffer(),
-				Usage: hal.BufferUsageTransition{
-					OldUsage: gputypes.BufferUsageStorage,
-					NewUsage: gputypes.BufferUsageIndirect,
-				},
+	parentEncoder.TransitionBuffers([]hal.BufferBarrier{
+		{
+			Buffer: iv.DstBuffer(),
+			Usage: hal.BufferUsageTransition{
+				OldUsage: gputypes.BufferUsageStorage,
+				NewUsage: gputypes.BufferUsageIndirect,
 			},
-		})
+		},
+	})
 
-		// Step 7: Re-begin compute pass for the user's actual dispatch.
-		userPass := parentEncoder.BeginComputePass(&hal.ComputePassDescriptor{
-			Label: "indirect_dispatch_user",
-		})
+	userPass := parentEncoder.BeginComputePass(&hal.ComputePassDescriptor{
+		Label: "indirect_dispatch_user",
+	})
+	p.restoreComputeState(userPass)
+	userPass.DispatchIndirect(iv.DstBuffer(), 0)
 
-		// Restore user pipeline and bind groups.
-		p.restoreComputeState(userPass)
-
-		// Step 8: DispatchIndirect from validated buffer at offset 0.
-		userPass.DispatchIndirect(iv.DstBuffer(), 0)
-
-		// Replace the core encoder's raw pass with the new one.
-		// This is needed because End() + BeginComputePass created a new pass.
-		p.core.ReplaceRawPass(userPass)
-	} else {
-		// No parent encoder access -- fall back to unvalidated dispatch.
-		p.core.DispatchIndirect(buffer.coreBuffer(), offset)
-	}
+	// The pass the core encoder records into from here on.
+	p.core.ReplaceRawPass(userPass)
 }
 
 // restoreComputeState restores the user's pipeline and bind groups on a new

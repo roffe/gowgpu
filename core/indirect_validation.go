@@ -24,6 +24,10 @@ const validationShaderEntryPoint = "main"
 // either the original values or (0, 0, 0) to a validated destination buffer.
 // The actual DispatchIndirect then reads from the validated buffer.
 //
+// Each dispatch binds the user's buffer so that the binding ends with its
+// three counts, and the shader reads the binding's last three words. So a
+// dispatch needs no params of its own, only its own src bind group.
+//
 // Created once at Device initialization and reused for every DispatchIndirect call.
 // Matches Rust wgpu-core's indirect_validation::Dispatch (dispatch.rs).
 type IndirectValidation struct {
@@ -39,24 +43,22 @@ type IndirectValidation struct {
 	// srcBindGroupLayout describes the source indirect buffer binding (read-only storage).
 	srcBindGroupLayout hal.BindGroupLayout
 
-	// dstBindGroupLayout describes the destination buffer binding (read-write storage)
-	// and the params uniform buffer binding.
+	// dstBindGroupLayout describes the destination buffer binding (read-write storage).
 	dstBindGroupLayout hal.BindGroupLayout
 
 	// dstBuffer is the 12-byte destination buffer (3 x uint32) that receives
 	// validated workgroup counts. Reused across frames.
 	dstBuffer hal.Buffer
 
-	// dstBindGroup is the pre-built bind group for the destination buffer and
-	// params uniform buffer (group 0).
+	// dstBindGroup is the pre-built bind group for the destination buffer (group 0).
 	dstBindGroup hal.BindGroup
-
-	// paramsBuffer is the 8-byte uniform buffer holding Params (max_workgroups + src_offset).
-	// Written before each validation dispatch.
-	paramsBuffer hal.Buffer
 
 	// maxComputeWorkgroupsPerDimension is cached from device limits.
 	maxWorkgroups uint32
+
+	// storageAlign is the device's storage buffer offset alignment, which a
+	// src binding starts on.
+	storageAlign uint64
 
 	// device is the parent HAL device for resource cleanup.
 	device hal.Device
@@ -68,20 +70,15 @@ type IndirectValidation struct {
 // creation time (dispatch.rs:48-72).
 func dispatchIndirectValidationWGSL(maxWorkgroups uint32) string {
 	return fmt.Sprintf(`@group(0) @binding(0) var<storage, read_write> dst: array<u32, 3>;
-@group(0) @binding(1) var<uniform> params: Params;
+// Bound so that it ends with the dispatch's three counts.
 @group(1) @binding(0) var<storage, read> src: array<u32>;
-
-struct Params {
-    max_workgroups: u32,
-    src_offset: u32,
-}
 
 @compute @workgroup_size(1)
 fn main() {
-    let offset = params.src_offset;
-    let x = src[offset];
-    let y = src[offset + 1u];
-    let z = src[offset + 2u];
+    let n = arrayLength(&src);
+    let x = src[n - 3u];
+    let y = src[n - 2u];
+    let z = src[n - 1u];
 
     let limit = %du;
     if (x > limit || y > limit || z > limit) {
@@ -109,7 +106,6 @@ type indirectValidationBuilder struct {
 	pipelineLayout     hal.PipelineLayout
 	pipeline           hal.ComputePipeline
 	dstBuffer          hal.Buffer
-	paramsBuffer       hal.Buffer
 	dstBindGroup       hal.BindGroup
 }
 
@@ -117,9 +113,6 @@ type indirectValidationBuilder struct {
 func (b *indirectValidationBuilder) cleanup() {
 	if b.dstBindGroup != nil {
 		b.device.DestroyBindGroup(b.dstBindGroup)
-	}
-	if b.paramsBuffer != nil {
-		b.device.DestroyBuffer(b.paramsBuffer)
 	}
 	if b.dstBuffer != nil {
 		b.device.DestroyBuffer(b.dstBuffer)
@@ -173,6 +166,10 @@ func NewIndirectValidation(halDevice hal.Device, limits gputypes.Limits) *Indire
 		b.cleanup()
 		return nil
 	}
+	iv.storageAlign = uint64(limits.MinStorageBufferOffsetAlignment)
+	if iv.storageAlign == 0 {
+		iv.storageAlign = 256 // WebGPU's default
+	}
 	return iv
 }
 
@@ -196,16 +193,13 @@ func buildIndirectValidation(
 	}
 
 	// 2. Create bind group layouts.
-	// Group 0: dst buffer (RW storage) + params uniform.
+	// Group 0: dst buffer (RW storage).
 	// Group 1: src indirect buffer (RO storage).
 	b.dstBindGroupLayout, err = halDevice.CreateBindGroupLayout(&hal.BindGroupLayoutDescriptor{
 		Label: "wgpu_indirect_dispatch_dst_layout",
 		Entries: []gputypes.BindGroupLayoutEntry{
 			{Binding: 0, Visibility: gputypes.ShaderStageCompute, Buffer: &gputypes.BufferBindingLayout{
 				Type: gputypes.BufferBindingTypeStorage, MinBindingSize: 12,
-			}},
-			{Binding: 1, Visibility: gputypes.ShaderStageCompute, Buffer: &gputypes.BufferBindingLayout{
-				Type: gputypes.BufferBindingTypeUniform, MinBindingSize: 8,
 			}},
 		},
 	})
@@ -257,18 +251,8 @@ func buildIndirectValidation(
 		return nil, fmt.Errorf("dst buffer: %w", err)
 	}
 
-	// 6. Create params uniform buffer (8 bytes = 2 x uint32).
-	b.paramsBuffer, err = halDevice.CreateBuffer(&hal.BufferDescriptor{
-		Label: "wgpu_indirect_dispatch_params",
-		Size:  8,
-		Usage: gputypes.BufferUsageUniform | gputypes.BufferUsageCopyDst,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("params buffer: %w", err)
-	}
-
-	// 7. Create destination bind group (group 0: dst buffer + params uniform).
-	if b.dstBuffer == nil || b.paramsBuffer == nil {
+	// 6. Create destination bind group (group 0: dst buffer).
+	if b.dstBuffer == nil {
 		return nil, fmt.Errorf("buffer creation returned nil")
 	}
 	b.dstBindGroup, err = halDevice.CreateBindGroup(&hal.BindGroupDescriptor{
@@ -277,9 +261,6 @@ func buildIndirectValidation(
 		Entries: []gputypes.BindGroupEntry{
 			{Binding: 0, Resource: gputypes.BufferBinding{
 				Buffer: b.dstBuffer.NativeHandle(), Offset: 0, Size: 12,
-			}},
-			{Binding: 1, Resource: gputypes.BufferBinding{
-				Buffer: b.paramsBuffer.NativeHandle(), Offset: 0, Size: 8,
 			}},
 		},
 	})
@@ -295,32 +276,27 @@ func buildIndirectValidation(
 		dstBindGroupLayout: b.dstBindGroupLayout,
 		dstBuffer:          b.dstBuffer,
 		dstBindGroup:       b.dstBindGroup,
-		paramsBuffer:       b.paramsBuffer,
 		maxWorkgroups:      maxWorkgroups,
 		device:             halDevice,
 	}, nil
 }
 
-// CreateSrcBindGroup creates a bind group for the user's source indirect buffer.
-// Called per-DispatchIndirect with the user's buffer. The bind group is
-// ephemeral and must be destroyed by the caller after the validation dispatch.
-//
-// Matches Rust wgpu-core dispatch.rs:264-296 (create_src_bind_group).
+// CreateSrcBindGroup creates the bind group of one validated dispatch with
+// its counts at offset in srcBuffer: the binding starts at offset rounded
+// down to the storage offset alignment and ends with the counts. The caller
+// destroys it once the GPU is done with the dispatch.
 func (iv *IndirectValidation) CreateSrcBindGroup(
 	halDevice hal.Device,
 	srcBuffer hal.Buffer,
-	bufferSize uint64,
+	offset uint64,
 ) (hal.BindGroup, error) {
-	if bufferSize < 12 {
-		return nil, fmt.Errorf("indirect dispatch buffer too small: %d < 12 bytes", bufferSize)
-	}
-
+	base := offset - offset%iv.storageAlign
 	return halDevice.CreateBindGroup(&hal.BindGroupDescriptor{
 		Label:  "wgpu_indirect_dispatch_src_group",
 		Layout: iv.srcBindGroupLayout,
 		Entries: []gputypes.BindGroupEntry{
 			{Binding: 0, Resource: gputypes.BufferBinding{
-				Buffer: srcBuffer.NativeHandle(), Offset: 0, Size: bufferSize,
+				Buffer: srcBuffer.NativeHandle(), Offset: base, Size: offset + 12 - base,
 			}},
 		},
 	})
@@ -348,11 +324,6 @@ func (iv *IndirectValidation) DstBindGroup() hal.BindGroup {
 	return iv.dstBindGroup
 }
 
-// ParamsBuffer returns the uniform buffer for per-dispatch parameters.
-func (iv *IndirectValidation) ParamsBuffer() hal.Buffer {
-	return iv.paramsBuffer
-}
-
 // MaxWorkgroups returns the baked-in maximum workgroup count per dimension.
 func (iv *IndirectValidation) MaxWorkgroups() uint32 {
 	return iv.maxWorkgroups
@@ -372,7 +343,6 @@ func (iv *IndirectValidation) Dispose() {
 		pipelineLayout:     iv.pipelineLayout,
 		pipeline:           iv.pipeline,
 		dstBuffer:          iv.dstBuffer,
-		paramsBuffer:       iv.paramsBuffer,
 		dstBindGroup:       iv.dstBindGroup,
 	}
 	b.cleanup()
