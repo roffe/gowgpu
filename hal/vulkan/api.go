@@ -690,7 +690,11 @@ func limitsFromProps(props *vk.PhysicalDeviceProperties) gputypes.Limits {
 	limits.MaxComputeWorkgroupSizeX = vkLimits.MaxComputeWorkGroupSize[0]
 	limits.MaxComputeWorkgroupSizeY = vkLimits.MaxComputeWorkGroupSize[1]
 	limits.MaxComputeWorkgroupSizeZ = vkLimits.MaxComputeWorkGroupSize[2]
-	limits.MaxComputeWorkgroupsPerDimension = vkLimits.MaxComputeWorkGroupCount[0]
+	// WebGPU's limit holds for each dimension, so it is the smallest of
+	// Vulkan's three, as in Rust's wgpu-hal. NVIDIA allows 2^31-1 in X but
+	// 65535 in Y and Z.
+	limits.MaxComputeWorkgroupsPerDimension = min(vkLimits.MaxComputeWorkGroupCount[0],
+		vkLimits.MaxComputeWorkGroupCount[1], vkLimits.MaxComputeWorkGroupCount[2])
 
 	// Push constants
 	limits.MaxPushConstantSize = vkLimits.MaxPushConstantsSize

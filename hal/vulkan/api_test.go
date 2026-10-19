@@ -202,7 +202,7 @@ func TestLimitsFromProps(t *testing.T) {
 			MaxVertexInputBindingStride:         2048,
 			MaxFragmentOutputAttachments:        8,
 			MaxComputeSharedMemorySize:          32768,
-			MaxComputeWorkGroupCount:            [3]uint32{65535, 65535, 65535},
+			MaxComputeWorkGroupCount:            [3]uint32{1<<31 - 1, 65535, 65535}, // NVIDIA's
 			MaxComputeWorkGroupInvocations:      1024,
 			MaxComputeWorkGroupSize:             [3]uint32{1024, 1024, 64},
 			MinUniformBufferOffsetAlignment:     256,
@@ -251,6 +251,9 @@ func TestLimitsFromProps(t *testing.T) {
 	}
 	if limits.MaxComputeWorkgroupSizeX != 1024 {
 		t.Errorf("MaxComputeWorkgroupSizeX = %d, want 1024", limits.MaxComputeWorkgroupSizeX)
+	}
+	if limits.MaxComputeWorkgroupsPerDimension != 65535 {
+		t.Errorf("MaxComputeWorkgroupsPerDimension = %d, want 65535, the smallest of the three", limits.MaxComputeWorkgroupsPerDimension)
 	}
 
 	// Verify push constants
