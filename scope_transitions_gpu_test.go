@@ -3,6 +3,7 @@
 package wgpu
 
 import (
+	"bytes"
 	"context"
 	"log/slog"
 	"os"
@@ -565,6 +566,122 @@ func TestFreshTextureCopyAfterZeroing(t *testing.T) {
 	device.Poll(PollWait)
 
 	expectPixels(t, "fresh texture after upload", readback(t, st), 0x7f, 0x7f, 0x7f, 0x7f)
+	assertNoValidation(t, h)
+}
+
+// TestQueueWriteBufferIsOrdered: a queue write is a CopyDst use of the buffer
+// in the device tracker, so the command buffers around it get their barriers:
+// a copy into a buffer the same submit wrote (write after write), a copy out
+// of it after a write in a later submit, whose start state the device knew as
+// CopySrc (read after write), and that write itself after the earlier submit
+// read the buffer (write after read). Under the synchronization validation
+// layer any message here is one of those hazards.
+func TestQueueWriteBufferIsOrdered(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	const size = 1024
+	q := device.Queue()
+	buf, err := device.CreateBuffer(&BufferDescriptor{Label: "written", Size: size, Usage: BufferUsageCopySrc | BufferUsageCopyDst})
+	if err != nil {
+		t.Fatalf("CreateBuffer: %v", err)
+	}
+	defer buf.Release()
+	src, err := device.CreateBuffer(&BufferDescriptor{Label: "src", Size: size, Usage: BufferUsageCopySrc | BufferUsageCopyDst})
+	if err != nil {
+		t.Fatalf("CreateBuffer: %v", err)
+	}
+	defer src.Release()
+	st := make([]*Buffer, 2)
+	for i := range st {
+		if st[i], err = device.CreateBuffer(&BufferDescriptor{Label: "st", Size: size, Usage: BufferUsageCopyDst | BufferUsageMapRead}); err != nil {
+			t.Fatalf("CreateBuffer: %v", err)
+		}
+		defer st[i].Release()
+	}
+	fill := func(b *Buffer, v byte) {
+		t.Helper()
+		if err := q.WriteBuffer(b, 0, bytes.Repeat([]byte{v}, size)); err != nil {
+			t.Fatalf("WriteBuffer: %v", err)
+		}
+	}
+	copyBuf := func(from, to *Buffer) {
+		t.Helper()
+		enc, err := device.CreateCommandEncoder(nil)
+		if err != nil {
+			t.Fatalf("CreateCommandEncoder: %v", err)
+		}
+		enc.CopyBufferToBuffer(from, 0, to, 0, size)
+		finishAndSubmit(t, device, enc)
+	}
+
+	fill(src, 0x11)
+	fill(buf, 0x22)
+	copyBuf(src, buf) // writes buf after the queue write of the same submit
+	copyBuf(buf, st[0])
+	fill(buf, 0x33) // after the read above, and read below as CopySrc again
+	copyBuf(buf, st[1])
+	device.Poll(PollWait)
+
+	for i, want := range []byte{0x11, 0x33} {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		err := st[i].Map(ctx, MapModeRead, 0, size)
+		cancel()
+		if err != nil {
+			t.Fatalf("Map: %v", err)
+		}
+		rng, err := st[i].MappedRange(0, size)
+		if err != nil {
+			t.Fatalf("MappedRange: %v", err)
+		}
+		if got := rng.Bytes(); !bytes.Equal(got, bytes.Repeat([]byte{want}, size)) {
+			t.Errorf("readback %d starts %#x, want all %#x", i, got[0], want)
+		}
+		if err := st[i].Unmap(); err != nil {
+			t.Fatalf("Unmap: %v", err)
+		}
+	}
+	assertNoValidation(t, h)
+}
+
+// TestQueueWriteTextureIsOrdered: a texture that isn't sampled stays a copy
+// destination after a queue write, so the next write into it, in the same
+// batch or after a command buffer that copied into it, needs a CopyDst to
+// CopyDst barrier, not none.
+func TestQueueWriteTextureIsOrdered(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	tex, view := pixTexture(t, device, "copy-dst-only", TextureUsageCopyDst|TextureUsageCopySrc)
+	defer releaseTextureView(tex, view)
+	upload, err := device.CreateBuffer(&BufferDescriptor{Label: "upload", Size: pixStaging, Usage: BufferUsageCopySrc | BufferUsageCopyDst})
+	if err != nil {
+		t.Fatalf("CreateBuffer: %v", err)
+	}
+	defer upload.Release()
+	write := func() {
+		t.Helper()
+		err := device.Queue().WriteTexture(&ImageCopyTexture{Texture: tex}, make([]byte, pixSide*pixSide*4),
+			&ImageDataLayout{BytesPerRow: pixSide * 4, RowsPerImage: pixSide},
+			&Extent3D{Width: pixSide, Height: pixSide, DepthOrArrayLayers: 1})
+		if err != nil {
+			t.Fatalf("WriteTexture: %v", err)
+		}
+	}
+
+	write()
+	write()
+	enc, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	enc.CopyBufferToTexture(upload, tex, []BufferTextureCopy{{
+		TextureBase:  ImageCopyTexture{Texture: tex},
+		BufferLayout: ImageDataLayout{BytesPerRow: pixRow, RowsPerImage: pixSide},
+		Size:         Extent3D{Width: pixSide, Height: pixSide, DepthOrArrayLayers: 1},
+	}})
+	finishAndSubmit(t, device, enc)
+	write()
+	if _, err := device.Queue().Submit(); err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	device.Poll(PollWait)
 	assertNoValidation(t, h)
 }
 

@@ -393,7 +393,7 @@ func (q *Queue) WriteBuffer(buffer *Buffer, offset uint64, data []byte) error {
 	// DX12: MapWrite buffers now use HEAP_TYPE_CUSTOM with WRITE_COMBINE + COMMON
 	// state (matching Rust suballocation.rs:437), allowing CopyBufferRegion as dst.
 	if q.pending != nil {
-		return q.pending.writeBuffer(halBuffer, buffer.Usage(), offset, data)
+		return q.pending.writeBufferFor(buffer, halBuffer, buffer.Usage(), offset, data)
 	}
 
 	return q.hal.WriteBuffer(halBuffer, offset, data)

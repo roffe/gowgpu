@@ -252,7 +252,7 @@ func TestPendingWrites_WriteBufferBatching(t *testing.T) {
 
 	// dstBuffers should track the buffer with proper usage.
 	pw2.mu.Lock()
-	pw2.dstBuffers[dstBuf] = usage
+	pw2.dstBuffers[dstBuf] = dstBuffer{usage: usage}
 	pw2.mu.Unlock()
 
 	pw2.mu.Lock()
@@ -261,8 +261,8 @@ func TestPendingWrites_WriteBufferBatching(t *testing.T) {
 	if !ok {
 		t.Error("expected destination buffer to be tracked in dstBuffers")
 	}
-	if trackedUsage != usage {
-		t.Errorf("expected tracked usage=%d, got %d", usage, trackedUsage)
+	if trackedUsage.usage != usage {
+		t.Errorf("expected tracked usage=%d, got %d", usage, trackedUsage.usage)
 	}
 }
 

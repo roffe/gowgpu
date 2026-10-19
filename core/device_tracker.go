@@ -94,6 +94,27 @@ func (dt *DeviceTracker) MergeBufferScopeInto(cmdTracker *track.EncoderBufferTra
 	return dt.buffers.MergeEncoderInto(cmdTracker, dst)
 }
 
+// SetBufferUsage moves a buffer to usage outside any command buffer, as a
+// queue write does, and returns the barrier from the state the GPU last used
+// it in, if one is needed. A buffer the device does not track yet has not
+// been on the GPU, so it is inserted without one.
+//
+// Reference: wgpu-core device/queue.rs write_buffer, trackers.buffers.set_single
+func (dt *DeviceTracker) SetBufferUsage(index track.TrackerIndex, usage track.BufferUses) (track.PendingTransition, bool) {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	if !dt.buffers.IsTracked(index) {
+		dt.buffers.InsertSingle(index, usage)
+		return track.PendingTransition{}, false
+	}
+	current := dt.buffers.GetUsage(index)
+	dt.buffers.SetUsage(index, usage)
+	if track.SkipBufferBarrier(current, usage) {
+		return track.PendingTransition{}, false
+	}
+	return track.PendingTransition{Index: index, Usage: track.StateTransition{From: current, To: usage}}, true
+}
+
 // InsertBuffer registers a buffer in the device tracker with its initial usage.
 func (dt *DeviceTracker) InsertBuffer(index track.TrackerIndex, usage track.BufferUses) {
 	dt.mu.Lock()

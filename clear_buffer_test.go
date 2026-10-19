@@ -38,12 +38,6 @@ func TestClearBufferZeroesRange(t *testing.T) {
 			t.Fatalf("WriteBuffer: %v", err)
 		}
 	}
-	// A submit of its own: on Vulkan nothing orders a queue write before a
-	// write to the same buffer in the same submit yet.
-	if _, err := device.Queue().Submit(); err != nil {
-		t.Fatalf("Submit: %v", err)
-	}
-	device.Poll(PollWait)
 	st := clearTestBuffer(t, device, BufferUsageCopyDst|BufferUsageMapRead, 2*size)
 
 	enc, err := device.CreateCommandEncoder(nil)

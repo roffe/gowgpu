@@ -72,11 +72,11 @@ type pendingWrites struct {
 	// the hal.CommandEncoder interface. Reused across writes within a frame.
 	copyRegion [1]hal.BufferCopy
 
-	// dstBuffers tracks buffers that have pending writes, keyed by HAL buffer
-	// with their creation usage flags as values. Usage is passed from the wgpu
-	// public API level (matching Rust wgpu-core where usage lives on core::Buffer,
-	// not on hal::Buffer). Used by flush() to compute COPY_DST → read-state barriers.
-	dstBuffers map[hal.Buffer]gputypes.BufferUsage
+	// dstBuffers tracks buffers that have pending writes, keyed by HAL buffer.
+	// Usage is passed from the wgpu public API level (matching Rust wgpu-core
+	// where usage lives on core::Buffer, not on hal::Buffer). Used by flush()
+	// to compute COPY_DST → read-state barriers.
+	dstBuffers map[hal.Buffer]dstBuffer
 
 	// dstTextures tracks textures that have pending writes, and dstOwners the
 	// public wrappers that contributed commands for them, so that every
@@ -87,10 +87,11 @@ type pendingWrites struct {
 	dstTextures map[hal.Texture]struct{}
 	dstOwners   []dstOwner
 
-	// Scratch for writeTextureLocked, under pw.mu: what it hands the HAL by
-	// slice, which does not keep it.
+	// Scratch for writeTextureLocked and writeBufferFor, under pw.mu: what
+	// they hand the HAL by slice, which does not keep it.
 	texBarrier [1]hal.TextureBarrier
 	texCopy    [1]hal.BufferTextureCopy
+	bufBarrier [1]hal.BufferBarrier
 
 	// inflight tracks staging buffers and encoders from previous submissions,
 	// keyed by submission index. Cleaned up when PollCompleted advances past them.
@@ -156,6 +157,13 @@ type dstOwner struct {
 	owner *Texture
 }
 
+// dstBuffer is a buffer the batch writes: its creation usage and the public
+// wrapper that wrote it, nil from the ownerless writeBuffer.
+type dstBuffer struct {
+	usage gputypes.BufferUsage
+	owner *Buffer
+}
+
 // inflightSubmission tracks resources from a single submission that must
 // remain alive until the GPU completes that submission.
 type inflightSubmission struct {
@@ -186,7 +194,7 @@ func newPendingWrites(halDevice hal.Device, halQueue hal.Queue, pool *encoderPoo
 	pw := &pendingWrites{
 		halDevice:    halDevice,
 		halQueue:     halQueue,
-		dstBuffers:   make(map[hal.Buffer]gputypes.BufferUsage),
+		dstBuffers:   make(map[hal.Buffer]dstBuffer),
 		dstTextures:  make(map[hal.Texture]struct{}),
 		usesBatching: halQueue.SupportsCommandBufferCopies(),
 	}
@@ -214,6 +222,12 @@ func newPendingWrites(halDevice hal.Device, halQueue hal.Queue, pool *encoderPoo
 // where usage lives on core::Buffer, not hal::Buffer. Used by flush() to compute
 // correct COPY_DST → read-state transition barriers (BUG-DX12-010).
 func (pw *pendingWrites) writeBuffer(buffer hal.Buffer, usage gputypes.BufferUsage, offset uint64, data []byte) error {
+	return pw.writeBufferFor(nil, buffer, usage, offset, data)
+}
+
+// writeBufferFor is writeBuffer for the public buffer owner, whose state in
+// the device tracker the write moves to CopyDst, Queue.WriteBuffer's form.
+func (pw *pendingWrites) writeBufferFor(owner *Buffer, buffer hal.Buffer, usage gputypes.BufferUsage, offset uint64, data []byte) error {
 	pw.mu.Lock()
 	defer pw.mu.Unlock()
 
@@ -238,6 +252,18 @@ func (pw *pendingWrites) writeBuffer(buffer hal.Buffer, usage gputypes.BufferUsa
 	enc, err := pw.activate()
 	if err != nil {
 		return fmt.Errorf("wgpu: pending writes: activate encoder: %w", err)
+	}
+
+	// The write is a CopyDst use of the buffer, after a barrier from what
+	// the GPU used it as last, so it neither lands under the reads of
+	// earlier submits nor races an earlier write, and the next submit's
+	// barriers start from it.
+	if idx, ok := pw.trackedBufferIndex(owner); ok {
+		if transition, needed := pw.tracker.SetBufferUsage(idx, track.BufferUsesCopyDst); needed {
+			pw.bufBarrier[0] = transition.IntoHAL(buffer)
+			enc.TransitionBuffers(pw.bufBarrier[:])
+			pw.bufBarrier[0] = hal.BufferBarrier{}
+		}
 	}
 
 	// Check if the allocation was chunked (BUG-VK-001).
@@ -267,7 +293,7 @@ func (pw *pendingWrites) writeBuffer(buffer hal.Buffer, usage gputypes.BufferUsa
 	}
 
 	// Track destination buffer for barrier computation at flush time.
-	pw.dstBuffers[buffer] = usage
+	pw.dstBuffers[buffer] = dstBuffer{usage: usage, owner: owner}
 
 	return nil
 }
@@ -413,7 +439,9 @@ func (pw *pendingWrites) copyToTextureLocked(
 		}
 	}
 	copyRange := textureCopyRange(owner, dst, size)
-	if currentUsage != gputypes.TextureUsageCopyDst {
+	// One the tracker knows as a copy destination already was written by an
+	// earlier copy, which this one has to wait for.
+	if currentUsage != gputypes.TextureUsageCopyDst || currentUses&hal.TextureUsesCopyDst != 0 {
 		pw.texBarrier[0] = hal.TextureBarrier{
 			Texture: dst.Texture,
 			Range:   copyRange,
@@ -506,6 +534,19 @@ func (pw *pendingWrites) hasOwner(raw hal.Texture, owner *Texture) bool {
 		}
 	}
 	return false
+}
+
+// trackedBufferIndex is owner's index in the device tracker, when there is
+// a tracker and the buffer has an index.
+func (pw *pendingWrites) trackedBufferIndex(owner *Buffer) (track.TrackerIndex, bool) {
+	if pw.tracker == nil || owner == nil || owner.core == nil {
+		return 0, false
+	}
+	td := owner.core.TrackingData()
+	if td == nil || !td.Index().IsValid() || td.IsReleased() {
+		return 0, false
+	}
+	return td.Index(), true
 }
 
 // trackedIndex is owner's index in the device tracker, when there is a
@@ -725,6 +766,25 @@ func bufferReadUsage(usage gputypes.BufferUsage) gputypes.BufferUsage {
 	return usage & readMask
 }
 
+// bufferReadUses is a bufferReadUsage in the device tracker's terms.
+func bufferReadUses(usage gputypes.BufferUsage) track.BufferUses {
+	var uses track.BufferUses
+	for _, m := range [...]struct {
+		usage gputypes.BufferUsage
+		uses  track.BufferUses
+	}{
+		{gputypes.BufferUsageVertex, track.BufferUsesVertex},
+		{gputypes.BufferUsageIndex, track.BufferUsesIndex},
+		{gputypes.BufferUsageUniform, track.BufferUsesUniform},
+		{gputypes.BufferUsageIndirect, track.BufferUsesIndirect},
+	} {
+		if usage&m.usage != 0 {
+			uses |= m.uses
+		}
+	}
+	return uses
+}
+
 // activate lazily begins encoding on the shared command encoder.
 // Acquires an encoder from the pool if none exists. Must be called with pw.mu held.
 func (pw *pendingWrites) activate() (hal.CommandEncoder, error) {
@@ -792,8 +852,8 @@ func (pw *pendingWrites) flush() (hal.CommandBuffer, hal.CommandEncoder, []hal.T
 	// usage to determine the target state.
 	if len(pw.dstBuffers) > 0 {
 		barriers := pw.barriers[:0]
-		for buf, usage := range pw.dstBuffers {
-			readUsage := bufferReadUsage(usage)
+		for buf, dst := range pw.dstBuffers {
+			readUsage := bufferReadUsage(dst.usage)
 			if readUsage != 0 {
 				barriers = append(barriers, hal.BufferBarrier{
 					Buffer: buf,
@@ -802,6 +862,10 @@ func (pw *pendingWrites) flush() (hal.CommandBuffer, hal.CommandEncoder, []hal.T
 						NewUsage: readUsage,
 					},
 				})
+				// The device tracker follows the buffer into the read state.
+				if idx, ok := pw.trackedBufferIndex(dst.owner); ok {
+					pw.tracker.InsertBuffer(idx, bufferReadUses(readUsage))
+				}
 			}
 		}
 		if len(barriers) > 0 {
