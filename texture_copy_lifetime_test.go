@@ -145,6 +145,16 @@ func TestTextureCopyBufferRefHeldUntilQueueRetirement(t *testing.T) {
 			if got := ref.RefCount(); got != 1 {
 				t.Fatalf("buffer refcount before retirement = %d, want 1", got)
 			}
+			// The GPU has to be done before the test says it is: retiring the
+			// submission releases the buffer, and releasing one the GPU still
+			// copies to stops WARP's debug layer and hangs vkd3d. WaitIdle
+			// retires nothing, the queue reports no completion until here.
+			if err := device.WaitIdle(); err != nil {
+				t.Fatalf("WaitIdle: %v", err)
+			}
+			if got := ref.RefCount(); got != 1 {
+				t.Fatalf("buffer refcount after WaitIdle = %d, want 1", got)
+			}
 			delayed.completed = submission
 			device.destroyQueue().Triage(delayed.PollCompleted())
 			if got := ref.RefCount(); got != 0 {
