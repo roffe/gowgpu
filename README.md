@@ -138,6 +138,7 @@ Not run yet: the browser backend, the BSDs, GL on Windows and real Apple hardwar
 - The DXIL compute test in `hal/dx12` (`TestComputePairSumIntegration/DXIL`) fails under wine: vkd3d takes FXC blobs, not naga's DXIL, so `CreateComputePipelineState` returns E_FAIL there. Run it on Windows.
 - DX12 ignores dynamic bind group offsets, and takes the vertex stride from whatever pipeline was set when `SetVertexBuffer` ran.
 - naga keeps identifiers that start with `gl_` when it writes GLSL, and strict drivers like Mali refuse them. Don't name things `gl_*` in WGSL.
+- On GL a `texture_depth_2d` only works with a comparison sampler: naga declares it `sampler2DShadow`, so `textureSample` with a plain sampler and `textureLoad` on it don't compile.
 - New textures are zeroed only when they have a color format, one sample and `TextureBinding`. Depth, multisampled and compressed textures start with whatever the memory held, so clear them in their first render pass or write all of them.
 - `DispatchIndirect` validation destroys its bind group before the GPU runs it, waits for the GPU before writing its params, and indirect dispatches recorded before one `Submit` share one set of params.
 - GL binds bind groups and vertex buffers against the pipeline set at the time, so set the pipeline first; integer vertex formats, index base vertex, `CopyBufferToTexture` row pitch and anything but 2D textures are not done on GL.
