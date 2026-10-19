@@ -11,7 +11,7 @@ What compute looks like on each gowgpu backend and where they differ. How to wri
 | Storage buffers | Yes | Yes | Yes | Same as compute | Yes | Plain Go memory |
 | Indirect dispatch | Yes | Yes | Yes | Same as compute | Yes | No-op |
 | Buffer mapping | Yes | Yes | Yes | Yes | Yes | Plain Go memory |
-| Dynamic offsets | Yes | Ignored | Yes | Yes | Yes | n/a |
+| Dynamic offsets | Yes | Yes | Yes | Yes | Yes | n/a |
 | Timestamp queries | Partly, see below | Partly, see below | No | Windows only | No | No |
 | Workgroup limits | From the driver | Fixed, 1024 | Fixed, 1024 | From the driver | From the browser | n/a |
 
@@ -39,7 +39,7 @@ Things that are the same everywhere:
 - Shaders are compiled when the pipeline is created: WGSL -> HLSL -> DXBC with FXC (`d3dcompiler_47.dll`) by default, or WGSL -> DXIL straight from naga with `GOGPU_DX12_DXIL=1`. `GOGPU_DX12_DXIL_VALIDATE=1` also runs the DXC validator on every DXIL blob so real errors reach the log.
 - The root signature comes from the pipeline layout. A nil layout gets an empty root signature, which only works for a shader without bindings.
 - Descriptor heaps get bound the first time `SetBindGroup` (or `SetPipeline` for a pipeline with samplers) needs them.
-- Dynamic bind group offsets are ignored ([gogpu/wgpu#343](https://github.com/gogpu/wgpu/issues/343)). Don't use `HasDynamicOffset` bindings on DX12.
+- A uniform buffer with a dynamic offset gets a root CBV instead of a descriptor in its group's table, and a storage buffer with one gets its offset in root constants that naga's HLSL adds to every address, as in Rust's wgpu-hal. `arrayLength()` on such a storage buffer counts to the end of the buffer, and with `GOGPU_DX12_DXIL=1` its offset is ignored.
 - Before each dispatch the bound storage buffers are moved to `UNORDERED_ACCESS`, and after it there's a global UAV barrier.
 - `DispatchIndirect` is `ExecuteIndirect` with the device's dispatch command signature (12 bytes of `D3D12_DISPATCH_ARGUMENTS`).
 - Limits are fixed: 1024 invocations per workgroup, 1024 for X and Y, 64 for Z, 32 KB workgroup storage, 65535 workgroups per dimension.

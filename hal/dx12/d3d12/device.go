@@ -968,6 +968,28 @@ func (c *ID3D12GraphicsCommandList) SetGraphicsRoot32BitConstant(rootParameterIn
 	)
 }
 
+// SetComputeRootConstantBufferView points a compute root CBV at a GPU virtual address.
+func (c *ID3D12GraphicsCommandList) SetComputeRootConstantBufferView(rootParameterIndex uint32, bufferLocation uint64) {
+	_, _, _ = syscall.Syscall(
+		c.vtbl.SetComputeRootConstantBufferView,
+		3,
+		uintptr(unsafe.Pointer(c)),
+		uintptr(rootParameterIndex),
+		uintptr(bufferLocation),
+	)
+}
+
+// SetGraphicsRootConstantBufferView points a graphics root CBV at a GPU virtual address.
+func (c *ID3D12GraphicsCommandList) SetGraphicsRootConstantBufferView(rootParameterIndex uint32, bufferLocation uint64) {
+	_, _, _ = syscall.Syscall(
+		c.vtbl.SetGraphicsRootConstantBufferView,
+		3,
+		uintptr(unsafe.Pointer(c)),
+		uintptr(rootParameterIndex),
+		uintptr(bufferLocation),
+	)
+}
+
 // IASetIndexBuffer sets the index buffer.
 func (c *ID3D12GraphicsCommandList) IASetIndexBuffer(view *D3D12_INDEX_BUFFER_VIEW) {
 	_, _, _ = syscall.Syscall(

@@ -107,7 +107,7 @@ hal trusts core. What's left in the backends is nil checks, and those return err
 - The swapchain is made for the HWND, or through DirectComposition when you configure premultiplied alpha. `GOGPU_DX12_FORCE_HWND=1` skips DirectComposition so RenderDoc can capture.
 - WARP, Microsoft's CPU renderer, only shows up when there's no hardware adapter, so VMs and CI still render.
 - `InstanceFlagsDebug` turns on the debug layer and DRED, and a removed device logs its breadcrumbs. Add `InstanceFlagsValidation` for GPU based validation.
-- Dynamic bind group offsets are ignored, they need root descriptors (gogpu/wgpu#343). The vertex stride comes from the pipeline that was set when `SetVertexBuffer` ran.
+- A uniform buffer with a dynamic offset gets a root CBV after its group's descriptor table, and a storage buffer with one gets its offset in root constants that naga's HLSL adds to its addresses, as in Rust's wgpu-hal. The vertex stride comes from the pipeline that was set when `SetVertexBuffer` ran.
 
 ### GL
 

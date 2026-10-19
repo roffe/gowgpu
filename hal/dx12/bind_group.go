@@ -21,7 +21,8 @@ type viewBinding struct {
 
 // orderBindGroupEntries matches bind group entries to their layout entries and
 // returns them in layout order, split into CBV/SRV/UAV entries and global
-// sampler pool slots.
+// sampler pool slots. A uniform buffer with a dynamic offset is in neither,
+// it has a root CBV instead of a descriptor in the table.
 //
 // Layout order is required: createRootSignatureFromLayouts emits one descriptor
 // range per non-sampler layout entry (D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND) and
@@ -57,7 +58,9 @@ func orderBindGroupEntries(layout *BindGroupLayout, entries []gputypes.BindGroup
 			if !ok || res.Buffer == 0 {
 				return nil, nil, fmt.Errorf("dx12: binding %d: layout expects a buffer, got %T", le.Binding, entry.Resource)
 			}
-			views = append(views, viewBinding{layout: le, entry: entry})
+			if !le.dynamicUniform() {
+				views = append(views, viewBinding{layout: le, entry: entry})
+			}
 
 		default: // BindingTypeSampledTexture, BindingTypeStorageTexture
 			res, ok := entry.Resource.(gputypes.TextureViewBinding)
@@ -117,6 +120,15 @@ func rawBufferViewRange(offset, size uint64) (firstElement uint64, numElements u
 //
 // Same as the BindingType::Buffer arm of Rust wgpu-hal's create_bind_group.
 func (d *Device) writeBufferViewDescriptor(le BindGroupLayoutEntry, buf *Buffer, res gputypes.BufferBinding, dest d3d12.D3D12_CPU_DESCRIPTOR_HANDLE) error {
+	if le.HasDynamicOffset {
+		// A storage buffer the shader adds its dynamic offset to: the view
+		// runs to the end of the buffer, as in Rust's wgpu-hal.
+		// ponytail: so arrayLength() on it counts from the bind group's
+		// offset to the end of the buffer, whatever the binding size and
+		// the dynamic offset, as in Rust. Fixing it takes the binding size
+		// in the root constants and naga reading it from there.
+		res.Size = 0
+	}
 	size := bufferBindingSize(buf.size, res)
 
 	switch le.Type {

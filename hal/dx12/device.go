@@ -6,11 +6,13 @@
 package dx12
 
 import (
+	"cmp"
 	"crypto/sha256"
 	"fmt"
 	"log/slog"
 	"os"
 	"runtime"
+	"slices"
 	"sync"
 	"time"
 	"unsafe"
@@ -1862,6 +1864,7 @@ func (d *Device) CreateBindGroupLayout(desc *hal.BindGroupLayoutDescriptor) (hal
 			case gputypes.BufferBindingTypeReadOnlyStorage:
 				entries[i].Type = BindingTypeReadOnlyStorageBuffer
 			}
+			entries[i].HasDynamicOffset = entry.Buffer.HasDynamicOffset
 		case entry.Sampler != nil:
 			if entry.Sampler.Type == gputypes.SamplerBindingTypeComparison {
 				entries[i].Type = BindingTypeComparisonSampler
@@ -1874,6 +1877,9 @@ func (d *Device) CreateBindGroupLayout(desc *hal.BindGroupLayoutDescriptor) (hal
 			entries[i].Type = BindingTypeStorageTexture
 		}
 	}
+	// WebGPU orders dynamic offsets by binding number, and Rust's wgpu-core
+	// hands the HAL its entries sorted that way too.
+	slices.SortFunc(entries, func(a, b BindGroupLayoutEntry) int { return cmp.Compare(a.Binding, b.Binding) })
 
 	return &BindGroupLayout{
 		entries: entries,
@@ -1921,7 +1927,9 @@ func (d *Device) CreateBindGroup(desc *hal.BindGroupDescriptor) (hal.BindGroup, 
 
 	// Collect resource references for DX12 command-local state tracking. The
 	// descriptor table itself does not carry enough information to emit state
-	// transitions, so retain the typed resources alongside it.
+	// transitions, so retain the typed resources alongside it. The buffers
+	// with a dynamic offset go in dynamicBuffers too, in the layout's
+	// binding order.
 	for _, layoutEntry := range layout.entries {
 		for _, bgEntry := range desc.Entries {
 			if bgEntry.Binding != layoutEntry.Binding {
@@ -1938,6 +1946,12 @@ func (d *Device) CreateBindGroup(desc *hal.BindGroupDescriptor) (hal.BindGroup, 
 						bg.storageBuffers = append(bg.storageBuffers, buf)
 					case BindingTypeReadOnlyStorageBuffer:
 						bg.readOnlyStorageBuffers = append(bg.readOnlyStorageBuffers, buf)
+					}
+					if layoutEntry.HasDynamicOffset {
+						bg.dynamicBuffers = append(bg.dynamicBuffers, dynamicBuffer{
+							uniform: layoutEntry.Type == BindingTypeUniformBuffer,
+							gpuVA:   buf.gpuVA + bufBinding.Offset,
+						})
 					}
 				}
 			case BindingTypeSampledTexture, BindingTypeStorageTexture:
@@ -2378,6 +2392,10 @@ func (d *Device) compileWGSLModuleDXIL(wgslSource string, irModule *ir.Module, n
 
 	opts := dxil.DefaultOptions()
 	if nagaOpts != nil {
+		// ponytail: naga's DXIL backend has no dynamic storage buffer
+		// offsets, so a DXIL shader uses a dynamic storage buffer at its
+		// bind group offset, whatever the dynamic one. Needs naga to take
+		// DynamicStorageBufferOffsetsTargets for DXIL as it does for HLSL.
 		opts.BindingMap = hlslToDXILBindingMap(nagaOpts.BindingMap)
 		opts.SamplerBufferBindingMap = hlslToDXILSamplerBufferBindingMap(nagaOpts.SamplerBufferBindingMap)
 		opts.SamplerHeapTargets = hlslToDXILSamplerHeapTargets(nagaOpts.SamplerHeapTargets)
