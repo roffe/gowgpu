@@ -167,6 +167,14 @@ func (b *Buffer) MapAsync(mode MapMode, offset, size uint64) (*MapPending, error
 	if b == nil || b.core == nil {
 		return nil, ErrReleased
 	}
+	// A queue write to the buffer that no submit has carried yet would land
+	// with the next one, after the map: submit it now, and the map waits
+	// for it like for any other work on the buffer.
+	if b.device != nil && b.device.queue != nil && b.device.queue.pending != nil && b.device.queue.pending.writesTo(b.halBuffer()) {
+		if _, err := b.device.queue.Submit(); err != nil {
+			return nil, err
+		}
+	}
 	cerr := b.core.BeginMap(mode.toInternal(), offset, size)
 	if cerr != nil {
 		return nil, coreErrToTyped(cerr)

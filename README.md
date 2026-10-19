@@ -134,7 +134,7 @@ Not run yet: the browser backend, the BSDs, GL on Windows and real Apple hardwar
 
 ## Known issues
 
-- On Vulkan and DX12, pipelines need an explicit layout (there are no automatic layouts; Metal takes pipelines without one). And `Map` doesn't see a `WriteBuffer` until something is submitted, an empty `Queue.Submit()` is enough. 10 tests in the root package fail on Vulkan and DX12 because of those two, 3 on Metal.
+- On Vulkan and DX12, pipelines need an explicit layout (there are no automatic layouts; Metal takes pipelines without one). 7 tests in the root package fail on Vulkan and DX12 because of it.
 - The DXIL compute test in `hal/dx12` (`TestComputePairSumIntegration/DXIL`) fails under wine: vkd3d takes FXC blobs, not naga's DXIL, so `CreateComputePipelineState` returns E_FAIL there. Run it on Windows.
 - DX12 ignores dynamic bind group offsets, and takes the vertex stride from whatever pipeline was set when `SetVertexBuffer` ran.
 - naga keeps identifiers that start with `gl_` when it writes GLSL, and strict drivers like Mali refuse them. Don't name things `gl_*` in WGSL.

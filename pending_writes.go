@@ -766,6 +766,14 @@ func bufferReadUsage(usage gputypes.BufferUsage) gputypes.BufferUsage {
 	return usage & readMask
 }
 
+// writesTo reports whether the batch being recorded writes buffer.
+func (pw *pendingWrites) writesTo(buffer hal.Buffer) bool {
+	pw.mu.Lock()
+	defer pw.mu.Unlock()
+	_, ok := pw.dstBuffers[buffer]
+	return ok
+}
+
 // bufferReadUses is a bufferReadUsage in the device tracker's terms.
 func bufferReadUses(usage gputypes.BufferUsage) track.BufferUses {
 	var uses track.BufferUses

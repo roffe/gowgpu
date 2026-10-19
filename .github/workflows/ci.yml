@@ -100,15 +100,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends libvulkan1 mesa-vulkan-drivers libegl1 libegl-mesa0 libgl1-mesa-dri
-      # These ten fail on Vulkan: there are no automatic pipeline layouts, and
-      # Map doesn't flush a WriteBuffer that wasn't submitted.
-      # Both are in ROADMAP.md.
+      # These seven fail on Vulkan: there are no automatic pipeline layouts.
+      # It's in ROADMAP.md.
       - name: Tests on Vulkan
-        run: go test -race -skip '^(TestBufferMapAsyncStatus|TestBufferMapRoundTrip|TestDeviceCreateRenderPipeline|TestIntegrationQueueReadBuffer|TestMixedResourceLifecycle_TrackedSubmission|TestMRTTwoTargetRenderPass|TestRenderPipelineHasRef|TestRenderPipelineReleaseIdempotent|TestRenderPipeline_ReleaseUsesRefDrop|TestRenderPipelineWithVertexBuffers)$' ./...
+        run: go test -race -skip '^(TestDeviceCreateRenderPipeline|TestMixedResourceLifecycle_TrackedSubmission|TestMRTTwoTargetRenderPass|TestRenderPipelineHasRef|TestRenderPipelineReleaseIdempotent|TestRenderPipeline_ReleaseUsesRefDrop|TestRenderPipelineWithVertexBuffers)$' ./...
       - name: GL tests, surfaceless EGL
         run: go test -race -tags integration ./hal/gles/...
 
-  # DX12 has the same ten as Vulkan.
+  # DX12 has the same seven as Vulkan.
   test-windows:
     name: Test on WARP
     runs-on: windows-latest
@@ -119,11 +118,9 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-      - run: go test -skip '^(TestBufferMapAsyncStatus|TestBufferMapRoundTrip|TestDeviceCreateRenderPipeline|TestIntegrationQueueReadBuffer|TestMixedResourceLifecycle_TrackedSubmission|TestMRTTwoTargetRenderPass|TestRenderPipelineHasRef|TestRenderPipelineReleaseIdempotent|TestRenderPipeline_ReleaseUsesRefDrop|TestRenderPipelineWithVertexBuffers)$' ./...
+      - run: go test -skip '^(TestDeviceCreateRenderPipeline|TestMixedResourceLifecycle_TrackedSubmission|TestMRTTwoTargetRenderPass|TestRenderPipelineHasRef|TestRenderPipelineReleaseIdempotent|TestRenderPipeline_ReleaseUsesRefDrop|TestRenderPipelineWithVertexBuffers)$' ./...
         shell: bash
 
-  # Pipelines without a layout work on Metal, so only the three Map tests of
-  # the ten fail there.
   test-macos:
     name: Test on Metal
     runs-on: macos-latest
@@ -134,4 +131,4 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-      - run: go test -skip '^(TestBufferMapAsyncStatus|TestBufferMapRoundTrip|TestIntegrationQueueReadBuffer)$' ./...
+      - run: go test ./...
