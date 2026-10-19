@@ -289,16 +289,31 @@ func (c *RenderPassCache) createRenderPass(key RenderPassKey) (vk.RenderPass, er
 		}
 	}
 
-	// No explicit subpass dependencies — Vulkan handles implicit ones.
-	// This matches Rust wgpu which doesn't add explicit dependencies.
+	// The pass's load ops and its layout transitions out of UNDEFINED write
+	// the attachments, so they wait for the attachment writes before it. Two
+	// passes in a row on one target get no barrier from the tracker
+	// (ColorTarget to ColorTarget needs none), and the dependency Vulkan
+	// adds when there is none waits for nothing: the second pass's clear
+	// raced the first one's store.
+	attachmentStages := vk.PipelineStageFlags(vk.PipelineStageColorAttachmentOutputBit |
+		vk.PipelineStageEarlyFragmentTestsBit | vk.PipelineStageLateFragmentTestsBit)
+	dependency := vk.SubpassDependency{
+		SrcSubpass:    vk.SubpassExternal,
+		DstSubpass:    0,
+		SrcStageMask:  attachmentStages,
+		DstStageMask:  attachmentStages,
+		SrcAccessMask: vk.AccessFlags(vk.AccessColorAttachmentWriteBit | vk.AccessDepthStencilAttachmentWriteBit),
+		DstAccessMask: vk.AccessFlags(vk.AccessColorAttachmentReadBit | vk.AccessColorAttachmentWriteBit |
+			vk.AccessDepthStencilAttachmentReadBit | vk.AccessDepthStencilAttachmentWriteBit),
+	}
 	attachmentSlice := attachments[:attachmentCount]
 	createInfo := vk.RenderPassCreateInfo{
 		SType:           vk.StructureTypeRenderPassCreateInfo,
 		AttachmentCount: uint32(attachmentCount),
 		SubpassCount:    1,
 		PSubpasses:      &subpass,
-		DependencyCount: 0,
-		PDependencies:   nil,
+		DependencyCount: 1,
+		PDependencies:   &dependency,
 	}
 	if attachmentCount > 0 {
 		createInfo.PAttachments = &attachmentSlice[0]
@@ -312,6 +327,7 @@ func (c *RenderPassCache) createRenderPass(key RenderPassKey) (vk.RenderPass, er
 	runtime.KeepAlive(depthRef)
 	runtime.KeepAlive(createInfo)
 	runtime.KeepAlive(subpass)
+	runtime.KeepAlive(dependency)
 
 	if result != vk.Success {
 		return 0, &vkError{code: result, op: "vkCreateRenderPass"}
