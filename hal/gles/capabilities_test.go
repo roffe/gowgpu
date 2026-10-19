@@ -211,3 +211,23 @@ func TestGlVersionAtLeast(t *testing.T) {
 		}
 	}
 }
+
+func TestAdapterCapabilitiesSupported(t *testing.T) {
+	for _, c := range []struct {
+		version string
+		want    bool
+	}{
+		{"1.1.0", false}, // GDI Generic
+		{"3.2.0 NVIDIA 615.78", false},
+		{"3.3 (Core Profile) Mesa 23.0.0", true},
+		{"4.6.0 NVIDIA 615.78", true},
+		{"OpenGL ES 2.0 Mesa 23.0.0", false},
+		{"OpenGL ES 3.0 Mesa 23.0.0", true},
+	} {
+		var caps AdapterCapabilities
+		caps.GLMajor, caps.GLMinor, caps.IsES = parseGLVersion(c.version)
+		if got := caps.supported(); got != c.want {
+			t.Errorf("%q supported = %v, want %v", c.version, got, c.want)
+		}
+	}
+}

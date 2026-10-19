@@ -135,6 +135,10 @@ func (i *Instance) EnumerateAdapters(_ hal.Surface) []hal.ExposedAdapter {
 
 	version := glCtx.GetString(gl.VERSION)
 	renderer := glCtx.GetString(gl.RENDERER)
+	if !caps.supported() {
+		hal.Logger().Warn("gles: no adapter, the GL context is older than 3.3", "version", version, "renderer", renderer)
+		return nil
+	}
 
 	driverInfo := "OpenGL 3.3+"
 	if caps.IsES {

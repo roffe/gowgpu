@@ -908,3 +908,14 @@ func GLSLVersionToNaga(glslVersion int, isES bool) glsl.Version {
 		ES:    isES,
 	}
 }
+
+// supported reports whether the backend runs on the context: OpenGL 3.3 or
+// OpenGL ES 3.0. A Windows box without a GPU driver only has GDI's OpenGL
+// 1.1 ("GDI Generic"), where the 3.x calls the backend makes don't exist and
+// the first one jumps to nil. Rust's wgpu-hal doesn't expose one either.
+func (c *AdapterCapabilities) supported() bool {
+	if c.IsES {
+		return c.GLMajor >= 3
+	}
+	return c.GLMajor > 3 || c.GLMajor == 3 && c.GLMinor >= 3
+}
