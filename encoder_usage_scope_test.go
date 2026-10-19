@@ -441,6 +441,57 @@ func TestCopyPastBufferEndIsAnError(t *testing.T) {
 	}
 }
 
+// TestCopyBufferToBufferValidation: CopyBufferToBuffer refuses what WebGPU's
+// copyBufferToBuffer refuses, at Finish, and a copy of 0 bytes is no copy.
+func TestCopyBufferToBufferValidation(t *testing.T) {
+	t.Parallel()
+	_, _, device := newTestDeviceWithTracker(t)
+	defer device.Release()
+
+	newBuffer := func(usage gputypes.BufferUsage) *Buffer {
+		t.Helper()
+		buf, err := device.CreateBuffer(&BufferDescriptor{Size: 256, Usage: usage})
+		if err != nil {
+			t.Fatalf("CreateBuffer: %v", err)
+		}
+		t.Cleanup(buf.Release)
+		return buf
+	}
+	src := newBuffer(BufferUsageCopySrc)
+	dst := newBuffer(BufferUsageCopyDst)
+
+	for _, tc := range []struct {
+		name                string
+		src, dst            *Buffer
+		srcOff, dstOff, len uint64
+		valid               bool
+	}{
+		{"valid", src, dst, 4, 8, 128, true},
+		{"empty", src, dst, 0, 0, 0, true},
+		{"source without CopySrc", dst, dst, 0, 0, 4, false},
+		{"destination without CopyDst", src, src, 0, 0, 4, false},
+		{"unaligned source offset", src, dst, 2, 0, 4, false},
+		{"unaligned destination offset", src, dst, 0, 2, 4, false},
+		{"unaligned size", src, dst, 0, 0, 6, false},
+		{"past the source end", src, dst, 128, 0, 132, false},
+		{"past the destination end", src, dst, 0, 192, 128, false},
+		{"source offset past the end", src, dst, 260, 0, 0, false},
+	} {
+		enc, err := device.CreateCommandEncoder(nil)
+		if err != nil {
+			t.Fatalf("CreateCommandEncoder: %v", err)
+		}
+		enc.CopyBufferToBuffer(tc.src, tc.srcOff, tc.dst, tc.dstOff, tc.len)
+		cb, err := enc.Finish()
+		if tc.valid != (err == nil) {
+			t.Errorf("%s: Finish = %v, want valid %v", tc.name, err, tc.valid)
+		}
+		if cb != nil {
+			cb.Release()
+		}
+	}
+}
+
 // TestSecondPassWithoutBarriersIsTwoCommandBuffers: a second render pass of
 // an encoder is recorded in a command buffer of its own, since the barriers
 // it may need ahead of it are only known once it ends. When it turns out to

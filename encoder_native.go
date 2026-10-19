@@ -615,6 +615,27 @@ func (e *CommandEncoder) CopyBufferToBuffer(src *Buffer, srcOffset uint64, dst *
 		e.setError(fmt.Errorf("wgpu: CommandEncoder.CopyBufferToBuffer: source or destination buffer is released: %w", ErrReleased))
 		return
 	}
+	// WebGPU's copyBufferToBuffer checks, which a backend would otherwise
+	// get as a copy its API calls undefined.
+	switch {
+	case src.Usage()&BufferUsageCopySrc == 0:
+		e.setError(fmt.Errorf("wgpu: CommandEncoder.CopyBufferToBuffer: source buffer missing CopySrc usage"))
+		return
+	case dst.Usage()&BufferUsageCopyDst == 0:
+		e.setError(fmt.Errorf("wgpu: CommandEncoder.CopyBufferToBuffer: destination buffer missing CopyDst usage"))
+		return
+	case srcOffset%4 != 0 || dstOffset%4 != 0 || size%4 != 0:
+		e.setError(fmt.Errorf("wgpu: CommandEncoder.CopyBufferToBuffer: offsets %d and %d and size %d must be multiples of 4", srcOffset, dstOffset, size))
+		return
+	case srcOffset > src.Size() || size > src.Size()-srcOffset:
+		e.setError(fmt.Errorf("wgpu: CommandEncoder.CopyBufferToBuffer: source offset %d + size %d exceeds buffer size %d", srcOffset, size, src.Size()))
+		return
+	case dstOffset > dst.Size() || size > dst.Size()-dstOffset:
+		e.setError(fmt.Errorf("wgpu: CommandEncoder.CopyBufferToBuffer: destination offset %d + size %d exceeds buffer size %d", dstOffset, size, dst.Size()))
+		return
+	case size == 0:
+		return // nothing to copy, and Vulkan takes no empty copy
+	}
 	if !e.recordCopyUsages(raw, nil, []copyBufferUsage{
 		{buffer: src, usage: track.BufferUsesCopySrc},
 		{buffer: dst, usage: track.BufferUsesCopyDst},
