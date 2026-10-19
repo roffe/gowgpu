@@ -118,15 +118,20 @@ func SkipBarrier(old, next TextureUses) bool {
 	return old == next && old.AllOrdered()
 }
 
+// ToHAL converts internal uses to the HAL's fine-grained state, which has
+// the same bits.
+func (u TextureUses) ToHAL() hal.TextureUses {
+	return hal.TextureUses(u)
+}
+
 // ToTextureUsage converts internal uses to gputypes.TextureUsage for HAL.
 //
 // A read-only depth/stencil attachment maps to RenderAttachment, not
-// TextureBinding: the backends keep a depth attachment in its attachment
-// layout whether the pass writes it or not (Vulkan's render pass declares
-// DEPTH_STENCIL_ATTACHMENT_OPTIMAL for a read-only one too), so a barrier
-// into or out of it has to name that layout, not the sampled one.
-// Uninitialized maps to nothing: the backend takes a usage of 0 as the
-// undefined state a new texture is in.
+// TextureBinding, as the coarse usage of an attachment. Uninitialized maps
+// to nothing: the backend takes a usage of 0 as the undefined state a new
+// texture is in. The coarse usage is for backends that go by it alone; a
+// barrier carries the fine state too (IntoHAL), which is what tells a
+// read-only depth attachment from a written one.
 func (u TextureUses) ToTextureUsage() gputypes.TextureUsage {
 	var result gputypes.TextureUsage
 
@@ -429,14 +434,17 @@ func (t TextureStateTransition) NeedsBarrier() bool {
 	return !SkipBarrier(t.From, t.To)
 }
 
-// IntoHAL converts a pending transition to a HAL texture barrier.
-// The caller provides the hal.Texture handle.
+// IntoHAL converts a pending transition to a HAL texture barrier, with
+// the coarse usages and the fine states behind them. The caller provides
+// the hal.Texture handle.
 func (p TexturePendingTransition) IntoHAL(texture hal.Texture) hal.TextureBarrier {
 	return hal.TextureBarrier{
 		Texture: texture,
 		Usage: hal.TextureUsageTransition{
 			OldUsage: p.Usage.From.ToTextureUsage(),
 			NewUsage: p.Usage.To.ToTextureUsage(),
+			Old:      p.Usage.From.ToHAL(),
+			New:      p.Usage.To.ToHAL(),
 		},
 	}
 }

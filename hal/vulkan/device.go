@@ -1116,9 +1116,17 @@ func (d *Device) updateDescriptorSet(set vk.DescriptorSet, entries []gputypes.Bi
 			write.PImageInfo = &imageInfos[len(imageInfos)-1]
 
 		case gputypes.TextureViewBinding:
+			// A sampled image is in the layout its barriers put a read-only
+			// texture in (deriveImageLayout): SHADER_READ_ONLY_OPTIMAL for a
+			// colour format, DEPTH_STENCIL_READ_ONLY_OPTIMAL for a depth or
+			// stencil one, which is also where a read-only depth attachment
+			// sits, so a pass can sample the depth it tests against.
 			imageInfo := vk.DescriptorImageInfo{
 				ImageView:   vk.ImageView(res.TextureView),
 				ImageLayout: vk.ImageLayoutShaderReadOnlyOptimal,
+			}
+			if isDepthStencilFormat(res.Format) {
+				imageInfo.ImageLayout = vk.ImageLayoutDepthStencilReadOnlyOptimal
 			}
 			write.DescriptorType = vk.DescriptorTypeSampledImage
 			// A storage texture is a storage image, read and written in

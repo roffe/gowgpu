@@ -223,9 +223,70 @@ type BufferUsageTransition struct {
 }
 
 // TextureUsageTransition defines a texture usage state transition.
+//
+// OldUsage and NewUsage are the coarse WebGPU usages. Old and New are the
+// fine-grained states behind them when the caller knows them (the core
+// tracker always does): gputypes folds a read-only depth attachment and a
+// written one into RenderAttachment, while Vulkan keeps them in different
+// layouts. Zero means not known, and the backend derives the state from
+// the coarse usage and the texture format (TextureUsesFromUsage).
 type TextureUsageTransition struct {
 	OldUsage gputypes.TextureUsage
 	NewUsage gputypes.TextureUsage
+	Old      TextureUses
+	New      TextureUses
+}
+
+// TextureUses is the fine-grained usage state of a texture, the states the
+// core tracker tells apart. core/track.TextureUses has the same bits, so a
+// tracked state converts by value.
+//
+// Reference: wgpu-types TextureUses (wgpu-types/src/texture.rs).
+type TextureUses uint32
+
+// Texture usage states.
+const (
+	TextureUsesUninitialized     TextureUses = 1 << 0 // Unknown/junk contents
+	TextureUsesPresent           TextureUses = 1 << 1 // Ready for surface presentation
+	TextureUsesCopySrc           TextureUses = 1 << 2 // Source of a hardware copy
+	TextureUsesCopyDst           TextureUses = 1 << 3 // Destination of a hardware copy
+	TextureUsesResource          TextureUses = 1 << 4 // Read-only sampled or fetched
+	TextureUsesColorTarget       TextureUses = 1 << 5 // Render pass color target
+	TextureUsesDepthStencilRead  TextureUses = 1 << 6 // Read-only depth/stencil attachment
+	TextureUsesDepthStencilWrite TextureUses = 1 << 7 // Read-write depth/stencil attachment
+	TextureUsesStorageRead       TextureUses = 1 << 8 // Storage texture read-only
+	TextureUsesStorageWrite      TextureUses = 1 << 9 // Storage texture write-only
+)
+
+// TextureUsesFromUsage is the fine-grained state a coarse usage stands for:
+// RenderAttachment is the depth/stencil write state on a depth/stencil
+// format and the color target otherwise, StorageBinding the exclusive
+// storage write state so later uses are always fenced, and 0 stays 0 (the
+// uninitialized state).
+//
+// Reference: wgpu-core conv.rs map_texture_usage
+func TextureUsesFromUsage(usage gputypes.TextureUsage, depthStencil bool) TextureUses {
+	var uses TextureUses
+	if usage&gputypes.TextureUsageCopySrc != 0 {
+		uses |= TextureUsesCopySrc
+	}
+	if usage&gputypes.TextureUsageCopyDst != 0 {
+		uses |= TextureUsesCopyDst
+	}
+	if usage&gputypes.TextureUsageTextureBinding != 0 {
+		uses |= TextureUsesResource
+	}
+	if usage&gputypes.TextureUsageStorageBinding != 0 {
+		uses |= TextureUsesStorageWrite
+	}
+	if usage&gputypes.TextureUsageRenderAttachment != 0 {
+		if depthStencil {
+			uses |= TextureUsesDepthStencilWrite
+		} else {
+			uses |= TextureUsesColorTarget
+		}
+	}
+	return uses
 }
 
 // TextureRange specifies a range of texture subresources.

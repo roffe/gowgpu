@@ -680,6 +680,8 @@ func (q *Queue) WriteTexture(dst *hal.ImageCopyTexture, data []byte, layout *hal
 			Usage: hal.TextureUsageTransition{
 				OldUsage: 0,
 				NewUsage: gputypes.TextureUsageCopyDst,
+				Old:      hal.TextureUsesUninitialized,
+				New:      hal.TextureUsesCopyDst,
 			},
 		},
 	})
@@ -730,6 +732,8 @@ func (q *Queue) WriteTexture(dst *hal.ImageCopyTexture, data []byte, layout *hal
 			Usage: hal.TextureUsageTransition{
 				OldUsage: gputypes.TextureUsageCopyDst,
 				NewUsage: gputypes.TextureUsageTextureBinding,
+				Old:      hal.TextureUsesCopyDst,
+				New:      hal.TextureUsesResource,
 			},
 		},
 	})

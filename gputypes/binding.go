@@ -150,6 +150,10 @@ func (SamplerBinding) bindingResource() {}
 type TextureViewBinding struct {
 	// TextureView is a handle to the texture view (implementation-specific).
 	TextureView uintptr
+	// Format is the format of the texture the view is of, when known. A
+	// backend that keeps a depth texture in another layout than a color one
+	// (Vulkan) writes the descriptor from it.
+	Format TextureFormat
 }
 
 // bindingResource implements BindingResource.

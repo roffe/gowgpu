@@ -35,7 +35,11 @@ type RenderPassKey struct {
 	Colors     [hal.MaxColorAttachments]ColorAttachmentKeyEntry
 	ColorCount int // number of active color attachment slots
 
-	DepthFormat    vk.Format
+	DepthFormat vk.Format
+	// DepthReadOnly is a pass that writes neither aspect of its depth/stencil
+	// attachment: the attachment stays in DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+	// the layout a depth texture is sampled in, so the pass can sample it too.
+	DepthReadOnly  bool
 	DepthLoadOp    vk.AttachmentLoadOp
 	DepthStoreOp   vk.AttachmentStoreOp
 	StencilLoadOp  vk.AttachmentLoadOp
@@ -238,9 +242,19 @@ func (c *RenderPassCache) createRenderPass(key RenderPassKey) (vk.RenderPass, er
 	// Depth/stencil attachment (last attachment)
 	var depthRef *vk.AttachmentReference
 	if key.DepthFormat != vk.FormatUndefined {
+		// The layout the barriers put a depth/stencil attachment in
+		// (deriveImageLayout): read-only in DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+		// written in DEPTH_STENCIL_ATTACHMENT_OPTIMAL. The pass keeps it
+		// there. When either aspect is loaded, InitialLayout must be the
+		// actual layout so the contents are kept; a read-only pass loads by
+		// definition.
+		depthLayout := vk.ImageLayoutDepthStencilAttachmentOptimal
+		if key.DepthReadOnly {
+			depthLayout = vk.ImageLayoutDepthStencilReadOnlyOptimal
+		}
 		depthInitialLayout := vk.ImageLayoutUndefined
-		if key.DepthLoadOp == vk.AttachmentLoadOpLoad {
-			depthInitialLayout = vk.ImageLayoutDepthStencilAttachmentOptimal
+		if key.DepthReadOnly || key.DepthLoadOp == vk.AttachmentLoadOpLoad || key.StencilLoadOp == vk.AttachmentLoadOpLoad {
+			depthInitialLayout = depthLayout
 		}
 		attachments[attachmentCount] = vk.AttachmentDescription{
 			Format:         key.DepthFormat,
@@ -250,11 +264,11 @@ func (c *RenderPassCache) createRenderPass(key RenderPassKey) (vk.RenderPass, er
 			StencilLoadOp:  key.StencilLoadOp,
 			StencilStoreOp: key.StencilStoreOp,
 			InitialLayout:  depthInitialLayout,
-			FinalLayout:    vk.ImageLayoutDepthStencilAttachmentOptimal,
+			FinalLayout:    depthLayout,
 		}
 		depthRef = &vk.AttachmentReference{
 			Attachment: uint32(attachmentCount),
-			Layout:     vk.ImageLayoutDepthStencilAttachmentOptimal,
+			Layout:     depthLayout,
 		}
 		attachmentCount++
 	}

@@ -2,7 +2,10 @@
 
 package track
 
-import "github.com/roffe/gowgpu/gputypes"
+import (
+	"github.com/roffe/gowgpu/gputypes"
+	"github.com/roffe/gowgpu/hal"
+)
 
 // Usage scopes versus command-buffer trackers
 //
@@ -306,25 +309,5 @@ func trackerIndexAt(i int) (TrackerIndex, bool) {
 //
 // Reference: wgpu-core conv.rs map_texture_usage
 func TextureUsesFromUsage(usage gputypes.TextureUsage, depthStencil bool) TextureUses {
-	var uses TextureUses
-	if usage&gputypes.TextureUsageCopySrc != 0 {
-		uses |= TextureUsesCopySrc
-	}
-	if usage&gputypes.TextureUsageCopyDst != 0 {
-		uses |= TextureUsesCopyDst
-	}
-	if usage&gputypes.TextureUsageTextureBinding != 0 {
-		uses |= TextureUsesResource
-	}
-	if usage&gputypes.TextureUsageStorageBinding != 0 {
-		uses |= TextureUsesStorageWrite
-	}
-	if usage&gputypes.TextureUsageRenderAttachment != 0 {
-		if depthStencil {
-			uses |= TextureUsesDepthStencilWrite
-		} else {
-			uses |= TextureUsesColorTarget
-		}
-	}
-	return uses
+	return TextureUses(hal.TextureUsesFromUsage(usage, depthStencil))
 }

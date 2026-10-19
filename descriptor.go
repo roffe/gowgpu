@@ -287,9 +287,11 @@ func (e *BindGroupEntry) toHAL() gputypes.BindGroupEntry {
 			Sampler: e.Sampler.hal.NativeHandle(),
 		}
 	case halView != nil:
-		entry.Resource = gputypes.TextureViewBinding{
-			TextureView: halView.NativeHandle(),
+		binding := gputypes.TextureViewBinding{TextureView: halView.NativeHandle()}
+		if e.TextureView.texture != nil {
+			binding.Format = e.TextureView.texture.Format()
 		}
+		entry.Resource = binding
 	}
 
 	return entry

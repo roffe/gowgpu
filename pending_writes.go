@@ -389,9 +389,12 @@ func (pw *pendingWrites) writeTextureLocked(
 	// from creation) has no usage to name, and the backend's own state
 	// stands.
 	currentUsage := dst.Texture.CurrentUsage()
+	var currentUses hal.TextureUses
 	idx, tracked := pw.trackedIndex(owner)
 	if tracked {
-		if uses := pw.tracker.TextureUsage(idx).ToTextureUsage(); uses != 0 {
+		state := pw.tracker.TextureUsage(idx)
+		currentUses = state.ToHAL()
+		if uses := state.ToTextureUsage(); uses != 0 {
 			currentUsage = uses
 		}
 	}
@@ -403,6 +406,8 @@ func (pw *pendingWrites) writeTextureLocked(
 			Usage: hal.TextureUsageTransition{
 				OldUsage: currentUsage,
 				NewUsage: gputypes.TextureUsageCopyDst,
+				Old:      currentUses,
+				New:      hal.TextureUsesCopyDst,
 			},
 		}
 		enc.TransitionTextures(pw.texBarrier[:])
@@ -430,6 +435,8 @@ func (pw *pendingWrites) writeTextureLocked(
 		Usage: hal.TextureUsageTransition{
 			OldUsage: gputypes.TextureUsageCopyDst,
 			NewUsage: gputypes.TextureUsageTextureBinding,
+			Old:      hal.TextureUsesCopyDst,
+			New:      hal.TextureUsesResource,
 		},
 	}
 	enc.TransitionTextures(pw.texBarrier[:])

@@ -200,7 +200,7 @@ func (e *CommandEncoder) TransitionTextures(barriers []hal.TextureBarrier) {
 			continue
 		}
 
-		afterState := textureBarrierState(tex, b.Usage.NewUsage)
+		afterState := textureBarrierState(tex, b.Usage.NewUsage, b.Usage.New)
 		plans = append(plans, e.stateTracker.transitionTextureRange(tex, textureRangeSubresources(tex, b.Range), afterState)...)
 	}
 	e.emitStateBarrierPlans(plans)
@@ -1328,12 +1328,17 @@ func d3d12StateToTextureUsage(state d3d12.D3D12_RESOURCE_STATES) gputypes.Textur
 
 // textureBarrierState is the state a usage of tex means in an explicit
 // barrier (TransitionTextures). A depth/stencil texture cannot be in
-// RENDER_TARGET: its attachment usage is DEPTH_WRITE, which the render pass
-// narrows to DEPTH_READ itself for a read-only attachment.
-func textureBarrierState(tex *Texture, usage gputypes.TextureUsage) d3d12.D3D12_RESOURCE_STATES {
+// RENDER_TARGET: its attachment usage is DEPTH_WRITE, or DEPTH_READ when the
+// fine-grained usage says the attachment is read-only (the render pass
+// narrows DEPTH_WRITE to DEPTH_READ itself otherwise).
+func textureBarrierState(tex *Texture, usage gputypes.TextureUsage, uses hal.TextureUses) d3d12.D3D12_RESOURCE_STATES {
 	state := textureUsageToD3D12State(usage)
 	if state&d3d12.D3D12_RESOURCE_STATE_RENDER_TARGET != 0 && tex != nil && isDepthFormat(tex.format) {
-		state = state&^d3d12.D3D12_RESOURCE_STATE_RENDER_TARGET | d3d12.D3D12_RESOURCE_STATE_DEPTH_WRITE
+		depth := d3d12.D3D12_RESOURCE_STATE_DEPTH_WRITE
+		if uses&hal.TextureUsesDepthStencilRead != 0 && uses&hal.TextureUsesDepthStencilWrite == 0 {
+			depth = d3d12.D3D12_RESOURCE_STATE_DEPTH_READ
+		}
+		state = state&^d3d12.D3D12_RESOURCE_STATE_RENDER_TARGET | depth
 	}
 	return state
 }

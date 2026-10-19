@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/roffe/gowgpu/gputypes"
+	"github.com/roffe/gowgpu/hal"
 )
 
 func TestTextureUses_IsReadOnly(t *testing.T) {
@@ -644,5 +645,38 @@ func BenchmarkTextureTracker_Merge(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = tracker.Merge(scope)
+	}
+}
+
+// TestTextureUsesMatchHAL: the tracker's states convert to the HAL's by
+// value (ToHAL), so the bits have to be the same.
+func TestTextureUsesMatchHAL(t *testing.T) {
+	pairs := []struct {
+		name  string
+		track TextureUses
+		hal   hal.TextureUses
+	}{
+		{"Uninitialized", TextureUsesUninitialized, hal.TextureUsesUninitialized},
+		{"Present", TextureUsesPresent, hal.TextureUsesPresent},
+		{"CopySrc", TextureUsesCopySrc, hal.TextureUsesCopySrc},
+		{"CopyDst", TextureUsesCopyDst, hal.TextureUsesCopyDst},
+		{"Resource", TextureUsesResource, hal.TextureUsesResource},
+		{"ColorTarget", TextureUsesColorTarget, hal.TextureUsesColorTarget},
+		{"DepthStencilRead", TextureUsesDepthStencilRead, hal.TextureUsesDepthStencilRead},
+		{"DepthStencilWrite", TextureUsesDepthStencilWrite, hal.TextureUsesDepthStencilWrite},
+		{"StorageRead", TextureUsesStorageRead, hal.TextureUsesStorageRead},
+		{"StorageWrite", TextureUsesStorageWrite, hal.TextureUsesStorageWrite},
+	}
+	for _, p := range pairs {
+		if p.track.ToHAL() != p.hal {
+			t.Errorf("%s: track %#x, hal %#x", p.name, uint32(p.track), uint32(p.hal))
+		}
+	}
+	tr := TexturePendingTransition{Usage: TextureStateTransition{From: TextureUsesDepthStencilWrite, To: TextureUsesDepthStencilRead | TextureUsesResource}}.IntoHAL(nil)
+	if tr.Usage.Old != hal.TextureUsesDepthStencilWrite || tr.Usage.New != hal.TextureUsesDepthStencilRead|hal.TextureUsesResource {
+		t.Errorf("IntoHAL fine usage = %#x -> %#x", uint32(tr.Usage.Old), uint32(tr.Usage.New))
+	}
+	if tr.Usage.OldUsage != gputypes.TextureUsageRenderAttachment || tr.Usage.NewUsage != gputypes.TextureUsageRenderAttachment|gputypes.TextureUsageTextureBinding {
+		t.Errorf("IntoHAL coarse usage = %v -> %v", tr.Usage.OldUsage, tr.Usage.NewUsage)
 	}
 }

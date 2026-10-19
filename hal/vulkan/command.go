@@ -604,8 +604,8 @@ func (e *CommandEncoder) TransitionTextures(barriers []hal.TextureBarrier) {
 			continue
 		}
 
-		srcAccess, srcStage, oldLayout := textureBarrierState(tex, b.Usage.OldUsage)
-		dstAccess, dstStage, newLayout := textureBarrierState(tex, b.Usage.NewUsage)
+		srcAccess, srcStage, oldLayout := textureBarrierState(tex, textureUses(tex, b.Usage.Old, b.Usage.OldUsage))
+		dstAccess, dstStage, newLayout := textureBarrierState(tex, textureUses(tex, b.Usage.New, b.Usage.NewUsage))
 		srcStages |= srcStage
 		dstStages |= dstStage
 
@@ -1089,6 +1089,7 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 		dsa := desc.DepthStencilAttachment
 		if dsView, ok := dsa.View.(*TextureView); ok && dsView.texture != nil {
 			rpKey.DepthFormat = textureFormatToVk(dsView.texture.format)
+			rpKey.DepthReadOnly = dsa.DepthReadOnly && dsa.StencilReadOnly
 			rpKey.DepthLoadOp = loadOpToVk(dsa.DepthLoadOp)
 			rpKey.DepthStoreOp = storeOpToVk(dsa.DepthStoreOp)
 			rpKey.StencilLoadOp = loadOpToVk(dsa.StencilLoadOp)
@@ -1788,72 +1789,109 @@ func bufferUsageToAccessAndStage(usage gputypes.BufferUsage) (vk.AccessFlags, vk
 	return access, stage
 }
 
-// textureBarrierState is the access, stage and layout a usage of tex means in
-// a barrier. The layout has to be the one every other path puts the image in:
-// a render pass ends a colour target that is also sampled in GENERAL
-// (offscreenFinalLayout) and a depth target in DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-// so a barrier to or from RenderAttachment names those, not
-// COLOR_ATTACHMENT_OPTIMAL. tex may be nil, for a swapchain image.
-func textureBarrierState(tex *Texture, usage gputypes.TextureUsage) (vk.AccessFlags, vk.PipelineStageFlags, vk.ImageLayout) {
-	// Usage 0 means "initial/undefined" — the image has no prior usage.
-	// Newly created Vulkan images start in VK_IMAGE_LAYOUT_UNDEFINED.
-	// Using ImageLayoutGeneral here would lie about the old layout,
-	// causing validation errors and undefined behavior on the barrier.
-	if usage == 0 {
-		return 0, vk.PipelineStageFlags(vk.PipelineStageTopOfPipeBit), vk.ImageLayoutUndefined
+// textureUses is the fine-grained state one end of a barrier names: the one
+// the caller gave, else the one its coarse usage stands for on tex's format.
+func textureUses(tex *Texture, uses hal.TextureUses, usage gputypes.TextureUsage) hal.TextureUses {
+	if uses != 0 {
+		return uses
 	}
+	return hal.TextureUsesFromUsage(usage, tex != nil && isDepthStencilFormat(tex.format))
+}
 
+// textureBarrierState is the access, stage and layout a fine-grained usage
+// of tex means in a barrier. The layout has to be the one every other path
+// puts the image in (deriveImageLayout). tex may be nil, for a swapchain
+// image.
+//
+// Reference: wgpu-hal vulkan/conv.rs map_texture_usage_to_barrier
+func textureBarrierState(tex *Texture, uses hal.TextureUses) (vk.AccessFlags, vk.PipelineStageFlags, vk.ImageLayout) {
 	var access vk.AccessFlags
 	var stage vk.PipelineStageFlags
-	layout := vk.ImageLayoutGeneral
 
-	if usage&gputypes.TextureUsageCopySrc != 0 {
+	if uses&hal.TextureUsesCopySrc != 0 {
 		access |= vk.AccessFlags(vk.AccessTransferReadBit)
 		stage |= vk.PipelineStageFlags(vk.PipelineStageTransferBit)
-		layout = vk.ImageLayoutTransferSrcOptimal
 	}
-	if usage&gputypes.TextureUsageCopyDst != 0 {
+	if uses&hal.TextureUsesCopyDst != 0 {
 		access |= vk.AccessFlags(vk.AccessTransferWriteBit)
 		stage |= vk.PipelineStageFlags(vk.PipelineStageTransferBit)
-		layout = vk.ImageLayoutTransferDstOptimal
 	}
-	if usage&gputypes.TextureUsageTextureBinding != 0 {
+	if uses&(hal.TextureUsesResource|hal.TextureUsesStorageRead) != 0 {
 		access |= vk.AccessFlags(vk.AccessShaderReadBit)
 		stage |= shaderStages
-		layout = vk.ImageLayoutShaderReadOnlyOptimal
 	}
-	if usage&gputypes.TextureUsageStorageBinding != 0 {
+	if uses&hal.TextureUsesStorageWrite != 0 {
 		access |= vk.AccessFlags(vk.AccessShaderReadBit | vk.AccessShaderWriteBit)
 		stage |= shaderStages
-		layout = vk.ImageLayoutGeneral
 	}
-	if usage&gputypes.TextureUsageRenderAttachment != 0 {
-		switch {
-		case tex != nil && isDepthStencilFormat(tex.format):
-			access |= vk.AccessFlags(vk.AccessDepthStencilAttachmentWriteBit | vk.AccessDepthStencilAttachmentReadBit)
-			stage |= vk.PipelineStageFlags(vk.PipelineStageEarlyFragmentTestsBit | vk.PipelineStageLateFragmentTestsBit)
-			layout = vk.ImageLayoutDepthStencilAttachmentOptimal
-		default:
-			access |= vk.AccessFlags(vk.AccessColorAttachmentWriteBit | vk.AccessColorAttachmentReadBit)
-			stage |= vk.PipelineStageFlags(vk.PipelineStageColorAttachmentOutputBit)
-			layout = vk.ImageLayoutColorAttachmentOptimal
-			if tex != nil && tex.usage&gputypes.TextureUsageTextureBinding != 0 {
-				layout = vk.ImageLayoutGeneral
-			}
-		}
+	if uses&hal.TextureUsesColorTarget != 0 {
+		access |= vk.AccessFlags(vk.AccessColorAttachmentWriteBit | vk.AccessColorAttachmentReadBit)
+		stage |= vk.PipelineStageFlags(vk.PipelineStageColorAttachmentOutputBit)
+	}
+	if uses&hal.TextureUsesDepthStencilRead != 0 {
+		access |= vk.AccessFlags(vk.AccessDepthStencilAttachmentReadBit)
+		stage |= vk.PipelineStageFlags(vk.PipelineStageEarlyFragmentTestsBit | vk.PipelineStageLateFragmentTestsBit)
+	}
+	if uses&hal.TextureUsesDepthStencilWrite != 0 {
+		access |= vk.AccessFlags(vk.AccessDepthStencilAttachmentWriteBit | vk.AccessDepthStencilAttachmentReadBit)
+		stage |= vk.PipelineStageFlags(vk.PipelineStageEarlyFragmentTestsBit | vk.PipelineStageLateFragmentTestsBit)
 	}
 
+	// Uninitialized and Present have no access of their own.
 	if stage == 0 {
 		stage = vk.PipelineStageFlags(vk.PipelineStageTopOfPipeBit)
 	}
 
-	return access, stage, layout
+	return access, stage, deriveImageLayout(tex, uses)
 }
 
-// textureUsageToAccessStageLayout is textureBarrierState for an image whose
-// texture is not known.
-func textureUsageToAccessStageLayout(usage gputypes.TextureUsage) (vk.AccessFlags, vk.PipelineStageFlags, vk.ImageLayout) {
-	return textureBarrierState(nil, usage)
+// deriveImageLayout is the layout an image of tex's format is in while it
+// is in the fine-grained state uses. Every path that names a layout agrees
+// on it: the barriers, the render pass attachment layouts and the sampled
+// image descriptors.
+//
+//   - Uninitialized (and no state at all) is UNDEFINED, the layout a new
+//     image starts in; naming GENERAL there would lie about the old layout.
+//   - A depth/stencil format is only ever read in
+//     DEPTH_STENCIL_READ_ONLY_OPTIMAL: sampled, attached read-only, or both
+//     in the same pass. Written as an attachment it is in
+//     DEPTH_STENCIL_ATTACHMENT_OPTIMAL.
+//   - A colour target that is also sampled (TextureBinding usage) ends a
+//     pass in GENERAL, see offscreenFinalLayout, so its target state is
+//     GENERAL too.
+//   - Any other combination of read states is GENERAL, which every access
+//     allows.
+//
+// Reference: wgpu-hal vulkan/conv.rs derive_image_layout
+func deriveImageLayout(tex *Texture, uses hal.TextureUses) vk.ImageLayout {
+	isColor := tex == nil || !isDepthStencilFormat(tex.format)
+	switch uses {
+	case 0, hal.TextureUsesUninitialized:
+		return vk.ImageLayoutUndefined
+	case hal.TextureUsesCopySrc:
+		return vk.ImageLayoutTransferSrcOptimal
+	case hal.TextureUsesCopyDst:
+		return vk.ImageLayoutTransferDstOptimal
+	case hal.TextureUsesColorTarget:
+		if tex != nil && tex.usage&gputypes.TextureUsageTextureBinding != 0 {
+			return vk.ImageLayoutGeneral
+		}
+		return vk.ImageLayoutColorAttachmentOptimal
+	case hal.TextureUsesDepthStencilWrite:
+		return vk.ImageLayoutDepthStencilAttachmentOptimal
+	case hal.TextureUsesPresent:
+		return vk.ImageLayoutPresentSrcKhr
+	case hal.TextureUsesResource:
+		if isColor {
+			return vk.ImageLayoutShaderReadOnlyOptimal
+		}
+		return vk.ImageLayoutDepthStencilReadOnlyOptimal
+	default:
+		if isColor {
+			return vk.ImageLayoutGeneral
+		}
+		return vk.ImageLayoutDepthStencilReadOnlyOptimal
+	}
 }
 
 func mipLevelCountOrRemaining(count uint32) uint32 {
