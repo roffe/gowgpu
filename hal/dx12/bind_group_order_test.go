@@ -3,6 +3,7 @@
 package dx12
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/roffe/gowgpu/gputypes"
@@ -11,18 +12,25 @@ import (
 // The descriptor table follows the layout's entry order, so a bind group
 // listing its entries in another order has to be put back in that order.
 func TestLayoutOrderedEntries(t *testing.T) {
-	layout := []BindGroupLayoutEntry{{Binding: 4}, {Binding: 0}, {Binding: 2}}
-	entries := []gputypes.BindGroupEntry{{Binding: 0}, {Binding: 2}, {Binding: 4}}
-	ordered, err := layoutOrderedEntries(layout, entries)
+	bufs := []*Buffer{{size: 256}, {size: 256}, {size: 256}}
+	defer runtime.KeepAlive(bufs)
+
+	layout := &BindGroupLayout{entries: []BindGroupLayoutEntry{
+		{Binding: 4, Type: BindingTypeUniformBuffer},
+		{Binding: 0, Type: BindingTypeUniformBuffer},
+		{Binding: 2, Type: BindingTypeUniformBuffer},
+	}}
+	entries := []gputypes.BindGroupEntry{bufferEntry(0, bufs[0]), bufferEntry(2, bufs[1]), bufferEntry(4, bufs[2])}
+	ordered, _, err := orderBindGroupEntries(layout, entries)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for i, want := range []uint32{4, 0, 2} {
-		if ordered[i].Binding != want {
-			t.Errorf("slot %d binds %d, want %d", i, ordered[i].Binding, want)
+		if ordered[i].entry.Binding != want || ordered[i].layout.Binding != want {
+			t.Errorf("slot %d binds %d (layout %d), want %d", i, ordered[i].entry.Binding, ordered[i].layout.Binding, want)
 		}
 	}
-	if _, err := layoutOrderedEntries(layout, entries[:2]); err == nil {
+	if _, _, err := orderBindGroupEntries(layout, entries[:2]); err == nil {
 		t.Error("a layout entry without a bind group entry was accepted")
 	}
 }

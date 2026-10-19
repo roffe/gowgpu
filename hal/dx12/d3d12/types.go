@@ -226,7 +226,10 @@ type D3D12_UNORDERED_ACCESS_VIEW_DESC struct {
 	Format        DXGI_FORMAT
 	ViewDimension D3D12_UAV_DIMENSION
 	// Union of different view types, as big as its largest, D3D12_BUFFER_UAV
-	// (32 bytes). The driver reads all of it.
+	// (UINT64 FirstElement, UINT NumElements, UINT StructureByteStride,
+	// UINT64 CounterOffsetInBytes, UINT Flags = 28 bytes, padded to 32 by
+	// its 8-byte alignment). The union starts at offset 8, so the whole
+	// struct is 40 bytes, as in d3d12.h. The driver reads all of it.
 	Union [32]byte
 }
 

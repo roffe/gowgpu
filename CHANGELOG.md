@@ -93,6 +93,7 @@ gowgpu split off from gogpu/wgpu v0.34.5 on 2026-10-17. Everything from [0.34.5]
   - A render pass refused for a usage conflict had already begun on the HAL and was never ended (on Metal its descriptor and attachments leaked).
   - A failed Submit lost the flushed pending writes or the barrier encoder.
 - **GL contexts stayed current on whichever thread made them**, so `Lock` on another thread failed with `EGL_BAD_ACCESS` and ran its GL calls without a context: 35 failures in 10 runs of 20 headless cycles, none now.
+- **DX12 bound storage buffers as constant buffers.** `CreateBindGroup` wrote a CBV for every buffer binding, whatever the layout said, so a storage buffer sat in its SRV or UAV slot as a constant buffer descriptor: a compute shader's writes went nowhere (`examples/compute-sum` read back zeros on NVIDIA), and the debug layer complained about `CreateConstantBufferView` ranges for small storage buffers. The descriptor kind follows the layout entry now, like Rust wgpu-hal: uniform is a CBV, read-only storage a raw SRV, storage a raw UAV (`R32_TYPELESS` with the raw flag, offset and size in 32-bit elements). An entry whose resource is not what its layout entry expects is refused instead of written as the wrong kind. The indirect dispatch validation buffer, a storage buffer core binds itself, is bound right as a side effect. From upstream gogpu/wgpu commit fff6354 (Andrey Kolkov); the layout-order and UAV union size parts of it were already in.
 
 ### Removed
 

@@ -1858,22 +1858,11 @@ func (d *Device) CreateBindGroup(desc *hal.BindGroupDescriptor) (hal.BindGroup, 
 	// that is how CreatePipelineLayout laid out the descriptor table and
 	// numbered the samplers, while WebGPU lets the caller list the entries
 	// in any order. Taking them as given put the caller's second texture in
-	// the layout's second slot whenever the orders differed.
-	ordered, err := layoutOrderedEntries(layout.entries, desc.Entries)
+	// the layout's second slot whenever the orders differed. Each view entry
+	// keeps its layout entry, which picks the descriptor kind to write.
+	viewEntries, samplerPoolIndices, err := orderBindGroupEntries(layout, desc.Entries)
 	if err != nil {
 		return nil, err
-	}
-	var viewEntries []gputypes.BindGroupEntry // CBV, SRV, UAV
-	var samplerPoolIndices []uint32           // global sampler pool indices
-
-	for _, entry := range ordered {
-		switch res := entry.Resource.(type) {
-		case gputypes.SamplerBinding:
-			sampler := fromHandle[Sampler](res.Sampler)
-			samplerPoolIndices = append(samplerPoolIndices, sampler.samplerPoolSlot)
-		default: // BufferBinding, TextureViewBinding
-			viewEntries = append(viewEntries, entry)
-		}
 	}
 
 	// Collect resource references for DX12 command-local state tracking. The
@@ -1926,29 +1915,9 @@ func (d *Device) CreateBindGroup(desc *hal.BindGroupDescriptor) (hal.BindGroup, 
 	return bg, nil
 }
 
-// layoutOrderedEntries returns entries in the order of the layout entries
-// they bind, matched by binding number. Every layout entry needs one.
-func layoutOrderedEntries(layout []BindGroupLayoutEntry, entries []gputypes.BindGroupEntry) ([]gputypes.BindGroupEntry, error) {
-	ordered := make([]gputypes.BindGroupEntry, 0, len(layout))
-	for _, le := range layout {
-		found := false
-		for _, e := range entries {
-			if e.Binding == le.Binding {
-				ordered = append(ordered, e)
-				found = true
-				break
-			}
-		}
-		if !found {
-			return nil, fmt.Errorf("dx12: bind group has no entry for binding %d of its layout", le.Binding)
-		}
-	}
-	return ordered, nil
-}
-
 // populateBindGroupDescriptors allocates view heap descriptors and writes CBV/SRV/UAV
 // entries plus the sampler index buffer SRV into the contiguous GPU descriptor range.
-func (d *Device) populateBindGroupDescriptors(bg *BindGroup, totalViewDescs uint32, viewEntries []gputypes.BindGroupEntry, samplerPoolIndices []uint32) error {
+func (d *Device) populateBindGroupDescriptors(bg *BindGroup, totalViewDescs uint32, viewEntries []viewBinding, samplerPoolIndices []uint32) error {
 	if totalViewDescs == 0 || d.viewHeap == nil {
 		return nil
 	}
@@ -2033,61 +2002,49 @@ func (d *Device) createSamplerIndexBuffer(indices []uint32) (*d3d12.ID3D12Resour
 func (d *Device) createBufferSRV(resource *d3d12.ID3D12Resource, numElements, structureByteStride uint32, dest d3d12.D3D12_CPU_DESCRIPTOR_HANDLE) {
 	srvDesc := d3d12.D3D12_SHADER_RESOURCE_VIEW_DESC{
 		Format:                  d3d12.DXGI_FORMAT_UNKNOWN,
-		ViewDimension:           d3d12.D3D12_SRV_DIMENSION_BUFFER,
 		Shader4ComponentMapping: d3d12.D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
 	}
-	// Set buffer SRV union: FirstElement=0, NumElements, StructureByteStride, Flags=0
-	type bufferSRV struct {
-		FirstElement        uint64
-		NumElements         uint32
-		StructureByteStride uint32
-		Flags               uint32
-	}
-	buf := (*bufferSRV)(unsafe.Pointer(&srvDesc.Union[0]))
-	buf.FirstElement = 0
-	buf.NumElements = numElements
-	buf.StructureByteStride = structureByteStride
-	buf.Flags = 0
+	srvDesc.SetBuffer(0, numElements, structureByteStride, d3d12.D3D12_BUFFER_SRV_FLAG_NONE)
 
 	d.raw.CreateShaderResourceView(resource, &srvDesc, dest)
 }
 
 // writeViewDescriptorsBatched writes CBV/SRV/UAV descriptors for all view entries.
-// CBVs are created inline (cannot be batched), while SRV copies from scattered
-// source handles are batched into a single CopyDescriptors call.
-func (d *Device) writeViewDescriptorsBatched(cpuStart d3d12.D3D12_CPU_DESCRIPTOR_HANDLE, entries []gputypes.BindGroupEntry) error {
+// A buffer gets the descriptor kind its layout entry asks for (see
+// writeBufferViewDescriptor): uniform -> CBV, read-only storage -> raw SRV,
+// storage -> raw UAV. Writing a CBV for every buffer, as this used to, put a
+// constant buffer descriptor in the SRV/UAV slot of a storage buffer, so a
+// compute shader's writes went nowhere. Buffer views are created inline
+// (they cannot be batched), while texture SRV copies from scattered staging
+// handles are batched into a single CopyDescriptors call.
+func (d *Device) writeViewDescriptorsBatched(cpuStart d3d12.D3D12_CPU_DESCRIPTOR_HANDLE, entries []viewBinding) error {
 	// Collect SRV copy sources for batching.
 	// destHandles[i] = destination in GPU-visible heap, srcHandles[i] = source from staging heap.
 	var srvDestHandles []d3d12.D3D12_CPU_DESCRIPTOR_HANDLE
 	var srvSrcHandles []d3d12.D3D12_CPU_DESCRIPTOR_HANDLE
 
-	for i, entry := range entries {
+	for i, vb := range entries {
 		dest := cpuStart.Offset(i, d.viewHeap.incrementSize)
 
-		switch res := entry.Resource.(type) {
+		switch res := vb.entry.Resource.(type) {
 		case gputypes.BufferBinding:
 			buf := fromHandle[Buffer](res.Buffer)
-			size := res.Size
-			if size == 0 {
-				size = buf.size - res.Offset
+			if err := d.writeBufferViewDescriptor(vb.layout, buf, res, dest); err != nil {
+				return err
 			}
-			// Align CBV size to 256 bytes (D3D12 requirement).
-			alignedSize := (size + 255) &^ 255
-			d.raw.CreateConstantBufferView(&d3d12.D3D12_CONSTANT_BUFFER_VIEW_DESC{
-				BufferLocation: buf.gpuVA + res.Offset,
-				SizeInBytes:    uint32(alignedSize),
-			}, dest)
 
 		case gputypes.TextureViewBinding:
+			// A storage texture needs a UAV, which TextureView does not
+			// create yet; it keeps the sampled SRV here, as before.
 			view := fromHandle[TextureView](res.TextureView)
 			if !view.hasSRV {
-				return fmt.Errorf("dx12: texture view has no SRV for binding %d", entry.Binding)
+				return fmt.Errorf("dx12: texture view has no SRV for binding %d", vb.entry.Binding)
 			}
 			srvDestHandles = append(srvDestHandles, dest)
 			srvSrcHandles = append(srvSrcHandles, view.srvHandle)
 
 		default:
-			return fmt.Errorf("dx12: unsupported binding resource type: %T", entry.Resource)
+			return fmt.Errorf("dx12: unsupported binding resource type: %T", vb.entry.Resource)
 		}
 	}
 
