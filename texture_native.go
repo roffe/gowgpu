@@ -20,11 +20,11 @@ type Texture struct {
 	surfaceLease uint64
 
 	// coreTexture holds the core.Texture for dense TrackerIndex allocation.
-	// This enables submit-time barrier injection: the TrackerIndex is used
-	// by populateTextureScope (via core.TextureView.Parent) to record per-
-	// texture usage in the command buffer's TextureUsageScope. At submit
-	// time the scope is merged into the device-level DeviceTracker which
-	// produces the barrier list.
+	// This enables barrier injection: the TrackerIndex is what a render
+	// pass's usage scope (via core.TextureView.Parent) and the command
+	// buffer's tracker record the texture's usages under. At submit time the
+	// tracker is merged into the device-level DeviceTracker which produces
+	// the barrier list.
 	//
 	// nil for textures created without HAL (e.g., test stubs or browser).
 	// Swapchain textures also get a coreTexture so barriers work for

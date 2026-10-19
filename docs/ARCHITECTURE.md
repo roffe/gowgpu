@@ -61,6 +61,7 @@ core sits between the API and hal. It does the validating so hal doesn't have to
 - Errors while encoding are recorded with `SetError` and returned from `End()` or `Finish()`, the WebGPU way. Error scopes are `Device.PushErrorScope` and `PopErrorScope`.
 - A surface goes Unconfigured, Configured, Acquired and back. You can't acquire twice or present without an acquire. `Surface.SetPrepareFrame` hooks in a size or DPI check that runs before every acquire.
 - A command encoder is Recording, InRenderPass, InComputePass, Finished or Error. A pass has to end before the next one begins, and after a recorded error the encoder stays in Error.
+- Resource usage is tracked the way Rust wgpu-core's `track/mod.rs` does it. Each render pass, each compute dispatch and each copy is a usage scope (`core/track` `TextureUsageScope`, `BufferUsageScope`): the attachments, the textures and buffers its bind groups bind, the vertex, index and indirect buffers, the copy's endpoints. Conflicts, the same texture as colour and depth attachment or sampled by the pass that draws into it, a buffer a dispatch writes and reads, are only checked inside one scope. The command buffer keeps an `EncoderTextureTracker` and `EncoderBufferTracker` with the first and last usage of every resource; when a scope is applied to them, the transitions from the resource's last usage come out and go in as HAL barriers: a copy's and a dispatch's right ahead of it, a render pass's in a command buffer of its own inserted ahead of the pass's (a pass can't take barriers inside, and its bind groups are only known when it ends; the encoder's first pass is never split, and nothing is reopened after a split pass until the next command needs it). At `Queue.Submit` the device tracker (`core/device_tracker.go`) merges each command buffer in turn: barriers from the device state into its first usages go in a barrier command buffer right ahead of it, and the device adopts its last usages. The trackers and scope live in the pooled encoder state, so a frame allocates nothing for them.
 - HAL handles sit in `Snatchable` wrappers, so destroying one can't race whoever is using it.
 
 `Queue.Submit` refuses a command buffer that was already submitted, or that uses a buffer, texture or bind group you released.
@@ -272,7 +273,7 @@ WriteTexture(tex, data) ---+
                            |
 Queue.Submit(cmds)         |
   flush <------------------+
-  hal Submit([texture barriers, pending copies, cmds...])
+  hal Submit([pending copies, texture barriers, cmds...])
   staging, encoder and destinations stay alive until the GPU is done
 ```
 

@@ -340,9 +340,9 @@ func (s *Surface) GetCurrentTexture() (*SurfaceTexture, bool, error) {
 	// memory consumption (#307).
 	//
 	// The coreTexture is shared with any Texture/TextureView wrappers
-	// created from this SurfaceTexture. At submit time, the TrackerIndex
-	// is used by populateTextureScope to record surface texture usage in
-	// the command buffer's TextureUsageScope for barrier generation.
+	// created from this SurfaceTexture. Its TrackerIndex is what a render
+	// pass's usage scope records the surface texture's usage under, for
+	// barrier generation.
 	if s.swapchainTexture == nil && s.device != nil && s.device.core != nil {
 		cfg := s.core.Config()
 		if cfg != nil {

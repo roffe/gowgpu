@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/roffe/gowgpu/core"
+	"github.com/roffe/gowgpu/core/track"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 )
@@ -81,7 +82,10 @@ func (p *ComputePassEncoder) SetBindGroup(index uint32, group *BindGroup, offset
 	p.assignedBindGroups[index] = group
 	p.assignedDynOffsets[index] = offsets
 	// Keeps the group and its buffers alive and lists the group for
-	// submit-time validation, once per encoder.
+	// submit-time validation, once per encoder. Its textures and buffers
+	// enter a usage scope only when a dispatch runs with it (recordDispatch),
+	// so a group bound and replaced before the dispatch conflicts with
+	// nothing.
 	p.encoder.trackBindGroup(group)
 	raw := p.core.RawPass()
 	if raw != nil && group.hal != nil {
@@ -137,7 +141,32 @@ func (p *ComputePassEncoder) Dispatch(x, y, z uint32) {
 		return
 	}
 
+	if !p.recordDispatch("ComputePass.Dispatch") {
+		return
+	}
 	p.core.Dispatch(x, y, z)
+}
+
+// recordDispatch puts the textures and buffers of the bind groups the next
+// dispatch runs with, the ones in the pipeline's layout, in the dispatch's
+// usage scope: each dispatch is a scope of its own, validated on its own,
+// and the core dispatch transitions what an earlier dispatch, pass or copy
+// of this encoder left in another state. Returns false, with the conflict
+// recorded on the encoder, if two of the groups use one resource in
+// incompatible ways (a storage buffer one writes and another reads).
+//
+// Reference: wgpu-core command/compute.rs State::flush_states (binder.
+// list_active merged into the scope)
+func (p *ComputePassEncoder) recordDispatch(op string) bool {
+	enc := p.encoder
+	if enc.core == nil {
+		return true
+	}
+	wasErr := enc.core.Status() == core.CommandEncoderStatusError
+	for i := uint32(0); i < p.binder.maxSlots && i < MaxBindGroups; i++ {
+		enc.recordDispatchBindGroup(p.assignedBindGroups[i], op)
+	}
+	return wasErr || enc.core.Status() != core.CommandEncoderStatusError
 }
 
 // DispatchIndirect dispatches compute work with GPU-generated parameters.
@@ -182,6 +211,11 @@ func (p *ComputePassEncoder) DispatchIndirect(buffer *Buffer, offset uint64) {
 	}
 	p.encoder.trackBuffer(buffer)
 
+	// The dispatch's usage scope: its bind groups, and the indirect buffer.
+	if !p.recordDispatch("ComputePass.DispatchIndirect") {
+		return
+	}
+
 	// FEAT-COMPUTE-004: GPU-side indirect dispatch validation.
 	// If the device has an IndirectValidation pipeline, run a pre-dispatch
 	// validation shader that checks workgroup counts and either copies valid
@@ -192,11 +226,20 @@ func (p *ComputePassEncoder) DispatchIndirect(buffer *Buffer, offset uint64) {
 	iv := p.encoder.device.core.IndirectValidation()
 	raw := p.core.RawPass()
 	if iv != nil && raw != nil {
+		// The validation shader reads the user's buffer as storage; the
+		// HAL dispatch reads core's own validated copy, which core does not
+		// track. The scope's barriers go in ahead of both.
+		if err := p.encoder.core.RecordPassBufferUsage(buffer.coreBuffer(), buffer.halBuffer(), track.BufferUsesStorageRead); err != nil {
+			p.encoder.setError(fmt.Errorf("wgpu: ComputePass.DispatchIndirect: buffer usage conflict: %w", err))
+			return
+		}
+		p.core.FlushScope()
 		p.dispatchIndirectValidated(buffer, offset, iv, raw)
 		return
 	}
 
-	// Fallback: no validation available, dispatch directly.
+	// Fallback: no validation available, dispatch directly. Core puts the
+	// buffer in the scope as INDIRECT and flushes it.
 	p.core.DispatchIndirect(buffer.coreBuffer(), offset)
 }
 

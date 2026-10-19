@@ -108,6 +108,17 @@ type CommandEncoder struct {
 	swapchainImage  vk.Image       // VkImage of the swapchain target (0 = none)
 	swapchainLayout vk.ImageLayout // layout the render pass leaves the image in
 	swapchain       *Swapchain     // back-pointer for layout tracking updates
+
+	// presented is the swapchain whose image presentedImage an inline
+	// present barrier of this encoder marked PRESENT_SRC_KHR, kept until
+	// ResetAll: the fields above are per command buffer (BeginEncoding
+	// clears them), and a swapchain pass split off into a command buffer
+	// of its own (core recordPassTransitions) is closed, barrier and all,
+	// while the encoder goes on recording. A DiscardEncoding after that
+	// drops the closed command buffer too, so the image never reaches
+	// PRESENT_SRC_KHR and its tracking goes back to UNDEFINED.
+	presented      *Swapchain
+	presentedImage uint32
 }
 
 // BeginEncoding begins command recording.
@@ -242,6 +253,7 @@ func (e *CommandEncoder) EndEncoding() (hal.CommandBuffer, error) {
 		e.swapchainImage = 0
 		e.swapchainLayout = 0
 		e.swapchain = nil
+		e.presented = nil
 		encoderPool.Put(e)
 	}
 
@@ -324,6 +336,7 @@ func (e *CommandEncoder) injectInlinePresentBarrier() {
 	// present() sees PRESENT_SRC_KHR and returns early (zero-cost path).
 	if e.swapchain != nil {
 		e.swapchain.SetImageLayout(e.swapchain.currentImage, vk.ImageLayoutPresentSrcKhr)
+		e.presented, e.presentedImage = e.swapchain, e.swapchain.currentImage
 	}
 
 	// Prevent double-injection if EndEncoding is called again (should not
@@ -427,6 +440,13 @@ func (e *CommandEncoder) DiscardEncoding() {
 	e.swapchainImage = 0
 	e.swapchainLayout = 0
 	e.swapchain = nil
+	// The same for a command buffer this encoder closed with a present
+	// barrier inside: it goes with the discard, so its image is not
+	// presentable either.
+	if e.presented != nil {
+		e.presented.SetImageLayout(e.presentedImage, vk.ImageLayoutUndefined)
+		e.presented = nil
+	}
 
 	if !e.poolManaged {
 		// Standalone mode: recycle pool and encoder struct (VK-POOL-001).
@@ -463,6 +483,9 @@ func (e *CommandEncoder) ResetAll(commandBuffers []hal.CommandBuffer) {
 	e.free = append(e.free, e.discarded...)
 	e.discarded = e.discarded[:0]
 	e.usedResults = 0
+	// The command buffers are spent, so is the present barrier one of them
+	// carried.
+	e.presented = nil
 
 	// Batch reset entire pool — one call resets all command buffers to
 	// initial state. Much cheaper than N individual resets (NVIDIA, ARM docs).
@@ -782,7 +805,7 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst hal.Texture, regions []ha
 
 	srcTex, srcOk := src.(*Texture)
 	dstTex, dstOk := dst.(*Texture)
-	if !srcOk || !dstOk {
+	if !srcOk || !dstOk || len(regions) == 0 {
 		return
 	}
 
@@ -1188,6 +1211,20 @@ type RenderPassEncoder struct {
 	// begun records whether vkCmdBeginRenderPass actually ran, which End needs
 	// because BeginRenderPass returns an encoder either way.
 	begun bool
+	// pending holds the bind groups set before any pipeline, which WebGPU
+	// allows and Vulkan cannot bind without a pipeline layout: SetPipeline
+	// binds them.
+	pending [maxBindGroupSlots]pendingBindGroup
+}
+
+// maxBindGroupSlots is how many bind group slots a pass has (WebGPU's
+// maxBindGroups).
+const maxBindGroupSlots = 8
+
+// pendingBindGroup is a bind group set before the pipeline.
+type pendingBindGroup struct {
+	group   *BindGroup
+	offsets []uint32
 }
 
 const (
@@ -1218,10 +1255,12 @@ func (e *RenderPassEncoder) End() {
 	e.renderPass = 0
 	e.framebuffer = 0
 	e.begun = false
+	e.pending = [maxBindGroupSlots]pendingBindGroup{}
 	renderPassPool.Put(e)
 }
 
-// SetPipeline sets the render pipeline.
+// SetPipeline sets the render pipeline, and binds the bind groups set
+// before it.
 func (e *RenderPassEncoder) SetPipeline(pipeline hal.RenderPipeline) {
 	p, ok := pipeline.(*RenderPipeline)
 	if !ok || e.encoder.active == 0 {
@@ -1229,12 +1268,25 @@ func (e *RenderPassEncoder) SetPipeline(pipeline hal.RenderPipeline) {
 	}
 	e.pipeline = p
 	vkCmdBindPipeline(e.encoder.device.cmds, e.encoder.active, vk.PipelineBindPointGraphics, p.handle)
+	for i := range e.pending {
+		if pending := e.pending[i]; pending.group != nil {
+			e.pending[i] = pendingBindGroup{}
+			e.SetBindGroup(uint32(i), pending.group, pending.offsets) //nolint:gosec // slot index
+		}
+	}
 }
 
-// SetBindGroup sets a bind group.
+// SetBindGroup sets a bind group. Before a pipeline is set there is no
+// layout to bind it with, so it waits for SetPipeline.
 func (e *RenderPassEncoder) SetBindGroup(index uint32, group hal.BindGroup, offsets []uint32) {
 	bg, ok := group.(*BindGroup)
 	if !ok || e.encoder.active == 0 {
+		return
+	}
+	if e.pipeline == nil {
+		if index < maxBindGroupSlots {
+			e.pending[index] = pendingBindGroup{group: bg, offsets: append([]uint32(nil), offsets...)}
+		}
 		return
 	}
 

@@ -9,8 +9,8 @@ import (
 	"github.com/roffe/gowgpu/gputypes"
 )
 
-// A submitted command buffer's usage scopes go back to the device, emptied,
-// and the next encoder records into them.
+// A submitted command buffer's trackers and pass scope go back to the
+// device, emptied, and the next encoder records into them.
 func TestCommandBufferScopesReused(t *testing.T) {
 	device := NewDevice(&mockHALDevice{}, &Adapter{}, gputypes.Features(0), gputypes.DefaultLimits(), "TestDevice")
 
@@ -19,10 +19,9 @@ func TestCommandBufferScopesReused(t *testing.T) {
 		t.Fatal(err)
 	}
 	scopes := enc.Mutable()
-	if err := scopes.TextureScope().SetUsage(5, track.TextureUsesColorTarget); err != nil {
-		t.Fatal(err)
-	}
-	if err := scopes.BufferScope().SetUsage(3, track.BufferUsesVertex); err != nil {
+	scopes.TextureScope().SetSingle(5, track.TextureUsesColorTarget)
+	scopes.BufferScope().SetSingle(3, track.BufferUsesVertex)
+	if err := scopes.pass.addTexture(7, nil, track.TextureUsesResource); err != nil {
 		t.Fatal(err)
 	}
 	cb, err := enc.Finish()
@@ -50,6 +49,9 @@ func TestCommandBufferScopesReused(t *testing.T) {
 		t.Fatal("the next encoder did not get the released scopes")
 	}
 	if !scopes.TextureScope().IsEmpty() || scopes.TextureScope().IsUsed(5) || scopes.BufferScope().IsUsed(3) {
-		t.Fatal("released scopes came back with usage in them")
+		t.Fatal("released trackers came back with usage in them")
+	}
+	if !scopes.pass.textures.IsEmpty() || len(scopes.pass.texHAL) != 0 {
+		t.Fatal("released pass scope came back with usage in it")
 	}
 }

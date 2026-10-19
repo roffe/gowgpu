@@ -198,11 +198,18 @@ type BindGroup struct {
 	// Used at Submit time to verify that referenced textures are still alive.
 	boundTextures []*Texture
 	// boundTextureUses is how each of boundTextures is used by the group:
-	// sampled, or storage read or write. Recorded in the command buffer's
-	// usage scope when the group is bound, so a submit transitions the texture.
+	// sampled, or storage read or write. Recorded in the usage scope of the
+	// render pass or the dispatch that binds the group, so the texture is
+	// transitioned into it.
 	boundTextureUses []track.TextureUses
-	// mark is the last command encoder that tracked this bind group.
-	mark encoderMark
+	// boundBufferUses is the same for each of boundBuffers: uniform, or
+	// storage read-only or read-write.
+	boundBufferUses []track.BufferUses
+	// mark is the last command encoder that tracked this bind group, and
+	// passMark the last render pass that put its resources in its usage
+	// scope.
+	mark     encoderMark
+	passMark encoderMark
 }
 
 // Release marks the bind group for destruction. Drops the application's

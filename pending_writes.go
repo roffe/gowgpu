@@ -384,12 +384,15 @@ func (pw *pendingWrites) writeTextureLocked(
 	// Transition texture to COPY_DST from the state the GPU has it in: what
 	// the last submit left (the device tracker), else what the backend tracks
 	// itself (DX12), else undefined, which is right for a new texture and
-	// nothing else: on Vulkan it lets the driver discard the contents.
+	// nothing else: on Vulkan it lets the driver discard the contents. A
+	// texture the tracker only knows as uninitialized (every texture is,
+	// from creation) has no usage to name, and the backend's own state
+	// stands.
 	currentUsage := dst.Texture.CurrentUsage()
 	idx, tracked := pw.trackedIndex(owner)
 	if tracked {
-		if uses := pw.tracker.TextureUsage(idx); uses != 0 {
-			currentUsage = uses.ToTextureUsage()
+		if uses := pw.tracker.TextureUsage(idx).ToTextureUsage(); uses != 0 {
+			currentUsage = uses
 		}
 	}
 	copyRange := textureCopyRange(owner, dst, size)

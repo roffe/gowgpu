@@ -12,6 +12,10 @@ import (
 // =============================================================================
 // Multi-CB Encoder Tests
 // Tests for Rust wgpu-core InnerCommandEncoder parity (command/mod.rs:530-738).
+//
+// An encoder starts out recording its first command buffer (the HAL encoder
+// is recording when the encoder is made), so OpenPass closes that one first
+// and every list below counts it.
 // =============================================================================
 
 // newTestEncoder creates a CoreCommandEncoder using the mock HAL device.
@@ -31,7 +35,8 @@ func TestMultiCBEncoder_SinglePass(t *testing.T) {
 	t.Parallel()
 	encoder, _ := newTestEncoder(t, "single-pass")
 
-	// Open a pass, close it -> cbList has 1 CB.
+	// Open a pass, close it -> cbList has 2 CBs: the recording the encoder
+	// started with, closed by OpenPass, and the pass.
 	if err := encoder.OpenPass("pass1"); err != nil {
 		t.Fatalf("OpenPass failed: %v", err)
 	}
@@ -45,18 +50,18 @@ func TestMultiCBEncoder_SinglePass(t *testing.T) {
 	if encoder.IsCBOpen() {
 		t.Error("Expected cbListOpen to be false after CloseCB")
 	}
-	if encoder.CBListLen() != 1 {
-		t.Errorf("Expected cbList length 1, got %d", encoder.CBListLen())
+	if encoder.CBListLen() != 2 {
+		t.Errorf("Expected cbList length 2, got %d", encoder.CBListLen())
 	}
 
-	// Finish returns the single CB.
+	// Finish returns both CBs.
 	cmdBuf, err := encoder.Finish()
 	if err != nil {
 		t.Fatalf("Finish failed: %v", err)
 	}
 	bufList := cmdBuf.HalBufferList()
-	if len(bufList) != 1 {
-		t.Errorf("Expected 1 CB from Finish, got %d", len(bufList))
+	if len(bufList) != 2 {
+		t.Errorf("Expected 2 CBs from Finish, got %d", len(bufList))
 	}
 }
 
@@ -80,18 +85,18 @@ func TestMultiCBEncoder_TwoPasses(t *testing.T) {
 		t.Fatalf("CloseCB(pass2) failed: %v", err)
 	}
 
-	if encoder.CBListLen() != 2 {
-		t.Errorf("Expected cbList length 2, got %d", encoder.CBListLen())
+	if encoder.CBListLen() != 3 {
+		t.Errorf("Expected cbList length 3, got %d", encoder.CBListLen())
 	}
 
-	// Finish returns both CBs.
+	// Finish returns all three CBs: the initial recording and both passes.
 	cmdBuf, err := encoder.Finish()
 	if err != nil {
 		t.Fatalf("Finish failed: %v", err)
 	}
 	bufList := cmdBuf.HalBufferList()
-	if len(bufList) != 2 {
-		t.Errorf("Expected 2 CBs from Finish, got %d", len(bufList))
+	if len(bufList) != 3 {
+		t.Errorf("Expected 3 CBs from Finish, got %d", len(bufList))
 	}
 }
 
@@ -106,7 +111,7 @@ func TestMultiCBEncoder_CloseAndSwap(t *testing.T) {
 	if err := encoder.CloseCB(); err != nil {
 		t.Fatalf("CloseCB(render) failed: %v", err)
 	}
-	// cbList: [render]
+	// cbList: [initial, render]
 
 	// Now record a barrier CB and insert it BEFORE the render CB.
 	if err := encoder.OpenPass("barrier"); err != nil {
@@ -115,20 +120,20 @@ func TestMultiCBEncoder_CloseAndSwap(t *testing.T) {
 	if err := encoder.CloseAndSwap(); err != nil {
 		t.Fatalf("CloseAndSwap failed: %v", err)
 	}
-	// cbList: [barrier, render]
+	// cbList: [initial, barrier, render]
 
-	if encoder.CBListLen() != 2 {
-		t.Errorf("Expected cbList length 2, got %d", encoder.CBListLen())
+	if encoder.CBListLen() != 3 {
+		t.Errorf("Expected cbList length 3, got %d", encoder.CBListLen())
 	}
 
-	// Finish returns both CBs in correct order.
+	// Finish returns all CBs in correct order.
 	cmdBuf, err := encoder.Finish()
 	if err != nil {
 		t.Fatalf("Finish failed: %v", err)
 	}
 	bufList := cmdBuf.HalBufferList()
-	if len(bufList) != 2 {
-		t.Errorf("Expected 2 CBs from Finish, got %d", len(bufList))
+	if len(bufList) != 3 {
+		t.Errorf("Expected 3 CBs from Finish, got %d", len(bufList))
 	}
 	// Both should be non-nil (mockCommandBuffer instances).
 	for i, buf := range bufList {
@@ -149,7 +154,7 @@ func TestMultiCBEncoder_CloseAndSwap_ThreeCBs(t *testing.T) {
 	if err := encoder.CloseCB(); err != nil {
 		t.Fatalf("CloseCB(setup) failed: %v", err)
 	}
-	// cbList: [setup]
+	// cbList: [initial, setup]
 
 	if err := encoder.OpenPass("render"); err != nil {
 		t.Fatalf("OpenPass(render) failed: %v", err)
@@ -157,7 +162,7 @@ func TestMultiCBEncoder_CloseAndSwap_ThreeCBs(t *testing.T) {
 	if err := encoder.CloseCB(); err != nil {
 		t.Fatalf("CloseCB(render) failed: %v", err)
 	}
-	// cbList: [setup, render]
+	// cbList: [initial, setup, render]
 
 	if err := encoder.OpenPass("barrier"); err != nil {
 		t.Fatalf("OpenPass(barrier) failed: %v", err)
@@ -165,7 +170,43 @@ func TestMultiCBEncoder_CloseAndSwap_ThreeCBs(t *testing.T) {
 	if err := encoder.CloseAndSwap(); err != nil {
 		t.Fatalf("CloseAndSwap failed: %v", err)
 	}
-	// cbList: [setup, barrier, render]
+	// cbList: [initial, setup, barrier, render]
+
+	if encoder.CBListLen() != 4 {
+		t.Errorf("Expected cbList length 4, got %d", encoder.CBListLen())
+	}
+
+	cmdBuf, err := encoder.Finish()
+	if err != nil {
+		t.Fatalf("Finish failed: %v", err)
+	}
+	bufList := cmdBuf.HalBufferList()
+	if len(bufList) != 4 {
+		t.Errorf("Expected 4 CBs from Finish, got %d", len(bufList))
+	}
+}
+
+func TestMultiCBEncoder_CloseAndPushFront(t *testing.T) {
+	t.Parallel()
+	encoder, _ := newTestEncoder(t, "push-front")
+
+	// Record a render pass CB.
+	if err := encoder.OpenPass("render"); err != nil {
+		t.Fatalf("OpenPass(render) failed: %v", err)
+	}
+	if err := encoder.CloseCB(); err != nil {
+		t.Fatalf("CloseCB(render) failed: %v", err)
+	}
+	// cbList: [initial, render]
+
+	// Now record a transit CB and insert at front.
+	if err := encoder.OpenPass("transit"); err != nil {
+		t.Fatalf("OpenPass(transit) failed: %v", err)
+	}
+	if err := encoder.CloseAndPushFront(); err != nil {
+		t.Fatalf("CloseAndPushFront failed: %v", err)
+	}
+	// cbList: [transit, initial, render]
 
 	if encoder.CBListLen() != 3 {
 		t.Errorf("Expected cbList length 3, got %d", encoder.CBListLen())
@@ -181,47 +222,11 @@ func TestMultiCBEncoder_CloseAndSwap_ThreeCBs(t *testing.T) {
 	}
 }
 
-func TestMultiCBEncoder_CloseAndPushFront(t *testing.T) {
-	t.Parallel()
-	encoder, _ := newTestEncoder(t, "push-front")
-
-	// Record a render pass CB.
-	if err := encoder.OpenPass("render"); err != nil {
-		t.Fatalf("OpenPass(render) failed: %v", err)
-	}
-	if err := encoder.CloseCB(); err != nil {
-		t.Fatalf("CloseCB(render) failed: %v", err)
-	}
-	// cbList: [render]
-
-	// Now record a transit CB and insert at front.
-	if err := encoder.OpenPass("transit"); err != nil {
-		t.Fatalf("OpenPass(transit) failed: %v", err)
-	}
-	if err := encoder.CloseAndPushFront(); err != nil {
-		t.Fatalf("CloseAndPushFront failed: %v", err)
-	}
-	// cbList: [transit, render]
-
-	if encoder.CBListLen() != 2 {
-		t.Errorf("Expected cbList length 2, got %d", encoder.CBListLen())
-	}
-
-	cmdBuf, err := encoder.Finish()
-	if err != nil {
-		t.Fatalf("Finish failed: %v", err)
-	}
-	bufList := cmdBuf.HalBufferList()
-	if len(bufList) != 2 {
-		t.Errorf("Expected 2 CBs from Finish, got %d", len(bufList))
-	}
-}
-
 func TestMultiCBEncoder_CloseAndPushFront_MultiCB(t *testing.T) {
 	t.Parallel()
 	encoder, _ := newTestEncoder(t, "push-front-multi")
 
-	// Build: [A, B], then push-front [C, A, B]
+	// Build: [initial, A, B], then push-front [C, initial, A, B]
 	if err := encoder.OpenPass("A"); err != nil {
 		t.Fatal(err)
 	}
@@ -234,7 +239,7 @@ func TestMultiCBEncoder_CloseAndPushFront_MultiCB(t *testing.T) {
 	if err := encoder.CloseCB(); err != nil {
 		t.Fatal(err)
 	}
-	// cbList: [A, B]
+	// cbList: [initial, A, B]
 
 	if err := encoder.OpenPass("C"); err != nil {
 		t.Fatal(err)
@@ -242,18 +247,18 @@ func TestMultiCBEncoder_CloseAndPushFront_MultiCB(t *testing.T) {
 	if err := encoder.CloseAndPushFront(); err != nil {
 		t.Fatal(err)
 	}
-	// cbList: [C, A, B]
+	// cbList: [C, initial, A, B]
 
-	if encoder.CBListLen() != 3 {
-		t.Errorf("Expected 3, got %d", encoder.CBListLen())
+	if encoder.CBListLen() != 4 {
+		t.Errorf("Expected 4, got %d", encoder.CBListLen())
 	}
 
 	cmdBuf, err := encoder.Finish()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cmdBuf.HalBufferList()) != 3 {
-		t.Errorf("Expected 3 CBs, got %d", len(cmdBuf.HalBufferList()))
+	if len(cmdBuf.HalBufferList()) != 4 {
+		t.Errorf("Expected 4 CBs, got %d", len(cmdBuf.HalBufferList()))
 	}
 }
 
@@ -274,8 +279,8 @@ func TestMultiCBEncoder_CloseIfOpen_WhenOpen(t *testing.T) {
 	if encoder.IsCBOpen() {
 		t.Error("Expected closed after CloseIfOpen")
 	}
-	if encoder.CBListLen() != 1 {
-		t.Errorf("Expected 1 CB in list, got %d", encoder.CBListLen())
+	if encoder.CBListLen() != 2 {
+		t.Errorf("Expected 2 CBs in list, got %d", encoder.CBListLen())
 	}
 }
 
@@ -283,12 +288,16 @@ func TestMultiCBEncoder_CloseIfOpen_WhenClosed(t *testing.T) {
 	t.Parallel()
 	encoder, _ := newTestEncoder(t, "close-if-noop")
 
-	// No pass opened -> CloseIfOpen should be a no-op.
+	// Close the recording the encoder started with; CloseIfOpen is then a
+	// no-op.
+	if err := encoder.CloseCB(); err != nil {
+		t.Fatalf("CloseCB: %v", err)
+	}
 	if err := encoder.CloseIfOpen(); err != nil {
 		t.Fatalf("CloseIfOpen should succeed when nothing open: %v", err)
 	}
-	if encoder.CBListLen() != 0 {
-		t.Errorf("Expected 0 CBs in list, got %d", encoder.CBListLen())
+	if encoder.CBListLen() != 1 {
+		t.Errorf("Expected 1 CB in list, got %d", encoder.CBListLen())
 	}
 }
 
@@ -296,7 +305,8 @@ func TestMultiCBEncoder_Finish_FlattensAll(t *testing.T) {
 	t.Parallel()
 	encoder, _ := newTestEncoder(t, "flatten-all")
 
-	// 3 passes -> Finish -> HalBufferList() returns 3
+	// 3 passes -> Finish -> HalBufferList() returns 4: the initial recording
+	// and the passes
 	for i := 0; i < 3; i++ {
 		if err := encoder.OpenPass("pass"); err != nil {
 			t.Fatalf("OpenPass(%d) failed: %v", i, err)
@@ -311,8 +321,8 @@ func TestMultiCBEncoder_Finish_FlattensAll(t *testing.T) {
 		t.Fatalf("Finish failed: %v", err)
 	}
 	bufList := cmdBuf.HalBufferList()
-	if len(bufList) != 3 {
-		t.Errorf("Expected 3 CBs, got %d", len(bufList))
+	if len(bufList) != 4 {
+		t.Errorf("Expected 4 CBs, got %d", len(bufList))
 	}
 	for i, buf := range bufList {
 		if buf == nil {
@@ -335,8 +345,8 @@ func TestMultiCBEncoder_Finish_WithOpenRecording(t *testing.T) {
 		t.Fatalf("Finish failed: %v", err)
 	}
 	bufList := cmdBuf.HalBufferList()
-	if len(bufList) != 1 {
-		t.Errorf("Expected 1 CB (auto-closed by Finish), got %d", len(bufList))
+	if len(bufList) != 2 {
+		t.Errorf("Expected 2 CBs (initial, and the one auto-closed by Finish), got %d", len(bufList))
 	}
 }
 
@@ -389,8 +399,8 @@ func TestMultiCBEncoder_HalBufferList_MultiCB_RawConsistency(t *testing.T) {
 	}
 
 	bufList := cmdBuf.HalBufferList()
-	if len(bufList) != 2 {
-		t.Fatalf("Expected 2 CBs, got %d", len(bufList))
+	if len(bufList) != 3 {
+		t.Fatalf("Expected 3 CBs, got %d", len(bufList))
 	}
 
 	// Raw() should return the first CB in the list.
@@ -407,7 +417,10 @@ func TestMultiCBEncoder_CloseCB_NotOpen(t *testing.T) {
 	t.Parallel()
 	encoder, _ := newTestEncoder(t, "close-not-open")
 
-	// CloseCB without OpenPass should fail.
+	// A second CloseCB, with nothing open any more, should fail.
+	if err := encoder.CloseCB(); err != nil {
+		t.Fatalf("CloseCB of the initial recording: %v", err)
+	}
 	err := encoder.CloseCB()
 	if err == nil {
 		t.Fatal("Expected error when closing without open pass")
@@ -418,6 +431,9 @@ func TestMultiCBEncoder_CloseAndSwap_NotOpen(t *testing.T) {
 	t.Parallel()
 	encoder, _ := newTestEncoder(t, "swap-not-open")
 
+	if err := encoder.CloseCB(); err != nil {
+		t.Fatalf("CloseCB of the initial recording: %v", err)
+	}
 	err := encoder.CloseAndSwap()
 	if err == nil {
 		t.Fatal("Expected error when CloseAndSwap without open pass")
@@ -428,10 +444,8 @@ func TestMultiCBEncoder_CloseAndSwap_EmptyList(t *testing.T) {
 	t.Parallel()
 	encoder, _ := newTestEncoder(t, "swap-empty")
 
-	// Open a pass, but no CBs in list yet -> CloseAndSwap needs at least one.
-	if err := encoder.OpenPass("only"); err != nil {
-		t.Fatal(err)
-	}
+	// The initial recording is open, but no CB is in the list yet ->
+	// CloseAndSwap needs at least one.
 	err := encoder.CloseAndSwap()
 	if err == nil {
 		t.Fatal("Expected error when CloseAndSwap with empty CB list")
@@ -442,6 +456,9 @@ func TestMultiCBEncoder_CloseAndPushFront_NotOpen(t *testing.T) {
 	t.Parallel()
 	encoder, _ := newTestEncoder(t, "front-not-open")
 
+	if err := encoder.CloseCB(); err != nil {
+		t.Fatalf("CloseCB of the initial recording: %v", err)
+	}
 	err := encoder.CloseAndPushFront()
 	if err == nil {
 		t.Fatal("Expected error when CloseAndPushFront without open pass")
@@ -477,9 +494,10 @@ func TestMultiCBEncoder_OpenPass_AutoClosePrevious(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// pass1 was auto-closed -> cbList has 1 CB, pass2 is open.
-	if encoder.CBListLen() != 1 {
-		t.Errorf("Expected 1 CB in list (auto-closed pass1), got %d", encoder.CBListLen())
+	// pass1 was auto-closed -> cbList has the initial recording and pass1,
+	// pass2 is open.
+	if encoder.CBListLen() != 2 {
+		t.Errorf("Expected 2 CBs in list (initial, auto-closed pass1), got %d", encoder.CBListLen())
 	}
 	if !encoder.IsCBOpen() {
 		t.Error("Expected pass2 to be open")
@@ -489,8 +507,8 @@ func TestMultiCBEncoder_OpenPass_AutoClosePrevious(t *testing.T) {
 	if err := encoder.CloseCB(); err != nil {
 		t.Fatal(err)
 	}
-	if encoder.CBListLen() != 2 {
-		t.Errorf("Expected 2 CBs, got %d", encoder.CBListLen())
+	if encoder.CBListLen() != 3 {
+		t.Errorf("Expected 3 CBs, got %d", encoder.CBListLen())
 	}
 }
 

@@ -95,8 +95,10 @@ func (p *RenderPassEncoder) SetBindGroup(index uint32, group *BindGroup, offsets
 	p.binder.assign(index, group.layout)
 	p.binder.assignBindGroup(index, group)
 	// Keeps the group and its buffers alive and lists the group for
-	// submit-time validation, once per encoder.
+	// submit-time validation, once per encoder; and puts its textures and
+	// buffers in the pass's usage scope, once per pass.
 	p.encoder.trackBindGroup(group)
+	p.encoder.recordPassBindGroup(group)
 	raw := p.core.RawPass()
 	if raw != nil && group.hal != nil {
 		raw.SetBindGroup(index, group.hal, offsets)

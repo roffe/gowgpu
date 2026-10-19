@@ -991,8 +991,8 @@ func (t *Texture) TrackingData() *track.TrackingData {
 // TextureView wraps a HAL texture view handle and carries a reference to
 // its parent Texture. The parent reference is needed for usage tracking:
 // when a render pass uses a texture view as an attachment, the parent
-// texture's TrackerIndex must be recorded in the command buffer's
-// TextureUsageScope for barrier generation at submit time.
+// texture's TrackerIndex is recorded in the pass's usage scope, and from
+// there in the command buffer's tracker, for barrier generation.
 //
 // Reference: Rust wgpu-core resource.rs TextureView { parent: Arc<Texture>, ... }
 type TextureView struct {
@@ -1005,6 +1005,12 @@ type TextureView struct {
 	// May be nil for texture views created without a parent (e.g., swapchain
 	// views where the parent texture lifecycle is managed externally).
 	Parent *Texture
+
+	// Texture is the HAL texture the view is of, when the public layer knows
+	// a better handle than Parent's own: a borrowed surface texture shares
+	// one core Texture across the swapchain images. The barriers into a
+	// render pass are recorded against it; nil means Parent.Raw.
+	Texture hal.Texture
 }
 
 // Sampler represents a texture sampler with HAL integration.

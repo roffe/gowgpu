@@ -358,14 +358,17 @@ type TextureView struct {
 	layerCount     uint32
 	device         *Device
 	srvHandle      d3d12.D3D12_CPU_DESCRIPTOR_HANDLE    // Shader resource view (for sampling)
+	uavHandle      d3d12.D3D12_CPU_DESCRIPTOR_HANDLE    // Unordered access view (storage texture)
 	rtvHandle      d3d12.D3D12_CPU_DESCRIPTOR_HANDLE    // Render target view
 	dsvHandle      d3d12.D3D12_CPU_DESCRIPTOR_HANDLE    // Depth stencil view
 	dsvHandles     [4]d3d12.D3D12_CPU_DESCRIPTOR_HANDLE // DSV variants keyed by D3D12_DSV_FLAGS
 	hasSRV         bool
+	hasUAV         bool
 	hasRTV         bool
 	hasDSV         bool
 	hasDSVVariants [4]bool
 	srvHeapIndex   uint32
+	uavHeapIndex   uint32
 	rtvHeapIndex   uint32
 	dsvHeapIndex   [4]uint32
 }
@@ -377,6 +380,9 @@ func (v *TextureView) Destroy() {
 	if v.device != nil && (v.texture == nil || !v.texture.isExternal) {
 		if v.hasSRV && v.device.stagingViewHeap != nil {
 			v.device.stagingViewHeap.Free(v.srvHeapIndex, 1)
+		}
+		if v.hasUAV && v.device.stagingViewHeap != nil {
+			v.device.stagingViewHeap.Free(v.uavHeapIndex, 1)
 		}
 		if v.hasRTV && v.device.rtvHeap != nil {
 			v.device.rtvHeap.Free(v.rtvHeapIndex, 1)
@@ -390,6 +396,7 @@ func (v *TextureView) Destroy() {
 		}
 	}
 	v.hasSRV = false
+	v.hasUAV = false
 	v.hasRTV = false
 	v.hasDSV = false
 	v.hasDSVVariants = [4]bool{}

@@ -1681,6 +1681,32 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 		view.hasSRV = true
 	}
 
+	// Create a UAV if the texture can be a storage texture: a storage
+	// texture binding of a bind group is written from it (a UAV range of
+	// the root signature, see bindingTypeToD3D12DescriptorRangeType). Depth
+	// formats have no UAV, and WebGPU has no storage depth textures.
+	if tex.usage&gputypes.TextureUsageStorageBinding != 0 && !isDepthFormat(viewFormat) {
+		uavHandle, uavIndex, err := d.allocateSRVDescriptor()
+		if err != nil {
+			return failTextureViewCreation(view, fmt.Errorf("dx12: failed to allocate UAV descriptor: %w", err))
+		}
+		uavDesc := d3d12.D3D12_UNORDERED_ACCESS_VIEW_DESC{Format: textureFormatToD3D12(viewFormat)}
+		switch viewDim {
+		case gputypes.TextureViewDimension1D:
+			uavDesc.SetTexture1D(baseMip)
+		case gputypes.TextureViewDimension3D:
+			uavDesc.SetTexture3D(baseMip, 0, ^uint32(0))
+		case gputypes.TextureViewDimension2DArray, gputypes.TextureViewDimensionCube, gputypes.TextureViewDimensionCubeArray:
+			uavDesc.SetTexture2DArray(baseMip, baseLayer, layerCount, 0)
+		default:
+			uavDesc.SetTexture2D(baseMip, 0)
+		}
+		d.raw.CreateUnorderedAccessView(tex.raw, nil, &uavDesc, uavHandle)
+		view.uavHandle = uavHandle
+		view.uavHeapIndex = uavIndex
+		view.hasUAV = true
+	}
+
 	return view, nil
 }
 
@@ -2014,9 +2040,11 @@ func (d *Device) createBufferSRV(resource *d3d12.ID3D12Resource, numElements, st
 // writeBufferViewDescriptor): uniform -> CBV, read-only storage -> raw SRV,
 // storage -> raw UAV. Writing a CBV for every buffer, as this used to, put a
 // constant buffer descriptor in the SRV/UAV slot of a storage buffer, so a
-// compute shader's writes went nowhere. Buffer views are created inline
-// (they cannot be batched), while texture SRV copies from scattered staging
-// handles are batched into a single CopyDescriptors call.
+// compute shader's writes went nowhere. A texture view is written from its
+// UAV for a storage texture layout entry and from its SRV otherwise. Buffer
+// views are created inline (they cannot be batched), while the texture
+// SRV and UAV copies from scattered staging handles are batched into a
+// single CopyDescriptors call.
 func (d *Device) writeViewDescriptorsBatched(cpuStart d3d12.D3D12_CPU_DESCRIPTOR_HANDLE, entries []viewBinding) error {
 	// Collect SRV copy sources for batching.
 	// destHandles[i] = destination in GPU-visible heap, srcHandles[i] = source from staging heap.
@@ -2034,9 +2062,15 @@ func (d *Device) writeViewDescriptorsBatched(cpuStart d3d12.D3D12_CPU_DESCRIPTOR
 			}
 
 		case gputypes.TextureViewBinding:
-			// A storage texture needs a UAV, which TextureView does not
-			// create yet; it keeps the sampled SRV here, as before.
 			view := fromHandle[TextureView](res.TextureView)
+			if vb.layout.Type == BindingTypeStorageTexture {
+				if !view.hasUAV {
+					return fmt.Errorf("dx12: texture view has no UAV for storage texture binding %d (texture made without StorageBinding?)", vb.entry.Binding)
+				}
+				srvDestHandles = append(srvDestHandles, dest)
+				srvSrcHandles = append(srvSrcHandles, view.uavHandle)
+				continue
+			}
 			if !view.hasSRV {
 				return fmt.Errorf("dx12: texture view has no SRV for binding %d", vb.entry.Binding)
 			}

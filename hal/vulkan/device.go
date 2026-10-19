@@ -1120,8 +1120,14 @@ func (d *Device) updateDescriptorSet(set vk.DescriptorSet, entries []gputypes.Bi
 				ImageView:   vk.ImageView(res.TextureView),
 				ImageLayout: vk.ImageLayoutShaderReadOnlyOptimal,
 			}
-			imageInfos = append(imageInfos, imageInfo)
 			write.DescriptorType = vk.DescriptorTypeSampledImage
+			// A storage texture is a storage image, read and written in
+			// GENERAL, the layout its barriers put it in (textureBarrierState).
+			if dt, ok := bindingTypes[entry.Binding]; ok && dt == vk.DescriptorTypeStorageImage {
+				write.DescriptorType = dt
+				imageInfo.ImageLayout = vk.ImageLayoutGeneral
+			}
+			imageInfos = append(imageInfos, imageInfo)
 			write.PImageInfo = &imageInfos[len(imageInfos)-1]
 
 		default:

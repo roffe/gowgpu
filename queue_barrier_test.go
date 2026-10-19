@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/roffe/gowgpu/core/track"
+	"github.com/roffe/gowgpu/hal"
 
 	_ "github.com/roffe/gowgpu/hal/noop"
 )
@@ -21,7 +22,7 @@ func TestInjectTextureBarriers_NilDevice(t *testing.T) {
 	t.Parallel()
 
 	q := &Queue{}
-	cb, err := q.injectBarriers(nil)
+	cb, err := injectBarriersFirst(q, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -37,7 +38,7 @@ func TestInjectTextureBarriers_NilTracker(t *testing.T) {
 
 	// Device with nil core -> Tracker() returns nil
 	q := &Queue{device: &Device{}}
-	cb, err := q.injectBarriers(nil)
+	cb, err := injectBarriersFirst(q, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -72,7 +73,7 @@ func TestInjectTextureBarriers_EmptyScope(t *testing.T) {
 		usedTextures: []*Texture{},
 	}
 
-	barrierCB, err := q.injectBarriers([]*CommandBuffer{cb})
+	barrierCB, err := injectBarriersFirst(q, []*CommandBuffer{cb})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -123,7 +124,7 @@ func TestInjectTextureBarriers_WithTransition(t *testing.T) {
 	if scope == nil {
 		t.Fatal("textureScope should not be nil")
 	}
-	_ = scope.SetUsage(td.Index(), track.TextureUsesColorTarget)
+	scope.SetSingle(td.Index(), track.TextureUsesColorTarget)
 
 	cb := &CommandBuffer{
 		core:         coreCB,
@@ -131,7 +132,7 @@ func TestInjectTextureBarriers_WithTransition(t *testing.T) {
 		usedTextures: []*Texture{tex},
 	}
 
-	barrierCB, err := q.injectBarriers([]*CommandBuffer{cb})
+	barrierCB, err := injectBarriersFirst(q, []*CommandBuffer{cb})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -174,7 +175,7 @@ func TestInjectTextureBarriers_NoTransitionSameState(t *testing.T) {
 	}
 
 	scope := coreCB.TextureScope()
-	_ = scope.SetUsage(td.Index(), track.TextureUsesResource)
+	scope.SetSingle(td.Index(), track.TextureUsesResource)
 
 	cb := &CommandBuffer{
 		core:         coreCB,
@@ -182,7 +183,7 @@ func TestInjectTextureBarriers_NoTransitionSameState(t *testing.T) {
 		usedTextures: []*Texture{tex},
 	}
 
-	barrierCB, err := q.injectBarriers([]*CommandBuffer{cb})
+	barrierCB, err := injectBarriersFirst(q, []*CommandBuffer{cb})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -223,8 +224,8 @@ func TestInjectTextureBarriers_MultipleTextures(t *testing.T) {
 	}
 
 	scope1 := coreCB1.TextureScope()
-	_ = scope1.SetUsage(td1.Index(), track.TextureUsesColorTarget)
-	_ = scope1.SetUsage(td2.Index(), track.TextureUsesResource)
+	scope1.SetSingle(td1.Index(), track.TextureUsesColorTarget)
+	scope1.SetSingle(td2.Index(), track.TextureUsesResource)
 
 	cb1 := &CommandBuffer{
 		core:         coreCB1,
@@ -232,7 +233,7 @@ func TestInjectTextureBarriers_MultipleTextures(t *testing.T) {
 		usedTextures: []*Texture{tex1, tex2},
 	}
 
-	barrierCB, err := q.injectBarriers([]*CommandBuffer{cb1})
+	barrierCB, err := injectBarriersFirst(q, []*CommandBuffer{cb1})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -260,7 +261,7 @@ func TestInjectTextureBarriers_NilCommandBuffers(t *testing.T) {
 	defer device.Release()
 	q := device.Queue()
 
-	barrierCB, err := q.injectBarriers([]*CommandBuffer{nil, nil})
+	barrierCB, err := injectBarriersFirst(q, []*CommandBuffer{nil, nil})
 	if err != nil {
 		t.Fatalf("unexpected error with nil CBs: %v", err)
 	}
@@ -299,7 +300,7 @@ func TestInjectTextureBarriers_NoEncoderPool(t *testing.T) {
 	}
 
 	scope := coreCB.TextureScope()
-	_ = scope.SetUsage(td.Index(), track.TextureUsesColorTarget)
+	scope.SetSingle(td.Index(), track.TextureUsesColorTarget)
 
 	cb := &CommandBuffer{
 		core:         coreCB,
@@ -307,7 +308,7 @@ func TestInjectTextureBarriers_NoEncoderPool(t *testing.T) {
 		usedTextures: []*Texture{tex},
 	}
 
-	barrierCB, err := q.injectBarriers([]*CommandBuffer{cb})
+	barrierCB, err := injectBarriersFirst(q, []*CommandBuffer{cb})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -349,7 +350,7 @@ func TestInjectTextureBarriers_TextureWithoutCoreTexture(t *testing.T) {
 		usedTextures: []*Texture{tex},
 	}
 
-	barrierCB, err := q.injectBarriers([]*CommandBuffer{cb})
+	barrierCB, err := injectBarriersFirst(q, []*CommandBuffer{cb})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -498,4 +499,19 @@ func createTrackedTexture(t *testing.T, device *Device, label string) *Texture {
 		t.Fatalf("texture %s has no coreTexture", label)
 	}
 	return tex
+}
+
+// injectBarriersFirst is injectBarriers returning the barrier command buffer
+// recorded for the first command buffer that needed one, or nil: the tests
+// submit one command buffer at a time.
+func injectBarriersFirst(q *Queue, commandBuffers []*CommandBuffer) (hal.CommandBuffer, error) {
+	if err := q.injectBarriers(commandBuffers); err != nil {
+		return nil, err
+	}
+	for _, b := range q.cbBarriers {
+		if b != nil {
+			return b, nil
+		}
+	}
+	return nil, nil //nolint:nilnil // no barriers needed
 }

@@ -119,6 +119,14 @@ func SkipBarrier(old, next TextureUses) bool {
 }
 
 // ToTextureUsage converts internal uses to gputypes.TextureUsage for HAL.
+//
+// A read-only depth/stencil attachment maps to RenderAttachment, not
+// TextureBinding: the backends keep a depth attachment in its attachment
+// layout whether the pass writes it or not (Vulkan's render pass declares
+// DEPTH_STENCIL_ATTACHMENT_OPTIMAL for a read-only one too), so a barrier
+// into or out of it has to name that layout, not the sampled one.
+// Uninitialized maps to nothing: the backend takes a usage of 0 as the
+// undefined state a new texture is in.
 func (u TextureUses) ToTextureUsage() gputypes.TextureUsage {
 	var result gputypes.TextureUsage
 
@@ -128,13 +136,13 @@ func (u TextureUses) ToTextureUsage() gputypes.TextureUsage {
 	if u&TextureUsesCopyDst != 0 {
 		result |= gputypes.TextureUsageCopyDst
 	}
-	if u&(TextureUsesResource|TextureUsesDepthStencilRead) != 0 {
+	if u&TextureUsesResource != 0 {
 		result |= gputypes.TextureUsageTextureBinding
 	}
 	if u&(TextureUsesStorageRead|TextureUsesStorageWrite) != 0 {
 		result |= gputypes.TextureUsageStorageBinding
 	}
-	if u&(TextureUsesColorTarget|TextureUsesDepthStencilWrite) != 0 {
+	if u&(TextureUsesColorTarget|TextureUsesDepthStencilWrite|TextureUsesDepthStencilRead) != 0 {
 		result |= gputypes.TextureUsageRenderAttachment
 	}
 
@@ -272,9 +280,51 @@ func (t *TextureTracker) MergeInto(scope *TextureUsageScope, dst []TexturePendin
 	return transitions
 }
 
-// TextureUsageScope tracks texture usage within a command buffer or pass.
-// Each command buffer has its own scope that gets merged into the device
-// tracker on submit.
+// MergeEncoder merges a submitted command buffer's tracker into the device
+// tracker. For every texture the command buffer uses, a transition from the
+// device's current state to the command buffer's start state is returned
+// (unless SkipBarrier allows omitting it), and the device state becomes the
+// command buffer's end state. Textures the device does not track yet are
+// inserted with the end state and need no barrier.
+//
+// Reference: wgpu-core track/texture.rs DeviceTextureTracker::set_from_tracker_and_drain_transitions
+func (t *TextureTracker) MergeEncoder(enc *EncoderTextureTracker) []TexturePendingTransition {
+	return t.MergeEncoderInto(enc, nil)
+}
+
+// MergeEncoderInto is MergeEncoder appending the transitions to dst, so a
+// queue that merges every submit can keep the list.
+func (t *TextureTracker) MergeEncoderInto(enc *EncoderTextureTracker, dst []TexturePendingTransition) []TexturePendingTransition {
+	if enc == nil {
+		return dst
+	}
+	for i := range enc.end {
+		index, valid := trackerIndexAt(i)
+		if !valid || !enc.metadata.IsOwned(index) {
+			continue
+		}
+		start, end := enc.start[i], enc.end[i]
+		if !t.IsTracked(index) {
+			t.InsertSingle(index, end)
+			continue
+		}
+		current := t.states[index].usage
+		if !SkipBarrier(current, start) {
+			dst = append(dst, TexturePendingTransition{
+				Index: index,
+				Usage: TextureStateTransition{From: current, To: start},
+			})
+		}
+		t.states[index].usage = end
+	}
+	return dst
+}
+
+// TextureUsageScope tracks texture usage within ONE WebGPU usage scope: a
+// render pass, a compute pass, or a single copy command. Adding a usage that
+// is incompatible with an earlier usage in the same scope is a validation
+// error. Usages across different scopes are not merged here; the command
+// buffer's EncoderTextureTracker transitions between them.
 //
 // Reference: wgpu-core track/texture.rs TextureUsageScope
 type TextureUsageScope struct {

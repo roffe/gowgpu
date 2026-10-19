@@ -135,9 +135,9 @@ func (d *Device) CreateTexture(desc *TextureDescriptor) (*Texture, error) {
 		return nil, fmt.Errorf("wgpu: failed to create texture: %w", err)
 	}
 
-	// Create core.Texture for TrackerIndex allocation. This enables submit-time
-	// barrier injection: the TrackerIndex is used by populateTextureScope to
-	// record per-texture usage in the command buffer's TextureUsageScope.
+	// Create core.Texture for TrackerIndex allocation. This enables barrier
+	// injection: the TrackerIndex is what the usage scopes and the command
+	// buffer's tracker record the texture's usages under.
 	coreTexture := core.NewTexture(
 		halTexture, d.core, desc.Format, halDesc.Dimension,
 		desc.Usage,
@@ -148,6 +148,18 @@ func (d *Device) CreateTexture(desc *TextureDescriptor) (*Texture, error) {
 		},
 		halDesc.MipLevelCount, halDesc.SampleCount, desc.Label,
 	)
+
+	// The device tracker knows the texture from now on, as uninitialized, so
+	// its first use in a submit gets a barrier from UNDEFINED; Rust wgpu-core
+	// inserts every new texture as UNINITIALIZED the same way. Merged in at
+	// first use instead, a texture nothing had zeroed (no TextureBinding)
+	// was copied into or loaded in a render pass in the layout it was made
+	// in.
+	if tracker := d.core.Tracker(); tracker != nil {
+		if td := coreTexture.TrackingData(); td != nil && td.Index().IsValid() {
+			tracker.InsertTexture(td.Index(), track.TextureUsesUninitialized)
+		}
+	}
 
 	tex := &Texture{hal: halTexture, device: d, format: desc.Format, coreTexture: coreTexture}
 	if zero {
@@ -443,7 +455,7 @@ func (d *Device) CreateBindGroup(desc *BindGroupDescriptor) (*BindGroup, error) 
 	lateInfos := buildLateBufferBindingInfos(desc.Layout.entries, desc.Entries)
 
 	// Collect buffer and texture references for submit-time validation (VAL-A6).
-	boundBuffers, boundTextures, boundTextureUses := collectBindGroupResources(desc.Layout.entries, desc.Entries)
+	boundBuffers, boundBufferUses, boundTextures, boundTextureUses := collectBindGroupResources(desc.Layout.entries, desc.Entries)
 
 	// Initialize ResourceRef with onZero callback for refcount-driven destruction.
 	// When the last reference drops (either from explicit Release or Phase 2
@@ -470,6 +482,7 @@ func (d *Device) CreateBindGroup(desc *BindGroupDescriptor) (*BindGroup, error) 
 		lateBufferBindingInfos: lateInfos,
 		ref:                    core.NewResourceRef("BindGroup:"+desc.Label, bgOnZero),
 		boundBuffers:           boundBuffers,
+		boundBufferUses:        boundBufferUses,
 		boundTextures:          boundTextures,
 		boundTextureUses:       boundTextureUses,
 	}
@@ -549,20 +562,42 @@ func buildLateBufferBindingInfos(layoutEntries []gputypes.BindGroupLayoutEntry, 
 // used. Matches Rust wgpu-core where bind group creation stores resource
 // references that are later checked via trackers.buffers/textures.used_resources()
 // in validate_command_buffer.
-func collectBindGroupResources(layout []gputypes.BindGroupLayoutEntry, entries []BindGroupEntry) ([]*Buffer, []*Texture, []track.TextureUses) {
+func collectBindGroupResources(layout []gputypes.BindGroupLayoutEntry, entries []BindGroupEntry) ([]*Buffer, []track.BufferUses, []*Texture, []track.TextureUses) {
 	var buffers []*Buffer
+	var bufferUses []track.BufferUses
 	var textures []*Texture
 	var uses []track.TextureUses
 	for i := range entries {
 		if entries[i].Buffer != nil {
 			buffers = append(buffers, entries[i].Buffer)
+			bufferUses = append(bufferUses, bindingBufferUse(layout, entries[i].Binding))
 		}
 		if entries[i].TextureView != nil && entries[i].TextureView.texture != nil {
 			textures = append(textures, entries[i].TextureView.texture)
 			uses = append(uses, bindingTextureUse(layout, entries[i].Binding))
 		}
 	}
-	return buffers, textures, uses
+	return buffers, bufferUses, textures, uses
+}
+
+// bindingBufferUse is how the layout entry at binding uses its buffer:
+// uniform, or storage read-only or read-write.
+//
+// Reference: wgpu-core binding_model.rs (BufferBindingType to BufferUses)
+func bindingBufferUse(layout []gputypes.BindGroupLayoutEntry, binding uint32) track.BufferUses {
+	for i := range layout {
+		if layout[i].Binding != binding || layout[i].Buffer == nil {
+			continue
+		}
+		switch layout[i].Buffer.Type {
+		case gputypes.BufferBindingTypeStorage:
+			return track.BufferUsesStorageWrite
+		case gputypes.BufferBindingTypeReadOnlyStorage:
+			return track.BufferUsesStorageRead
+		}
+		return track.BufferUsesUniform
+	}
+	return track.BufferUsesUniform
 }
 
 // bindingTextureUse is how a texture bound at binding is used: sampled,
