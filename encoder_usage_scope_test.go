@@ -77,6 +77,10 @@ func runColorPass(t *testing.T, enc *CommandEncoder, view *TextureView, load gpu
 	}
 }
 
+// mustFinish finishes enc and releases the command buffer when the test
+// ends. Only for one the test doesn't submit: a submitted command buffer
+// lives in a pooled encoder object, which a parallel test may have got
+// back by then, and the Release would land on its command buffer.
 func mustFinish(t *testing.T, enc *CommandEncoder) *CommandBuffer {
 	t.Helper()
 	cb, err := enc.Finish()
@@ -322,7 +326,10 @@ func TestRenderThenSampleSameEncoderSplitsThePass(t *testing.T) {
 	runColorPass(t, enc, targetView, gputypes.LoadOpClear, func(pass *RenderPassEncoder) {
 		pass.SetBindGroup(0, group, nil)
 	})
-	cb := mustFinish(t, enc)
+	cb, err := enc.Finish() // submitted below, see mustFinish
+	if err != nil {
+		t.Fatalf("Finish: %v", err)
+	}
 
 	// Nothing is reopened after the split pass: an encoder that ends with
 	// it submits no empty command buffer.
@@ -369,7 +376,10 @@ func TestBindGroupTexturesRecordedInEveryPass(t *testing.T) {
 		Size:         Extent3D{Width: 4, Height: 4, DepthOrArrayLayers: 1},
 	}})
 	runColorPass(t, enc, targetView, gputypes.LoadOpLoad, bind)
-	cb := mustFinish(t, enc)
+	cb, err := enc.Finish() // submitted below, see mustFinish
+	if err != nil {
+		t.Fatalf("Finish: %v", err)
+	}
 
 	if got := len(cb.core.HalBufferList()); got != 3 {
 		t.Errorf("HAL command buffers = %d, want 3: before (first pass and copy), transit, pass", got)
