@@ -900,7 +900,13 @@ type BindVAOCommand struct {
 }
 
 func (c *BindVAOCommand) Execute(ctx *gl.Context) {
+	sh := &ctx.Shadow
+	if sh.VAOSet && sh.VAO == c.vao {
+		return
+	}
 	ctx.BindVertexArray(c.vao)
+	sh.VAO, sh.VAOSet = c.vao, true
+	sh.Attribs = [gl.MaxShadowAttribs]gl.ShadowAttrib{} // attribute state belongs to the VAO
 }
 
 // BindFramebufferCommand binds a framebuffer object.
@@ -1021,6 +1027,7 @@ type MSAAResolveCommand struct {
 }
 
 func (c *MSAAResolveCommand) Execute(ctx *gl.Context) {
+	ctx.Shadow.Scissor = gl.ShadowScissor{}
 	// Disable scissor test before blit — glBlitFramebuffer respects GL_SCISSOR_TEST
 	// on the draw framebuffer. Without this, only the last scissor rect's pixels
 	// are copied, leaving the rest of the surface black (gg#226).
@@ -1118,6 +1125,7 @@ func (c *ClearColorBufferCommand) Execute(ctx *gl.Context) {
 	// previous pipeline masked some channels. Matches Rust behavior which
 	// sets color_mask(true,true,true,true) before clear (queue.rs:1134).
 	ctx.ColorMask(true, true, true, true)
+	ctx.Shadow.Scissor, ctx.Shadow.Pipeline = gl.ShadowScissor{}, nil // scissor off, color mask on
 	ctx.ClearBufferfv(gl.COLOR, c.drawBuffer, &c.color)
 }
 
@@ -1130,6 +1138,7 @@ type ClearColorCommand struct {
 
 func (c *ClearColorCommand) Execute(ctx *gl.Context) {
 	ctx.Disable(gl.SCISSOR_TEST) // Ensure clear covers full framebuffer (not clipped by stale scissor)
+	ctx.Shadow.Scissor = gl.ShadowScissor{}
 	ctx.ClearColor(c.r, c.g, c.b, c.a)
 	ctx.Clear(gl.COLOR_BUFFER_BIT)
 }
@@ -1142,6 +1151,7 @@ type ClearDepthCommand struct {
 func (c *ClearDepthCommand) Execute(ctx *gl.Context) {
 	ctx.Disable(gl.SCISSOR_TEST)
 	ctx.DepthMask(true)
+	ctx.Shadow.Scissor, ctx.Shadow.Pipeline = gl.ShadowScissor{}, nil
 	ctx.ClearDepth(c.depth)
 	ctx.Clear(gl.DEPTH_BUFFER_BIT)
 }
@@ -1155,6 +1165,7 @@ func (c *ClearStencilCommand) Execute(ctx *gl.Context) {
 	ctx.Disable(gl.SCISSOR_TEST)
 	// Ensure stencil write mask allows the clear to take effect.
 	ctx.StencilMaskSeparate(gl.FRONT_AND_BACK, 0xFF)
+	ctx.Shadow.Scissor, ctx.Shadow.Pipeline = gl.ShadowScissor{}, nil
 	ctx.Clear(gl.STENCIL_BUFFER_BIT)
 }
 
@@ -1164,7 +1175,12 @@ type UseProgramCommand struct {
 }
 
 func (c *UseProgramCommand) Execute(ctx *gl.Context) {
+	sh := &ctx.Shadow
+	if sh.ProgramSet && sh.Program == c.programID {
+		return
+	}
 	ctx.UseProgram(c.programID)
+	sh.Program, sh.ProgramSet = c.programID, true
 }
 
 // SetPipelineStateCommand sets pipeline state (culling, depth, stencil, blending, color mask).
@@ -1178,6 +1194,9 @@ type SetPipelineStateCommand struct {
 }
 
 func (c *SetPipelineStateCommand) Execute(ctx *gl.Context) {
+	if last, ok := ctx.Shadow.Pipeline.(*SetPipelineStateCommand); ok && c.sameState(last) {
+		return
+	}
 	// Culling
 	if c.cullMode == gputypes.CullModeNone {
 		ctx.Disable(gl.CULL_FACE)
@@ -1211,6 +1230,29 @@ func (c *SetPipelineStateCommand) Execute(ctx *gl.Context) {
 	//   - If targets differ, use per-draw-buffer indexed calls (GLES 3.2 / GL 4.0).
 	//     Fallback: apply target[0] globally when indexed functions unavailable.
 	c.applyColorTargets(ctx)
+	ctx.Shadow.Pipeline = c
+}
+
+// sameState reports whether o set the GL state c sets, so that after o
+// there is nothing for c to send. The topology is not GL state, the draws
+// carry it.
+func (c *SetPipelineStateCommand) sameState(o *SetPipelineStateCommand) bool {
+	if c.cullMode != o.cullMode || c.frontFace != o.frontFace || c.stencilRef != o.stencilRef {
+		return false
+	}
+	if (c.depthStencil == nil) != (o.depthStencil == nil) || (c.depthStencil != nil && *c.depthStencil != *o.depthStencil) {
+		return false
+	}
+	if len(c.colorTargets) != len(o.colorTargets) {
+		return false
+	}
+	for i, t := range c.colorTargets {
+		u := o.colorTargets[i]
+		if t.WriteMask != u.WriteMask || (t.Blend == nil) != (u.Blend == nil) || (t.Blend != nil && *t.Blend != *u.Blend) {
+			return false
+		}
+	}
+	return true
 }
 
 // applyColorTargets sets blend and write-mask state per render target.
@@ -1351,10 +1393,21 @@ func (c *SetBindGroupCommand) Execute(ctx *gl.Context) {
 			target, dynOff := c.resolveBufferTarget(entry.Binding, &dynamicIdx)
 			offset += dynOff
 
+			slots := &ctx.Shadow.Uniforms
+			if target == gl.SHADER_STORAGE_BUFFER {
+				slots = &ctx.Shadow.Storages
+			}
+			want := gl.ShadowRange{Buffer: bufID, Offset: offset, Size: size, Set: true}
+			if glBinding < gl.MaxShadowIndexed && slots[glBinding] == want {
+				continue
+			}
 			if size > 0 {
 				ctx.BindBufferRange(target, glBinding, bufID, offset, size)
 			} else {
 				ctx.BindBufferBase(target, glBinding, bufID)
+			}
+			if glBinding < gl.MaxShadowIndexed {
+				slots[glBinding] = want
 			}
 
 		case gputypes.TextureViewBinding:
@@ -1377,8 +1430,19 @@ func (c *SetBindGroupCommand) Execute(ctx *gl.Context) {
 				}
 				continue
 			}
-			ctx.ActiveTexture(gl.TEXTURE0 + glBinding)
+			sh := &ctx.Shadow
+			want := gl.ShadowObject{ID: texID, Set: true}
+			if glBinding < gl.MaxShadowUnits && sh.Textures[glBinding] == want {
+				continue
+			}
+			if !sh.ActiveUnitSet || sh.ActiveUnit != glBinding {
+				ctx.ActiveTexture(gl.TEXTURE0 + glBinding)
+				sh.ActiveUnit, sh.ActiveUnitSet = glBinding, true
+			}
 			ctx.BindTexture(gl.TEXTURE_2D, texID)
+			if glBinding < gl.MaxShadowUnits {
+				sh.Textures[glBinding] = want
+			}
 
 		case gputypes.SamplerBinding:
 			// Sampler handle is the GL sampler object ID (from NativeHandle()).
@@ -1394,17 +1458,31 @@ func (c *SetBindGroupCommand) Execute(ctx *gl.Context) {
 			// A sampler shared by several textures goes to every unit that
 			// samples with it; a sampler nothing maps goes to its own binding.
 			bound := false
-			for texUnit := range c.samplerBindMap {
-				if c.samplerBindMap[texUnit] != int8(glBinding) {
-					continue
+			if c.samplerBindMap != nil {
+				for texUnit := range c.samplerBindMap {
+					if c.samplerBindMap[texUnit] != int8(glBinding) {
+						continue
+					}
+					bindSampler(ctx, uint32(texUnit), samplerID)
+					bound = true
 				}
-				ctx.BindSampler(uint32(texUnit), samplerID)
-				bound = true
 			}
 			if !bound {
-				ctx.BindSampler(glBinding, samplerID)
+				bindSampler(ctx, glBinding, samplerID)
 			}
 		}
+	}
+}
+
+// bindSampler binds sampler to unit unless the replay bound it there already.
+func bindSampler(ctx *gl.Context, unit, sampler uint32) {
+	want := gl.ShadowObject{ID: sampler, Set: true}
+	if unit < gl.MaxShadowUnits && ctx.Shadow.Samplers[unit] == want {
+		return
+	}
+	ctx.BindSampler(unit, sampler)
+	if unit < gl.MaxShadowUnits {
+		ctx.Shadow.Samplers[unit] = want
 	}
 }
 
@@ -1459,7 +1537,11 @@ type SetVertexBufferCommand struct {
 }
 
 func (c *SetVertexBufferCommand) Execute(ctx *gl.Context) {
-	ctx.BindBuffer(gl.ARRAY_BUFFER, c.buffer.id)
+	sh := &ctx.Shadow
+	if !sh.ArrayBufferSet || sh.ArrayBuffer != c.buffer.id {
+		ctx.BindBuffer(gl.ARRAY_BUFFER, c.buffer.id)
+		sh.ArrayBuffer, sh.ArrayBufferSet = c.buffer.id, true
+	}
 
 	// Configure vertex attributes from the pipeline's vertex layout.
 	if c.layout == nil {
@@ -1475,13 +1557,25 @@ func (c *SetVertexBufferCommand) Execute(ctx *gl.Context) {
 	for _, attr := range c.layout.Attributes {
 		loc := attr.ShaderLocation
 		size, typ, normalized := vertexFormatToGL(attr.Format)
-		attrOffset := uintptr(c.offset) + uintptr(attr.Offset)
+		want := gl.ShadowAttrib{
+			Buffer: c.buffer.id, Size: size, Type: typ, Normalized: normalized,
+			Stride: stride, Offset: uintptr(c.offset) + uintptr(attr.Offset), Divisor: divisor, Set: true,
+		}
+		// An attribute the bound VAO has like this already is left alone:
+		// a pipeline switch binds the buffer again under its own layout,
+		// and most pipelines share one.
+		if loc < gl.MaxShadowAttribs && sh.Attribs[loc] == want {
+			continue
+		}
 		ctx.EnableVertexAttribArray(loc)
-		ctx.VertexAttribPointer(loc, size, typ, normalized, stride, attrOffset)
+		ctx.VertexAttribPointer(loc, size, typ, normalized, stride, want.Offset)
 		// Set the instance divisor. Per-vertex attributes get divisor=0 (reset),
 		// per-instance attributes get divisor=1. Without this, instanced rendering
 		// reads the same instance data for all instances.
 		ctx.VertexAttribDivisor(loc, divisor)
+		if loc < gl.MaxShadowAttribs {
+			sh.Attribs[loc] = want
+		}
 	}
 }
 
@@ -1517,6 +1611,11 @@ type SetScissorCommand struct {
 }
 
 func (c *SetScissorCommand) Execute(ctx *gl.Context) {
+	want := gl.ShadowScissor{X: int32(c.x), Y: int32(c.y), W: int32(c.width), H: int32(c.height), Set: true}
+	if ctx.Shadow.Scissor == want {
+		return
+	}
+	defer func() { ctx.Shadow.Scissor = want }()
 	ctx.Enable(gl.SCISSOR_TEST)
 	// No Y-flip: ADJUST_COORDINATE_SPACE flips the scene in the vertex shader,
 	// so GL pixel Y=0 corresponds to the top of the scene (WebGPU Y=0).
@@ -1546,6 +1645,7 @@ func (c *SetStencilRefCommand) Execute(ctx *gl.Context) {
 		return
 	}
 	ref := int32(c.ref)
+	ctx.Shadow.Pipeline = nil // the stencil functions change under the pipeline state
 	ctx.StencilFuncSeparate(gl.FRONT,
 		compareFunctionToGL(c.depthStencil.StencilFront.Compare),
 		ref, c.depthStencil.StencilReadMask)
@@ -1763,6 +1863,7 @@ type CopyBufferToTextureCommand struct {
 }
 
 func (c *CopyBufferToTextureCommand) Execute(ctx *gl.Context) {
+	ctx.Shadow.ForgetTextures()
 	width := int32(c.copySize[0])
 	height := int32(c.copySize[1])
 	if width == 0 || height == 0 {
@@ -1810,6 +1911,7 @@ type CopyTextureToTextureCommand struct {
 }
 
 func (c *CopyTextureToTextureCommand) Execute(ctx *gl.Context) {
+	ctx.Shadow.ForgetTextures()
 	width := int32(c.copySize[0])
 	height := int32(c.copySize[1])
 	if width == 0 || height == 0 {

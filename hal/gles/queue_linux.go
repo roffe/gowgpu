@@ -32,6 +32,7 @@ type Queue struct {
 func (q *Queue) Submit(commandBuffers []hal.CommandBuffer) (uint64, error) {
 	glCtx := q.ctx.Lock()
 	defer q.ctx.Unlock()
+	glCtx.Shadow = gl.Shadow{} // what ran between submissions is not followed
 
 	// A GL error is only reported through the logger, so the per command
 	// glGetError runs only when a logger would show the warning. Otherwise

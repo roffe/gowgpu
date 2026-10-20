@@ -177,6 +177,9 @@ type Context struct {
 
 	// Indexed string query (GL 3.0+ / ES 3.0+)
 	glGetStringi uintptr
+
+	// Shadow is what the command replay knows the context's state to be.
+	Shadow Shadow
 }
 
 // ProcAddressFunc is a function that returns the address of an OpenGL function.
