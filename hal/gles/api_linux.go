@@ -41,10 +41,11 @@ func (Backend) Variant() gputypes.Backend {
 //
 // On Wayland, this may fail (EGL needs wl_display*) — that's OK, CreateSurface
 // provides the proper context later. On X11/headless, this succeeds.
-func (Backend) CreateInstance(_ *hal.InstanceDescriptor) (hal.Instance, error) {
+func (Backend) CreateInstance(desc *hal.InstanceDescriptor) (hal.Instance, error) {
 	if err := egl.Init(); err != nil {
 		return nil, fmt.Errorf("gles: failed to initialize EGL: %w", err)
 	}
+	pinned := desc != nil && desc.Flags&gputypes.InstanceFlagsGLPinnedThread != 0
 
 	// Try to create instance-level EGL context (Rust wgpu-hal parity).
 	// Skip on Wayland: surfaceless context would create GL objects (VAO, FBO) that
@@ -53,7 +54,7 @@ func (Backend) CreateInstance(_ *hal.InstanceDescriptor) (hal.Instance, error) {
 	// On X11/headless, instance context IS the presentation context — safe to create.
 	if egl.DetectWindowKind() == egl.WindowKindWayland {
 		hal.Logger().Info("gles: skipping instance context on Wayland (surface provides context)")
-		return &Instance{}, nil
+		return &Instance{pinned: pinned}, nil
 	}
 
 	config := egl.DefaultContextConfig()
@@ -74,20 +75,20 @@ func (Backend) CreateInstance(_ *hal.InstanceDescriptor) (hal.Instance, error) {
 	eglCtx, err := egl.NewContext(config)
 	if err != nil {
 		hal.Logger().Info("gles: instance context unavailable (expected on Wayland)", "err", err)
-		return &Instance{}, nil
+		return &Instance{pinned: pinned}, nil
 	}
 
 	if err := eglCtx.MakeCurrent(); err != nil {
 		eglCtx.Destroy()
 		hal.Logger().Warn("gles: instance context MakeCurrent failed", "err", err)
-		return &Instance{}, nil
+		return &Instance{pinned: pinned}, nil
 	}
 
 	glCtx := &gl.Context{}
 	if err := glCtx.Load(egl.GetGLProcAddress, config.GLES); err != nil {
 		eglCtx.Destroy()
 		hal.Logger().Warn("gles: instance GL load failed", "err", err)
-		return &Instance{}, nil
+		return &Instance{pinned: pinned}, nil
 	}
 
 	hal.Logger().Info("gles: instance created with EGL context",
@@ -95,7 +96,9 @@ func (Backend) CreateInstance(_ *hal.InstanceDescriptor) (hal.Instance, error) {
 		"renderer", glCtx.GetString(gl.RENDERER))
 
 	egl.MakeCurrent(eglCtx.Display(), egl.NoSurface, egl.NoSurface, egl.NoContext)
-	return &Instance{ctx: NewAdapterContext(eglCtx, glCtx, true)}, nil
+	ctx := NewAdapterContext(eglCtx, glCtx, true)
+	ctx.keepCurrent = pinned
+	return &Instance{ctx: ctx, pinned: pinned}, nil
 }
 
 // Instance implements hal.Instance for the OpenGL backend on Linux.
@@ -106,6 +109,8 @@ func (Backend) CreateInstance(_ *hal.InstanceDescriptor) (hal.Instance, error) {
 type Instance struct {
 	mu  sync.Mutex
 	ctx *AdapterContext
+	// pinned is InstanceFlagsGLPinnedThread, for the contexts made later.
+	pinned bool
 }
 
 // context returns the instance AdapterContext. Safe to call while
@@ -211,6 +216,7 @@ func (i *Instance) CreateSurface(target hal.SurfaceTarget) (hal.Surface, error) 
 	// the Device.Destroy that followed locked a nil EGL context and ran its GL
 	// calls on a nil *gl.Context, a panic on shutdown.
 	adapterCtx := NewAdapterContext(eglCtx, glCtx, true)
+	adapterCtx.keepCurrent = i.pinned
 	if prev := i.adoptContext(adapterCtx); prev != nil {
 		prev.Destroy()
 	}

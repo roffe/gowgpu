@@ -257,6 +257,7 @@ type glFence struct {
 // Matches Rust wgpu-hal/src/gles/fence.rs Fence struct.
 type Fence struct {
 	lastCompleted atomic.Uint64 // highest known completed value
+	signaled      uint64        // the value Signal was given last
 	pending       []glFence     // GL sync objects awaiting completion
 	glCtx         *gl.Context
 }
@@ -274,6 +275,7 @@ func NewFence(glCtx *gl.Context) *Fence {
 // Returns an error if glFenceSync fails (typically OOM).
 // Matches Rust wgpu-hal/src/gles/fence.rs Fence::signal.
 func (f *Fence) Signal(value uint64) error {
+	f.signaled = value
 	if f.glCtx == nil || !f.glCtx.SupportsFenceSync() {
 		f.lastCompleted.Store(value)
 		return nil
@@ -285,6 +287,9 @@ func (f *Fence) Signal(value uint64) error {
 	f.pending = append(f.pending, glFence{sync: sync, value: value})
 	return nil
 }
+
+// Signaled is the value Signal was given last: the queue's latest submission.
+func (f *Fence) Signaled() uint64 { return f.signaled }
 
 // GetLatest polls pending sync objects and returns the highest completed value.
 // Matches Rust wgpu-hal/src/gles/fence.rs Fence::get_latest.

@@ -7,6 +7,7 @@ package gles
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"image"
 	"log/slog"
@@ -17,6 +18,12 @@ import (
 	"github.com/roffe/gowgpu/hal/gles/egl"
 	"github.com/roffe/gowgpu/hal/gles/gl"
 )
+
+// errOtherThread is Submit's and Present's answer from a goroutine other than
+// the one holding the context under InstanceFlagsGLPinnedThread: the helper
+// context they would run on has no VAO or framebuffer, so nothing would be
+// drawn.
+var errOtherThread = errors.New("gles: InstanceFlagsGLPinnedThread keeps the GL context on the goroutine that used it first; this call comes from another goroutine")
 
 // Queue implements hal.Queue for OpenGL on Linux.
 // Holds a shared *AdapterContext (owned by Instance or Surface).
@@ -32,6 +39,9 @@ type Queue struct {
 func (q *Queue) Submit(commandBuffers []hal.CommandBuffer) (uint64, error) {
 	glCtx := q.ctx.Lock()
 	defer q.ctx.Unlock()
+	if q.ctx.OnHelper() {
+		return 0, errOtherThread
+	}
 	glCtx.Shadow = gl.Shadow{} // what ran between submissions is not followed
 
 	// A GL error is only reported through the logger, so the per command
@@ -197,6 +207,9 @@ func (q *Queue) Present(surface hal.Surface, _ hal.SurfaceTexture, damageRects [
 
 	glCtx := q.ctx.LockForSurface(surf.eglSurface)
 	defer q.ctx.Unlock()
+	if q.ctx.OnHelper() {
+		return errOtherThread
+	}
 
 	// eglSwapInterval applies to the current draw surface, so it is set
 	// here, once per configuration: Immediate and Mailbox swap without

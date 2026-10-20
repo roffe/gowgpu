@@ -89,6 +89,7 @@ var (
 	symEglMakeCurrent                 unsafe.Pointer
 	symEglGetCurrentContext           unsafe.Pointer
 	symEglGetCurrentDisplay           unsafe.Pointer
+	symEglGetCurrentSurface           unsafe.Pointer
 	symEglSwapBuffers                 unsafe.Pointer
 	symEglGetProcAddress              unsafe.Pointer
 	symEglGetPlatformDisplay          unsafe.Pointer // EGL 1.5, may be nil
@@ -177,6 +178,10 @@ func loadEGLSymbols() error {
 	}
 	if symEglGetCurrentDisplay, err = eglLib.Sym("eglGetCurrentDisplay"); err != nil {
 		return fmt.Errorf("eglGetCurrentDisplay not found: %w", err)
+	}
+	symEglGetCurrentSurface, err = eglLib.Sym("eglGetCurrentSurface")
+	if err != nil {
+		return fmt.Errorf("eglGetCurrentSurface not found: %w", err)
 	}
 	if symEglSwapBuffers, err = eglLib.Sym("eglSwapBuffers"); err != nil {
 		return fmt.Errorf("eglSwapBuffers not found: %w", err)
@@ -339,6 +344,12 @@ func GetCurrentContext() EGLContext {
 	var result EGLContext
 	result = EGLContext(C.egl_u_(C.uintptr_t(uintptr(symEglGetCurrentContext))))
 	return result
+}
+
+// GetCurrentSurface returns the surface the calling thread's current
+// context draws to (Draw) or reads from (Read).
+func GetCurrentSurface(which EGLInt) EGLSurface {
+	return EGLSurface(C.egl_u_i(C.uintptr_t(uintptr(symEglGetCurrentSurface)), C.uint32_t(uint32(which))))
 }
 
 // GetCurrentDisplay returns the current EGL display connection.

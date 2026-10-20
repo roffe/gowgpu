@@ -21,6 +21,7 @@ import (
 // operations acquire the context lock, do MakeCurrent, execute, and unlock.
 type Device struct {
 	ctx             *AdapterContext
+	fence           *Fence // the queue's, which stands for the work in WaitIdle on the helper context
 	displayHandle   uintptr
 	windowHandle    uintptr
 	vao             uint32 // persistent VAO (Core Profile requires one bound)
@@ -827,6 +828,18 @@ func (d *Device) WaitIdle() error {
 	if d.ctx != nil && d.ctx.GL() != nil {
 		glCtx := d.ctx.Lock()
 		defer d.ctx.Unlock()
+		if d.ctx.OnHelper() {
+			// glFinish here would finish the helper context's commands,
+			// none: the queue's last fence stands for the work, sync
+			// objects being shared.
+			if d.fence != nil {
+				v := d.fence.Signaled()
+				for deadline := time.Now().Add(10 * time.Second); d.fence.GetLatest() < v && time.Now().Before(deadline); {
+					d.fence.Wait(v, 100*time.Millisecond)
+				}
+			}
+			return nil
+		}
 		glCtx.Finish()
 	}
 	return nil

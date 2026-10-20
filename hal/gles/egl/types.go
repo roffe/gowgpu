@@ -110,6 +110,8 @@ const (
 	Height               EGLInt = 0x3056
 	Width                EGLInt = 0x3057
 	LargestPbuffer       EGLInt = 0x3058
+	Draw                 EGLInt = 0x3059 // eglGetCurrentSurface: the draw surface
+	Read                 EGLInt = 0x305A // eglGetCurrentSurface: the read surface
 	TextureFormat        EGLInt = 0x3080
 	TextureTarget        EGLInt = 0x3081
 	MipmapTexture        EGLInt = 0x3082

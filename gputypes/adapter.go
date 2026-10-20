@@ -262,6 +262,15 @@ const (
 	InstanceFlagsGPUBasedValidation
 	// InstanceFlagsDiscardHalLabels discards HAL debug labels.
 	InstanceFlagsDiscardHalLabels
+	// InstanceFlagsGLPinnedThread promises that one goroutine, locked to
+	// its OS thread for the life of the device, drives the GL backend: a
+	// window's main goroutine under GLFW. The backend then keeps its context
+	// current on that thread instead of binding it before and unbinding it
+	// after every operation, an eglMakeCurrent pair each. A Submit or
+	// Present from another goroutine then fails with an error; fence waits
+	// from other goroutines still work. Without the flag any goroutine may
+	// call the backend. Windows (WGL) always binds per operation.
+	InstanceFlagsGLPinnedThread
 )
 
 // InstanceDescriptor describes how to create a GPU instance.

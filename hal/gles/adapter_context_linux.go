@@ -28,6 +28,22 @@ type AdapterContext struct {
 	eglCtx *egl.Context
 	gl     *gl.Context
 	owns   bool // true → Destroy() destroys eglCtx
+
+	// keepCurrent (InstanceFlagsGLPinnedThread) leaves the context current
+	// on the thread that bound it: the eglMakeCurrent pair around every
+	// operation came to 10-19 pairs a frame under fyne (2026-10-20), and the
+	// unbind's implicit flush was where frame times spiked. It needs the
+	// caller's promise that one goroutine locked to its thread drives the
+	// backend: an EGL context is bound to a thread, Go moves goroutines
+	// between threads, and a goroutine exiting with the binding strands the
+	// context, which is what a device shared across test goroutines does
+	// (fyne's test driver, 2026-10-20). A lock from another thread runs on
+	// helper, a context sharing the objects, which is enough for the fence
+	// waits of gowgpu's map goroutine; it has no VAO or framebuffer, so
+	// Submit and Present refuse to run on it.
+	keepCurrent bool
+	helper      *egl.Context
+	onHelper    bool // the lock held now runs on helper
 }
 
 // NewAdapterContext wraps an already-created EGL context and GL function table.
@@ -52,6 +68,10 @@ func (c *AdapterContext) Lock() *gl.Context {
 		slog.Error("gles: AdapterContext.Lock: nil egl context")
 		return c.gl
 	}
+	if c.keepCurrent {
+		c.bindKept(egl.NoSurface)
+		return c.gl
+	}
 	if err := c.eglCtx.MakeCurrent(); err != nil {
 		slog.Error("gles: AdapterContext.Lock MakeCurrent failed", "err", err)
 	}
@@ -70,6 +90,10 @@ func (c *AdapterContext) LockForSurface(surf egl.EGLSurface) *gl.Context {
 		slog.Error("gles: AdapterContext.LockForSurface: nil egl context")
 		return c.gl
 	}
+	if c.keepCurrent {
+		c.bindKept(surf)
+		return c.gl
+	}
 	if err := c.eglCtx.MakeCurrentSurface(surf); err != nil {
 		slog.Error("gles: AdapterContext.LockForSurface MakeCurrent failed",
 			"err", err,
@@ -77,6 +101,52 @@ func (c *AdapterContext) LockForSurface(surf egl.EGLSurface) *gl.Context {
 	}
 	return c.gl
 }
+
+// bindKept makes the kept context current for the lock held: nothing when
+// it is current on this thread already (on surf, when one is asked for;
+// Lock takes whichever surface it has), a bind when no thread has it, and
+// helper when another thread keeps it.
+func (c *AdapterContext) bindKept(surf egl.EGLSurface) {
+	c.onHelper = false
+	ctx := c.eglCtx.EGLContext()
+	held := egl.GetCurrentContext() == ctx
+	if held && (surf == egl.NoSurface || egl.GetCurrentSurface(egl.Draw) == surf) {
+		return
+	}
+	if surf == egl.NoSurface {
+		surf = c.eglCtx.Pbuffer()
+	}
+	if egl.MakeCurrent(c.eglCtx.Display(), surf, surf, ctx) != egl.False {
+		if !held {
+			// This goroutine holds the context from now on, so it stays on
+			// this thread for good, as the flag promised: between two calls
+			// Go may otherwise move it, and the context cannot follow.
+			runtime.LockOSThread()
+		}
+		return
+	}
+	if err := egl.GetError(); err != egl.BadAccess {
+		slog.Error("gles: AdapterContext MakeCurrent failed", "err", fmt.Sprintf("0x%x", err), "surface", fmt.Sprintf("0x%x", surf))
+		return
+	}
+	if c.helper == nil {
+		h, err := c.eglCtx.NewShared()
+		if err != nil {
+			slog.Error("gles: AdapterContext: the context is current on another thread and no helper context could be made", "err", err)
+			return
+		}
+		c.helper = h
+	}
+	if err := c.helper.MakeCurrent(); err != nil {
+		slog.Error("gles: AdapterContext helper MakeCurrent failed", "err", err)
+		return
+	}
+	c.onHelper = true
+}
+
+// OnHelper reports whether the lock held runs on the helper context, where
+// only shared objects exist and glFinish finishes nothing of the queue's.
+func (c *AdapterContext) OnHelper() bool { return c.onHelper }
 
 // Unlock unmakes the GL context current, unpins the goroutine from the OS
 // thread, and releases the mutex.
@@ -86,12 +156,13 @@ func (c *AdapterContext) LockForSurface(surf egl.EGLSurface) *gl.Context {
 // Rust WglContext::unmake_current().
 func (c *AdapterContext) Unlock() {
 	// Check eglCtx first so Unlock is safe before egl.Init (unit tests, teardown).
-	if c.eglCtx != nil && egl.GetCurrentContext() != egl.NoContext {
+	if c.eglCtx != nil && (!c.keepCurrent || c.onHelper) && egl.GetCurrentContext() != egl.NoContext {
 		if egl.MakeCurrent(c.eglCtx.Display(), egl.NoSurface, egl.NoSurface, egl.NoContext) == egl.False {
 			slog.Error("gles: AdapterContext.Unlock UnmakeCurrent failed",
 				"err", fmt.Sprintf("0x%x", egl.GetError()))
 		}
 	}
+	c.onHelper = false
 	runtime.UnlockOSThread()
 	c.mu.Unlock()
 }
@@ -112,6 +183,10 @@ func (c *AdapterContext) EGL() *egl.Context {
 func (c *AdapterContext) Destroy() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.helper != nil {
+		c.helper.Destroy()
+		c.helper = nil
+	}
 	if c.owns && c.eglCtx != nil {
 		c.eglCtx.Destroy()
 		c.eglCtx = nil

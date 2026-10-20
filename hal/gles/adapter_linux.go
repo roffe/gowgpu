@@ -63,7 +63,9 @@ func (a *Adapter) Open(_ gputypes.Features, _ gputypes.Limits) (hal.OpenDevice, 
 
 	glslVer := GLSLVersionToNaga(a.caps.GLSLVersion, a.caps.IsES)
 
+	fence := NewFence(glCtx)
 	device := &Device{
+		fence:               fence,
 		ctx:                 a.ctx,
 		displayHandle:       a.displayHandle,
 		windowHandle:        a.windowHandle,
@@ -76,7 +78,7 @@ func (a *Adapter) Open(_ gputypes.Features, _ gputypes.Limits) (hal.OpenDevice, 
 
 	queue := &Queue{
 		ctx:   a.ctx,
-		fence: NewFence(glCtx),
+		fence: fence,
 	}
 
 	return hal.OpenDevice{

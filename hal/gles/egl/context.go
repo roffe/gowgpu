@@ -18,6 +18,8 @@ type Context struct {
 	context      EGLContext
 	pbuffer      EGLSurface
 	windowKind   WindowKind
+	cfg          ContextConfig // what made the context, for NewShared
+	shared       bool          // made by NewShared: borrows the display
 	displayOwner *DisplayOwner // owns native display connection (X11); closed after eglTerminate
 }
 
@@ -104,7 +106,7 @@ func NewContext(config ContextConfig) (*Context, error) {
 	}
 
 	// Create EGL context
-	eglContext := createEGLContext(display, eglConfig, config)
+	eglContext := createEGLContext(display, eglConfig, config, NoContext)
 	if eglContext == NoContext {
 		Terminate(display)
 		closeOwner()
@@ -138,6 +140,7 @@ func NewContext(config ContextConfig) (*Context, error) {
 		display:      display,
 		config:       eglConfig,
 		context:      eglContext,
+		cfg:          config,
 		pbuffer:      pbuffer,
 		windowKind:   windowKind,
 		displayOwner: displayOwner,
@@ -218,7 +221,7 @@ func chooseEGLConfig(display EGLDisplay, config ContextConfig, windowKind Window
 }
 
 // createEGLContext creates an EGL rendering context.
-func createEGLContext(display EGLDisplay, config EGLConfig, cfg ContextConfig) EGLContext {
+func createEGLContext(display EGLDisplay, config EGLConfig, cfg ContextConfig, share EGLContext) EGLContext {
 	var attribs []EGLInt
 
 	// Set OpenGL version
@@ -245,7 +248,7 @@ func createEGLContext(display EGLDisplay, config EGLConfig, cfg ContextConfig) E
 	// Terminate attribute list
 	attribs = append(attribs, None)
 
-	return CreateContext(display, config, NoContext, &attribs[0])
+	return CreateContext(display, config, share, &attribs[0])
 }
 
 // createPbufferSurface creates a minimal pbuffer surface for the context.
@@ -306,6 +309,9 @@ func (c *Context) Destroy() {
 		DestroySurface(c.display, c.pbuffer)
 		c.pbuffer = NoSurface
 	}
+	if c.shared {
+		return // the display is the sharing context's
+	}
 	if c.display != NoDisplay {
 		Terminate(c.display)
 		c.display = NoDisplay
@@ -316,6 +322,34 @@ func (c *Context) Destroy() {
 		c.displayOwner.Close()
 		c.displayOwner = nil
 	}
+}
+
+// NewShared makes a context sharing c's objects (buffers, textures,
+// programs and sync objects; not VAOs or framebuffers) for a thread that
+// cannot have c, with its own pbuffer when c has one. It borrows c's
+// display: its Destroy releases the context and pbuffer only, and c must
+// outlive it.
+func (c *Context) NewShared() (*Context, error) {
+	// The bound API is per thread, and this is another thread's context.
+	api := OpenGLAPI
+	if c.cfg.GLES {
+		api = OpenGLESAPI
+	}
+	if BindAPI(api) == False {
+		return nil, fmt.Errorf("eglBindAPI (shared) failed: error 0x%x", GetError())
+	}
+	ctx := createEGLContext(c.display, c.config, c.cfg, c.context)
+	if ctx == NoContext {
+		return nil, fmt.Errorf("eglCreateContext (shared) failed: error 0x%x", GetError())
+	}
+	pbuffer := NoSurface
+	if c.pbuffer != NoSurface {
+		if pbuffer = createPbufferSurface(c.display, c.config); pbuffer == NoSurface {
+			DestroyContext(c.display, ctx)
+			return nil, fmt.Errorf("eglCreatePbufferSurface (shared) failed: error 0x%x", GetError())
+		}
+	}
+	return &Context{display: c.display, config: c.config, context: ctx, pbuffer: pbuffer, windowKind: c.windowKind, cfg: c.cfg, shared: true}, nil
 }
 
 // EGLContext returns the EGL context handle.
