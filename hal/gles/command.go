@@ -500,6 +500,7 @@ type RenderPassEncoder struct {
 	desc          *hal.RenderPassDescriptor
 	pipeline      *RenderPipeline
 	vertexBuffers []*Buffer
+	vertexOffsets []uint64 // where each of vertexBuffers is bound from
 	indexBuffer   *Buffer
 	indexFormat   gputypes.IndexFormat
 	indexOffset   uint64 // where the index buffer starts, for the draws
@@ -600,6 +601,16 @@ func (e *RenderPassEncoder) SetPipeline(pipeline hal.RenderPipeline) {
 			stencilRef:   e.stencilRef,
 		}),
 	)
+	// The vertex attributes are set from the pipeline's layout when a vertex
+	// buffer is bound, and WebGPU keeps vertex buffers bound across pipeline
+	// changes, so the buffers bound already are bound again under this
+	// pipeline's layout: a batch drawn with the layout of the pipeline before
+	// read the buffer wrong, and past its end.
+	for slot, buf := range e.vertexBuffers {
+		if buf != nil && slot < len(p.vertexBuffers) {
+			e.SetVertexBuffer(uint32(slot), buf, e.vertexOffsets[slot]) //nolint:gosec // slot index
+		}
+	}
 }
 
 // SetBindGroup sets a bind group.
@@ -640,8 +651,10 @@ func (e *RenderPassEncoder) SetVertexBuffer(slot uint32, buffer hal.Buffer, offs
 	// Grow slice if needed
 	for len(e.vertexBuffers) <= int(slot) {
 		e.vertexBuffers = append(e.vertexBuffers, nil)
+		e.vertexOffsets = append(e.vertexOffsets, 0)
 	}
 	e.vertexBuffers[slot] = buf
+	e.vertexOffsets[slot] = offset
 
 	// Get vertex layout from the current pipeline for this slot.
 	var layout *gputypes.VertexBufferLayout
