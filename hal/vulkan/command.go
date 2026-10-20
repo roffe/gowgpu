@@ -767,11 +767,18 @@ func (e *CommandEncoder) CopyBufferToBuffer(src, dst hal.Buffer, regions []hal.B
 
 	srcBuf, srcOk := src.(*Buffer)
 	dstBuf, dstOk := dst.(*Buffer)
-	if !srcOk || !dstOk {
+	if !srcOk || !dstOk || len(regions) == 0 {
 		return
 	}
 
-	vkRegions := make([]vk.BufferCopy, len(regions))
+	// The regions stay on the stack for the usual one-region copy: the
+	// command does not keep them.
+	var stack [4]vk.BufferCopy
+	vkRegions := stack[:0]
+	if len(regions) > len(stack) {
+		vkRegions = make([]vk.BufferCopy, 0, len(regions))
+	}
+	vkRegions = vkRegions[:len(regions)]
 	for i, r := range regions {
 		vkRegions[i] = vk.BufferCopy{
 			SrcOffset: vk.DeviceSize(r.SrcOffset),
@@ -915,7 +922,12 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst hal.Texture, regions []ha
 	e.ensureSwapchainLayout(src, vk.ImageLayoutTransferSrcOptimal)
 	e.ensureSwapchainLayout(dst, vk.ImageLayoutTransferDstOptimal)
 
-	vkRegions := make([]vk.ImageCopy, len(regions))
+	var stack [4]vk.ImageCopy
+	vkRegions := stack[:0]
+	if len(regions) > len(stack) {
+		vkRegions = make([]vk.ImageCopy, 0, len(regions))
+	}
+	vkRegions = vkRegions[:len(regions)]
 	for i, r := range regions {
 		vkRegions[i] = vk.ImageCopy{
 			SrcSubresource: vk.ImageSubresourceLayers{
