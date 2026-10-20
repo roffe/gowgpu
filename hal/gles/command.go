@@ -616,14 +616,15 @@ func (e *RenderPassEncoder) SetBindGroup(index uint32, group hal.BindGroup, offs
 			groupInfos = e.pipeline.layout.groupInfos
 		}
 	}
-	e.encoder.commands = append(e.encoder.commands, e.encoder.store().bindGroups.put(SetBindGroupCommand{
+	cmd := e.encoder.store().bindGroups.put(SetBindGroupCommand{
 		index:           index,
 		group:           bg,
-		dynamicOffsets:  copyOffsets(offsets),
 		maxTextureUnits: e.encoder.maxTextureUnits,
 		groupInfos:      groupInfos,
 		samplerBindMap:  samplerMap,
-	}))
+	})
+	cmd.setOffsets(offsets)
+	e.encoder.commands = append(e.encoder.commands, cmd)
 }
 
 // SetVertexBuffer sets a vertex buffer and configures vertex attributes.
@@ -817,13 +818,14 @@ func (e *ComputePassEncoder) SetBindGroup(index uint32, group hal.BindGroup, off
 	if e.pipeline != nil && e.pipeline.layout != nil {
 		groupInfos = e.pipeline.layout.groupInfos
 	}
-	e.encoder.commands = append(e.encoder.commands, e.encoder.store().bindGroups.put(SetBindGroupCommand{
+	cmd := e.encoder.store().bindGroups.put(SetBindGroupCommand{
 		index:           index,
 		group:           bg,
-		dynamicOffsets:  copyOffsets(offsets),
 		maxTextureUnits: e.encoder.maxTextureUnits,
 		groupInfos:      groupInfos,
-	}))
+	})
+	cmd.setOffsets(offsets)
+	e.encoder.commands = append(e.encoder.commands, cmd)
 }
 
 // Dispatch dispatches compute work.
@@ -1289,9 +1291,12 @@ func (c *SetPipelineStateCommand) applyDepthStencilState(ctx *gl.Context) {
 
 // SetBindGroupCommand binds resources.
 type SetBindGroupCommand struct {
-	index           uint32
-	group           *BindGroup
+	index uint32
+	group *BindGroup
+	// dynamicOffsets are the call's dynamic offsets, in offsetBuf unless
+	// there are more than it holds; see setOffsets.
 	dynamicOffsets  []uint32
+	offsetBuf       [8]uint32
 	maxTextureUnits int32 // Hardware limit for validation
 	// groupInfos stores per-group binding-to-slot tables from PipelineLayout.
 	// Used to look up the GL slot for each binding instead of the old group*16+binding formula.
@@ -1597,13 +1602,19 @@ type CopyBufferCommand struct {
 	size                 uint64
 }
 
-// copyOffsets copies a SetBindGroup call's dynamic offsets: the command runs
-// at Submit, and the caller may reuse its slice for the next call before that.
-func copyOffsets(offsets []uint32) []uint32 {
-	if len(offsets) == 0 {
-		return nil
+// setOffsets keeps a copy of a SetBindGroup call's dynamic offsets: the
+// command runs at Submit, and the caller may reuse its slice for the next
+// call before that. The usual few stay inline in the command, so a frame
+// that binds its uniforms at an offset per batch allocates nothing for them.
+func (c *SetBindGroupCommand) setOffsets(offsets []uint32) {
+	switch {
+	case len(offsets) == 0:
+		c.dynamicOffsets = nil
+	case len(offsets) <= len(c.offsetBuf):
+		c.dynamicOffsets = c.offsetBuf[:copy(c.offsetBuf[:], offsets)]
+	default:
+		c.dynamicOffsets = append([]uint32(nil), offsets...)
 	}
-	return append([]uint32(nil), offsets...)
 }
 
 func (c *CopyBufferCommand) Execute(ctx *gl.Context) {
