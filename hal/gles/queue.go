@@ -12,7 +12,6 @@ import (
 	"log/slog"
 	"unsafe"
 
-	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/gles/gl"
 	"github.com/roffe/gowgpu/hal/gles/wgl"
@@ -134,7 +133,8 @@ func (q *Queue) WriteTexture(dst *hal.ImageCopyTexture, data []byte, layout *hal
 			rowLength = int32(layout.BytesPerRow / bpp)
 			glCtx.PixelStorei(gl.UNPACK_ROW_LENGTH, rowLength)
 		}
-		if tex.format == gputypes.TextureFormatR8Unorm {
+		narrow := tex.format.BlockCopySize() < 4 // rows of R8 or RG8 need not start 4-byte aligned
+		if narrow {
 			glCtx.PixelStorei(gl.UNPACK_ALIGNMENT, 1)
 		}
 		glCtx.TexSubImage2D(tex.target, int32(dst.MipLevel),
@@ -143,7 +143,7 @@ func (q *Queue) WriteTexture(dst *hal.ImageCopyTexture, data []byte, layout *hal
 		if rowLength != 0 {
 			glCtx.PixelStorei(gl.UNPACK_ROW_LENGTH, 0)
 		}
-		if tex.format == gputypes.TextureFormatR8Unorm {
+		if narrow {
 			glCtx.PixelStorei(gl.UNPACK_ALIGNMENT, 4)
 		}
 	}

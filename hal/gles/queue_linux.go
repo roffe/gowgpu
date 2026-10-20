@@ -13,7 +13,6 @@ import (
 	"log/slog"
 	"unsafe"
 
-	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/gles/egl"
 	"github.com/roffe/gowgpu/hal/gles/gl"
@@ -154,9 +153,10 @@ func (q *Queue) WriteTexture(dst *hal.ImageCopyTexture, data []byte, layout *hal
 			rowLength = int32(layout.BytesPerRow / bpp)
 			glCtx.PixelStorei(gl.UNPACK_ROW_LENGTH, rowLength)
 		}
-		// Set alignment to 1 for single-channel formats (R8) whose row stride
-		// may not be a multiple of the default 4-byte GL_UNPACK_ALIGNMENT.
-		if tex.format == gputypes.TextureFormatR8Unorm {
+		// Rows of texels narrower than 4 bytes (R8, RG8) need not start on
+		// the default 4-byte GL_UNPACK_ALIGNMENT.
+		narrow := tex.format.BlockCopySize() < 4
+		if narrow {
 			glCtx.PixelStorei(gl.UNPACK_ALIGNMENT, 1)
 		}
 		// Use TexSubImage2D to update existing texture data (Rust wgpu-hal pattern).
@@ -167,8 +167,7 @@ func (q *Queue) WriteTexture(dst *hal.ImageCopyTexture, data []byte, layout *hal
 		if rowLength != 0 {
 			glCtx.PixelStorei(gl.UNPACK_ROW_LENGTH, 0)
 		}
-		// Restore default alignment after upload.
-		if tex.format == gputypes.TextureFormatR8Unorm {
+		if narrow {
 			glCtx.PixelStorei(gl.UNPACK_ALIGNMENT, 4)
 		}
 	}
