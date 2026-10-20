@@ -405,6 +405,12 @@ func (pw *pendingWrites) writeTextureLocked(
 	// CPU copy with row pitch alignment. Returns data directly when no padding needed,
 	// otherwise writes into pw.alignBuf (grown on demand, never shrunk, reused each call).
 	stagingData := alignTextureDataInto(&pw.alignBuf, data, layout.Offset, bytesPerRow, alignedBytesPerRow, rowsPerImage, depthOrLayers, stagingSize)
+	// The belt writes all it is given: data that goes on past the copy, the
+	// rest of an image a region is uploaded from, would run over the next
+	// allocation of the chunk.
+	if uint64(len(stagingData)) > stagingSize {
+		stagingData = stagingData[:stagingSize]
+	}
 
 	// Allocate from staging belt (ring-buffer of reusable chunks).
 	alloc, err := pw.belt.allocate(stagingSize, stagingData)
@@ -861,11 +867,13 @@ func alignTextureRowsInto(aligned, data []byte, srcOffset uint64, bytesPerRow, a
 				uint64(row)*uint64(alignedBytesPerRow)
 			srcRowStart := srcOffset + uint64(layer)*uint64(rowsPerImage)*uint64(bytesPerRow) +
 				uint64(row)*uint64(bytesPerRow)
-			if srcRowStart+uint64(bytesPerRow) > uint64(len(data)) {
+			if srcRowStart >= uint64(len(data)) {
 				break
 			}
-			copy(aligned[dstRowStart:dstRowStart+uint64(bytesPerRow)],
-				data[srcRowStart:srcRowStart+uint64(bytesPerRow)])
+			// WebGPU's data may stop at the copy's width in the last row; it
+			// used to be dropped whole.
+			n := min(uint64(bytesPerRow), uint64(len(data))-srcRowStart)
+			copy(aligned[dstRowStart:dstRowStart+n], data[srcRowStart:srcRowStart+n])
 		}
 	}
 }
