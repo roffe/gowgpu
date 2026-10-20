@@ -67,6 +67,7 @@ type Device struct {
 	maxDrawIndirectCount      uint32
 	descriptorAllocator       *DescriptorAllocator // Descriptor pool management for bind groups
 	queue                     *Queue               // Primary queue (for swapchain synchronization)
+	interop                   *Interop             // for a video decoder sharing the device, nil without
 	renderPassCache           *RenderPassCache     // Cache for VkRenderPass and VkFramebuffer objects
 	pipelineCache             vk.PipelineCache     // Driver-compiled ISA cache (#331)
 	pipelineCachePath         string               // Disk path for pipeline cache persistence

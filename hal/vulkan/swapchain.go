@@ -1534,6 +1534,16 @@ func vkDestroySemaphore(d *Device, semaphore vk.Semaphore, _ *vk.AllocationCallb
 	d.cmds.DestroySemaphore(d.handle, semaphore, nil)
 }
 
+// vkDeviceWaitIdle waits for the device's work to finish, or with a video
+// decoder sharing the device (Device.Interop) for its own queue's:
+// vkDeviceWaitIdle needs every queue of the device kept from other threads,
+// and the decoder submits to its queues from its own. Its work never touches
+// what the callers free.
 func vkDeviceWaitIdle(d *Device) vk.Result {
+	if d.interop != nil && d.queue != nil {
+		d.queue.mu.Lock()
+		defer d.queue.mu.Unlock()
+		return d.cmds.QueueWaitIdle(d.queue.handle)
+	}
 	return d.cmds.DeviceWaitIdle(d.handle)
 }

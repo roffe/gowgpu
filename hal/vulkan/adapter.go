@@ -50,32 +50,20 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 		return hal.OpenDevice{}, err
 	}
 
-	// Create device with graphics queue
-	queuePriority := float32(1.0)
-	queueCreateInfo := vk.DeviceQueueCreateInfo{
-		SType:            vk.StructureTypeDeviceQueueCreateInfo,
-		QueueFamilyIndex: graphicsFamily,
-		QueueCount:       1,
-		PQueuePriorities: &queuePriority,
-	}
-
 	// Query supported device extensions to enable optional features.
-	hasIncrementalPresent := false
+	available := map[string]bool{}
 	{
 		var extCount uint32
 		a.instance.cmds.EnumerateDeviceExtensionProperties(a.physicalDevice, nil, &extCount, nil)
 		if extCount > 0 {
 			extProps := make([]vk.ExtensionProperties, extCount)
 			a.instance.cmds.EnumerateDeviceExtensionProperties(a.physicalDevice, nil, &extCount, &extProps[0])
-			for i := range extProps {
-				name := cStringToGo(extProps[i].ExtensionName[:])
-				if name == "VK_KHR_incremental_present" {
-					hasIncrementalPresent = true
-					break
-				}
+			for i := range extProps[:extCount] {
+				available[cStringToGo(extProps[i].ExtensionName[:])] = true
 			}
 		}
 	}
+	hasIncrementalPresent := available["VK_KHR_incremental_present"]
 
 	// Required extensions
 	extensions := []string{
@@ -92,26 +80,57 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 		extensionPtrs[i] = unsafe.StringData(ext)
 	}
 
-	// Detect timeline semaphore support (VK-IMPL-001).
+	// Detect timeline semaphore support (VK-IMPL-001), and on Vulkan 1.3 what
+	// a video decoder sharing the device needs.
 	// Query via PhysicalDeviceVulkan12Features with PNext chain on GetPhysicalDeviceFeatures2.
 	hasTimelineSemaphore := false
+	var (
+		has11 = vk.PhysicalDeviceVulkan11Features{SType: vk.StructureTypePhysicalDeviceVulkan11Features}
+		has12 = vk.PhysicalDeviceVulkan12Features{SType: vk.StructureTypePhysicalDeviceVulkan12Features}
+		has13 = vk.PhysicalDeviceVulkan13Features{SType: vk.StructureTypePhysicalDeviceVulkan13Features}
+	)
 	if a.instance.cmds.HasPhysicalDeviceFeatures2() {
-		var vulkan12Features vk.PhysicalDeviceVulkan12Features
-		vulkan12Features.SType = vk.StructureTypePhysicalDeviceVulkan12Features
-
 		features2 := vk.PhysicalDeviceFeatures2{
 			SType: vk.StructureTypePhysicalDeviceFeatures2,
-			PNext: (*uintptr)(unsafe.Pointer(&vulkan12Features)),
+			PNext: (*uintptr)(unsafe.Pointer(&has12)),
+		}
+		if a.properties.ApiVersion >= vkMakeVersion(1, 3, 0) {
+			features2.PNext = (*uintptr)(unsafe.Pointer(&has11))
+			has11.PNext = (*uintptr)(unsafe.Pointer(&has12))
+			has12.PNext = (*uintptr)(unsafe.Pointer(&has13))
 		}
 		a.instance.cmds.GetPhysicalDeviceFeatures2(a.physicalDevice, &features2)
-		hasTimelineSemaphore = vulkan12Features.TimelineSemaphore != 0
+		hasTimelineSemaphore = has12.TimelineSemaphore != 0
+	}
+	video := videoDecodeSetup(a.properties.ApiVersion, available, queueFamilies, graphicsFamily, &has11, &has12, &has13)
+
+	// The graphics queue, and with video a compute and a video decode queue
+	// gowgpu leaves to the decoder.
+	queuePriority := float32(1.0)
+	queueCreateInfos := []vk.DeviceQueueCreateInfo{{
+		SType:            vk.StructureTypeDeviceQueueCreateInfo,
+		QueueFamilyIndex: graphicsFamily,
+		QueueCount:       1,
+		PQueuePriorities: &queuePriority,
+	}}
+	if video != nil {
+		for _, family := range []uint32{video.compute, video.decode} {
+			info := queueCreateInfos[0]
+			info.QueueFamilyIndex = family
+			queueCreateInfos = append(queueCreateInfos, info)
+		}
+		extensions = append(extensions, video.extensions...)
+		extensionPtrs = extensionPtrs[:0]
+		for _, ext := range extensions {
+			extensionPtrs = append(extensionPtrs, unsafe.StringData(ext))
+		}
 	}
 
 	// Device create info
 	deviceCreateInfo := vk.DeviceCreateInfo{
 		SType:                   vk.StructureTypeDeviceCreateInfo,
-		QueueCreateInfoCount:    1,
-		PQueueCreateInfos:       &queueCreateInfo,
+		QueueCreateInfoCount:    uint32(len(queueCreateInfos)),
+		PQueueCreateInfos:       &queueCreateInfos[0],
 		EnabledExtensionCount:   uint32(len(extensions)),
 		PpEnabledExtensionNames: &extensionPtrs[0],
 		PEnabledFeatures:        &a.features,
@@ -119,11 +138,21 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 
 	// Enable timeline semaphore feature if supported.
 	// Vulkan 1.2 requires explicitly enabling features via PNext chain.
-	var vulkan12Enable vk.PhysicalDeviceVulkan12Features
+	var (
+		vulkan11Enable = vk.PhysicalDeviceVulkan11Features{SType: vk.StructureTypePhysicalDeviceVulkan11Features}
+		vulkan12Enable = vk.PhysicalDeviceVulkan12Features{SType: vk.StructureTypePhysicalDeviceVulkan12Features}
+		vulkan13Enable = vk.PhysicalDeviceVulkan13Features{SType: vk.StructureTypePhysicalDeviceVulkan13Features}
+	)
 	if hasTimelineSemaphore {
-		vulkan12Enable.SType = vk.StructureTypePhysicalDeviceVulkan12Features
 		vulkan12Enable.TimelineSemaphore = vk.Bool32(vk.True)
 		deviceCreateInfo.PNext = (*uintptr)(unsafe.Pointer(&vulkan12Enable))
+	}
+	if video != nil {
+		vulkan11Enable.SamplerYcbcrConversion = vk.Bool32(vk.True)
+		vulkan13Enable.Synchronization2 = vk.Bool32(vk.True)
+		deviceCreateInfo.PNext = (*uintptr)(unsafe.Pointer(&vulkan11Enable))
+		vulkan11Enable.PNext = (*uintptr)(unsafe.Pointer(&vulkan12Enable))
+		vulkan12Enable.PNext = (*uintptr)(unsafe.Pointer(&vulkan13Enable))
 	}
 
 	var device vk.Device
@@ -203,6 +232,27 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 
 	// Store queue reference in device for swapchain synchronization
 	dev.queue = q
+
+	if video != nil {
+		vulkan11Enable.PNext, vulkan12Enable.PNext = nil, nil
+		dev.interop = &Interop{
+			GetInstanceProcAddr: uintptr(vk.GetInstanceProcAddr(0, "vkGetInstanceProcAddr")),
+			Instance:            a.instance.handle,
+			PhysicalDevice:      a.physicalDevice,
+			Device:              device,
+			InstanceExtensions:  a.instance.extensions,
+			DeviceExtensions:    trimNUL(extensions),
+			Features:            a.features,
+			Features11:          vulkan11Enable,
+			Features12:          vulkan12Enable,
+			Features13:          vulkan13Enable,
+			QueueFamilies: []InteropQueueFamily{
+				{video.compute, 1, queueFamilies[video.compute].QueueFlags},
+				{video.decode, 1, queueFamilies[video.decode].QueueFlags},
+				{graphicsFamily, 1, vk.QueueFlags(vk.QueueGraphicsBit)},
+			},
+		}
+	}
 
 	syncMode := "binary fence pool (VK-IMPL-003)"
 	if dev.timelineFence.isTimeline {

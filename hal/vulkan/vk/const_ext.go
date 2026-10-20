@@ -75,6 +75,20 @@ const (
 
 	// ObjectTypeAccelerationStructureKHR = VK_OBJECT_TYPE_ACCELERATION_STRUCTURE_KHR (1000150000)
 	ObjectTypeAccelerationStructureKHR ObjectType = 1000150000
+
+	// === Vulkan 1.1 and 1.3 Core, for sharing the device with a video decoder ===
+
+	// StructureTypePhysicalDeviceVulkan11Features = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES
+	StructureTypePhysicalDeviceVulkan11Features StructureType = 49
+
+	// StructureTypePhysicalDeviceVulkan13Features = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES
+	StructureTypePhysicalDeviceVulkan13Features StructureType = 53
+
+	// ImageAspectPlane0Bit = VK_IMAGE_ASPECT_PLANE_0_BIT, the first plane of a multi-planar format.
+	ImageAspectPlane0Bit ImageAspectFlagBits = 1 << 4
+
+	// ImageAspectPlane1Bit = VK_IMAGE_ASPECT_PLANE_1_BIT
+	ImageAspectPlane1Bit ImageAspectFlagBits = 1 << 5
 )
 
 // ClearValueColor creates a ClearValue from RGBA float values.

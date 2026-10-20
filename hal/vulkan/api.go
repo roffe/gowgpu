@@ -78,7 +78,7 @@ func (Backend) CreateInstance(desc *hal.InstanceDescriptor) (hal.Instance, error
 		ApplicationVersion: vkMakeVersion(1, 0, 0),
 		PEngineName:        &engineName[0],
 		EngineVersion:      vkMakeVersion(0, 1, 0),
-		ApiVersion:         vkMakeVersion(1, 2, 0), // Vulkan 1.2
+		ApiVersion:         vkMakeVersion(1, 3, 0), // a video decoder sharing the device needs 1.3
 	}
 
 	// Required extensions
@@ -162,6 +162,7 @@ func (Backend) CreateInstance(desc *hal.InstanceDescriptor) (hal.Instance, error
 		cmds:         *cmds,
 		debugEnabled: validationEnabled,
 		platform:     platform,
+		extensions:   trimNUL(extensions),
 	}
 
 	// Create debug messenger when validation layers are active.
@@ -185,6 +186,16 @@ type Instance struct {
 	debugMessenger vk.DebugUtilsMessengerEXT
 	debugEnabled   bool
 	platform       platformInstanceState
+	extensions     []string // enabled
+}
+
+// trimNUL returns names without the NUL they are passed to Vulkan with.
+func trimNUL(names []string) []string {
+	out := make([]string, len(names))
+	for i, n := range names {
+		out[i] = strings.TrimSuffix(n, "\x00")
+	}
+	return out
 }
 
 // EnumerateAdapters returns available Vulkan adapters (physical devices).
