@@ -141,11 +141,39 @@ type Queue struct {
 	// inside the VkSubmitInfo chain. As locals they escaped to the heap, four
 	// allocations every submit. Guarded by mu.
 	submitScratch struct {
-		signalSems   [3]vk.Semaphore
-		waitValues   [2]uint64
-		signalValues [3]uint64
+		signalSems   [3 + maxExternalSync]vk.Semaphore
+		waitValues   [2 + maxExternalSync]uint64
+		signalValues [3 + maxExternalSync]uint64
 		timeline     vk.TimelineSemaphoreSubmitInfo
 	}
+
+	// Points of timeline semaphores of code sharing the device the next
+	// Submit waits for and signals (AddExternalSync). Guarded by mu.
+	externalWaits, externalSignals []TimelinePoint
+}
+
+// TimelinePoint is a value of a timeline semaphore.
+type TimelinePoint struct {
+	Semaphore vk.Semaphore
+	Value     uint64
+}
+
+// maxExternalSync is how many points of others one submit can wait for, and
+// signal.
+const maxExternalSync = 4
+
+// AddExternalSync has the next Submit wait for semaphore, a timeline
+// semaphore of code sharing the device such as a video decoder's, to reach
+// wait before its transfers, and signal signal once it completes.
+func (q *Queue) AddExternalSync(semaphore uintptr, wait, signal uint64) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if len(q.externalWaits) == maxExternalSync {
+		return fmt.Errorf("vulkan: a submit waits for at most %d external semaphores", maxExternalSync)
+	}
+	q.externalWaits = append(q.externalWaits, TimelinePoint{vk.Semaphore(semaphore), wait})
+	q.externalSignals = append(q.externalSignals, TimelinePoint{vk.Semaphore(semaphore), signal})
+	return nil
 }
 
 // acquireWaitStages are the stages the first submit of a frame holds until
@@ -203,7 +231,7 @@ func (q *Queue) advanceRelay() (wait, signal vk.Semaphore, err error) {
 
 func (q *Queue) submitTimeline(
 	submitInfo *vk.SubmitInfo,
-	signalSems *[3]vk.Semaphore,
+	signalSems *[3 + maxExternalSync]vk.Semaphore,
 	waitCount, signalCount uint32,
 	consumedAcquire bool,
 	signalValue uint64,
@@ -219,7 +247,6 @@ func (q *Queue) submitTimeline(
 
 	waitValues := &q.submitScratch.waitValues
 	signalValues := &q.submitScratch.signalValues
-	*waitValues, *signalValues = [2]uint64{}, [3]uint64{}
 	signalValues[signalCount-1] = signalValue
 	timelineSubmitInfo := &q.submitScratch.timeline
 	*timelineSubmitInfo = vk.TimelineSemaphoreSubmitInfo{
@@ -280,17 +307,22 @@ func (q *Queue) Submit(commandBuffers []hal.CommandBuffer) (uint64, error) {
 	}()
 
 	// Build wait/signal semaphore arrays. Maximum sizes:
-	//   wait:   acquire(1) + relay(1) = 2
-	//   signal: present(1) + relay(1) + timeline(1) = 3
+	//   wait:   acquire(1) + relay(1) + external = 2 + maxExternalSync
+	//   signal: present(1) + relay(1) + external + timeline(1) = 3 + maxExternalSync
+	// The values go alongside, 0 for the binary semaphores.
 	var (
-		waitSems   [2]vk.Semaphore
-		waitStages [2]vk.PipelineStageFlags
+		waitSems   [2 + maxExternalSync]vk.Semaphore
+		waitStages [2 + maxExternalSync]vk.PipelineStageFlags
 		waitCount  uint32
 
 		signalCount uint32
 	)
 	signalSems := &q.submitScratch.signalSems
-	*signalSems = [3]vk.Semaphore{}
+	*signalSems = [3 + maxExternalSync]vk.Semaphore{}
+	waitValues, signalValues := &q.submitScratch.waitValues, &q.submitScratch.signalValues
+	*waitValues, *signalValues = [2 + maxExternalSync]uint64{}, [3 + maxExternalSync]uint64{}
+	external := len(q.externalWaits)
+	defer func() { q.externalWaits, q.externalSignals = q.externalWaits[:0], q.externalSignals[:0] }()
 
 	// ADR-058: Acquire wait and present signal are now SEPARATE concerns.
 	//
@@ -343,6 +375,12 @@ func (q *Queue) Submit(commandBuffers []hal.CommandBuffer) (uint64, error) {
 		signalSems[signalCount] = relaySignal
 		signalCount++
 	}
+	for i := range external {
+		waitSems[waitCount], waitStages[waitCount], waitValues[waitCount] = q.externalWaits[i].Semaphore, vk.PipelineStageFlags(vk.PipelineStageTransferBit), q.externalWaits[i].Value
+		waitCount++
+		signalSems[signalCount], signalValues[signalCount] = q.externalSignals[i].Semaphore, q.externalSignals[i].Value
+		signalCount++
+	}
 
 	submitInfo := vk.SubmitInfo{
 		SType:              vk.StructureTypeSubmitInfo,
@@ -363,6 +401,9 @@ func (q *Queue) Submit(commandBuffers []hal.CommandBuffer) (uint64, error) {
 
 	if q.device.timelineFence.isTimeline {
 		return q.submitTimeline(&submitInfo, signalSems, waitCount, signalCount, consumedAcquire, signalValue)
+	}
+	if external > 0 {
+		return 0, fmt.Errorf("vulkan: external semaphores need timeline semaphores")
 	}
 
 	// Binary path (VK-IMPL-003): Get a fence from the pool to track this submission.

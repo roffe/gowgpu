@@ -435,7 +435,35 @@ func (pw *pendingWrites) copyToTextureLocked(
 	if err != nil {
 		return fmt.Errorf("wgpu: pending writes: activate encoder: %w", err)
 	}
+	w := pw.beginTextureWrite(enc, owner, dst, size)
 
+	// Record copy command.
+	pw.texCopy[0] = hal.BufferTextureCopy{
+		BufferLayout: hal.ImageDataLayout{
+			Offset:       offset,
+			BytesPerRow:  bytesPerRow,
+			RowsPerImage: rowsPerImage,
+		},
+		TextureBase: *dst,
+		Size:        *size,
+	}
+	enc.CopyBufferToTexture(src, dst.Texture, pw.texCopy[:])
+	pw.texCopy[0] = hal.BufferTextureCopy{}
+
+	pw.endTextureWrite(enc, owner, dst, w)
+	return nil
+}
+
+// textureWrite is what beginTextureWrite found out about a texture that
+// endTextureWrite needs.
+type textureWrite struct {
+	copyRange hal.TextureRange
+	idx       track.TrackerIndex
+	tracked   bool
+}
+
+// beginTextureWrite records the barrier that makes dst a copy destination.
+func (pw *pendingWrites) beginTextureWrite(enc hal.CommandEncoder, owner *Texture, dst *hal.ImageCopyTexture, size *hal.Extent3D) textureWrite {
 	// Transition texture to COPY_DST from the state the GPU has it in: what
 	// the last submit left (the device tracker), else what the backend tracks
 	// itself (DX12), else undefined, which is right for a new texture and
@@ -468,20 +496,14 @@ func (pw *pendingWrites) copyToTextureLocked(
 			},
 		}
 		enc.TransitionTextures(pw.texBarrier[:])
+		pw.texBarrier[0] = hal.TextureBarrier{}
 	}
+	return textureWrite{copyRange: copyRange, idx: idx, tracked: tracked}
+}
 
-	// Record copy command.
-	pw.texCopy[0] = hal.BufferTextureCopy{
-		BufferLayout: hal.ImageDataLayout{
-			Offset:       offset,
-			BytesPerRow:  bytesPerRow,
-			RowsPerImage: rowsPerImage,
-		},
-		TextureBase: *dst,
-		Size:        *size,
-	}
-	enc.CopyBufferToTexture(src, dst.Texture, pw.texCopy[:])
-
+// endTextureWrite records what follows a copy into dst: the barrier taking it
+// to what it is used as, and its new state in the tracker.
+func (pw *pendingWrites) endTextureWrite(enc hal.CommandEncoder, owner *Texture, dst *hal.ImageCopyTexture, w textureWrite) {
 	// A texture that is never sampled, a surface texture (presented or
 	// rendered over) or one made without TextureBinding, stays a copy
 	// destination, and the present, the render pass or the next copy takes
@@ -489,9 +511,8 @@ func (pw *pendingWrites) copyToTextureLocked(
 	// the image has no usage for (VUID-VkImageMemoryBarrier-oldLayout-01211
 	// on Vulkan).
 	if owner.textureUsage()&gputypes.TextureUsageTextureBinding == 0 {
-		pw.texBarrier[0], pw.texCopy[0] = hal.TextureBarrier{}, hal.BufferTextureCopy{}
-		if tracked {
-			pw.tracker.InsertTexture(idx, track.TextureUsesCopyDst)
+		if w.tracked {
+			pw.tracker.InsertTexture(w.idx, track.TextureUsesCopyDst)
 		}
 	} else {
 		// Transition texture to SHADER_RESOURCE for rendering.
@@ -500,7 +521,7 @@ func (pw *pendingWrites) copyToTextureLocked(
 		// also covers queue write operations (pending_writes integration, future work).
 		pw.texBarrier[0] = hal.TextureBarrier{
 			Texture: dst.Texture,
-			Range:   copyRange,
+			Range:   w.copyRange,
 			Usage: hal.TextureUsageTransition{
 				OldUsage: gputypes.TextureUsageCopyDst,
 				NewUsage: gputypes.TextureUsageTextureBinding,
@@ -509,17 +530,52 @@ func (pw *pendingWrites) copyToTextureLocked(
 			},
 		}
 		enc.TransitionTextures(pw.texBarrier[:])
-		pw.texBarrier[0], pw.texCopy[0] = hal.TextureBarrier{}, hal.BufferTextureCopy{}
+		pw.texBarrier[0] = hal.TextureBarrier{}
 
 		// The write leaves the texture ready to sample; the barriers of the
 		// submits that follow start from there.
-		if tracked {
-			pw.tracker.InsertTexture(idx, track.TextureUsesResource)
+		if w.tracked {
+			pw.tracker.InsertTexture(w.idx, track.TextureUsesResource)
 		}
 	}
 
 	// Staging buffer is managed by the belt (not tracked individually).
 	pw.trackDst(owner, dst.Texture)
+}
+
+// copyExternalLocked records copies of the planes of src, an image made
+// outside gowgpu in layout, into dsts, plane i into dsts[i] whole, between
+// the barriers a write has. pw.mu is held and usesBatching is set.
+func (pw *pendingWrites) copyExternalLocked(src uintptr, layout uint32, owners []*Texture) error {
+	enc, err := pw.activate()
+	if err != nil {
+		return fmt.Errorf("wgpu: pending writes: activate encoder: %w", err)
+	}
+	copier, ok := enc.(interface {
+		CopyExternalPlanes(src uintptr, layout uint32, dsts []hal.Texture)
+	})
+	if !ok {
+		return fmt.Errorf("wgpu: copying from external images needs the Vulkan backend")
+	}
+	var (
+		dsts   [3]hal.ImageCopyTexture
+		raws   [3]hal.Texture
+		writes [3]textureWrite
+	)
+	for i, owner := range owners {
+		raws[i] = owner.resolveHAL()
+		if raws[i] == nil || owner.coreTexture == nil {
+			return ErrReleased
+		}
+		delete(pw.zero, owner) // the copy fills it, where zeroing at flush would clear it after
+		dsts[i] = hal.ImageCopyTexture{Texture: raws[i]}
+		s := owner.coreTexture.Size()
+		writes[i] = pw.beginTextureWrite(enc, owner, &dsts[i], &hal.Extent3D{Width: s.Width, Height: s.Height, DepthOrArrayLayers: 1})
+	}
+	copier.CopyExternalPlanes(src, layout, raws[:len(owners)])
+	for i, owner := range owners {
+		pw.endTextureWrite(enc, owner, &dsts[i], writes[i])
+	}
 	return nil
 }
 

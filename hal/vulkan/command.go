@@ -972,6 +972,49 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst hal.Texture, regions []ha
 	)
 }
 
+// CopyExternalPlanes copies the planes of src, a multi-planar image of the
+// device made outside gowgpu, such as a video decoder's, into dsts, plane i
+// whole into dsts[i], which are its size and copy destinations already. src
+// goes from the layout it is in to TRANSFER_SRC_OPTIMAL, where it stays. A
+// semaphore the submit waits for at the transfer stage orders the copy after
+// the work that made src.
+// src is a VkImage, layout a VkImageLayout.
+func (e *CommandEncoder) CopyExternalPlanes(src uintptr, layout uint32, dsts []hal.Texture) {
+	if e.active == 0 || src == 0 || len(dsts) > 3 {
+		return
+	}
+	barrier := vk.ImageMemoryBarrier{
+		SType:               vk.StructureTypeImageMemoryBarrier,
+		DstAccessMask:       vk.AccessFlags(vk.AccessTransferReadBit),
+		OldLayout:           vk.ImageLayout(layout),
+		NewLayout:           vk.ImageLayoutTransferSrcOptimal,
+		SrcQueueFamilyIndex: vk.QueueFamilyIgnored,
+		DstQueueFamilyIndex: vk.QueueFamilyIgnored,
+		Image:               vk.Image(src),
+		SubresourceRange: vk.ImageSubresourceRange{
+			AspectMask: vk.ImageAspectFlags(vk.ImageAspectColorBit), // every plane of an image that is not disjoint
+			LevelCount: 1,
+			LayerCount: 1,
+		},
+	}
+	transfer := vk.PipelineStageFlags(vk.PipelineStageTransferBit)
+	vkCmdPipelineBarrier(e.device.cmds, e.active, transfer, transfer, 0, 0, nil, 0, nil, 1, &barrier)
+
+	planes := [3]vk.ImageAspectFlagBits{vk.ImageAspectPlane0Bit, vk.ImageAspectPlane1Bit, vk.ImageAspectPlane1Bit << 1}
+	for i, dst := range dsts {
+		t, ok := dst.(*Texture)
+		if !ok || t.handle == 0 {
+			continue
+		}
+		region := vk.ImageCopy{
+			SrcSubresource: vk.ImageSubresourceLayers{AspectMask: vk.ImageAspectFlags(planes[i]), LayerCount: 1},
+			DstSubresource: vk.ImageSubresourceLayers{AspectMask: vk.ImageAspectFlags(vk.ImageAspectColorBit), LayerCount: 1},
+			Extent:         vk.Extent3D{Width: t.size.Width, Height: t.size.Height, Depth: 1},
+		}
+		vkCmdCopyImage(e.device.cmds, e.active, vk.Image(src), vk.ImageLayoutTransferSrcOptimal, t.handle, vk.ImageLayoutTransferDstOptimal, 1, &region)
+	}
+}
+
 // ResolveQuerySet copies query results from a query set into a destination buffer.
 // For timestamp queries, each result is a uint64 (8 bytes).
 // This uses vkCmdCopyQueryPoolResults under the hood.

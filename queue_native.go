@@ -443,6 +443,49 @@ func (q *Queue) WriteTexture(dst *ImageCopyTexture, data []byte, layout *ImageDa
 	return q.hal.WriteTexture(&q.wtDst, data, &q.wtLayout, &q.wtSize)
 }
 
+// ExternalImage is a multi-planar Vulkan image of the device made outside
+// gowgpu, such as a video decoder's, which a timeline semaphore orders: its
+// users wait for the semaphore to reach Value before they touch it, and
+// signal Value+1 when done.
+type ExternalImage struct {
+	Image     uintptr // VkImage
+	Layout    uint32  // the VkImageLayout it is in
+	Semaphore uintptr // timeline VkSemaphore
+	Value     uint64
+}
+
+// layoutTransferSrcOptimal is VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL.
+const layoutTransferSrcOptimal = 6
+
+// CopyExternalPlanes copies the planes of src into dsts, plane i into dsts[i],
+// whole textures the plane's size made with CopyDst, in a format the size of
+// its texels: R8 and RG8 for NV12's planes, RG8 and RGBA8 for P010's. The
+// copy runs ahead of the next Submit, which waits for src's semaphore to
+// reach src.Value and has it signal src.Value+1 when done, so src must not
+// be copied again before it. It returns the VkImageLayout the copy leaves
+// src in. Only the Vulkan backend copies external images.
+func (q *Queue) CopyExternalPlanes(src ExternalImage, dsts ...*Texture) (uint32, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	syncer, ok := q.hal.(interface {
+		AddExternalSync(semaphore uintptr, wait, signal uint64) error
+	})
+	if !ok || q.pending == nil || len(dsts) == 0 || len(dsts) > 3 {
+		return 0, fmt.Errorf("wgpu: CopyExternalPlanes: needs the Vulkan backend and 1 to 3 textures")
+	}
+	q.pending.mu.Lock()
+	err := q.pending.copyExternalLocked(src.Image, src.Layout, dsts)
+	q.pending.mu.Unlock()
+	if err != nil {
+		return 0, err
+	}
+	if err := syncer.AddExternalSync(src.Semaphore, src.Value, src.Value+1); err != nil {
+		return 0, err
+	}
+	return layoutTransferSrcOptimal, nil
+}
+
 // SetSwapchainSuppressed temporarily disables swapchain semaphore binding
 // for subsequent Submit calls. Used for offscreen renders (e.g., RepaintBoundary)
 // that must not consume acquire/present semaphores intended for the compositor
