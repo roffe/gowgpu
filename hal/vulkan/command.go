@@ -1015,6 +1015,39 @@ func (e *CommandEncoder) CopyExternalPlanes(src uintptr, layout uint32, dsts []h
 	}
 }
 
+// CopyExternalBuffer copies src, a buffer of the device made outside gowgpu
+// that another API fills, such as OpenGL through memory it shares, into dst
+// whole, a copy destination already, its rows bytesPerRow apart. The copy
+// takes src from the external queue family and hands it back. A semaphore
+// the submit waits for at the transfer stage orders it after the filling.
+// src is a VkBuffer.
+func (e *CommandEncoder) CopyExternalBuffer(src uintptr, bytesPerRow uint32, dst hal.Texture) {
+	t, ok := dst.(*Texture)
+	if e.active == 0 || src == 0 || !ok || t.handle == 0 {
+		return
+	}
+	family := e.device.graphicsFamily
+	barrier := vk.BufferMemoryBarrier{
+		SType:               vk.StructureTypeBufferMemoryBarrier,
+		DstAccessMask:       vk.AccessFlags(vk.AccessTransferReadBit),
+		SrcQueueFamilyIndex: vk.QueueFamilyExternal,
+		DstQueueFamilyIndex: family,
+		Buffer:              vk.Buffer(src),
+		Size:                vk.DeviceSize(vk.WholeSize),
+	}
+	transfer := vk.PipelineStageFlags(vk.PipelineStageTransferBit)
+	vkCmdPipelineBarrier(e.device.cmds, e.active, transfer, transfer, 0, 0, nil, 1, &barrier, 0, nil)
+	region := vk.BufferImageCopy{
+		BufferRowLength:  bytesPerRow / max(t.format.BlockCopySize(), 1),
+		ImageSubresource: vk.ImageSubresourceLayers{AspectMask: vk.ImageAspectFlags(vk.ImageAspectColorBit), LayerCount: 1},
+		ImageExtent:      vk.Extent3D{Width: t.size.Width, Height: t.size.Height, Depth: 1},
+	}
+	vkCmdCopyBufferToImage(e.device.cmds, e.active, vk.Buffer(src), t.handle, vk.ImageLayoutTransferDstOptimal, 1, &region)
+	barrier.SrcAccessMask, barrier.DstAccessMask = vk.AccessFlags(vk.AccessTransferReadBit), 0
+	barrier.SrcQueueFamilyIndex, barrier.DstQueueFamilyIndex = family, vk.QueueFamilyExternal
+	vkCmdPipelineBarrier(e.device.cmds, e.active, transfer, vk.PipelineStageFlags(vk.PipelineStageBottomOfPipeBit), 0, 0, nil, 1, &barrier, 0, nil)
+}
+
 // ResolveQuerySet copies query results from a query set into a destination buffer.
 // For timestamp queries, each result is a uint64 (8 bytes).
 // This uses vkCmdCopyQueryPoolResults under the hood.

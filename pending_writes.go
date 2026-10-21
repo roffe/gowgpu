@@ -579,6 +579,33 @@ func (pw *pendingWrites) copyExternalLocked(src uintptr, layout uint32, owners [
 	return nil
 }
 
+// copyExternalBufferLocked records a copy of src, a buffer made outside
+// gowgpu with rows bytesPerRow apart, into owner whole, between the barriers
+// a write has. pw.mu is held and usesBatching is set.
+func (pw *pendingWrites) copyExternalBufferLocked(src uintptr, bytesPerRow uint32, owner *Texture) error {
+	enc, err := pw.activate()
+	if err != nil {
+		return fmt.Errorf("wgpu: pending writes: activate encoder: %w", err)
+	}
+	copier, ok := enc.(interface {
+		CopyExternalBuffer(src uintptr, bytesPerRow uint32, dst hal.Texture)
+	})
+	if !ok {
+		return fmt.Errorf("wgpu: copying from external buffers is not supported on this backend")
+	}
+	raw := owner.resolveHAL()
+	if raw == nil || owner.coreTexture == nil {
+		return ErrReleased
+	}
+	delete(pw.zero, owner) // the copy fills it, where zeroing at flush would clear it after
+	dst := hal.ImageCopyTexture{Texture: raw}
+	s := owner.coreTexture.Size()
+	write := pw.beginTextureWrite(enc, owner, &dst, &hal.Extent3D{Width: s.Width, Height: s.Height, DepthOrArrayLayers: 1})
+	copier.CopyExternalBuffer(src, bytesPerRow, raw)
+	pw.endTextureWrite(enc, owner, &dst, write)
+	return nil
+}
+
 // trackDst keeps raw, a texture the batch writes, alive until the GPU is done
 // with the batch: AddPendingRef prevents premature Destroy (BUG-DX12-006). And
 // it lists owner for the check at flush.

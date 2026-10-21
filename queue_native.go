@@ -486,6 +486,41 @@ func (q *Queue) CopyExternalPlanes(src ExternalImage, dsts ...*Texture) (uint32,
 	return layoutTransferSrcOptimal, nil
 }
 
+// ExternalBuffer is a buffer of the device made outside gowgpu that holds a
+// picture another API draws, such as OpenGL through memory it shares, which
+// a timeline semaphore orders as it does an ExternalImage.
+type ExternalBuffer struct {
+	Buffer      uintptr // VkBuffer
+	BytesPerRow uint32
+	Semaphore   uintptr // timeline VkSemaphore
+	Value       uint64
+}
+
+// CopyExternalBuffer copies the picture in src into dst, a whole texture made
+// with CopyDst whose rows src holds BytesPerRow apart, top row first. Like
+// CopyExternalPlanes it runs ahead of the next Submit, which waits for src's
+// semaphore to reach src.Value and signals src.Value+1 when done, so src must
+// not be copied again before it. Only the Vulkan backend copies external
+// buffers.
+func (q *Queue) CopyExternalBuffer(src ExternalBuffer, dst *Texture) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	syncer, ok := q.hal.(interface {
+		AddExternalSync(semaphore uintptr, wait, signal uint64) error
+	})
+	if !ok || q.pending == nil || dst == nil {
+		return fmt.Errorf("wgpu: CopyExternalBuffer: needs the Vulkan backend and a texture")
+	}
+	q.pending.mu.Lock()
+	err := q.pending.copyExternalBufferLocked(src.Buffer, src.BytesPerRow, dst)
+	q.pending.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	return syncer.AddExternalSync(src.Semaphore, src.Value, src.Value+1)
+}
+
 // SetSwapchainSuppressed temporarily disables swapchain semaphore binding
 // for subsequent Submit calls. Used for offscreen renders (e.g., RepaintBoundary)
 // that must not consume acquire/present semaphores intended for the compositor
