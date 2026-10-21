@@ -75,6 +75,11 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 	if hasIncrementalPresent {
 		extensions = append(extensions, "VK_KHR_incremental_present\x00")
 	}
+	// Optional: exporting memory, for another API such as OpenGL to fill
+	// buffers the device reads (see Interop).
+	if ext := externalMemoryExtension(); available[ext] {
+		extensions = append(extensions, ext+"\x00")
+	}
 	extensionPtrs := make([]*byte, len(extensions))
 	for i, ext := range extensions {
 		extensionPtrs[i] = unsafe.StringData(ext)
@@ -233,24 +238,24 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 	// Store queue reference in device for swapchain synchronization
 	dev.queue = q
 
+	vulkan11Enable.PNext, vulkan12Enable.PNext = nil, nil
+	dev.interop = &Interop{
+		GetInstanceProcAddr: uintptr(vk.GetInstanceProcAddr(0, "vkGetInstanceProcAddr")),
+		Instance:            a.instance.handle,
+		PhysicalDevice:      a.physicalDevice,
+		Device:              device,
+		InstanceExtensions:  a.instance.extensions,
+		DeviceExtensions:    trimNUL(extensions),
+		Features:            a.features,
+		Features11:          vulkan11Enable,
+		Features12:          vulkan12Enable,
+		Features13:          vulkan13Enable,
+	}
 	if video != nil {
-		vulkan11Enable.PNext, vulkan12Enable.PNext = nil, nil
-		dev.interop = &Interop{
-			GetInstanceProcAddr: uintptr(vk.GetInstanceProcAddr(0, "vkGetInstanceProcAddr")),
-			Instance:            a.instance.handle,
-			PhysicalDevice:      a.physicalDevice,
-			Device:              device,
-			InstanceExtensions:  a.instance.extensions,
-			DeviceExtensions:    trimNUL(extensions),
-			Features:            a.features,
-			Features11:          vulkan11Enable,
-			Features12:          vulkan12Enable,
-			Features13:          vulkan13Enable,
-			QueueFamilies: []InteropQueueFamily{
-				{video.compute, 1, queueFamilies[video.compute].QueueFlags},
-				{video.decode, 1, queueFamilies[video.decode].QueueFlags},
-				{graphicsFamily, 1, vk.QueueFlags(vk.QueueGraphicsBit)},
-			},
+		dev.interop.QueueFamilies = []InteropQueueFamily{
+			{video.compute, 1, queueFamilies[video.compute].QueueFlags},
+			{video.decode, 1, queueFamilies[video.decode].QueueFlags},
+			{graphicsFamily, 1, vk.QueueFlags(vk.QueueGraphicsBit)},
 		}
 	}
 

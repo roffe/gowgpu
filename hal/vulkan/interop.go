@@ -3,14 +3,18 @@
 package vulkan
 
 import (
+	"runtime"
 	"strings"
 
 	"github.com/roffe/gowgpu/hal/vulkan/vk"
 )
 
-// Interop describes the device to a video decoder sharing it with gowgpu,
-// such as FFmpeg, which takes it in its AVVulkanDeviceContext: the handles,
-// what was enabled, and the queue families the decoder may use.
+// Interop describes the device to code sharing it with gowgpu: a video
+// decoder such as FFmpeg, which takes it in its AVVulkanDeviceContext, or
+// another API filling memory the device reads, as OpenGL does through
+// VK_KHR_external_memory_fd or _win32 where the device has them enabled.
+// It has the handles, what was enabled, and the queue families a decoder
+// may use.
 type Interop struct {
 	GetInstanceProcAddr uintptr // vkGetInstanceProcAddr
 	Instance            vk.Instance
@@ -28,7 +32,9 @@ type Interop struct {
 	// QueueFamilies are, in the order to prefer them, a compute and a video
 	// decode family whose queues gowgpu made for the decoder and does not use,
 	// then gowgpu's own family, flagged graphics only: the decoder must not
-	// use its queues, but shares the images it makes with it.
+	// use its queues, but shares the images it makes with it. Empty when the
+	// GPU cannot decode video with Vulkan Video, or the device was made
+	// without what it takes.
 	QueueFamilies []InteropQueueFamily
 }
 
@@ -39,14 +45,22 @@ type InteropQueueFamily struct {
 	Flags        vk.QueueFlags
 }
 
-// Interop returns the device's description for a video decoder sharing it,
-// or false when the GPU cannot decode video with Vulkan Video, and the device
-// was made without what it takes.
+// Interop returns the device's description for code sharing it, or false
+// for a device not made by an adapter.
 func (d *Device) Interop() (Interop, bool) {
 	if d.interop == nil {
 		return Interop{}, false
 	}
 	return *d.interop, true
+}
+
+// externalMemoryExtension is the extension that exports device memory to
+// other APIs on this platform.
+func externalMemoryExtension() string {
+	if runtime.GOOS == "windows" {
+		return "VK_KHR_external_memory_win32"
+	}
+	return "VK_KHR_external_memory_fd"
 }
 
 // videoSetup is what a device needs for a video decoder to share it: the
