@@ -344,6 +344,14 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 		viewType = MTLTextureType2DMultisample
 	}
 
+	// A view of all of the texture as it is is the texture: a drawable is
+	// framebufferOnly, which allows no views.
+	if pixelFormat == d.adapter.mapTextureFormat(mtlTexture.format) &&
+		viewType == textureTypeFromDimension(mtlTexture.dimension, mtlTexture.samples, mtlTexture.depth) &&
+		baseMip == 0 && mipCount == mtlTexture.mipLevels && baseLayer == 0 && layerCount == max(mtlTexture.depth, 1) {
+		return &TextureView{raw: Retain(mtlTexture.raw), texture: mtlTexture, device: d}, nil
+	}
+
 	// Metal's newTextureViewWithPixelFormat:textureType:levels:slices: expects NSRange structs
 	levelRange := NSRange{
 		Location: NSUInteger(baseMip),
