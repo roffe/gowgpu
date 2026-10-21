@@ -975,13 +975,13 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst hal.Texture, regions []ha
 // CopyExternalPlanes copies the planes of src, a multi-planar image of the
 // device made outside gowgpu, such as a video decoder's, into dsts, plane i
 // whole into dsts[i], which are its size and copy destinations already. src
-// goes from the layout it is in to TRANSFER_SRC_OPTIMAL, where it stays. A
-// semaphore the submit waits for at the transfer stage orders the copy after
-// the work that made src.
-// src is a VkImage, layout a VkImageLayout.
-func (e *CommandEncoder) CopyExternalPlanes(src uintptr, layout uint32, dsts []hal.Texture) {
+// goes from the layout it is in to TRANSFER_SRC_OPTIMAL, where it stays, and
+// which it returns. A semaphore the submit waits for at the transfer stage
+// orders the copy after the work that made src.
+// src is a VkImage of one layer, layout a VkImageLayout.
+func (e *CommandEncoder) CopyExternalPlanes(src uintptr, layout, _ uint32, dsts []hal.Texture) uint32 {
 	if e.active == 0 || src == 0 || len(dsts) > 3 {
-		return
+		return layout
 	}
 	barrier := vk.ImageMemoryBarrier{
 		SType:               vk.StructureTypeImageMemoryBarrier,
@@ -1013,6 +1013,7 @@ func (e *CommandEncoder) CopyExternalPlanes(src uintptr, layout uint32, dsts []h
 		}
 		vkCmdCopyImage(e.device.cmds, e.active, vk.Image(src), vk.ImageLayoutTransferSrcOptimal, t.handle, vk.ImageLayoutTransferDstOptimal, 1, &region)
 	}
+	return uint32(vk.ImageLayoutTransferSrcOptimal)
 }
 
 // CopyExternalBuffer copies src, a buffer of the device made outside gowgpu

@@ -544,18 +544,19 @@ func (pw *pendingWrites) endTextureWrite(enc hal.CommandEncoder, owner *Texture,
 }
 
 // copyExternalLocked records copies of the planes of src, an image made
-// outside gowgpu in layout, into dsts, plane i into dsts[i] whole, between
-// the barriers a write has. pw.mu is held and usesBatching is set.
-func (pw *pendingWrites) copyExternalLocked(src uintptr, layout uint32, owners []*Texture) error {
+// outside gowgpu in layout, layer slice of it, into dsts, plane i into dsts[i]
+// whole, between the barriers a write has, and returns the layout the copy
+// leaves src in. pw.mu is held and usesBatching is set.
+func (pw *pendingWrites) copyExternalLocked(src uintptr, layout, slice uint32, owners []*Texture) (uint32, error) {
 	enc, err := pw.activate()
 	if err != nil {
-		return fmt.Errorf("wgpu: pending writes: activate encoder: %w", err)
+		return layout, fmt.Errorf("wgpu: pending writes: activate encoder: %w", err)
 	}
 	copier, ok := enc.(interface {
-		CopyExternalPlanes(src uintptr, layout uint32, dsts []hal.Texture)
+		CopyExternalPlanes(src uintptr, layout, slice uint32, dsts []hal.Texture) uint32
 	})
 	if !ok {
-		return fmt.Errorf("wgpu: copying from external images needs the Vulkan backend")
+		return layout, fmt.Errorf("wgpu: copying from external images is not supported on this backend")
 	}
 	var (
 		dsts   [3]hal.ImageCopyTexture
@@ -565,18 +566,18 @@ func (pw *pendingWrites) copyExternalLocked(src uintptr, layout uint32, owners [
 	for i, owner := range owners {
 		raws[i] = owner.resolveHAL()
 		if raws[i] == nil || owner.coreTexture == nil {
-			return ErrReleased
+			return layout, ErrReleased
 		}
 		delete(pw.zero, owner) // the copy fills it, where zeroing at flush would clear it after
 		dsts[i] = hal.ImageCopyTexture{Texture: raws[i]}
 		s := owner.coreTexture.Size()
 		writes[i] = pw.beginTextureWrite(enc, owner, &dsts[i], &hal.Extent3D{Width: s.Width, Height: s.Height, DepthOrArrayLayers: 1})
 	}
-	copier.CopyExternalPlanes(src, layout, raws[:len(owners)])
+	after := copier.CopyExternalPlanes(src, layout, slice, raws[:len(owners)])
 	for i, owner := range owners {
 		pw.endTextureWrite(enc, owner, &dsts[i], writes[i])
 	}
-	return nil
+	return after, nil
 }
 
 // copyExternalBufferLocked records a copy of src, a buffer made outside

@@ -443,27 +443,28 @@ func (q *Queue) WriteTexture(dst *ImageCopyTexture, data []byte, layout *ImageDa
 	return q.hal.WriteTexture(&q.wtDst, data, &q.wtLayout, &q.wtSize)
 }
 
-// ExternalImage is a multi-planar Vulkan image of the device made outside
-// gowgpu, such as a video decoder's, which a timeline semaphore orders: its
-// users wait for the semaphore to reach Value before they touch it, and
-// signal Value+1 when done.
+// ExternalImage is a multi-planar image of the device made outside gowgpu,
+// such as a video decoder's, which a timeline orders: its users wait for it
+// to reach Value before they touch the image, and signal Value+1 when done.
+// On Vulkan it is a VkImage in the VkImageLayout Layout, ordered by a timeline
+// VkSemaphore; on Direct3D 12 an ID3D12Resource in the D3D12_RESOURCE_STATES
+// Layout, COMMON, layer Slice of it when it is an array, and an ID3D12Fence.
 type ExternalImage struct {
-	Image     uintptr // VkImage
-	Layout    uint32  // the VkImageLayout it is in
-	Semaphore uintptr // timeline VkSemaphore
+	Image     uintptr
+	Layout    uint32
+	Slice     uint32
+	Semaphore uintptr
 	Value     uint64
 }
 
-// layoutTransferSrcOptimal is VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL.
-const layoutTransferSrcOptimal = 6
-
 // CopyExternalPlanes copies the planes of src into dsts, plane i into dsts[i],
-// whole textures the plane's size made with CopyDst, in a format the size of
-// its texels: R8 and RG8 for NV12's planes, RG8 and RGBA8 for P010's. The
-// copy runs ahead of the next Submit, which waits for src's semaphore to
-// reach src.Value and has it signal src.Value+1 when done, so src must not
-// be copied again before it. It returns the VkImageLayout the copy leaves
-// src in. Only the Vulkan backend copies external images.
+// textures made with CopyDst, as much of the plane as they hold, in a format
+// copies take the plane's texels to: R8 and RG8 for NV12's planes, on Vulkan
+// RG8 and RGBA8 for P010's. The copy runs ahead of the next Submit, which
+// waits for src's timeline to reach src.Value and has it signal src.Value+1
+// when done, so src must not be copied again before it. It returns the layout
+// the copy leaves src in. The Vulkan and Direct3D 12 backends copy external
+// images.
 func (q *Queue) CopyExternalPlanes(src ExternalImage, dsts ...*Texture) (uint32, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -472,27 +473,29 @@ func (q *Queue) CopyExternalPlanes(src ExternalImage, dsts ...*Texture) (uint32,
 		AddExternalSync(semaphore uintptr, wait, signal uint64) error
 	})
 	if !ok || q.pending == nil || len(dsts) == 0 || len(dsts) > 3 {
-		return 0, fmt.Errorf("wgpu: CopyExternalPlanes: needs the Vulkan backend and 1 to 3 textures")
+		return src.Layout, fmt.Errorf("wgpu: CopyExternalPlanes: needs the Vulkan or Direct3D 12 backend and 1 to 3 textures")
 	}
 	q.pending.mu.Lock()
-	err := q.pending.copyExternalLocked(src.Image, src.Layout, dsts)
+	after, err := q.pending.copyExternalLocked(src.Image, src.Layout, src.Slice, dsts)
 	q.pending.mu.Unlock()
 	if err != nil {
-		return 0, err
+		return src.Layout, err
 	}
 	if err := syncer.AddExternalSync(src.Semaphore, src.Value, src.Value+1); err != nil {
-		return 0, err
+		return src.Layout, err
 	}
-	return layoutTransferSrcOptimal, nil
+	return after, nil
 }
 
 // ExternalBuffer is a buffer of the device made outside gowgpu that holds a
 // picture another API draws, such as OpenGL through memory it shares, which
-// a timeline semaphore orders as it does an ExternalImage.
+// a timeline orders as it does an ExternalImage: a VkBuffer and a timeline
+// VkSemaphore on Vulkan, an ID3D12Resource and an ID3D12Fence on Direct3D 12,
+// where BytesPerRow must be a multiple of 256.
 type ExternalBuffer struct {
-	Buffer      uintptr // VkBuffer
+	Buffer      uintptr
 	BytesPerRow uint32
-	Semaphore   uintptr // timeline VkSemaphore
+	Semaphore   uintptr
 	Value       uint64
 }
 
@@ -500,8 +503,8 @@ type ExternalBuffer struct {
 // with CopyDst whose rows src holds BytesPerRow apart, top row first. Like
 // CopyExternalPlanes it runs ahead of the next Submit, which waits for src's
 // semaphore to reach src.Value and signals src.Value+1 when done, so src must
-// not be copied again before it. Only the Vulkan backend copies external
-// buffers.
+// not be copied again before it. The Vulkan and Direct3D 12 backends copy
+// external buffers.
 func (q *Queue) CopyExternalBuffer(src ExternalBuffer, dst *Texture) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -510,7 +513,7 @@ func (q *Queue) CopyExternalBuffer(src ExternalBuffer, dst *Texture) error {
 		AddExternalSync(semaphore uintptr, wait, signal uint64) error
 	})
 	if !ok || q.pending == nil || dst == nil {
-		return fmt.Errorf("wgpu: CopyExternalBuffer: needs the Vulkan backend and a texture")
+		return fmt.Errorf("wgpu: CopyExternalBuffer: needs the Vulkan or Direct3D 12 backend and a texture")
 	}
 	q.pending.mu.Lock()
 	err := q.pending.copyExternalBufferLocked(src.Buffer, src.BytesPerRow, dst)

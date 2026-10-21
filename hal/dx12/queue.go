@@ -38,6 +38,10 @@ type queueState struct {
 	preambleIdle     []preambleInFlight
 	preambleOps      preambleNativeOps
 	oneShotsInFlight []oneShotInFlight
+
+	// Values of fences of code sharing the device the next submit waits for
+	// and signals (AddExternalSync).
+	externalWaits, externalSignals []externalPoint
 }
 
 type preambleInFlight struct {
@@ -194,7 +198,15 @@ func (q *Queue) submitLocked(commandBuffers []hal.CommandBuffer) (uint64, error)
 
 	// Execute command lists
 	submitStart := time.Now()
+	if err := q.waitExternal(); err != nil {
+		q.releaseBuiltPreambles(nativePreambles)
+		return 0, err
+	}
 	q.raw.ExecuteCommandLists(uint32(len(executionLists)), &executionLists[0])
+	if err := q.signalExternal(); err != nil {
+		q.retainPreamblesWithoutFence(nativePreambles)
+		return 0, err
+	}
 
 	// Check for immediate device removal after execution.
 	if reason := q.device.raw.GetDeviceRemovedReason(); reason != nil {
