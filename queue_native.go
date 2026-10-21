@@ -449,7 +449,9 @@ func (q *Queue) WriteTexture(dst *ImageCopyTexture, data []byte, layout *ImageDa
 // to reach Value before they touch the image, and signal Value+1 when done.
 // On Vulkan it is a VkImage in the VkImageLayout Layout, ordered by a timeline
 // VkSemaphore; on Direct3D 12 an ID3D12Resource in the D3D12_RESOURCE_STATES
-// Layout, COMMON, layer Slice of it when it is an array, and an ID3D12Fence.
+// Layout, COMMON, layer Slice of it when it is an array, and an ID3D12Fence;
+// on Metal an IOSurfaceRef, such as a VideoToolbox CVPixelBuffer's, and an
+// id<MTLSharedEvent>, Layout and Slice unused.
 type ExternalImage struct {
 	Image     uintptr
 	Layout    uint32
@@ -461,18 +463,18 @@ type ExternalImage struct {
 // CopyExternalPlanes copies the planes of src into dsts, plane i into dsts[i],
 // textures made with CopyDst, as much of the plane as they hold, in a format
 // copies take the plane's texels to: R8 and RG8 for NV12's planes, on Vulkan
-// RG8 and RGBA8 for P010's. The copy runs ahead of the next Submit, which
-// waits for src's timeline to reach src.Value and has it signal src.Value+1
-// when done, so src must not be copied again before it. It returns the layout
-// the copy leaves src in. The Vulkan and Direct3D 12 backends copy external
-// images.
+// and Metal RG8 and RGBA8 for P010's. The copy runs ahead of the next Submit,
+// which waits for src's timeline to reach src.Value and has it signal
+// src.Value+1 when done, so src must not be copied again before it. It
+// returns the layout the copy leaves src in. The Vulkan, Direct3D 12 and
+// Metal backends copy external images.
 func (q *Queue) CopyExternalPlanes(src ExternalImage, dsts ...*Texture) (uint32, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
 	syncer, ok := q.hal.(externalSyncer)
 	if !ok || q.pending == nil || len(dsts) == 0 || len(dsts) > 3 {
-		return src.Layout, fmt.Errorf("wgpu: CopyExternalPlanes: needs the Vulkan or Direct3D 12 backend and 1 to 3 textures")
+		return src.Layout, fmt.Errorf("wgpu: CopyExternalPlanes: needs the Vulkan, Direct3D 12 or Metal backend and 1 to 3 textures")
 	}
 	if syncer.ExternalSyncFull() { // the copy is not recorded without its sync
 		return src.Layout, errExternalSyncFull
@@ -502,7 +504,8 @@ var errExternalSyncFull = errors.New("wgpu: the next submit waits for as many ex
 // picture another API draws, such as OpenGL through memory it shares, which
 // a timeline orders as it does an ExternalImage: a VkBuffer and a timeline
 // VkSemaphore on Vulkan, an ID3D12Resource and an ID3D12Fence on Direct3D 12,
-// where BytesPerRow must be a multiple of 256.
+// where BytesPerRow must be a multiple of 256, an id<MTLBuffer> and an
+// id<MTLSharedEvent> on Metal.
 type ExternalBuffer struct {
 	Buffer      uintptr
 	BytesPerRow uint32
@@ -514,15 +517,15 @@ type ExternalBuffer struct {
 // with CopyDst whose rows src holds BytesPerRow apart, top row first. Like
 // CopyExternalPlanes it runs ahead of the next Submit, which waits for src's
 // semaphore to reach src.Value and signals src.Value+1 when done, so src must
-// not be copied again before it. The Vulkan and Direct3D 12 backends copy
-// external buffers.
+// not be copied again before it. The Vulkan, Direct3D 12 and Metal backends
+// copy external buffers.
 func (q *Queue) CopyExternalBuffer(src ExternalBuffer, dst *Texture) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
 	syncer, ok := q.hal.(externalSyncer)
 	if !ok || q.pending == nil || dst == nil {
-		return fmt.Errorf("wgpu: CopyExternalBuffer: needs the Vulkan or Direct3D 12 backend and a texture")
+		return fmt.Errorf("wgpu: CopyExternalBuffer: needs the Vulkan, Direct3D 12 or Metal backend and a texture")
 	}
 	if syncer.ExternalSyncFull() { // the copy is not recorded without its sync
 		return errExternalSyncFull

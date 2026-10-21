@@ -40,6 +40,10 @@ type Queue struct {
 	// returns the slot when the command buffer finishes execution.
 	// nil if block support is unavailable (graceful degradation).
 	frameSemaphore chan struct{}
+
+	// external are the points the next Submit's external copies wait for
+	// and signal (AddExternalSync).
+	external []externalSync
 }
 
 // Submit submits command buffers to the GPU.
@@ -66,6 +70,13 @@ func (q *Queue) Submit(commandBuffers []hal.CommandBuffer) (uint64, error) {
 
 	pool := NewAutoreleasePool()
 	defer pool.Drain()
+
+	if err := q.commitExternal(commandBuffers); err != nil {
+		if q.frameSemaphore != nil {
+			q.frameSemaphore <- struct{}{}
+		}
+		return 0, err
+	}
 
 	// The completion handlers go on the last command buffer that is one of
 	// ours; on an entry that is skipped they would never be registered, and

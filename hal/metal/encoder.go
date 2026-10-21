@@ -27,6 +27,7 @@ type CommandEncoder struct {
 	cmdBuffer ID
 	label     string
 	icbOwners []*indexedICBOwnership
+	external  []externalCopy
 	finished  *CommandBuffer
 	passState renderPassPendingState
 	recordErr error
@@ -46,6 +47,7 @@ func (e *CommandEncoder) BeginEncoding(label string) error {
 	}
 	e.label = label
 	e.recordErr = nil
+	e.external = nil
 
 	// Scoped autorelease pool — drain immediately after creating the command buffer.
 	// The command buffer is Retained so it survives the pool drain.
@@ -83,9 +85,10 @@ func (e *CommandEncoder) EndEncoding() (hal.CommandBuffer, error) {
 		e.releaseICBOwners()
 		return nil, err
 	}
-	cb := &CommandBuffer{raw: e.cmdBuffer, device: e.device, icbOwners: e.icbOwners}
+	cb := &CommandBuffer{raw: e.cmdBuffer, device: e.device, icbOwners: e.icbOwners, external: e.external}
 	e.cmdBuffer = 0 // Recording state becomes false
 	e.icbOwners = nil
+	e.external = nil
 	e.finished = cb
 	hal.Logger().Debug("metal: encoding ended")
 	return cb, nil
@@ -510,6 +513,7 @@ type CommandBuffer struct {
 	device    *Device
 	drawable  ID // Attached drawable for presentation
 	icbOwners []*indexedICBOwnership
+	external  []externalCopy // for Submit to encode, see externalCopy
 	destroy   sync.Once
 }
 
