@@ -160,7 +160,15 @@ type TimelinePoint struct {
 
 // maxExternalSync is how many points of others one submit can wait for, and
 // signal.
-const maxExternalSync = 4
+const maxExternalSync = 8
+
+// ExternalSyncFull reports whether the next Submit takes no more points of
+// AddExternalSync.
+func (q *Queue) ExternalSyncFull() bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return len(q.externalWaits) == maxExternalSync
+}
 
 // AddExternalSync has the next Submit wait for semaphore, a timeline
 // semaphore of code sharing the device such as a video decoder's, to reach

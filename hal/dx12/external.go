@@ -22,6 +22,12 @@ type externalPoint struct {
 	value uint64
 }
 
+// ExternalSyncFull reports false: a submit takes any number of points of
+// AddExternalSync.
+func (q *Queue) ExternalSyncFull() bool {
+	return false
+}
+
 // AddExternalSync has the next Submit wait for fence, an ID3D12Fence of code
 // sharing the device such as a video decoder's, to reach wait before its
 // command lists run, and signal signal once they complete.

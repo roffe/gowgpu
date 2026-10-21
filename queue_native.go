@@ -3,6 +3,7 @@
 package wgpu
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -469,11 +470,12 @@ func (q *Queue) CopyExternalPlanes(src ExternalImage, dsts ...*Texture) (uint32,
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	syncer, ok := q.hal.(interface {
-		AddExternalSync(semaphore uintptr, wait, signal uint64) error
-	})
+	syncer, ok := q.hal.(externalSyncer)
 	if !ok || q.pending == nil || len(dsts) == 0 || len(dsts) > 3 {
 		return src.Layout, fmt.Errorf("wgpu: CopyExternalPlanes: needs the Vulkan or Direct3D 12 backend and 1 to 3 textures")
+	}
+	if syncer.ExternalSyncFull() { // the copy is not recorded without its sync
+		return src.Layout, errExternalSyncFull
 	}
 	q.pending.mu.Lock()
 	after, err := q.pending.copyExternalLocked(src.Image, src.Layout, src.Slice, dsts)
@@ -486,6 +488,15 @@ func (q *Queue) CopyExternalPlanes(src ExternalImage, dsts ...*Texture) (uint32,
 	}
 	return after, nil
 }
+
+// externalSyncer is a backend queue that orders work with timelines of code
+// sharing the device.
+type externalSyncer interface {
+	ExternalSyncFull() bool
+	AddExternalSync(timeline uintptr, wait, signal uint64) error
+}
+
+var errExternalSyncFull = errors.New("wgpu: the next submit waits for as many external timelines as it can, submit first")
 
 // ExternalBuffer is a buffer of the device made outside gowgpu that holds a
 // picture another API draws, such as OpenGL through memory it shares, which
@@ -509,11 +520,12 @@ func (q *Queue) CopyExternalBuffer(src ExternalBuffer, dst *Texture) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	syncer, ok := q.hal.(interface {
-		AddExternalSync(semaphore uintptr, wait, signal uint64) error
-	})
+	syncer, ok := q.hal.(externalSyncer)
 	if !ok || q.pending == nil || dst == nil {
 		return fmt.Errorf("wgpu: CopyExternalBuffer: needs the Vulkan or Direct3D 12 backend and a texture")
+	}
+	if syncer.ExternalSyncFull() { // the copy is not recorded without its sync
+		return errExternalSyncFull
 	}
 	q.pending.mu.Lock()
 	err := q.pending.copyExternalBufferLocked(src.Buffer, src.BytesPerRow, dst)

@@ -978,8 +978,8 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst hal.Texture, regions []ha
 // goes from the layout it is in to TRANSFER_SRC_OPTIMAL, where it stays, and
 // which it returns. A semaphore the submit waits for at the transfer stage
 // orders the copy after the work that made src.
-// src is a VkImage of one layer, layout a VkImageLayout.
-func (e *CommandEncoder) CopyExternalPlanes(src uintptr, layout, _ uint32, dsts []hal.Texture) uint32 {
+// src is a VkImage, layer slice of it, layout a VkImageLayout.
+func (e *CommandEncoder) CopyExternalPlanes(src uintptr, layout, slice uint32, dsts []hal.Texture) uint32 {
 	if e.active == 0 || src == 0 || len(dsts) > 3 {
 		return layout
 	}
@@ -992,9 +992,10 @@ func (e *CommandEncoder) CopyExternalPlanes(src uintptr, layout, _ uint32, dsts 
 		DstQueueFamilyIndex: vk.QueueFamilyIgnored,
 		Image:               vk.Image(src),
 		SubresourceRange: vk.ImageSubresourceRange{
-			AspectMask: vk.ImageAspectFlags(vk.ImageAspectColorBit), // every plane of an image that is not disjoint
-			LevelCount: 1,
-			LayerCount: 1,
+			AspectMask:     vk.ImageAspectFlags(vk.ImageAspectColorBit), // every plane of an image that is not disjoint
+			LevelCount:     1,
+			BaseArrayLayer: slice,
+			LayerCount:     1,
 		},
 	}
 	transfer := vk.PipelineStageFlags(vk.PipelineStageTransferBit)
@@ -1007,7 +1008,7 @@ func (e *CommandEncoder) CopyExternalPlanes(src uintptr, layout, _ uint32, dsts 
 			continue
 		}
 		region := vk.ImageCopy{
-			SrcSubresource: vk.ImageSubresourceLayers{AspectMask: vk.ImageAspectFlags(planes[i]), LayerCount: 1},
+			SrcSubresource: vk.ImageSubresourceLayers{AspectMask: vk.ImageAspectFlags(planes[i]), BaseArrayLayer: slice, LayerCount: 1},
 			DstSubresource: vk.ImageSubresourceLayers{AspectMask: vk.ImageAspectFlags(vk.ImageAspectColorBit), LayerCount: 1},
 			Extent:         vk.Extent3D{Width: t.size.Width, Height: t.size.Height, Depth: 1},
 		}
