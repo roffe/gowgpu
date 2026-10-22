@@ -86,8 +86,9 @@ func (s *Surface) Configure(device hal.Device, config *hal.SurfaceConfiguration)
 	size := CGSize{Width: CGFloat(config.Width), Height: CGFloat(config.Height)}
 	msgSendCGSize(s.layer, Sel("setDrawableSize:"), size)
 
-	// Configure framebuffer only if not using storage binding
-	framebufferOnly := config.Usage&gputypes.TextureUsageStorageBinding == 0
+	// A drawable that is only ever an attachment is framebufferOnly: any
+	// other usage reads, copies or samples it.
+	framebufferOnly := config.Usage == gputypes.TextureUsageRenderAttachment
 	msgSendVoid(s.layer, Sel("setFramebufferOnly:"), argBool(framebufferOnly))
 
 	// Set maximum drawable count for frame latency control.
