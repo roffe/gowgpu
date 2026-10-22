@@ -14,8 +14,11 @@ import (
 // from the layer the source names to the one the destination names, and
 // touches no other.
 func TestCopyTextureToTextureArrayLayer(t *testing.T) {
-	_, _, device := newTestDevice(t)
+	_, adapter, device := newTestDevice(t)
 	defer device.Release()
+	if adapter.Info().Backend == gputypes.BackendGL {
+		t.Skip("array textures are not done on GL")
+	}
 
 	const side, layers = 8, 3
 	const rowBytes = side * 4
