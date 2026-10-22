@@ -956,6 +956,9 @@ func (q *Queue) SetSwapchainSuppressed(suppressed bool) {
 	defer q.mu.Unlock()
 
 	if suppressed {
+		if q.swapchainSuppressed {
+			return
+		}
 		// Save current swapchain state and suppress semaphore binding.
 		q.savedSwapchain = q.activeSwapchain
 		q.savedAcquireUsed = q.acquireUsed
