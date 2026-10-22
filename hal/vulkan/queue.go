@@ -176,6 +176,9 @@ func (q *Queue) ExternalSyncFull() bool {
 func (q *Queue) AddExternalSync(semaphore uintptr, wait, signal uint64) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	if !q.device.timelineFence.isTimeline {
+		return fmt.Errorf("vulkan: external semaphores need timeline semaphores")
+	}
 	if len(q.externalWaits) == maxExternalSync {
 		return fmt.Errorf("vulkan: a submit waits for at most %d external semaphores", maxExternalSync)
 	}
@@ -409,9 +412,6 @@ func (q *Queue) Submit(commandBuffers []hal.CommandBuffer) (uint64, error) {
 
 	if q.device.timelineFence.isTimeline {
 		return q.submitTimeline(&submitInfo, signalSems, waitCount, signalCount, consumedAcquire, signalValue)
-	}
-	if external > 0 {
-		return 0, fmt.Errorf("vulkan: external semaphores need timeline semaphores")
 	}
 
 	// Binary path (VK-IMPL-003): Get a fence from the pool to track this submission.
