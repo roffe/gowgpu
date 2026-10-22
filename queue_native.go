@@ -191,9 +191,12 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (uint64, error) {
 				dstTextures:     flushedDstTextures,
 				dstBuffers:      flushedDstBuffers,
 				views:           q.pending.flushedViews,
+				destroys:        q.pending.flushedDestroys,
+				refs:            q.pending.flushedRefs,
 			})
 		}
 		q.pending.flushedViews = nil
+		q.pending.flushedDestroys, q.pending.flushedRefs = nil, nil
 		// Update the staging belt with the actual submission index
 		// (belt.finish() was called during flush() before Submit).
 		if q.pending.belt != nil {

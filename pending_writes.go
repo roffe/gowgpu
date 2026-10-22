@@ -121,6 +121,14 @@ type pendingWrites struct {
 	// done with it.
 	views, flushedViews []hal.TextureView
 
+	// destroys are the HAL destroys of textures released while the batch
+	// copies into them (holdDestroy), and refs keep the buffers the batch
+	// copies into alive, as a command buffer keeps what it binds. Both run
+	// out once the batch's submission is complete; flush hands them to the
+	// flushed ones, which Submit moves to the inflight record.
+	destroys, flushedDestroys []heldDestroy
+	refs, flushedRefs         []*core.ResourceRef
+
 	// Scratch reused under pw.mu, so a steady stream of flushes allocates
 	// nothing: flush's barrier list, maintain's one element command buffer
 	// list for ResetAll, and the destination lists of completed inflight
@@ -174,6 +182,8 @@ type dstBuffer struct {
 // remain alive until the GPU completes that submission.
 type inflightSubmission struct {
 	submissionIndex uint64
+	destroys        []heldDestroy
+	refs            []*core.ResourceRef
 	staging         []hal.Buffer
 	cmdBuf          hal.CommandBuffer  // pending writes command buffer (consumed by ResetAll)
 	encoder         hal.CommandEncoder // encoder to reset+release after completion (nil if not pooled)
@@ -186,6 +196,45 @@ type inflightSubmission struct {
 	// views are the views of the passes that zeroed textures, see
 	// pendingWrites.views.
 	views []hal.TextureView
+}
+
+// heldDestroy is a texture's HAL destroy held back while the batch being
+// recorded copies into it (Texture.Release): now runs it once the batch's
+// submission is complete, later defers it as a plain Release does, for a
+// batch that is dropped.
+type heldDestroy struct {
+	now, later func()
+}
+
+// holdDestroy holds t's HAL destroy until the batch being recorded, which
+// copies into t, has run. A Release between a WriteTexture and the Submit
+// used to destroy the texture under the copy, which made flush drop the
+// whole batch. It reports false when the batch does not write t, and the
+// caller destroys as usual.
+func (pw *pendingWrites) holdDestroy(t *Texture, now, later func()) bool {
+	pw.mu.Lock()
+	defer pw.mu.Unlock()
+	if !pw.isRecording {
+		return false
+	}
+	for _, o := range pw.dstOwners {
+		if o.owner == t {
+			pw.destroys = append(pw.destroys, heldDestroy{now: now, later: later})
+			return true
+		}
+	}
+	return false
+}
+
+// dropHeld runs the held destroys as deferred and drops the refs of a batch
+// that will not run.
+func dropHeld(destroys []heldDestroy, refs []*core.ResourceRef) {
+	for _, h := range destroys {
+		h.later()
+	}
+	for _, r := range refs {
+		r.Drop()
+	}
 }
 
 // newPendingWrites creates a pendingWrites for the given HAL device and queue.
@@ -299,6 +348,13 @@ func (pw *pendingWrites) writeBufferFor(owner *Buffer, buffer hal.Buffer, usage 
 			Size:      dataLen,
 		}
 		enc.CopyBufferToBuffer(alloc.buffer, buffer, pw.copyRegion[:])
+	}
+
+	// The batch keeps the buffer alive until its copy has run: a Release
+	// before the Submit destroyed the buffer under the copy.
+	if _, seen := pw.dstBuffers[buffer]; !seen && owner != nil && owner.core != nil && owner.core.Ref != nil {
+		owner.core.Ref.Clone()
+		pw.refs = append(pw.refs, owner.core.Ref)
 	}
 
 	// Track destination buffer for barrier computation at flush time.
@@ -1055,9 +1111,11 @@ func (pw *pendingWrites) flush() (hal.CommandBuffer, hal.CommandEncoder, []hal.T
 	// Queue writes are recorded lazily, so a surface acquisition can retire
 	// between WriteTexture and Submit. Revalidate every contributing wrapper
 	// before any command buffer reaches HAL. The raw texture comparison also
-	// protects against a wrapper being rebound to a different resource.
+	// protects against a wrapper being rebound to a different resource. A
+	// released texture of any other kind is held alive for the batch
+	// (holdDestroy).
 	for _, o := range pw.dstOwners {
-		if o.owner.resolveHAL() != o.raw {
+		if o.owner.hal != o.raw || o.owner.surface != nil && o.owner.resolveHAL() != o.raw {
 			pw.discardRecording()
 			return nil, nil, nil, nil, fmt.Errorf("wgpu: pending writes: destination texture retired before submit: %w", ErrReleased)
 		}
@@ -1143,6 +1201,8 @@ func (pw *pendingWrites) flush() (hal.CommandBuffer, hal.CommandEncoder, []hal.T
 	clear(pw.dstTextures)
 	pw.clearOwners()
 	pw.flushedViews, pw.views = pw.views, nil
+	pw.flushedDestroys, pw.destroys = pw.destroys, nil
+	pw.flushedRefs, pw.refs = pw.refs, nil
 
 	return cmdBuf, flushedEncoder, flushedDstTextures, flushedDstBuffers, nil
 }
@@ -1170,6 +1230,8 @@ func (pw *pendingWrites) discardRecording() {
 
 	pw.destroyViews(pw.views)
 	pw.views = nil
+	dropHeld(pw.destroys, pw.refs)
+	pw.destroys, pw.refs = nil, nil
 	for raw := range pw.dstTextures {
 		raw.DecPendingRef()
 	}
@@ -1205,6 +1267,8 @@ func (pw *pendingWrites) cancelFlush(cmdBuf hal.CommandBuffer, encoder hal.Comma
 	}
 	pw.destroyViews(pw.flushedViews)
 	pw.flushedViews = nil
+	dropHeld(pw.flushedDestroys, pw.flushedRefs)
+	pw.flushedDestroys, pw.flushedRefs = nil, nil
 }
 
 // maintain frees staging buffers and returns encoders to the pool from
@@ -1228,6 +1292,12 @@ func (pw *pendingWrites) maintain(completedIndex uint64) {
 			pw.halDevice.DestroyBuffer(buf)
 		}
 		pw.destroyViews(sub.views)
+		for _, h := range sub.destroys {
+			h.now()
+		}
+		for _, r := range sub.refs {
+			r.Drop()
+		}
 		// Release pending refs on destination textures/buffers (BUG-DX12-006).
 		// This allows deferred Destroy to proceed now that GPU is done.
 		for _, tex := range sub.dstTextures {
@@ -1289,6 +1359,12 @@ func (pw *pendingWrites) destroy() {
 			pw.halDevice.FreeCommandBuffer(sub.cmdBuf)
 		}
 		pw.destroyViews(sub.views)
+		for _, h := range sub.destroys {
+			h.now()
+		}
+		for _, r := range sub.refs {
+			r.Drop()
+		}
 		for _, tex := range sub.dstTextures {
 			tex.DecPendingRef()
 		}

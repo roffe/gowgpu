@@ -110,25 +110,34 @@ func (t *Texture) Release() {
 	t.defaultView = nil
 	t.viewMu.Unlock()
 
-	dq := t.device.destroyQueue()
-	if dq == nil {
+	halTex := t.hal
+	now := func() {
 		if defaultView != nil {
 			halDevice.DestroyTextureView(defaultView)
 		}
-		halDevice.DestroyTexture(t.hal)
+		halDevice.DestroyTexture(halTex)
+	}
+	dq := t.device.destroyQueue()
+	if dq == nil {
+		now()
 		return
 	}
-
 	// The shared default view goes first, at the same submission.
-	subIdx := t.device.lastSubmissionIndex()
-	if defaultView != nil {
-		t.viewDestroy = viewDestroy{dev: halDevice, view: defaultView}
-		dq.DeferRelease(subIdx, "TextureView", &t.viewDestroy)
+	later := func() {
+		subIdx := t.device.lastSubmissionIndex()
+		if defaultView != nil {
+			t.viewDestroy = viewDestroy{dev: halDevice, view: defaultView}
+			dq.DeferRelease(subIdx, "TextureView", &t.viewDestroy)
+		}
+		dq.Defer(subIdx, "Texture", func() {
+			halDevice.DestroyTexture(halTex)
+		})
 	}
-	halTex := t.hal
-	dq.Defer(subIdx, "Texture", func() {
-		halDevice.DestroyTexture(halTex)
-	})
+	// A texture the queued writes copy into stays until they have run.
+	if q := t.device.queue; q != nil && q.pending != nil && q.pending.holdDestroy(t, now, later) {
+		return
+	}
+	later()
 }
 
 // releaseTextureTracking gives a texture's tracker index back, after taking
