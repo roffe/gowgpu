@@ -74,7 +74,7 @@ func main() {
 
 `hal/allbackends` registers what the platform has, `CreateInstance(nil)` picks between Vulkan, Metal and DX12, and `RequestAdapter` hands you the best GPU it found. On a machine without any of them you get `no adapters available`.
 
-The examples are a good next step: [compute-copy](examples/compute-copy), [compute-sum](examples/compute-sum) and [compute-particles](examples/compute-particles) for compute, and [triangle-headless](examples/triangle-headless), which renders to a texture and writes a PNG.
+The examples are a good next step: [compute-copy](examples/compute-copy), [compute-sum](examples/compute-sum) and [compute-particles](examples/compute-particles) for compute, and [triangle-headless](examples/triangle-headless), which renders to a texture and writes a PNG. The ones that open a window live in [examples/desktop](examples/desktop), a module of its own because they need GLFW: [particles](examples/desktop/particles) runs a compute shader and a render pipeline on 200,000 particles every frame, and [fluid](examples/desktop/fluid) is water, 16,384 SPH particles binned into a grid with atomics, that the mouse pulls and pushes. `cd examples/desktop && go run ./fluid`.
 
 ## Backends
 
@@ -141,6 +141,7 @@ Not run yet: the browser backend, the BSDs, GL on Windows and a real iOS device.
 - On GL a `texture_depth_2d` only works with a comparison sampler: naga declares it `sampler2DShadow`, so `textureSample` with a plain sampler and `textureLoad` on it don't compile.
 - On GL, new depth, multisampled and compressed textures start with whatever the memory held, so clear them in their first render pass or write all of them. Every other new texture starts zeroed, and on Vulkan, DX12 and Metal all of them do. One catch on Metal with an Apple GPU: a `WriteTexture` into part of a new depth or stencil texture before its first `Submit` gets the zeroing clear on top of it.
 - GL binds bind groups and vertex buffers against the pipeline set at the time, so set the pipeline first; integer vertex formats, index base vertex, `CopyBufferToTexture` row pitch and anything but 2D textures are not done on GL.
+- Desktop GL compiles compute shaders as GLSL 3.30, where naga declares a storage buffer as a `uniform` block, so a compute shader that writes one fails to compile (`assignment to uniform`). The desktop examples show it with `-backend gl`.
 - Render bundles crash on Vulkan in `vkBeginCommandBuffer`.
 - Metal has no compressed texture formats yet, so it doesn't offer `TextureCompressionBC`. It used to offer it, and a BC texture aborted the app.
 - `examples/browser-compute` doesn't build, it was written against an older API.

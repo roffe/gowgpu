@@ -22,7 +22,7 @@ import (
 - `core/`: validation, state tracking, deferred destruction.
 - `hal/`: the backend interfaces, `hal/vulkan`, `hal/metal`, `hal/dx12`, `hal/gles` (with `egl`, `gl`, `wgl`), `hal/noop`, `hal/allbackends`.
 - `gputypes/`: WebGPU types, from gogpu/gputypes v0.8.0.
-- `internal/dl`: dlopen/dlsym. `cmd/`: generators and backend test programs. `examples/`: compute and headless rendering.
+- `internal/dl`: dlopen/dlsym. `cmd/`: generators and backend test programs. `examples/`: compute and headless rendering, and `examples/desktop`, the windowed demos, a module of its own because they need GLFW.
 
 There is no software backend, no `-tags rust` backend, no goffi and no gpucontext any more.
 

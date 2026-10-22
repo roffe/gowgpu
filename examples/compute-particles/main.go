@@ -6,7 +6,7 @@
 // neighbors. Results are read back to CPU each step.
 //
 // The example is headless (no window required) and works on any supported GPU.
-// For a windowed version with real-time rendering, see gogpu/examples/particles.
+// For a windowed version with real-time rendering, see examples/desktop/particles.
 //
 // Usage: CGO_ENABLED=0 go run .
 package main
