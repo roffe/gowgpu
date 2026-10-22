@@ -450,7 +450,11 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 		if tv, ok := dsa.View.(*TextureView); ok && tv != nil {
 			_ = MsgSend(depthAttachment, Sel("setTexture:"), uintptr(tv.raw))
 		}
-		_ = MsgSend(depthAttachment, Sel("setLoadAction:"), uintptr(loadOpToMTL(dsa.DepthLoadOp)))
+		depthLoad := loadOpToMTL(dsa.DepthLoadOp)
+		if dsa.DepthReadOnly {
+			depthLoad = MTLLoadActionLoad
+		}
+		_ = MsgSend(depthAttachment, Sel("setLoadAction:"), uintptr(depthLoad))
 		if dsa.DepthLoadOp == gputypes.LoadOpClear {
 			msgSendVoid(depthAttachment, Sel("setClearDepth:"), argFloat64(float64(dsa.DepthClearValue)))
 		}
@@ -470,7 +474,11 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 		if tv, ok := dsa.View.(*TextureView); ok && tv != nil && tv.texture != nil && tv.texture.format.HasStencil() {
 			stencilAttachment := MsgSend(rpDesc, Sel("stencilAttachment"))
 			_ = MsgSend(stencilAttachment, Sel("setTexture:"), uintptr(tv.raw))
-			_ = MsgSend(stencilAttachment, Sel("setLoadAction:"), uintptr(loadOpToMTL(dsa.StencilLoadOp)))
+			stencilLoad := loadOpToMTL(dsa.StencilLoadOp)
+			if dsa.StencilReadOnly {
+				stencilLoad = MTLLoadActionLoad
+			}
+			_ = MsgSend(stencilAttachment, Sel("setLoadAction:"), uintptr(stencilLoad))
 			if dsa.StencilLoadOp == gputypes.LoadOpClear {
 				_ = MsgSend(stencilAttachment, Sel("setClearStencil:"), uintptr(dsa.StencilClearValue))
 			}
