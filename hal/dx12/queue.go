@@ -154,10 +154,13 @@ func (q *Queue) Submit(commandBuffers []hal.CommandBuffer) (uint64, error) {
 		return 0, err
 	}
 	defer q.state.submitMu.Unlock()
-	return q.submitLocked(commandBuffers)
+	return q.submitLocked(commandBuffers, true)
 }
 
-func (q *Queue) submitLocked(commandBuffers []hal.CommandBuffer) (uint64, error) {
+// submitLocked executes commandBuffers with submitMu held. Only a Submit
+// waits for and signals the fences AddExternalSync was given (external);
+// the one-shot copies of WriteBuffer and WriteTexture leave them for it.
+func (q *Queue) submitLocked(commandBuffers []hal.CommandBuffer, external bool) (uint64, error) {
 	completed := q.device.completedFrameFenceValue()
 	q.releaseCompletedPreambles(completed)
 	q.releaseCompletedOneShots(completed)
@@ -198,14 +201,18 @@ func (q *Queue) submitLocked(commandBuffers []hal.CommandBuffer) (uint64, error)
 
 	// Execute command lists
 	submitStart := time.Now()
-	if err := q.waitExternal(); err != nil {
-		q.releaseBuiltPreambles(nativePreambles)
-		return 0, err
+	if external {
+		if err := q.waitExternal(); err != nil {
+			q.releaseBuiltPreambles(nativePreambles)
+			return 0, err
+		}
 	}
 	q.raw.ExecuteCommandLists(uint32(len(executionLists)), &executionLists[0])
-	if err := q.signalExternal(); err != nil {
-		q.retainPreamblesWithoutFence(nativePreambles)
-		return 0, err
+	if external {
+		if err := q.signalExternal(); err != nil {
+			q.retainPreamblesWithoutFence(nativePreambles)
+			return 0, err
+		}
 	}
 
 	// Check for immediate device removal after execution.
@@ -641,7 +648,7 @@ func (q *Queue) writeBufferStaged(buf *Buffer, offset uint64, data []byte) error
 	owner.commandBuffer = cmdBuffer.(*CommandBuffer)
 
 	// Submit and wait for GPU completion.
-	submission, err := q.submitLocked([]hal.CommandBuffer{cmdBuffer})
+	submission, err := q.submitLocked([]hal.CommandBuffer{cmdBuffer}, false)
 	if err != nil {
 		q.retainOneShot(owner, 0)
 		owner = nil
@@ -744,7 +751,7 @@ func (q *Queue) WriteTexture(dst *hal.ImageCopyTexture, data []byte, layout *hal
 		return fmt.Errorf("dx12: WriteTexture: EndEncoding failed: %w", err)
 	}
 	owner.commandBuffer = cmdBuffer.(*CommandBuffer)
-	submission, err := q.submitLocked([]hal.CommandBuffer{cmdBuffer})
+	submission, err := q.submitLocked([]hal.CommandBuffer{cmdBuffer}, false)
 	if err != nil {
 		q.retainOneShot(owner, 0)
 		owner = nil
