@@ -4,6 +4,7 @@ package wgpu
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
@@ -110,6 +111,11 @@ const (
 	maxFreeOversized       = 4
 	maxPooledOversizedSize = 4 << 20
 )
+
+// unsubmittedIndex is the submission index of a batch finished ahead of its
+// submit: no completed index reaches it, so recall leaves the batch alone
+// until setLastSubmissionIndex names the real one.
+const unsubmittedIndex uint64 = math.MaxUint64
 
 // stagingBeltMaxOversizedSize caps individual staging buffer allocations at 64MB.
 // Rust wgpu caps staging buffers at 1 << 26 (64MB). This prevents
@@ -438,11 +444,11 @@ func (b *stagingBelt) discardActive() {
 	b.chunkedAllocs = nil
 }
 
-// discardLastClosed rolls back the batch most recently finished with the
-// placeholder submission index. It is used only when HAL rejects Submit.
+// discardLastClosed rolls back the batch most recently finished with
+// unsubmittedIndex. It is used only when HAL rejects Submit.
 func (b *stagingBelt) discardLastClosed() {
 	last := len(b.closedSubmissions) - 1
-	if last < 0 || b.closedSubmissions[last].submissionIndex != 0 {
+	if last < 0 || b.closedSubmissions[last].submissionIndex != unsubmittedIndex {
 		return
 	}
 	submission := b.closedSubmissions[last]

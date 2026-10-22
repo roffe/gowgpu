@@ -173,7 +173,7 @@ func TestStagingBelt_DiscardPathsRetireOnlyUnsubmittedBatches(t *testing.T) {
 		if _, err := belt.allocate(96, make([]byte, 96)); err != nil {
 			t.Fatalf("allocate placeholder oversized buffer: %v", err)
 		}
-		belt.finish(0)
+		belt.finish(unsubmittedIndex)
 		belt.discardLastClosed()
 		stats := belt.stats()
 		if stats.ClosedSubs != 0 || stats.FreeChunks != 1 {
@@ -191,6 +191,28 @@ func TestStagingBelt_DiscardPathsRetireOnlyUnsubmittedBatches(t *testing.T) {
 	})
 }
 
+// A batch finished ahead of its submit is not recalled before the submit
+// names its index: a Poll from another goroutine could otherwise recycle
+// its chunks under the copies.
+func TestStagingBelt_RecallSkipsUnsubmittedBatch(t *testing.T) {
+	belt := createTestBelt(t, 1024)
+	defer belt.destroy()
+
+	if _, err := belt.allocate(32, make([]byte, 32)); err != nil {
+		t.Fatalf("allocate: %v", err)
+	}
+	belt.finish(unsubmittedIndex)
+	belt.recall(100)
+	if s := belt.stats(); s.ClosedSubs != 1 || s.FreeChunks != 0 {
+		t.Fatalf("recalled before the submit: %+v", s)
+	}
+	belt.setLastSubmissionIndex(5)
+	belt.recall(100)
+	if s := belt.stats(); s.ClosedSubs != 0 || s.FreeChunks != 1 {
+		t.Fatalf("not recalled after the submit: %+v", s)
+	}
+}
+
 func TestStagingBelt_FinishAndRecall(t *testing.T) {
 	belt := createTestBelt(t, 1024)
 	defer belt.destroy()
@@ -201,14 +223,14 @@ func TestStagingBelt_FinishAndRecall(t *testing.T) {
 	if _, err := belt.allocate(32, data); err != nil {
 		t.Fatalf("alloc 1: %v", err)
 	}
-	belt.finish(0)
+	belt.finish(unsubmittedIndex)
 	belt.setLastSubmissionIndex(10)
 
 	// Submission 2: allocate (new chunk since previous was closed), finish.
 	if _, err := belt.allocate(32, data); err != nil {
 		t.Fatalf("alloc 2: %v", err)
 	}
-	belt.finish(0)
+	belt.finish(unsubmittedIndex)
 	belt.setLastSubmissionIndex(20)
 
 	s := belt.stats()

@@ -1229,7 +1229,7 @@ func (pw *pendingWrites) flush() (hal.CommandBuffer, hal.CommandEncoder, []hal.T
 	// Belt is the sole owner of all staging resources (chunks + oversized).
 	// recall() handles destruction after GPU completion — no double-destroy.
 	if pw.belt != nil {
-		pw.belt.finish(0) // submissionIndex set by caller via setLastSubmissionIndex
+		pw.belt.finish(unsubmittedIndex) // the caller names it through setLastSubmissionIndex
 	}
 
 	// Both stay nil when empty: Submit treats a nil flushedDstTextures as
