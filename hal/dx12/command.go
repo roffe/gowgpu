@@ -180,7 +180,7 @@ func (e *CommandEncoder) TransitionBuffers(barriers []hal.BufferBarrier) {
 
 		afterState := bufferUsageToD3D12State(b.Usage.NewUsage)
 		beforeState, needsBarrier := e.stateTracker.transitionBuffer(buf, afterState)
-		if needsBarrier {
+		if needsBarrier || keepsUnorderedAccess(beforeState, afterState) {
 			plans = append(plans, stateBarrierPlan{resource: buf, subresource: d3d12.D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, before: beforeState, after: afterState})
 		}
 	}
@@ -220,10 +220,15 @@ func (e *CommandEncoder) emitStateBarrierPlans(plans []stateBarrierPlan) {
 		case *Texture:
 			raw = resource.raw
 		}
-		if raw == nil || plan.before == plan.after {
+		if raw == nil {
 			continue
 		}
-		d3dBarriers = append(d3dBarriers, d3d12.NewTransitionBarrier(raw, plan.before, plan.after, plan.subresource))
+		switch {
+		case keepsUnorderedAccess(plan.before, plan.after):
+			d3dBarriers = append(d3dBarriers, d3d12.NewUAVBarrier(raw))
+		case plan.before != plan.after:
+			d3dBarriers = append(d3dBarriers, d3d12.NewTransitionBarrier(raw, plan.before, plan.after, plan.subresource))
+		}
 	}
 	if len(d3dBarriers) > 0 {
 		if hal.DebugEnabled() {

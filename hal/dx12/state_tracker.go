@@ -247,11 +247,19 @@ const d3d12WriteStates = d3d12.D3D12_RESOURCE_STATE_RENDER_TARGET |
 	d3d12.D3D12_RESOURCE_STATE_VIDEO_PROCESS_WRITE |
 	d3d12.D3D12_RESOURCE_STATE_VIDEO_ENCODE_WRITE
 
+// keepsUnorderedAccess reports a transition that leaves the resource in
+// UNORDERED_ACCESS. The core asks for one between two read-write storage
+// uses so that a UAV barrier can order the writes of the first before the
+// second, as a transition barrier would between two different states.
+func keepsUnorderedAccess(before, after d3d12.D3D12_RESOURCE_STATES) bool {
+	return before == after && after == d3d12.D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+}
+
 func (t *commandStateTracker) transitionTextureRange(texture *Texture, subresources []uint32, target d3d12.D3D12_RESOURCE_STATES) []stateBarrierPlan {
 	plans := make([]stateBarrierPlan, 0, len(subresources))
 	for _, subresource := range subresources {
 		before, barrier := t.transitionTexture(texture, subresource, target)
-		if barrier {
+		if barrier || keepsUnorderedAccess(before, target) {
 			plans = append(plans, stateBarrierPlan{resource: texture, subresource: subresource, before: before, after: target})
 		}
 	}

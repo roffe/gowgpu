@@ -1027,3 +1027,36 @@ func TestTextureViewDestroyRecyclesOnlyAllocatedDSVVariantsOnce(t *testing.T) {
 		t.Fatalf("freed partial DSV variants = %v, want %v", device.dsvHeap.freeList, want)
 	}
 }
+
+func TestTransitionTextureRangePlansUAVBarrierBetweenStorageWrites(t *testing.T) {
+	const uav = d3d12.D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+	shaderRead := d3d12.D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | d3d12.D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
+	texture := testTexture(gputypes.TextureFormatRGBA8Unorm, gputypes.TextureDimension2D, 4, 4, 1, 1)
+	tracker := newCommandStateTracker()
+
+	if plans := tracker.transitionTextureRange(texture, []uint32{0}, uav); len(plans) != 1 || plans[0].before != d3d12.D3D12_RESOURCE_STATE_COMMON || plans[0].after != uav {
+		t.Fatalf("first storage use = %#v, want COMMON->UNORDERED_ACCESS", plans)
+	}
+	plans := tracker.transitionTextureRange(texture, []uint32{0}, uav)
+	if len(plans) != 1 || !keepsUnorderedAccess(plans[0].before, plans[0].after) {
+		t.Fatalf("second storage use = %#v, want a UAV barrier plan", plans)
+	}
+	tracker.transitionTextureRange(texture, []uint32{0}, shaderRead)
+	if plans := tracker.transitionTextureRange(texture, []uint32{0}, shaderRead); len(plans) != 0 {
+		t.Fatalf("second read = %#v, want no barrier", plans)
+	}
+}
+
+func TestTransitionBufferKeepsUnorderedAccessForStorageWrites(t *testing.T) {
+	const uav = d3d12.D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+	buffer := &Buffer{}
+	tracker := newCommandStateTracker()
+	tracker.transitionBuffer(buffer, uav)
+	before, barrier := tracker.transitionBuffer(buffer, uav)
+	if barrier || !keepsUnorderedAccess(before, uav) {
+		t.Fatalf("second storage use = (%d, %v), want UNORDERED_ACCESS kept without a transition", before, barrier)
+	}
+	if keepsUnorderedAccess(d3d12.D3D12_RESOURCE_STATE_COPY_DEST, d3d12.D3D12_RESOURCE_STATE_COPY_DEST) {
+		t.Fatal("a repeated copy destination needs no UAV barrier")
+	}
+}
