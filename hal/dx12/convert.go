@@ -295,8 +295,17 @@ func addressModeToD3D12(mode gputypes.AddressMode) d3d12.D3D12_TEXTURE_ADDRESS_M
 	}
 }
 
-// filterModeToD3D12 builds a D3D12 filter from WebGPU filter modes.
-func filterModeToD3D12(minFilter, magFilter, mipmapFilter gputypes.FilterMode, compare gputypes.CompareFunction) d3d12.D3D12_FILTER {
+// filterModeToD3D12 builds a D3D12 filter from WebGPU filter modes. An
+// anisotropic sampler has its own filter, which samples every level
+// linearly whatever the modes say.
+func filterModeToD3D12(minFilter, magFilter, mipmapFilter gputypes.FilterMode, compare gputypes.CompareFunction, anisotropic bool) d3d12.D3D12_FILTER {
+	if anisotropic {
+		if compare != gputypes.CompareFunctionUndefined {
+			return d3d12.D3D12_FILTER_COMPARISON_ANISOTROPIC
+		}
+		return d3d12.D3D12_FILTER_ANISOTROPIC
+	}
+
 	// Build filter from components
 	var filter uint32
 

@@ -1784,7 +1784,7 @@ func (d *Device) CreateSampler(desc *hal.SamplerDescriptor) (hal.Sampler, error)
 
 	// Build D3D12 sampler desc
 	samplerDesc := d3d12.D3D12_SAMPLER_DESC{
-		Filter:         filterModeToD3D12(desc.MinFilter, desc.MagFilter, desc.MipmapFilter, desc.Compare),
+		Filter:         filterModeToD3D12(desc.MinFilter, desc.MagFilter, desc.MipmapFilter, desc.Compare, desc.Anisotropy > 1),
 		AddressU:       addressModeToD3D12(desc.AddressModeU),
 		AddressV:       addressModeToD3D12(desc.AddressModeV),
 		AddressW:       addressModeToD3D12(desc.AddressModeW),

@@ -322,25 +322,28 @@ func TestAddressModeToD3D12(t *testing.T) {
 
 func TestFilterModeToD3D12(t *testing.T) {
 	tests := []struct {
-		name    string
-		min     gputypes.FilterMode
-		mag     gputypes.FilterMode
-		mipmap  gputypes.FilterMode
-		compare gputypes.CompareFunction
-		expect  d3d12.D3D12_FILTER
+		name        string
+		min         gputypes.FilterMode
+		mag         gputypes.FilterMode
+		mipmap      gputypes.FilterMode
+		compare     gputypes.CompareFunction
+		anisotropic bool
+		expect      d3d12.D3D12_FILTER
 	}{
-		{"AllNearest", gputypes.FilterModeNearest, gputypes.FilterModeNearest, gputypes.FilterModeNearest, gputypes.CompareFunctionUndefined, d3d12.D3D12_FILTER(0x00)},
-		{"MipLinear", gputypes.FilterModeNearest, gputypes.FilterModeNearest, gputypes.FilterModeLinear, gputypes.CompareFunctionUndefined, d3d12.D3D12_FILTER(0x01)},
-		{"MagLinear", gputypes.FilterModeNearest, gputypes.FilterModeLinear, gputypes.FilterModeNearest, gputypes.CompareFunctionUndefined, d3d12.D3D12_FILTER(0x04)},
-		{"MinLinear", gputypes.FilterModeLinear, gputypes.FilterModeNearest, gputypes.FilterModeNearest, gputypes.CompareFunctionUndefined, d3d12.D3D12_FILTER(0x10)},
-		{"AllLinear", gputypes.FilterModeLinear, gputypes.FilterModeLinear, gputypes.FilterModeLinear, gputypes.CompareFunctionUndefined, d3d12.D3D12_FILTER(0x15)},
-		{"ComparisonAllNearest", gputypes.FilterModeNearest, gputypes.FilterModeNearest, gputypes.FilterModeNearest, gputypes.CompareFunctionLess, d3d12.D3D12_FILTER(0x80)},
-		{"ComparisonAllLinear", gputypes.FilterModeLinear, gputypes.FilterModeLinear, gputypes.FilterModeLinear, gputypes.CompareFunctionLess, d3d12.D3D12_FILTER(0x95)},
+		{"AllNearest", gputypes.FilterModeNearest, gputypes.FilterModeNearest, gputypes.FilterModeNearest, gputypes.CompareFunctionUndefined, false, d3d12.D3D12_FILTER(0x00)},
+		{"MipLinear", gputypes.FilterModeNearest, gputypes.FilterModeNearest, gputypes.FilterModeLinear, gputypes.CompareFunctionUndefined, false, d3d12.D3D12_FILTER(0x01)},
+		{"MagLinear", gputypes.FilterModeNearest, gputypes.FilterModeLinear, gputypes.FilterModeNearest, gputypes.CompareFunctionUndefined, false, d3d12.D3D12_FILTER(0x04)},
+		{"MinLinear", gputypes.FilterModeLinear, gputypes.FilterModeNearest, gputypes.FilterModeNearest, gputypes.CompareFunctionUndefined, false, d3d12.D3D12_FILTER(0x10)},
+		{"AllLinear", gputypes.FilterModeLinear, gputypes.FilterModeLinear, gputypes.FilterModeLinear, gputypes.CompareFunctionUndefined, false, d3d12.D3D12_FILTER(0x15)},
+		{"ComparisonAllNearest", gputypes.FilterModeNearest, gputypes.FilterModeNearest, gputypes.FilterModeNearest, gputypes.CompareFunctionLess, false, d3d12.D3D12_FILTER(0x80)},
+		{"ComparisonAllLinear", gputypes.FilterModeLinear, gputypes.FilterModeLinear, gputypes.FilterModeLinear, gputypes.CompareFunctionLess, false, d3d12.D3D12_FILTER(0x95)},
+		{"Anisotropic", gputypes.FilterModeLinear, gputypes.FilterModeLinear, gputypes.FilterModeNearest, gputypes.CompareFunctionUndefined, true, d3d12.D3D12_FILTER_ANISOTROPIC},
+		{"ComparisonAnisotropic", gputypes.FilterModeLinear, gputypes.FilterModeLinear, gputypes.FilterModeLinear, gputypes.CompareFunctionLess, true, d3d12.D3D12_FILTER_COMPARISON_ANISOTROPIC},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := filterModeToD3D12(tt.min, tt.mag, tt.mipmap, tt.compare)
+			got := filterModeToD3D12(tt.min, tt.mag, tt.mipmap, tt.compare, tt.anisotropic)
 			if got != tt.expect {
 				t.Errorf("filterModeToD3D12() = %#x, want %#x", got, tt.expect)
 			}
