@@ -495,7 +495,8 @@ const (
 	MTLVertexFormatUInt2                 MTLVertexFormat = 37
 	MTLVertexFormatUInt3                 MTLVertexFormat = 38
 	MTLVertexFormatUInt4                 MTLVertexFormat = 39
-	MTLVertexFormatUInt1010102Normalized MTLVertexFormat = 40
+	MTLVertexFormatInt1010102Normalized  MTLVertexFormat = 40
+	MTLVertexFormatUInt1010102Normalized MTLVertexFormat = 41
 )
 
 // MTLVertexStepFunction represents vertex step functions.
