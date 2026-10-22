@@ -6,6 +6,7 @@
 package dx12
 
 import (
+	"encoding/binary"
 	"testing"
 
 	"github.com/roffe/gowgpu/gputypes"
@@ -783,6 +784,135 @@ func TestCompositeAlphaModeToDXGI(t *testing.T) {
 			got := compositeAlphaModeToDXGI(tt.mode)
 			if got != tt.expect {
 				t.Errorf("compositeAlphaModeToDXGI(%v) = %v, want %v", tt.mode, got, tt.expect)
+			}
+		})
+	}
+}
+
+func viewOf(dim gputypes.TextureViewDimension, baseLayer, layerCount, samples uint32) *TextureView {
+	return &TextureView{
+		texture:    &Texture{dimension: gputypes.TextureDimension2D, size: hal.Extent3D{Width: 16, Height: 16, DepthOrArrayLayers: 24}, mipLevels: 3, samples: samples},
+		dimension:  dim,
+		baseMip:    1,
+		mipCount:   2,
+		baseLayer:  baseLayer,
+		layerCount: layerCount,
+	}
+}
+
+func unionU32(union []byte, index int) uint32 {
+	return binary.LittleEndian.Uint32(union[4*index:])
+}
+
+func TestRenderTargetViewDescAddressesTheViewsLayers(t *testing.T) {
+	tests := []struct {
+		name      string
+		view      *TextureView
+		dimension d3d12.D3D12_RTV_DIMENSION
+		fields    []uint32
+	}{
+		{"2D of layer 0", viewOf(gputypes.TextureViewDimension2D, 0, 1, 1), d3d12.D3D12_RTV_DIMENSION_TEXTURE2D, []uint32{1, 0}},
+		{"2D of layer 5", viewOf(gputypes.TextureViewDimension2D, 5, 1, 1), d3d12.D3D12_RTV_DIMENSION_TEXTURE2DARRAY, []uint32{1, 5, 1, 0}},
+		{"2D of layer 5 counted as the rest", viewOf(gputypes.TextureViewDimension2D, 5, 19, 1), d3d12.D3D12_RTV_DIMENSION_TEXTURE2DARRAY, []uint32{1, 5, 1, 0}},
+		{"2D array", viewOf(gputypes.TextureViewDimension2DArray, 2, 4, 1), d3d12.D3D12_RTV_DIMENSION_TEXTURE2DARRAY, []uint32{1, 2, 4, 0}},
+		{"multisampled 2D of layer 0", viewOf(gputypes.TextureViewDimension2D, 0, 1, 4), d3d12.D3D12_RTV_DIMENSION_TEXTURE2DMS, nil},
+		{"multisampled 2D of layer 3", viewOf(gputypes.TextureViewDimension2D, 3, 1, 4), d3d12.D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY, []uint32{3, 1}},
+		{"multisampled 2D array", viewOf(gputypes.TextureViewDimension2DArray, 0, 6, 4), d3d12.D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY, []uint32{0, 6}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			desc := renderTargetViewDesc(tt.view, d3d12.DXGI_FORMAT_R8G8B8A8_UNORM)
+			if desc.ViewDimension != tt.dimension {
+				t.Fatalf("dimension = %d, want %d", desc.ViewDimension, tt.dimension)
+			}
+			for i, want := range tt.fields {
+				if got := unionU32(desc.Union[:], i); got != want {
+					t.Errorf("field %d = %d, want %d", i, got, want)
+				}
+			}
+		})
+	}
+}
+
+func TestDepthStencilViewDescAddressesTheViewsLayers(t *testing.T) {
+	tests := []struct {
+		name      string
+		view      *TextureView
+		dimension d3d12.D3D12_DSV_DIMENSION
+		fields    []uint32
+	}{
+		{"2D of layer 0", viewOf(gputypes.TextureViewDimension2D, 0, 1, 1), d3d12.D3D12_DSV_DIMENSION_TEXTURE2D, []uint32{1}},
+		{"2D of layer 5", viewOf(gputypes.TextureViewDimension2D, 5, 1, 1), d3d12.D3D12_DSV_DIMENSION_TEXTURE2DARRAY, []uint32{1, 5, 1}},
+		{"2D array", viewOf(gputypes.TextureViewDimension2DArray, 2, 4, 1), d3d12.D3D12_DSV_DIMENSION_TEXTURE2DARRAY, []uint32{1, 2, 4}},
+		{"multisampled 2D of layer 0", viewOf(gputypes.TextureViewDimension2D, 0, 1, 4), d3d12.D3D12_DSV_DIMENSION_TEXTURE2DMS, nil},
+		{"multisampled 2D of layer 3", viewOf(gputypes.TextureViewDimension2D, 3, 1, 4), d3d12.D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY, []uint32{3, 1}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			desc := depthStencilViewDesc(tt.view, d3d12.DXGI_FORMAT_D32_FLOAT)
+			if desc.ViewDimension != tt.dimension {
+				t.Fatalf("dimension = %d, want %d", desc.ViewDimension, tt.dimension)
+			}
+			for i, want := range tt.fields {
+				if got := unionU32(desc.Union[:], i); got != want {
+					t.Errorf("field %d = %d, want %d", i, got, want)
+				}
+			}
+		})
+	}
+}
+
+func TestShaderResourceViewDescAddressesTheViewsLayers(t *testing.T) {
+	tests := []struct {
+		name      string
+		view      *TextureView
+		dimension d3d12.D3D12_SRV_DIMENSION
+		fields    []uint32
+	}{
+		{"2D of layer 0", viewOf(gputypes.TextureViewDimension2D, 0, 1, 1), d3d12.D3D12_SRV_DIMENSION_TEXTURE2D, []uint32{1, 2, 1}},
+		{"2D of layer 5", viewOf(gputypes.TextureViewDimension2D, 5, 1, 1), d3d12.D3D12_SRV_DIMENSION_TEXTURE2DARRAY, []uint32{1, 2, 5, 1, 1}},
+		{"2D array", viewOf(gputypes.TextureViewDimension2DArray, 2, 4, 1), d3d12.D3D12_SRV_DIMENSION_TEXTURE2DARRAY, []uint32{1, 2, 2, 4, 1}},
+		{"cube of the first cube", viewOf(gputypes.TextureViewDimensionCube, 0, 6, 1), d3d12.D3D12_SRV_DIMENSION_TEXTURECUBE, []uint32{1, 2}},
+		{"cube of the second cube", viewOf(gputypes.TextureViewDimensionCube, 6, 6, 1), d3d12.D3D12_SRV_DIMENSION_TEXTURECUBEARRAY, []uint32{1, 2, 6, 1}},
+		{"cube array from the second cube", viewOf(gputypes.TextureViewDimensionCubeArray, 6, 18, 1), d3d12.D3D12_SRV_DIMENSION_TEXTURECUBEARRAY, []uint32{1, 2, 6, 3}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			desc := shaderResourceViewDesc(tt.view, d3d12.DXGI_FORMAT_R8G8B8A8_UNORM, 1)
+			if desc.ViewDimension != tt.dimension {
+				t.Fatalf("dimension = %d, want %d", desc.ViewDimension, tt.dimension)
+			}
+			for i, want := range tt.fields {
+				if got := unionU32(desc.Union[:], i); got != want {
+					t.Errorf("field %d = %d, want %d", i, got, want)
+				}
+			}
+		})
+	}
+}
+
+func TestUnorderedAccessViewDescAddressesTheViewsLayers(t *testing.T) {
+	tests := []struct {
+		name      string
+		view      *TextureView
+		dimension d3d12.D3D12_UAV_DIMENSION
+		fields    []uint32
+	}{
+		{"2D of layer 0", viewOf(gputypes.TextureViewDimension2D, 0, 1, 1), d3d12.D3D12_UAV_DIMENSION_TEXTURE2D, []uint32{1, 0}},
+		{"2D of layer 5", viewOf(gputypes.TextureViewDimension2D, 5, 1, 1), d3d12.D3D12_UAV_DIMENSION_TEXTURE2DARRAY, []uint32{1, 5, 1, 0}},
+		{"2D array", viewOf(gputypes.TextureViewDimension2DArray, 2, 4, 1), d3d12.D3D12_UAV_DIMENSION_TEXTURE2DARRAY, []uint32{1, 2, 4, 0}},
+		{"cube", viewOf(gputypes.TextureViewDimensionCube, 6, 6, 1), d3d12.D3D12_UAV_DIMENSION_TEXTURE2DARRAY, []uint32{1, 6, 6, 0}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			desc := unorderedAccessViewDesc(tt.view, d3d12.DXGI_FORMAT_R8G8B8A8_UNORM)
+			if desc.ViewDimension != tt.dimension {
+				t.Fatalf("dimension = %d, want %d", desc.ViewDimension, tt.dimension)
+			}
+			for i, want := range tt.fields {
+				if got := unionU32(desc.Union[:], i); got != want {
+					t.Errorf("field %d = %d, want %d", i, got, want)
+				}
 			}
 		})
 	}

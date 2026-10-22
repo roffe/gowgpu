@@ -1564,8 +1564,6 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 
 	dxgiFormat := textureFormatToD3D12(viewFormat)
 
-	isMultisampled := tex.samples > 1
-
 	// Create RTV if texture supports render attachment and is not depth
 	if tex.usage&gputypes.TextureUsageRenderAttachment != 0 && !isDepthFormat(viewFormat) {
 		// Allocate RTV descriptor
@@ -1574,33 +1572,7 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 			return failTextureViewCreation(view, fmt.Errorf("dx12: failed to allocate RTV descriptor: %w", err))
 		}
 
-		var rtvDesc d3d12.D3D12_RENDER_TARGET_VIEW_DESC
-		if isMultisampled && viewDim == gputypes.TextureViewDimension2D {
-			// MSAA textures require TEXTURE2DMS view dimension.
-			// Using TEXTURE2D for multi-sampled resources is invalid and
-			// causes DX12 DEVICE_REMOVED on some drivers (Intel Iris Xe).
-			rtvDesc = d3d12.D3D12_RENDER_TARGET_VIEW_DESC{
-				Format:        dxgiFormat,
-				ViewDimension: d3d12.D3D12_RTV_DIMENSION_TEXTURE2DMS,
-			}
-			// TEXTURE2DMS has no additional fields (no MipSlice, etc.)
-		} else {
-			rtvDesc = d3d12.D3D12_RENDER_TARGET_VIEW_DESC{
-				Format:        dxgiFormat,
-				ViewDimension: textureViewDimensionToRTV(viewDim),
-			}
-			switch viewDim {
-			case gputypes.TextureViewDimension1D:
-				rtvDesc.SetTexture1D(baseMip)
-			case gputypes.TextureViewDimension2D:
-				rtvDesc.SetTexture2D(baseMip, 0)
-			case gputypes.TextureViewDimension2DArray:
-				rtvDesc.SetTexture2DArray(baseMip, baseLayer, layerCount, 0)
-			case gputypes.TextureViewDimension3D:
-				rtvDesc.SetTexture3D(baseMip, baseLayer, layerCount)
-			}
-		}
-
+		rtvDesc := renderTargetViewDesc(view, dxgiFormat)
 		d.raw.CreateRenderTargetView(tex.raw, &rtvDesc, rtvHandle)
 		view.rtvHandle = rtvHandle
 		view.rtvHeapIndex = rtvIndex
@@ -1615,34 +1587,7 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 			return failTextureViewCreation(view, fmt.Errorf("dx12: failed to allocate DSV descriptor: %w", err))
 		}
 
-		// For depth views, use the actual depth format, not typeless
-		depthFormat := textureFormatToD3D12(viewFormat)
-
-		var dsvDesc d3d12.D3D12_DEPTH_STENCIL_VIEW_DESC
-		if isMultisampled && viewDim == gputypes.TextureViewDimension2D {
-			// MSAA depth/stencil textures require TEXTURE2DMS view dimension.
-			dsvDesc = d3d12.D3D12_DEPTH_STENCIL_VIEW_DESC{
-				Format:        depthFormat,
-				ViewDimension: d3d12.D3D12_DSV_DIMENSION_TEXTURE2DMS,
-				Flags:         0,
-			}
-			// TEXTURE2DMS has no additional fields.
-		} else {
-			dsvDesc = d3d12.D3D12_DEPTH_STENCIL_VIEW_DESC{
-				Format:        depthFormat,
-				ViewDimension: textureViewDimensionToDSV(viewDim),
-				Flags:         0,
-			}
-			switch viewDim {
-			case gputypes.TextureViewDimension1D:
-				dsvDesc.SetTexture1D(baseMip)
-			case gputypes.TextureViewDimension2D:
-				dsvDesc.SetTexture2D(baseMip)
-			case gputypes.TextureViewDimension2DArray:
-				dsvDesc.SetTexture2DArray(baseMip, baseLayer, layerCount)
-			}
-		}
-
+		dsvDesc := depthStencilViewDesc(view, dxgiFormat)
 		d.raw.CreateDepthStencilView(tex.raw, &dsvDesc, dsvHandle)
 		view.dsvHandle = dsvHandle
 		view.dsvHandles[0] = dsvHandle
@@ -1682,29 +1627,7 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 			return failTextureViewCreation(view, fmt.Errorf("dx12: texture format %d aspect %d cannot create an SRV", viewFormat, view.aspect))
 		}
 
-		// Create SRV desc
-		srvDesc := d3d12.D3D12_SHADER_RESOURCE_VIEW_DESC{
-			Format:                  srvFormat,
-			ViewDimension:           textureViewDimensionToSRV(viewDim),
-			Shader4ComponentMapping: d3d12.D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
-		}
-
-		// Set up dimension-specific fields
-		switch viewDim {
-		case gputypes.TextureViewDimension1D:
-			srvDesc.SetTexture1D(baseMip, mipCount, 0)
-		case gputypes.TextureViewDimension2D:
-			srvDesc.SetTexture2D(baseMip, mipCount, srvPlane, 0)
-		case gputypes.TextureViewDimension2DArray:
-			srvDesc.SetTexture2DArray(baseMip, mipCount, baseLayer, layerCount, srvPlane, 0)
-		case gputypes.TextureViewDimensionCube:
-			srvDesc.SetTextureCube(baseMip, mipCount, 0)
-		case gputypes.TextureViewDimensionCubeArray:
-			srvDesc.SetTextureCubeArray(baseMip, mipCount, baseLayer, layerCount/6, 0)
-		case gputypes.TextureViewDimension3D:
-			srvDesc.SetTexture3D(baseMip, mipCount, 0)
-		}
-
+		srvDesc := shaderResourceViewDesc(view, srvFormat, srvPlane)
 		d.raw.CreateShaderResourceView(tex.raw, &srvDesc, srvHandle)
 		view.srvHandle = srvHandle
 		view.srvHeapIndex = srvIndex
@@ -1720,17 +1643,7 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 		if err != nil {
 			return failTextureViewCreation(view, fmt.Errorf("dx12: failed to allocate UAV descriptor: %w", err))
 		}
-		uavDesc := d3d12.D3D12_UNORDERED_ACCESS_VIEW_DESC{Format: textureFormatToD3D12(viewFormat)}
-		switch viewDim {
-		case gputypes.TextureViewDimension1D:
-			uavDesc.SetTexture1D(baseMip)
-		case gputypes.TextureViewDimension3D:
-			uavDesc.SetTexture3D(baseMip, 0, ^uint32(0))
-		case gputypes.TextureViewDimension2DArray, gputypes.TextureViewDimensionCube, gputypes.TextureViewDimensionCubeArray:
-			uavDesc.SetTexture2DArray(baseMip, baseLayer, layerCount, 0)
-		default:
-			uavDesc.SetTexture2D(baseMip, 0)
-		}
+		uavDesc := unorderedAccessViewDesc(view, dxgiFormat)
 		d.raw.CreateUnorderedAccessView(tex.raw, nil, &uavDesc, uavHandle)
 		view.uavHandle = uavHandle
 		view.uavHeapIndex = uavIndex

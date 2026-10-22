@@ -211,6 +211,123 @@ func textureViewDimensionToDSV(dim gputypes.TextureViewDimension) d3d12.D3D12_DS
 	}
 }
 
+// arraySlices is the array slice range a 2D or 2D-array view addresses and
+// whether it needs an array view dimension. A 2D view of layer 0 does not,
+// as a non-array dimension always means slice 0; a 2D view of a later layer
+// is a one-slice array view, and an array view spans its layers.
+func (v *TextureView) arraySlices() (first, count uint32, array bool) {
+	if v.dimension == gputypes.TextureViewDimension2D {
+		return v.baseLayer, 1, v.baseLayer != 0
+	}
+	return v.baseLayer, v.layerCount, true
+}
+
+func (v *TextureView) multisampled() bool {
+	return v.texture.samples > 1
+}
+
+// renderTargetViewDesc describes a render target view of view in format.
+func renderTargetViewDesc(view *TextureView, format d3d12.DXGI_FORMAT) d3d12.D3D12_RENDER_TARGET_VIEW_DESC {
+	desc := d3d12.D3D12_RENDER_TARGET_VIEW_DESC{Format: format, ViewDimension: textureViewDimensionToRTV(view.dimension)}
+	switch view.dimension {
+	case gputypes.TextureViewDimension1D:
+		desc.SetTexture1D(view.baseMip)
+	case gputypes.TextureViewDimension2D, gputypes.TextureViewDimension2DArray:
+		first, count, array := view.arraySlices()
+		switch {
+		case !array && view.multisampled():
+			desc.SetTexture2DMS()
+		case !array:
+			desc.SetTexture2D(view.baseMip, 0)
+		case view.multisampled():
+			desc.SetTexture2DMSArray(first, count)
+		default:
+			desc.SetTexture2DArray(view.baseMip, first, count, 0)
+		}
+	case gputypes.TextureViewDimension3D:
+		desc.SetTexture3D(view.baseMip, view.baseLayer, view.layerCount)
+	}
+	return desc
+}
+
+// depthStencilViewDesc describes a depth/stencil view of view in format,
+// with no read-only flags.
+func depthStencilViewDesc(view *TextureView, format d3d12.DXGI_FORMAT) d3d12.D3D12_DEPTH_STENCIL_VIEW_DESC {
+	desc := d3d12.D3D12_DEPTH_STENCIL_VIEW_DESC{Format: format, ViewDimension: textureViewDimensionToDSV(view.dimension)}
+	switch view.dimension {
+	case gputypes.TextureViewDimension1D:
+		desc.SetTexture1D(view.baseMip)
+	case gputypes.TextureViewDimension2D, gputypes.TextureViewDimension2DArray:
+		first, count, array := view.arraySlices()
+		switch {
+		case !array && view.multisampled():
+			desc.SetTexture2DMS()
+		case !array:
+			desc.SetTexture2D(view.baseMip)
+		case view.multisampled():
+			desc.SetTexture2DMSArray(first, count)
+		default:
+			desc.SetTexture2DArray(view.baseMip, first, count)
+		}
+	}
+	return desc
+}
+
+// shaderResourceViewDesc describes a shader resource view of view in format,
+// reading plane. A cube view of a later cube than the first is a one-cube
+// cube-array view, since a cube view has no first face.
+func shaderResourceViewDesc(view *TextureView, format d3d12.DXGI_FORMAT, plane uint32) d3d12.D3D12_SHADER_RESOURCE_VIEW_DESC {
+	desc := d3d12.D3D12_SHADER_RESOURCE_VIEW_DESC{
+		Format:                  format,
+		ViewDimension:           textureViewDimensionToSRV(view.dimension),
+		Shader4ComponentMapping: d3d12.D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+	}
+	switch view.dimension {
+	case gputypes.TextureViewDimension1D:
+		desc.SetTexture1D(view.baseMip, view.mipCount, 0)
+	case gputypes.TextureViewDimension2D, gputypes.TextureViewDimension2DArray:
+		if first, count, array := view.arraySlices(); array {
+			desc.SetTexture2DArray(view.baseMip, view.mipCount, first, count, plane, 0)
+		} else {
+			desc.SetTexture2D(view.baseMip, view.mipCount, plane, 0)
+		}
+	case gputypes.TextureViewDimensionCube, gputypes.TextureViewDimensionCubeArray:
+		cubes := view.layerCount / 6
+		if view.dimension == gputypes.TextureViewDimensionCube {
+			if view.baseLayer == 0 {
+				desc.SetTextureCube(view.baseMip, view.mipCount, 0)
+				break
+			}
+			cubes = 1
+		}
+		desc.SetTextureCubeArray(view.baseMip, view.mipCount, view.baseLayer, cubes, 0)
+	case gputypes.TextureViewDimension3D:
+		desc.SetTexture3D(view.baseMip, view.mipCount, 0)
+	}
+	return desc
+}
+
+// unorderedAccessViewDesc describes an unordered access view of view in
+// format. A cube view is written as the array of its faces.
+func unorderedAccessViewDesc(view *TextureView, format d3d12.DXGI_FORMAT) d3d12.D3D12_UNORDERED_ACCESS_VIEW_DESC {
+	desc := d3d12.D3D12_UNORDERED_ACCESS_VIEW_DESC{Format: format}
+	switch view.dimension {
+	case gputypes.TextureViewDimension1D:
+		desc.SetTexture1D(view.baseMip)
+	case gputypes.TextureViewDimension3D:
+		desc.SetTexture3D(view.baseMip, 0, ^uint32(0))
+	case gputypes.TextureViewDimensionCube, gputypes.TextureViewDimensionCubeArray:
+		desc.SetTexture2DArray(view.baseMip, view.baseLayer, view.layerCount, 0)
+	default:
+		if first, count, array := view.arraySlices(); array {
+			desc.SetTexture2DArray(view.baseMip, first, count, 0)
+		} else {
+			desc.SetTexture2D(view.baseMip, 0)
+		}
+	}
+	return desc
+}
+
 // isDepthFormat returns true if the format is a depth/stencil format.
 func isDepthFormat(format gputypes.TextureFormat) bool {
 	switch format {
