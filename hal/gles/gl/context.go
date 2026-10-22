@@ -150,6 +150,10 @@ type Context struct {
 	glDrawElementsInstanced uintptr
 	glVertexAttribDivisor   uintptr
 
+	// Base instance (GL 4.2 / ARB_base_instance; optional)
+	glDrawArraysInstancedBaseInstance   uintptr
+	glDrawElementsInstancedBaseInstance uintptr
+
 	// Compute shaders (GL 4.3+ / ES 3.1+)
 	glDispatchCompute         uintptr
 	glDispatchComputeIndirect uintptr
@@ -322,6 +326,8 @@ func (c *Context) Load(getProcAddr ProcAddressFunc) error {
 	c.glDrawArraysInstanced = getProcAddr("glDrawArraysInstanced")
 	c.glDrawElementsInstanced = getProcAddr("glDrawElementsInstanced")
 	c.glVertexAttribDivisor = getProcAddr("glVertexAttribDivisor")
+	c.glDrawArraysInstancedBaseInstance = getProcAddr("glDrawArraysInstancedBaseInstance")
+	c.glDrawElementsInstancedBaseInstance = getProcAddr("glDrawElementsInstancedBaseInstance")
 
 	// Compute shaders (optional - may be nil on older GL versions)
 	c.glDispatchCompute = getProcAddr("glDispatchCompute")
@@ -994,6 +1000,26 @@ func (c *Context) DrawArraysInstanced(mode uint32, first, count, instanceCount i
 func (c *Context) DrawElementsInstanced(mode uint32, count int32, typ uint32, indices uintptr, instanceCount int32) {
 	syscall.SyscallN(c.glDrawElementsInstanced, uintptr(mode), uintptr(count),
 		uintptr(typ), indices, uintptr(instanceCount))
+}
+
+// DrawArraysInstancedBaseInstance is DrawArraysInstanced with the instance
+// the per-instance attributes are fetched from first.
+func (c *Context) DrawArraysInstancedBaseInstance(mode uint32, first, count, instanceCount int32, baseInstance uint32) {
+	syscall.SyscallN(c.glDrawArraysInstancedBaseInstance, uintptr(mode), uintptr(first),
+		uintptr(count), uintptr(instanceCount), uintptr(baseInstance))
+}
+
+// DrawElementsInstancedBaseInstance is DrawElementsInstanced with the
+// instance the per-instance attributes are fetched from first.
+func (c *Context) DrawElementsInstancedBaseInstance(mode uint32, count int32, typ uint32, indices uintptr, instanceCount int32, baseInstance uint32) {
+	syscall.SyscallN(c.glDrawElementsInstancedBaseInstance, uintptr(mode), uintptr(count),
+		uintptr(typ), indices, uintptr(instanceCount), uintptr(baseInstance))
+}
+
+// SupportsBaseInstance reports whether draws can start at an instance other
+// than the first.
+func (c *Context) SupportsBaseInstance() bool {
+	return c.glDrawArraysInstancedBaseInstance != 0 && c.glDrawElementsInstancedBaseInstance != 0
 }
 
 // --- Compute Shaders ---

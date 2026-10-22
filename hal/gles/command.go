@@ -7,6 +7,7 @@ package gles
 
 import (
 	"log/slog"
+	"sync"
 	"unsafe"
 
 	"github.com/roffe/gowgpu/gputypes"
@@ -1716,11 +1717,28 @@ func (c *DrawCommand) Execute(ctx *gl.Context) {
 	switch {
 	case c.instanceCount == 0:
 		// Nothing to draw, as in WebGPU; GL would draw one instance.
+	case c.firstInstance != 0 && ctx.SupportsBaseInstance():
+		ctx.DrawArraysInstancedBaseInstance(mode, int32(c.firstVertex), int32(c.vertexCount), int32(c.instanceCount), c.firstInstance)
 	case c.instanceCount == 1:
+		warnNoBaseInstance(c.firstInstance)
 		ctx.DrawArrays(mode, int32(c.firstVertex), int32(c.vertexCount))
 	default:
+		warnNoBaseInstance(c.firstInstance)
 		ctx.DrawArraysInstanced(mode, int32(c.firstVertex), int32(c.vertexCount), int32(c.instanceCount))
 	}
+}
+
+// noBaseInstanceOnce guards the one warning for draws that start at an
+// instance other than the first on a context without base instance draws.
+var noBaseInstanceOnce sync.Once
+
+func warnNoBaseInstance(firstInstance uint32) {
+	if firstInstance == 0 {
+		return
+	}
+	noBaseInstanceOnce.Do(func() {
+		hal.Logger().Warn("gles: no base instance draws on this GL context (GL 4.2, ARB_base_instance or EXT_base_instance); draws start at instance 0 whatever their firstInstance")
+	})
 }
 
 // DrawIndexedCommand executes an indexed draw. indexOffset is where the bound
@@ -1751,9 +1769,13 @@ func (c *DrawIndexedCommand) Execute(ctx *gl.Context) {
 	switch {
 	case c.instanceCount == 0:
 		// Nothing to draw, as in WebGPU; GL would draw one instance.
+	case c.firstInstance != 0 && ctx.SupportsBaseInstance():
+		ctx.DrawElementsInstancedBaseInstance(mode, int32(c.indexCount), indexType, offset, int32(c.instanceCount), c.firstInstance)
 	case c.instanceCount == 1:
+		warnNoBaseInstance(c.firstInstance)
 		ctx.DrawElements(mode, int32(c.indexCount), indexType, offset)
 	default:
+		warnNoBaseInstance(c.firstInstance)
 		ctx.DrawElementsInstanced(mode, int32(c.indexCount), indexType, offset, int32(c.instanceCount))
 	}
 }

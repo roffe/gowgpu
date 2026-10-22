@@ -276,3 +276,74 @@ func TestVertexStrideFollowsPipeline(t *testing.T) {
 	expectPixels(t, "vertex buffer kept across a stride change", readback(t, changedSt), 0, 255, 0, 255)
 	assertNoValidation(t, h)
 }
+
+// instanceShader draws a full-screen triangle in its per-instance colour.
+const instanceShader = `
+struct VSOut { @builtin(position) pos: vec4<f32>, @location(0) color: vec4<f32> }
+@vertex fn vs_main(@builtin(vertex_index) vi: u32, @location(0) color: vec4<f32>) -> VSOut {
+	var out: VSOut;
+	out.pos = vec4<f32>(f32(i32(vi & 1u) * 4 - 1), f32(i32(vi >> 1u) * 4 - 1), 0.0, 1.0);
+	out.color = color;
+	return out;
+}
+@fragment fn fs_main(in: VSOut) -> @location(0) vec4<f32> { return in.color; }
+`
+
+// TestDrawFirstInstance draws one instance starting at the second entry of
+// a per-instance colour buffer, red then green. GL drew from instance 0
+// whatever firstInstance said.
+func TestDrawFirstInstance(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	module, err := device.CreateShaderModule(&ShaderModuleDescriptor{Label: "first-instance", WGSL: instanceShader})
+	if err != nil {
+		t.Fatalf("CreateShaderModule: %v", err)
+	}
+	defer module.Release()
+	pl, err := device.CreatePipelineLayout(&PipelineLayoutDescriptor{})
+	if err != nil {
+		t.Fatalf("CreatePipelineLayout: %v", err)
+	}
+	defer pl.Release()
+	pipe, err := device.CreateRenderPipeline(&RenderPipelineDescriptor{
+		Label:  "first-instance",
+		Layout: pl,
+		Vertex: VertexState{Module: module, EntryPoint: "vs_main", Buffers: []gputypes.VertexBufferLayout{{
+			ArrayStride: 16, StepMode: gputypes.VertexStepModeInstance,
+			Attributes: []gputypes.VertexAttribute{{Format: gputypes.VertexFormatFloat32x4, ShaderLocation: 0}},
+		}}},
+		Primitive: gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList},
+		Fragment: &FragmentState{Module: module, EntryPoint: "fs_main",
+			Targets: []gputypes.ColorTargetState{{Format: gputypes.TextureFormatRGBA8Unorm, WriteMask: gputypes.ColorWriteMaskAll}}},
+	})
+	if err != nil {
+		t.Fatalf("CreateRenderPipeline: %v", err)
+	}
+	defer pipe.Release()
+	colors := []float32{1, 0, 0, 1, 0, 1, 0, 1}
+	vb, err := device.CreateBuffer(&BufferDescriptor{Label: "instance-colors", Size: uint64(len(colors) * 4), Usage: BufferUsageVertex | BufferUsageCopyDst})
+	if err != nil {
+		t.Fatalf("CreateBuffer: %v", err)
+	}
+	defer vb.Release()
+	if err := device.Queue().WriteBuffer(vb, 0, unsafe.Slice((*byte)(unsafe.Pointer(&colors[0])), len(colors)*4)); err != nil {
+		t.Fatalf("WriteBuffer: %v", err)
+	}
+	tex, view := pixTexture(t, device, "first-instance", TextureUsageRenderAttachment|TextureUsageCopySrc)
+	defer releaseTextureView(tex, view)
+	st := readbackBuffer(t, device, "first-instance-st")
+
+	enc, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	clearPass(t, enc, view, gputypes.LoadOpClear, gputypes.Color{}, func(p *RenderPassEncoder) {
+		p.SetPipeline(pipe)
+		p.SetVertexBuffer(0, vb, 0)
+		p.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1, FirstInstance: 1})
+	})
+	copyOut(enc, tex, st)
+	finishAndSubmit(t, device, enc)
+	device.Poll(PollWait)
+	expectPixels(t, "draw from instance 1", readback(t, st), 0, 255, 0, 255)
+	assertNoValidation(t, h)
+}

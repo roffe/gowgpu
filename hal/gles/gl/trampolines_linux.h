@@ -32,6 +32,7 @@ static inline void gl_v_iiiiiip(uintptr_t fn, uint32_t a0, uint32_t a1, uint32_t
 static inline void gl_v_iiiiiu(uintptr_t fn, uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uintptr_t a5) { ((void (*)(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uintptr_t))fn)(a0, a1, a2, a3, a4, a5); }
 static inline void gl_v_iiiu(uintptr_t fn, uint32_t a0, uint32_t a1, uint32_t a2, uintptr_t a3) { ((void (*)(uint32_t, uint32_t, uint32_t, uintptr_t))fn)(a0, a1, a2, a3); }
 static inline void gl_v_iiiui(uintptr_t fn, uint32_t a0, uint32_t a1, uint32_t a2, uintptr_t a3, uint32_t a4) { ((void (*)(uint32_t, uint32_t, uint32_t, uintptr_t, uint32_t))fn)(a0, a1, a2, a3, a4); }
+static inline void gl_v_iiiuii(uintptr_t fn, uint32_t a0, uint32_t a1, uint32_t a2, uintptr_t a3, uint32_t a4, uint32_t a5) { ((void (*)(uint32_t, uint32_t, uint32_t, uintptr_t, uint32_t, uint32_t))fn)(a0, a1, a2, a3, a4, a5); }
 static inline void gl_v_iip(uintptr_t fn, uint32_t a0, uint32_t a1, const uint8_t * a2) { ((void (*)(uint32_t, uint32_t, const void *))fn)(a0, a1, a2); }
 static inline void gl_v_iipp(uintptr_t fn, uint32_t a0, uint32_t a1, const uint8_t * a2, const uint8_t * a3) { ((void (*)(uint32_t, uint32_t, const void *, const void *))fn)(a0, a1, a2, a3); }
 static inline void gl_v_iiuuu(uintptr_t fn, uint32_t a0, uint32_t a1, uintptr_t a2, uintptr_t a3, uintptr_t a4) { ((void (*)(uint32_t, uint32_t, uintptr_t, uintptr_t, uintptr_t))fn)(a0, a1, a2, a3, a4); }
