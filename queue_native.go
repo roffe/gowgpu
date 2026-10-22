@@ -86,6 +86,9 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (uint64, error) {
 	if q.hal == nil {
 		return 0, fmt.Errorf("wgpu: queue not available")
 	}
+	if q.released() {
+		return 0, ErrReleased
+	}
 
 	// Validate user command buffers before closing the pending-write encoder.
 	// A validation error leaves buffered writes intact for a later valid Submit
@@ -319,10 +322,16 @@ func (q *Queue) postSubmit(subIdx, completed uint64, commandBuffers []*CommandBu
 // Poll returns the last completed submission index. Non-blocking.
 // All submissions with index <= the returned value have been completed by the GPU.
 func (q *Queue) Poll() uint64 {
-	if q.hal == nil {
+	if q.hal == nil || q.released() {
 		return 0
 	}
 	return q.hal.PollCompleted()
+}
+
+// released reports whether the queue's device has been released, taking its
+// HAL device with it.
+func (q *Queue) released() bool {
+	return q.device != nil && q.device.released.Load()
 }
 
 // WriteBuffer writes data to a buffer.
@@ -349,6 +358,9 @@ func (q *Queue) WriteBuffer(buffer *Buffer, offset uint64, data []byte) error {
 
 	if q.hal == nil || buffer == nil {
 		return fmt.Errorf("wgpu: WriteBuffer: queue or buffer is nil")
+	}
+	if q.released() {
+		return ErrReleased
 	}
 
 	// --- VAL-A1: bounds + state validation (before HAL access) ---
@@ -417,6 +429,9 @@ func (q *Queue) WriteTexture(dst *ImageCopyTexture, data []byte, layout *ImageDa
 	if q.hal == nil || dst == nil {
 		return fmt.Errorf("wgpu: WriteTexture: queue or destination is nil")
 	}
+	if q.released() {
+		return ErrReleased
+	}
 	if dst.Texture != nil && dst.Texture.resolveHAL() == nil {
 		return ErrReleased
 	}
@@ -475,6 +490,9 @@ func (q *Queue) CopyExternalPlanes(src ExternalImage, dsts ...*Texture) (uint32,
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
+	if q.released() {
+		return src.Layout, ErrReleased
+	}
 	syncer, ok := q.hal.(externalSyncer)
 	if !ok || q.pending == nil || len(dsts) == 0 || len(dsts) > 3 {
 		return src.Layout, fmt.Errorf("wgpu: CopyExternalPlanes: needs the Vulkan, Direct3D 12 or Metal backend and 1 to 3 textures")
@@ -526,6 +544,9 @@ func (q *Queue) CopyExternalBuffer(src ExternalBuffer, dst *Texture) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
+	if q.released() {
+		return ErrReleased
+	}
 	syncer, ok := q.hal.(externalSyncer)
 	if !ok || q.pending == nil || dst == nil {
 		return fmt.Errorf("wgpu: CopyExternalBuffer: needs the Vulkan, Direct3D 12 or Metal backend and a texture")
