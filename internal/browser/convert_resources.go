@@ -567,12 +567,8 @@ func (d *DepthStencilStateJS) ToJS() js.Value {
 	if d.StencilBack != nil {
 		obj.Set("stencilBack", d.StencilBack.ToJS())
 	}
-	if d.StencilReadMask != 0 {
-		obj.Set("stencilReadMask", d.StencilReadMask)
-	}
-	if d.StencilWriteMask != 0 {
-		obj.Set("stencilWriteMask", d.StencilWriteMask)
-	}
+	obj.Set("stencilReadMask", d.StencilReadMask)
+	obj.Set("stencilWriteMask", d.StencilWriteMask)
 	if d.DepthBias != 0 {
 		obj.Set("depthBias", d.DepthBias)
 	}
@@ -670,9 +666,7 @@ func (c *ColorTargetStateJS) ToJS() js.Value {
 	if c.Blend != nil {
 		obj.Set("blend", c.Blend.ToJS())
 	}
-	if c.WriteMask > 0 {
-		obj.Set("writeMask", c.WriteMask)
-	}
+	obj.Set("writeMask", c.WriteMask)
 	return obj
 }
 
