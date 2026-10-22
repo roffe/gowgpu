@@ -443,6 +443,53 @@ func (q *Queue) Submit(commandBuffers []hal.CommandBuffer) (uint64, error) {
 	return signalValue, nil
 }
 
+// consumeAcquire waits for sc's acquire semaphore in a submission of
+// nothing, for a frame discarded without a Submit: vkAcquireNextImageKHR
+// may only get the semaphore back unsignaled, and the fence value recorded
+// here is what the next acquire with it waits for. q.mu is held.
+func (q *Queue) consumeAcquire(sc *Swapchain) error {
+	if q.acquireUsed || sc.currentAcquireSem == 0 || sc.currentAcquireIdx < 0 || sc.currentAcquireIdx >= len(sc.acquireFenceValues) {
+		return nil
+	}
+	tf := q.device.timelineFence
+	signalValue := tf.nextSignalValue()
+	waitStage := vk.PipelineStageFlags(vk.PipelineStageAllCommandsBit)
+	waitValues := [1]uint64{0}
+	signalSems := [1]vk.Semaphore{tf.timelineSemaphore}
+	signalValues := [1]uint64{signalValue}
+	submitInfo := vk.SubmitInfo{
+		SType:              vk.StructureTypeSubmitInfo,
+		WaitSemaphoreCount: 1,
+		PWaitSemaphores:    &sc.currentAcquireSem,
+		PWaitDstStageMask:  &waitStage,
+	}
+	fence := vk.Fence(0)
+	var timelineInfo vk.TimelineSemaphoreSubmitInfo
+	if tf.isTimeline {
+		submitInfo.SignalSemaphoreCount = 1
+		submitInfo.PSignalSemaphores = &signalSems[0]
+		timelineInfo = vk.TimelineSemaphoreSubmitInfo{
+			SType:                     vk.StructureTypeTimelineSemaphoreSubmitInfo,
+			WaitSemaphoreValueCount:   1,
+			PWaitSemaphoreValues:      &waitValues[0],
+			SignalSemaphoreValueCount: 1,
+			PSignalSemaphoreValues:    &signalValues[0],
+		}
+		submitInfo.PNext = (*uintptr)(unsafe.Pointer(&timelineInfo))
+	} else {
+		var err error
+		if fence, err = tf.pool.signal(q.device.cmds, q.device.handle, signalValue); err != nil {
+			return fmt.Errorf("vulkan: discard fence: %w", err)
+		}
+	}
+	if result := vkQueueSubmit(q, 1, &submitInfo, fence); result != vk.Success {
+		return fmt.Errorf("vulkan: vkQueueSubmit (discard) failed: %d", result)
+	}
+	sc.acquireFenceValues[sc.currentAcquireIdx] = signalValue
+	q.acquireUsed = true
+	return nil
+}
+
 // PollCompleted returns the highest submission index known to be completed by the GPU.
 // Non-blocking.
 func (q *Queue) PollCompleted() uint64 {

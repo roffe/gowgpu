@@ -443,8 +443,22 @@ func (s *Surface) DiscardTexture(_ hal.SurfaceTexture) {
 		// Discarding an acquired texture is a normal lifecycle operation during
 		// resize or minimization. Match Rust wgpu-hal: release the acquisition
 		// without poisoning the swapchain and let the next frame continue.
+		// The acquire semaphore is waited for by a submission of nothing
+		// when no Submit did, so that it is unsignaled when its turn to be
+		// acquired with comes round again.
 		s.swapchain.imageAcquired = false
-		s.detachSwapchainFromQueue(s.swapchain)
+		if s.device != nil && s.device.queue != nil {
+			q := s.device.queue
+			q.mu.Lock()
+			if q.activeSwapchain == s.swapchain {
+				if err := q.consumeAcquire(s.swapchain); err != nil {
+					hal.Logger().Warn("vulkan: discarded frame's acquire semaphore not consumed", "err", err)
+				}
+				q.activeSwapchain = nil
+				q.acquireUsed = false
+			}
+			q.mu.Unlock()
+		}
 	}
 }
 
