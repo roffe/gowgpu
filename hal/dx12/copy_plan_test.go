@@ -162,3 +162,14 @@ func TestPlanTextureTextureCopiesArraysAnd3D(t *testing.T) {
 		t.Fatal("expected absolute 3D bounds to reject an oversized copy")
 	}
 }
+
+func TestTextureViewMipExtentIsAtLeastOneTexel(t *testing.T) {
+	view := &TextureView{texture: testTexture(gputypes.TextureFormatRGBA8Unorm, gputypes.TextureDimension2D, 8, 2, 1, 4), baseMip: 3}
+	if w, h := view.mipExtent(); w != 1 || h != 1 {
+		t.Fatalf("mip 3 of 8x2 = %dx%d, want 1x1", w, h)
+	}
+	view.baseMip = 1
+	if w, h := view.mipExtent(); w != 4 || h != 1 {
+		t.Fatalf("mip 1 of 8x2 = %dx%d, want 4x1", w, h)
+	}
+}

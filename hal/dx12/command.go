@@ -463,13 +463,11 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 	var width, height uint32
 	if len(desc.ColorAttachments) > 0 {
 		if view, ok := desc.ColorAttachments[0].View.(*TextureView); ok {
-			width = view.texture.size.Width >> view.baseMip
-			height = view.texture.size.Height >> view.baseMip
+			width, height = view.mipExtent()
 		}
 	} else if desc.DepthStencilAttachment != nil {
 		if view, ok := desc.DepthStencilAttachment.View.(*TextureView); ok {
-			width = view.texture.size.Width >> view.baseMip
-			height = view.texture.size.Height >> view.baseMip
+			width, height = view.mipExtent()
 		}
 	}
 
@@ -1228,6 +1226,12 @@ func (e *CommandEncoder) trackBindGroupState(bg *BindGroup) {
 		}
 	}
 	e.emitStateBarrierPlans(plans)
+}
+
+// mipExtent is the size of the view's first mip level, at least one texel
+// each way.
+func (v *TextureView) mipExtent() (width, height uint32) {
+	return max(1, v.texture.size.Width>>v.baseMip), max(1, v.texture.size.Height>>v.baseMip)
 }
 
 func textureViewSubresources(view *TextureView) []uint32 {
