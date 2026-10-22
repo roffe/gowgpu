@@ -930,12 +930,18 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		"sampleCount", sampleCount,
 	)
 
+	depthClipMode := MTLDepthClipModeClip
+	if desc.Primitive.UnclippedDepth {
+		depthClipMode = MTLDepthClipModeClamp
+	}
+
 	return &RenderPipeline{
 		raw:           pipelineState,
 		device:        d,
 		layout:        pipeLayout,
 		cullMode:      cullModeToMTL(desc.Primitive.CullMode),
 		frontFace:     frontFaceToMTL(desc.Primitive.FrontFace),
+		depthClipMode: depthClipMode,
 		primitive:     primitiveTopologyToMTL(desc.Primitive.Topology),
 		icbCompatible: icbCompatible,
 
