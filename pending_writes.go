@@ -670,6 +670,8 @@ func (pw *pendingWrites) copyExternalLocked(src uintptr, layout, slice uint32, o
 		if raws[i] == nil || owner.coreTexture == nil {
 			return layout, ErrReleased
 		}
+	}
+	for i, owner := range owners {
 		delete(pw.zero, owner) // the copy fills it, where zeroing at flush would clear it after
 		dsts[i] = hal.ImageCopyTexture{Texture: raws[i]}
 		s := owner.coreTexture.Size()
