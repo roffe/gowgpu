@@ -88,50 +88,58 @@ func (b *Buffer) MapAsync(mode uint32, offset, size uint64) error {
 	return nil
 }
 
-// ensureMappedBuffer lazily calls GPUBuffer.getMappedRange once for the
-// entire mapped region and caches the result. Subsequent calls to
-// GetMappedRangeBytes create Uint8Array views into this cached ArrayBuffer
-// without additional JS interop. Matches Rust wgpu WebBuffer.get_mapped_range
-// which calls get_mapped_range_with_f64_and_f64 once and then creates
-// Uint8Array views with byte_offset + length.
-func (b *Buffer) ensureMappedBuffer() js.Value {
+// ensureMappedBuffer calls GPUBuffer.getMappedRange once for the entire
+// mapped region and caches the ArrayBuffer, which the spec lets a mapping
+// hand out only once. It returns the exception getMappedRange throws, if
+// any, as an error.
+func (b *Buffer) ensureMappedBuffer() (js.Value, error) {
 	if b.mappedBuffer.IsUndefined() || b.mappedBuffer.IsNull() || b.mappedBuffer.Equal(js.Value{}) {
-		b.mappedBuffer = b.ref_.Call("getMappedRange", float64(b.mappedOffset), float64(b.mappedSize))
+		err := catchJS(func() {
+			b.mappedBuffer = b.ref_.Call("getMappedRange", float64(b.mappedOffset), float64(b.mappedSize))
+		})
+		if err != nil {
+			return js.Value{}, fmt.Errorf("GPUBuffer.getMappedRange: %w", err)
+		}
 	}
-	return b.mappedBuffer
+	return b.mappedBuffer, nil
 }
 
-// GetMappedRangeBytes copies bytes from the mapped region [offset, offset+size) into
-// a new Go byte slice. The buffer must be in the mapped state (MapAsync resolved or
-// the buffer was created with mappedAtCreation: true).
-//
-// Internally this obtains a Uint8Array view into the cached ArrayBuffer at the
-// correct sub-range offset, then uses js.CopyBytesToGo to transfer data.
-// Matches Rust wgpu WebBufferMappedRange which copies from JS to Rust/WASM heap.
-func (b *Buffer) GetMappedRangeBytes(offset, size uint64) ([]byte, error) {
-	ab := b.ensureMappedBuffer()
+// mappedView returns a Uint8Array view of size bytes of the mapped region
+// from offset on. It returns the exception the browser throws when the
+// buffer is not mapped or the view falls outside the mapping, if any, as
+// an error.
+func (b *Buffer) mappedView(offset uint64, size int) (js.Value, error) {
+	ab, err := b.ensureMappedBuffer()
+	if err != nil {
+		return js.Value{}, err
+	}
+	var view js.Value
+	err = catchJS(func() {
+		view = js.Global().Get("Uint8Array").New(ab, int(offset-b.mappedOffset), size) //nolint:gosec // validated by caller
+	})
+	return view, err
+}
 
-	// Create a Uint8Array view at the sub-range offset within the cached
-	// ArrayBuffer. The sub-range offset is relative to mappedOffset.
-	byteOffset := offset - b.mappedOffset
-	view := js.Global().Get("Uint8Array").New(ab, int(byteOffset), int(size)) //nolint:gosec // validated by caller
+// GetMappedRangeBytes copies the mapped region [offset, offset+size) into a
+// new Go byte slice. The buffer must be mapped, by MapAsync or at creation.
+func (b *Buffer) GetMappedRangeBytes(offset, size uint64) ([]byte, error) {
+	view, err := b.mappedView(offset, int(size)) //nolint:gosec // validated by caller
+	if err != nil {
+		return nil, err
+	}
 	data := make([]byte, size)
 	js.CopyBytesToGo(data, view)
 	return data, nil
 }
 
-// WriteMappedRange writes data into the mapped buffer at [offset, offset+len(data)).
-// The buffer must be mapped with MAP_WRITE mode (or created with mappedAtCreation).
-//
-// Internally creates a Uint8Array view into the cached ArrayBuffer and uses
-// js.CopyBytesToJS to transfer data from Go to JS. On Unmap the browser flushes
-// the written data to the GPU.
-// Matches Rust wgpu WebBufferMappedRange.slice_mut + Drop write-back pattern.
+// WriteMappedRange writes data into the mapped region at [offset, offset+len(data)).
+// The buffer must be mapped for writing, by MapAsync or at creation; the
+// browser flushes the data to the GPU on Unmap.
 func (b *Buffer) WriteMappedRange(offset uint64, data []byte) error {
-	ab := b.ensureMappedBuffer()
-
-	byteOffset := offset - b.mappedOffset
-	view := js.Global().Get("Uint8Array").New(ab, int(byteOffset), len(data)) //nolint:gosec // validated by caller
+	view, err := b.mappedView(offset, len(data))
+	if err != nil {
+		return err
+	}
 	js.CopyBytesToJS(view, data)
 	return nil
 }

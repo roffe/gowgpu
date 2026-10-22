@@ -3,6 +3,7 @@
 package wgpu
 
 import (
+	"fmt"
 	"syscall/js"
 
 	"github.com/roffe/gowgpu/internal/browser"
@@ -39,9 +40,9 @@ func (q *Queue) Poll() uint64 {
 	return 0
 }
 
-// WriteBuffer writes data to a buffer.
-// Uses js.CopyBytesToJS for Go-to-JS data transfer (same pattern as Rust's
-// Uint8Array::from(data).buffer()).
+// WriteBuffer writes data to a buffer. The buffer must be unmapped and made
+// with CopyDst, offset and len(data) must be multiples of 4, and the write
+// must stay within the buffer.
 func (q *Queue) WriteBuffer(buffer *Buffer, offset uint64, data []byte) error {
 	if q.released {
 		return ErrReleased
@@ -49,8 +50,23 @@ func (q *Queue) WriteBuffer(buffer *Buffer, offset uint64, data []byte) error {
 	if buffer == nil || buffer.browser == nil {
 		return ErrReleased
 	}
-	q.browser.WriteBuffer(buffer.browser.Ref(), offset, data)
-	return nil
+	if buffer.MapState() != MapStateUnmapped {
+		return fmt.Errorf("wgpu: WriteBuffer: buffer is currently mapped")
+	}
+	if buffer.Usage()&BufferUsageCopyDst == 0 {
+		return fmt.Errorf("wgpu: WriteBuffer: buffer missing CopyDst usage")
+	}
+	if offset%4 != 0 {
+		return fmt.Errorf("wgpu: WriteBuffer: offset %d not 4-byte aligned", offset)
+	}
+	dataSize := uint64(len(data))
+	if dataSize%4 != 0 {
+		return fmt.Errorf("wgpu: WriteBuffer: data size %d not 4-byte aligned", dataSize)
+	}
+	if offset+dataSize > buffer.Size() {
+		return fmt.Errorf("wgpu: WriteBuffer: offset %d + size %d exceeds buffer size %d", offset, dataSize, buffer.Size())
+	}
+	return q.browser.WriteBuffer(buffer.browser.Ref(), offset, data)
 }
 
 // WriteTexture writes data to a texture.
@@ -63,6 +79,12 @@ func (q *Queue) WriteTexture(dst *ImageCopyTexture, data []byte, layout *ImageDa
 	if dst == nil || dst.Texture == nil || dst.Texture.browser == nil {
 		return ErrReleased
 	}
+	if layout == nil {
+		return fmt.Errorf("wgpu: WriteTexture: layout is nil")
+	}
+	if size == nil {
+		return fmt.Errorf("wgpu: WriteTexture: size is nil")
+	}
 
 	jsDst := browser.BuildImageCopyTexture(
 		dst.Texture.browser.Ref(),
@@ -70,26 +92,14 @@ func (q *Queue) WriteTexture(dst *ImageCopyTexture, data []byte, layout *ImageDa
 		dst.Origin.X, dst.Origin.Y, dst.Origin.Z,
 	)
 
-	var jsLayout js.Value
-	if layout != nil {
-		jsLayout = browser.BuildTexelCopyBufferLayout(
-			layout.Offset,
-			layout.BytesPerRow,
-			layout.RowsPerImage,
-		)
-	} else {
-		jsLayout = browser.BuildTexelCopyBufferLayout(0, 0, 0)
-	}
+	jsLayout := browser.BuildTexelCopyBufferLayout(
+		layout.Offset,
+		layout.BytesPerRow,
+		layout.RowsPerImage,
+	)
+	jsSize := browser.BuildExtent3D(size.Width, size.Height, size.DepthOrArrayLayers)
 
-	var jsSize js.Value
-	if size != nil {
-		jsSize = browser.BuildExtent3D(size.Width, size.Height, size.DepthOrArrayLayers)
-	} else {
-		jsSize = browser.BuildExtent3D(0, 0, 0)
-	}
-
-	q.browser.WriteTexture(jsDst, data, jsLayout, jsSize)
-	return nil
+	return q.browser.WriteTexture(jsDst, data, jsLayout, jsSize)
 }
 
 // SetSwapchainSuppressed is a no-op on the browser backend.

@@ -51,16 +51,20 @@ func (q *Queue) Submit(commandBuffers []js.Value) {
 // standard Go WASM pattern (equivalent to Rust's Uint8Array::from(data)).
 //
 // Signature: queue.writeBuffer(buffer, bufferOffset, data, dataOffset, size)
-func (q *Queue) WriteBuffer(buffer js.Value, bufferOffset uint64, data []byte) {
+//
+// It returns the exception writeBuffer throws, if any, as an error.
+func (q *Queue) WriteBuffer(buffer js.Value, bufferOffset uint64, data []byte) error {
 	jsArray := js.Global().Get("Uint8Array").New(len(data))
 	js.CopyBytesToJS(jsArray, data)
-	q.fnWriteBuffer.Invoke(
-		buffer,
-		float64(bufferOffset),
-		jsArray,
-		0,
-		len(data),
-	)
+	return catchJS(func() {
+		q.fnWriteBuffer.Invoke(
+			buffer,
+			float64(bufferOffset),
+			jsArray,
+			0,
+			len(data),
+		)
+	})
 }
 
 // WriteTexture writes Go byte data to a GPU texture.
@@ -70,8 +74,12 @@ func (q *Queue) WriteBuffer(buffer js.Value, bufferOffset uint64, data []byte) {
 //
 // Rust wgpu creates a Uint8Array from the data, passes .buffer() (ArrayBuffer) to
 // writeTexture. We use js.CopyBytesToJS for the Go→JS transfer.
-func (q *Queue) WriteTexture(destination js.Value, data []byte, dataLayout js.Value, size js.Value) {
+//
+// It returns the exception writeTexture throws, if any, as an error.
+func (q *Queue) WriteTexture(destination js.Value, data []byte, dataLayout js.Value, size js.Value) error {
 	jsArray := js.Global().Get("Uint8Array").New(len(data))
 	js.CopyBytesToJS(jsArray, data)
-	q.fnWriteTexture.Invoke(destination, jsArray, dataLayout, size)
+	return catchJS(func() {
+		q.fnWriteTexture.Invoke(destination, jsArray, dataLayout, size)
+	})
 }

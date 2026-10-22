@@ -58,3 +58,25 @@ func NewJSError(v js.Value) *JSError {
 		Name:    name,
 	}
 }
+
+// catchJS runs fn and returns the JavaScript exception it throws, if any,
+// as an error.
+func catchJS(fn func()) (err error) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			return
+		}
+		jsErr, ok := r.(js.Error)
+		if !ok {
+			panic(r)
+		}
+		if e := NewJSError(jsErr.Value); e != nil {
+			err = e
+		} else {
+			err = jsErr
+		}
+	}()
+	fn()
+	return nil
+}

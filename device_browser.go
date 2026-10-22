@@ -44,13 +44,33 @@ func (d *Device) CreateBuffer(desc *BufferDescriptor) (*Buffer, error) {
 	if desc == nil {
 		return nil, fmt.Errorf("wgpu: buffer descriptor is nil")
 	}
+	if desc.Size == 0 {
+		return nil, fmt.Errorf("wgpu: CreateBuffer: buffer %q has zero size", desc.Label)
+	}
+	if desc.Size > d.limits.MaxBufferSize {
+		return nil, fmt.Errorf("wgpu: CreateBuffer: buffer %q size %d exceeds maxBufferSize %d", desc.Label, desc.Size, d.limits.MaxBufferSize)
+	}
+	if desc.Usage == 0 {
+		return nil, fmt.Errorf("wgpu: CreateBuffer: buffer %q has no usage", desc.Label)
+	}
+	if desc.Usage.ContainsUnknownBits() {
+		return nil, fmt.Errorf("wgpu: CreateBuffer: buffer %q has unknown usage bits", desc.Label)
+	}
+	if desc.Usage.Contains(BufferUsageMapRead) && desc.Usage.Contains(BufferUsageMapWrite) {
+		return nil, fmt.Errorf("wgpu: CreateBuffer: buffer %q has both MapRead and MapWrite usage", desc.Label)
+	}
+	// The GPU buffer is a multiple of 4 bytes, which a mapped-at-creation
+	// buffer has to be; Size stays what was asked for.
 	jsDesc := browser.BuildBufferDescriptor(
 		desc.Label,
-		desc.Size,
+		(desc.Size+3)&^3,
 		uint64(desc.Usage),
 		desc.MappedAtCreation,
 	)
-	bb := d.browser.CreateBufferFromDesc(jsDesc)
+	bb, err := d.browser.CreateBufferFromDesc(jsDesc)
+	if err != nil {
+		return nil, fmt.Errorf("wgpu: CreateBuffer: %w", err)
+	}
 
 	state := MapStateUnmapped
 	if desc.MappedAtCreation {

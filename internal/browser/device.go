@@ -136,10 +136,15 @@ func (d *Device) CreateSampler() js.Value { return d.fnCreateSampler }
 // CreateQuerySet returns the pre-bound createQuerySet function.
 func (d *Device) CreateQuerySet() js.Value { return d.fnCreateQuerySet }
 
-// CreateBufferFromDesc creates a GPUBuffer from a JS descriptor object.
-func (d *Device) CreateBufferFromDesc(desc js.Value) *Buffer {
-	jsBuffer := d.fnCreateBuffer.Invoke(desc)
-	return NewBuffer(jsBuffer)
+// CreateBufferFromDesc creates a GPUBuffer from a JS descriptor object. It
+// returns the exception createBuffer throws, if any, as an error.
+func (d *Device) CreateBufferFromDesc(desc js.Value) (*Buffer, error) {
+	var jsBuffer js.Value
+	err := catchJS(func() { jsBuffer = d.fnCreateBuffer.Invoke(desc) })
+	if err != nil {
+		return nil, err
+	}
+	return NewBuffer(jsBuffer), nil
 }
 
 // CreateTextureFromDesc creates a GPUTexture from a JS descriptor object.
