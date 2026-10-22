@@ -68,6 +68,9 @@ func (s *Surface) Configure(device *Device, config *hal.SurfaceConfiguration) er
 	if s.state == SurfaceStateAcquired {
 		return ErrSurfaceConfigureWhileAcquired
 	}
+	if s.raw == nil {
+		return ErrSurfaceNotConfigured
+	}
 
 	halDevice := s.getHALDevice(device)
 	if halDevice == nil {
@@ -322,6 +325,9 @@ func (s *Surface) applyPrepareFrame() error {
 	width, height, changed := s.prepareFrame()
 	if !changed || s.config == nil {
 		return nil
+	}
+	if s.raw == nil {
+		return ErrSurfaceNotConfigured
 	}
 
 	newConfig := *s.config
