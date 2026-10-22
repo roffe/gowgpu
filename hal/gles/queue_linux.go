@@ -18,10 +18,10 @@ import (
 	"github.com/roffe/gowgpu/hal/gles/gl"
 )
 
-// errOtherThread is Submit's and Present's answer from a goroutine other than
-// the one holding the context under InstanceFlagsGLPinnedThread: the helper
-// context they would run on has no VAO or framebuffer, so nothing would be
-// drawn.
+// errOtherThread is the answer of Submit, Present, Surface.Configure and the
+// CreateCommandEncoder that makes the VAO from a goroutine other than the one
+// holding the context under InstanceFlagsGLPinnedThread: the helper context
+// they would run on shares no VAO or framebuffer, so nothing would be drawn.
 var errOtherThread = errors.New("gles: InstanceFlagsGLPinnedThread keeps the GL context on the goroutine that used it first; this call comes from another goroutine")
 
 // Queue implements hal.Queue for OpenGL on Linux.

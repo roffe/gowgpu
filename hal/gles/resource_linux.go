@@ -149,6 +149,9 @@ func (s *Surface) Configure(_ hal.Device, config *hal.SurfaceConfiguration) erro
 	// invalidation when Submit (Lock) and Present (LockForSurface) alternate.
 	glCtx := s.ctx.Lock()
 	defer s.ctx.Unlock()
+	if s.ctx.OnHelper() {
+		return errOtherThread
+	}
 
 	if err := s.reconfigureSwapchainFBOWith(glCtx, config.Format, config.Width, config.Height); err != nil {
 		return fmt.Errorf("gles: failed to configure swapchain framebuffer: %w", err)

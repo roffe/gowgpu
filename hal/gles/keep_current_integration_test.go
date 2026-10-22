@@ -62,9 +62,14 @@ func TestKeepCurrentStaysOnItsThread(t *testing.T) {
 			g.BindBuffer(gl.COPY_READ_BUFFER, 0)
 			adapterCtx.Unlock()
 			_, err := (&Queue{ctx: adapterCtx}).Submit(nil)
+			_, encErr := (&Device{ctx: adapterCtx}).CreateCommandEncoder(nil)
 			adapterCtx.Lock() // for the deferred Unlock
 			if !errors.Is(err, errOtherThread) {
 				done <- fmt.Sprintf("Submit from another goroutine returned %v, want errOtherThread", err)
+				return
+			}
+			if !errors.Is(encErr, errOtherThread) {
+				done <- fmt.Sprintf("the first CreateCommandEncoder from another goroutine returned %v, want errOtherThread", encErr)
 				return
 			}
 			done <- ""

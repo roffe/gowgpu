@@ -718,6 +718,9 @@ func (d *Device) CreateCommandEncoder(_ *CommandEncoderDescriptor) (hal.CommandE
 	defer d.ctx.Unlock()
 
 	if d.vao == 0 {
+		if d.ctx.OnHelper() {
+			return nil, errOtherThread
+		}
 		d.vao = glCtx.GenVertexArrays(1)
 		glCtx.BindVertexArray(d.vao)
 		hal.Logger().Debug("gles: lazy VAO created", "vao", d.vao)
