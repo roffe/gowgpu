@@ -35,6 +35,10 @@ package gl
 #cgo nocallback gl_u_ii
 #cgo noescape gl_v_
 #cgo nocallback gl_v_
+#cgo noescape gl_v_d
+#cgo nocallback gl_v_d
+#cgo noescape gl_v_dd
+#cgo nocallback gl_v_dd
 #cgo noescape gl_v_f
 #cgo nocallback gl_v_f
 #cgo noescape gl_v_ff
@@ -511,20 +515,24 @@ func (c *Context) ClearColor(r, g, b, a float32) {
 	C.gl_v_ffff(C.uintptr_t(uintptr(c.glClearColor)), C.float(r), C.float(g), C.float(b), C.float(a))
 }
 
-// ClearDepth sets the depth value used by glClear(GL_DEPTH_BUFFER_BIT).
-// On GLES the loaded function is glClearDepthf (float32).
-// On desktop GL it is glClearDepth (double) — but Linux GLES contexts always
-// load glClearDepthf, so we pass float32 unconditionally.
+// ClearDepth sets the depth value used by glClear(GL_DEPTH_BUFFER_BIT):
+// glClearDepthf on GLES, glClearDepth with its double on desktop GL.
 func (c *Context) ClearDepth(depth float64) {
-	d := float32(depth)
-	C.gl_v_f(C.uintptr_t(uintptr(c.glClearDepth)), C.float(d))
+	if c.isGLES {
+		C.gl_v_f(C.uintptr_t(uintptr(c.glClearDepth)), C.float(float32(depth)))
+		return
+	}
+	C.gl_v_d(C.uintptr_t(uintptr(c.glClearDepth)), C.double(depth))
 }
 
-// DepthRange sets the mapping of NDC depth to window depth.
-// On GLES the loaded function is glDepthRangef (float32).
+// DepthRange sets the mapping of NDC depth to window depth: glDepthRangef
+// on GLES, glDepthRange with its doubles on desktop GL.
 func (c *Context) DepthRange(near, far float64) {
-	n, f := float32(near), float32(far)
-	C.gl_v_ff(C.uintptr_t(uintptr(c.glDepthRange)), C.float(n), C.float(f))
+	if c.isGLES {
+		C.gl_v_ff(C.uintptr_t(uintptr(c.glDepthRange)), C.float(float32(near)), C.float(float32(far)))
+		return
+	}
+	C.gl_v_dd(C.uintptr_t(uintptr(c.glDepthRange)), C.double(near), C.double(far))
 }
 
 func (c *Context) Viewport(x, y, width, height int32) {
