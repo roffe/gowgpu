@@ -611,8 +611,10 @@ func (d *Device) CreateTexture(desc *hal.TextureDescriptor) (hal.Texture, error)
 
 	// Determine image creation flags
 	var imageFlags vk.ImageCreateFlags
-	// Enable cube compatibility for 2D textures with 6+ layers (potential cubemaps)
-	if desc.Dimension == gputypes.TextureDimension2D && arrayLayers >= 6 {
+	// A square 2D image with a multiple of 6 layers and one sample can be
+	// viewed as cube maps, the only image that can be
+	// (VUID-VkImageCreateInfo-imageType-00954, samples-02257).
+	if desc.Dimension == gputypes.TextureDimension2D && arrayLayers%6 == 0 && samples == 1 && desc.Size.Width == desc.Size.Height {
 		imageFlags |= vk.ImageCreateFlags(vk.ImageCreateCubeCompatibleBit)
 	}
 	// Enable mutable format if view formats are specified
