@@ -553,11 +553,11 @@ func (d *Device) CreateTexture(desc *hal.TextureDescriptor) (hal.Texture, error)
 	vkUsage := textureUsageToVk(desc.Usage)
 	imageType := textureDimensionToVkImageType(desc.Dimension)
 
-	// For depth/stencil formats, replace COLOR_ATTACHMENT with DEPTH_STENCIL_ATTACHMENT.
-	// textureUsageToVk maps RenderAttachment → COLOR_ATTACHMENT generically,
-	// but depth/stencil textures must use DEPTH_STENCIL_ATTACHMENT instead.
-	if isDepthStencilFormat(desc.Format) &&
-		vkUsage&vk.ImageUsageFlags(vk.ImageUsageColorAttachmentBit) != 0 {
+	// A depth/stencil image is an attachment whatever it was made for: the
+	// clear pass that zeroes it needs that (Rust wgpu-core adds
+	// DEPTH_STENCIL_WRITE the same way), and textureUsageToVk maps
+	// RenderAttachment to COLOR_ATTACHMENT, which it cannot have.
+	if isDepthStencilFormat(desc.Format) {
 		vkUsage &^= vk.ImageUsageFlags(vk.ImageUsageColorAttachmentBit)
 		vkUsage |= vk.ImageUsageFlags(vk.ImageUsageDepthStencilAttachmentBit)
 	}
@@ -654,6 +654,7 @@ func (d *Device) CreateTexture(desc *hal.TextureDescriptor) (hal.Texture, error)
 		size:        Extent3D{Width: desc.Size.Width, Height: desc.Size.Height, Depth: depth},
 		format:      desc.Format,
 		usage:       desc.Usage,
+		usageFlags:  vkUsage,
 		mipLevels:   mipLevels,
 		arrayLayers: arrayLayers,
 		samples:     samples,
@@ -734,6 +735,14 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 		return t.textureView, nil
 	default:
 		return nil, fmt.Errorf("vulkan: invalid texture type %T", texture)
+	}
+
+	// An image made for copies only has no usage a view may have, and is
+	// not allowed one (VUID-VkImageViewCreateInfo-image-04441). Its users
+	// get the wrapper without a VkImageView: no bind group or pass takes
+	// such a texture, the usage rules it out before the HAL.
+	if t, ok := texture.(*Texture); ok && t.usageFlags&viewableImageUsage == 0 {
+		return &TextureView{texture: t, device: d, size: textureSize, image: imageHandle}, nil
 	}
 
 	// Handle nil descriptor - use defaults from texture
@@ -831,6 +840,11 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 	}
 	return tv, nil
 }
+
+// viewableImageUsage are the usages an image needs one of for a view of it.
+const viewableImageUsage = vk.ImageUsageFlags(vk.ImageUsageSampledBit | vk.ImageUsageStorageBit |
+	vk.ImageUsageColorAttachmentBit | vk.ImageUsageDepthStencilAttachmentBit |
+	vk.ImageUsageInputAttachmentBit | vk.ImageUsageTransientAttachmentBit)
 
 // DestroyTextureView destroys a texture view.
 func (d *Device) DestroyTextureView(view hal.TextureView) {

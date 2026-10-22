@@ -49,6 +49,7 @@ type Texture struct {
 	size        Extent3D
 	format      gputypes.TextureFormat
 	usage       gputypes.TextureUsage
+	usageFlags  vk.ImageUsageFlags // the image's, from usage and format
 	mipLevels   uint32
 	arrayLayers uint32 // Number of array layers (1 for non-array textures)
 	samples     uint32
