@@ -976,7 +976,7 @@ func (pw *pendingWrites) zeroBuffer() (hal.Buffer, error) {
 // to avoid per-call heap allocation.
 func copyTextureDataAligned(data []byte, srcOffset uint64, bytesPerRow, alignedBytesPerRow, rowsPerImage, depthOrLayers uint32, stagingSize uint64) []byte {
 	if alignedBytesPerRow == bytesPerRow {
-		return data
+		return dataFrom(data, srcOffset)
 	}
 	aligned := make([]byte, stagingSize)
 	alignTextureRowsInto(aligned, data, srcOffset, bytesPerRow, alignedBytesPerRow, rowsPerImage, depthOrLayers)
@@ -988,7 +988,7 @@ func copyTextureDataAligned(data []byte, srcOffset uint64, bytesPerRow, alignedB
 // *buf to stagingSize (never shrinks) and copies rows with padding into it.
 func alignTextureDataInto(buf *[]byte, data []byte, srcOffset uint64, bytesPerRow, alignedBytesPerRow, rowsPerImage, depthOrLayers uint32, stagingSize uint64) []byte {
 	if alignedBytesPerRow == bytesPerRow {
-		return data
+		return dataFrom(data, srcOffset)
 	}
 	if uint64(cap(*buf)) < stagingSize {
 		*buf = make([]byte, stagingSize)
@@ -997,6 +997,15 @@ func alignTextureDataInto(buf *[]byte, data []byte, srcOffset uint64, bytesPerRo
 	}
 	alignTextureRowsInto(*buf, data, srcOffset, bytesPerRow, alignedBytesPerRow, rowsPerImage, depthOrLayers)
 	return *buf
+}
+
+// dataFrom is data from offset on, what a WriteTexture copies when its rows
+// need no padding: the offset used to be dropped on that path.
+func dataFrom(data []byte, offset uint64) []byte {
+	if offset >= uint64(len(data)) {
+		return nil
+	}
+	return data[offset:]
 }
 
 // alignTextureRowsInto does the inner row-copy loop shared by both aligned functions.

@@ -31,3 +31,25 @@ func TestAlignTextureDataIntoShortLastRow(t *testing.T) {
 		}
 	}
 }
+
+func TestAlignTextureDataFromOffsetWithoutPadding(t *testing.T) {
+	const bytesPerRow, rows, offset = 256, 2, 256
+	data := make([]byte, offset+bytesPerRow*rows)
+	for i := range data {
+		data[i] = byte(i)
+	}
+	var buf []byte
+	for name, out := range map[string][]byte{
+		"into":   alignTextureDataInto(&buf, data, offset, bytesPerRow, bytesPerRow, rows, 1, bytesPerRow*rows),
+		"copy":   copyTextureDataAligned(data, offset, bytesPerRow, bytesPerRow, rows, 1, bytesPerRow*rows),
+		"beyond": alignTextureDataInto(&buf, data, uint64(len(data)), bytesPerRow, bytesPerRow, rows, 1, bytesPerRow*rows),
+	} {
+		want := data[offset:]
+		if name == "beyond" {
+			want = nil
+		}
+		if !bytes.Equal(out, want) {
+			t.Errorf("%s: got %d bytes starting %v, want %d starting %v", name, len(out), out[:min(4, len(out))], len(want), want[:min(4, len(want))])
+		}
+	}
+}
