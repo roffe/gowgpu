@@ -62,13 +62,14 @@ type Context struct {
 	glUniformMatrix4fv uintptr
 
 	// Buffers (GL 1.5+)
-	glGenBuffers    uintptr
-	glDeleteBuffers uintptr
-	glBindBuffer    uintptr
-	glBufferData    uintptr
-	glBufferSubData uintptr
-	glMapBuffer     uintptr
-	glUnmapBuffer   uintptr
+	glGenBuffers     uintptr
+	glDeleteBuffers  uintptr
+	glBindBuffer     uintptr
+	glBufferData     uintptr
+	glBufferSubData  uintptr
+	glMapBuffer      uintptr
+	glMapBufferRange uintptr
+	glUnmapBuffer    uintptr
 
 	// VAO (GL 3.0+)
 	glGenVertexArrays    uintptr
@@ -248,6 +249,7 @@ func (c *Context) Load(getProcAddr ProcAddressFunc) error {
 	c.glBufferData = getProcAddr("glBufferData")
 	c.glBufferSubData = getProcAddr("glBufferSubData")
 	c.glMapBuffer = getProcAddr("glMapBuffer")
+	c.glMapBufferRange = getProcAddr("glMapBufferRange")
 	c.glUnmapBuffer = getProcAddr("glUnmapBuffer")
 
 	// VAO
@@ -590,6 +592,17 @@ func (c *Context) MapBuffer(target, access uint32) uintptr {
 		return 0
 	}
 	r, _, _ := syscall.SyscallN(c.glMapBuffer, uintptr(target), uintptr(access))
+	return r
+}
+
+// MapBufferRange maps length bytes of the buffer bound to target from offset
+// for the MAP_*_BIT access given (GL 3.0 / ES 3.0). Returns the mapped
+// pointer, or 0 when the call fails.
+func (c *Context) MapBufferRange(target uint32, offset, length int, access uint32) uintptr {
+	if c.glMapBufferRange == 0 {
+		return 0
+	}
+	r, _, _ := syscall.SyscallN(c.glMapBufferRange, uintptr(target), uintptr(offset), uintptr(length), uintptr(access))
 	return r
 }
 

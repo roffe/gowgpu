@@ -11,6 +11,7 @@ static inline uint32_t gl_i_i(uintptr_t fn, uint32_t a0) { return ((uint32_t (*)
 static inline uint32_t gl_i_ip(uintptr_t fn, uint32_t a0, const uint8_t * a1) { return ((uint32_t (*)(uint32_t, const void *))fn)(a0, a1); }
 static inline uint32_t gl_i_uiq(uintptr_t fn, uintptr_t a0, uint32_t a1, uint64_t a2) { return ((uint32_t (*)(uintptr_t, uint32_t, uint64_t))fn)(a0, a1, a2); }
 static inline uintptr_t gl_u_ii(uintptr_t fn, uint32_t a0, uint32_t a1) { return ((uintptr_t (*)(uint32_t, uint32_t))fn)(a0, a1); }
+static inline uintptr_t gl_u_iuui(uintptr_t fn, uint32_t a0, uintptr_t a1, uintptr_t a2, uint32_t a3) { return ((uintptr_t (*)(uint32_t, uintptr_t, uintptr_t, uint32_t))fn)(a0, a1, a2, a3); }
 static inline void gl_v_(uintptr_t fn) { ((void (*)(void))fn)(); }
 static inline void gl_v_d(uintptr_t fn, double a0) { ((void (*)(double))fn)(a0); }
 static inline void gl_v_dd(uintptr_t fn, double a0, double a1) { ((void (*)(double, double))fn)(a0, a1); }

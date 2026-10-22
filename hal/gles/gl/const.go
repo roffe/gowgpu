@@ -60,6 +60,9 @@ const (
 	WRITE_ONLY = 0x88B9
 	READ_WRITE = 0x88BA
 
+	// Buffer map range access bits
+	MAP_READ_BIT = 0x0001
+
 	// Buffer usage
 	STREAM_DRAW  = 0x88E0
 	STREAM_READ  = 0x88E1

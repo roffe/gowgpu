@@ -130,13 +130,12 @@ func (d *Device) MapBuffer(buffer hal.Buffer, offset, size uint64) (hal.BufferMa
 			switch {
 			case len(buf.data) == int(buf.size):
 				copy(buf.mapped, buf.data)
-			case buf.id != 0:
+			case buf.id != 0 && size > 0:
 				glCtx.BindBuffer(gl.COPY_READ_BUFFER, buf.id)
-				glPtr := glCtx.MapBuffer(gl.COPY_READ_BUFFER, gl.READ_ONLY)
+				glPtr := glCtx.MapBufferRange(gl.COPY_READ_BUFFER, int(offset), int(size), gl.MAP_READ_BIT)
 				if glPtr != 0 {
 					basePtr := *(**byte)(unsafe.Pointer(&glPtr))
-					src := unsafe.Slice(basePtr, buf.size)
-					copy(buf.mapped, src)
+					copy(buf.mapped[offset:], unsafe.Slice(basePtr, size))
 					glCtx.UnmapBuffer(gl.COPY_READ_BUFFER)
 				}
 				glCtx.BindBuffer(gl.COPY_READ_BUFFER, 0)

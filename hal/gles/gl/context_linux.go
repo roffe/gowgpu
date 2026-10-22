@@ -33,6 +33,8 @@ package gl
 #cgo nocallback gl_i_uiq
 #cgo noescape gl_u_ii
 #cgo nocallback gl_u_ii
+#cgo noescape gl_u_iuui
+#cgo nocallback gl_u_iuui
 #cgo noescape gl_v_
 #cgo nocallback gl_v_
 #cgo noescape gl_v_d
@@ -156,13 +158,14 @@ type Context struct {
 	glUniformMatrix4fv unsafe.Pointer
 
 	// Buffers (GL 1.5+)
-	glGenBuffers    unsafe.Pointer
-	glDeleteBuffers unsafe.Pointer
-	glBindBuffer    unsafe.Pointer
-	glBufferData    unsafe.Pointer
-	glBufferSubData unsafe.Pointer
-	glMapBuffer     unsafe.Pointer
-	glUnmapBuffer   unsafe.Pointer
+	glGenBuffers     unsafe.Pointer
+	glDeleteBuffers  unsafe.Pointer
+	glBindBuffer     unsafe.Pointer
+	glBufferData     unsafe.Pointer
+	glBufferSubData  unsafe.Pointer
+	glMapBuffer      unsafe.Pointer
+	glMapBufferRange unsafe.Pointer
+	glUnmapBuffer    unsafe.Pointer
 
 	// VAO (GL 3.0+)
 	glGenVertexArrays    unsafe.Pointer
@@ -353,9 +356,7 @@ func (c *Context) Load(getProcAddr ProcAddressFunc, isGLES ...bool) error {
 	c.glBufferData = getProcAddr("glBufferData")
 	c.glBufferSubData = getProcAddr("glBufferSubData")
 	c.glMapBuffer = getProcAddr("glMapBuffer")
-	if gles && c.glMapBuffer == nil {
-		c.glMapBuffer = getProcAddr("glMapBufferOES")
-	}
+	c.glMapBufferRange = getProcAddr("glMapBufferRange")
 	c.glUnmapBuffer = getProcAddr("glUnmapBuffer")
 
 	// VAO — GLES may need OES suffix on some Mesa dispatch paths.
@@ -735,6 +736,16 @@ func (c *Context) MapBuffer(target, access uint32) uintptr {
 	var ptr uintptr
 	ptr = uintptr(C.gl_u_ii(C.uintptr_t(uintptr(c.glMapBuffer)), C.uint32_t(target), C.uint32_t(access)))
 	return ptr
+}
+
+// MapBufferRange maps length bytes of the buffer bound to target from offset
+// for the MAP_*_BIT access given (GL 3.0 / ES 3.0). Returns the mapped
+// pointer, or 0 when the call fails.
+func (c *Context) MapBufferRange(target uint32, offset, length int, access uint32) uintptr {
+	if c.glMapBufferRange == nil {
+		return 0
+	}
+	return uintptr(C.gl_u_iuui(C.uintptr_t(uintptr(c.glMapBufferRange)), C.uint32_t(target), C.uintptr_t(uintptr(offset)), C.uintptr_t(uintptr(length)), C.uint32_t(access)))
 }
 
 // UnmapBuffer releases the mapping of a buffer object's data store.
