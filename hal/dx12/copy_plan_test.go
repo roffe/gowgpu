@@ -10,6 +10,7 @@ import (
 
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/gowgpu/hal/dx12/d3d12"
 )
 
 func testTexture(format gputypes.TextureFormat, dimension gputypes.TextureDimension, width, height, depth, mips uint32) *Texture {
@@ -113,7 +114,7 @@ func TestTextureWriteSourceOffsetUsesBlockRows(t *testing.T) {
 
 func TestWriteTextureNativeLayoutRepacksUnalignedSourcePitch(t *testing.T) {
 	texture := testTexture(gputypes.TextureFormatRGBA8Unorm, gputypes.TextureDimension2D, 64, 8, 1, 1)
-	_, native, sourceBPR, _, ok := writeTextureNativeLayout(texture, hal.ImageDataLayout{BytesPerRow: 300, RowsPerImage: 2}, hal.Extent3D{Width: 64, Height: 2, DepthOrArrayLayers: 1})
+	_, native, sourceBPR, _, ok := writeTextureNativeLayout(texture, gputypes.TextureAspectAll, hal.ImageDataLayout{BytesPerRow: 300, RowsPerImage: 2}, hal.Extent3D{Width: 64, Height: 2, DepthOrArrayLayers: 1})
 	if !ok || native.BytesPerRow != 256 || sourceBPR != 300 {
 		t.Fatalf("native layout = %#v, source BPR = %d, ok=%v", native, sourceBPR, ok)
 	}
@@ -121,7 +122,7 @@ func TestWriteTextureNativeLayoutRepacksUnalignedSourcePitch(t *testing.T) {
 
 func TestWriteTextureNativeLayoutKeepsSourcePaddingOutOfStaging(t *testing.T) {
 	texture := testTexture(gputypes.TextureFormatBC1RGBAUnorm, gputypes.TextureDimension2D, 8, 8, 2, 1)
-	_, native, _, sourceBlockRows, ok := writeTextureNativeLayout(texture, hal.ImageDataLayout{BytesPerRow: 300, RowsPerImage: 8}, hal.Extent3D{Width: 8, Height: 4, DepthOrArrayLayers: 2})
+	_, native, _, sourceBlockRows, ok := writeTextureNativeLayout(texture, gputypes.TextureAspectAll, hal.ImageDataLayout{BytesPerRow: 300, RowsPerImage: 8}, hal.Extent3D{Width: 8, Height: 4, DepthOrArrayLayers: 2})
 	if !ok || sourceBlockRows != 2 || native.RowsPerImage != 4 {
 		t.Fatalf("native layout = %#v, source block rows = %d, ok=%v", native, sourceBlockRows, ok)
 	}
@@ -171,5 +172,63 @@ func TestTextureViewMipExtentIsAtLeastOneTexel(t *testing.T) {
 	view.baseMip = 1
 	if w, h := view.mipExtent(); w != 4 || h != 1 {
 		t.Fatalf("mip 1 of 8x2 = %dx%d, want 4x1", w, h)
+	}
+}
+
+func TestTextureCopyFormatIsThePlanesOwn(t *testing.T) {
+	tests := []struct {
+		name   string
+		format gputypes.TextureFormat
+		plane  uint32
+		expect d3d12.DXGI_FORMAT
+		bytes  uint32
+	}{
+		{"colour", gputypes.TextureFormatRGBA8Unorm, 0, d3d12.DXGI_FORMAT_R8G8B8A8_UNORM, 4},
+		{"depth16", gputypes.TextureFormatDepth16Unorm, 0, d3d12.DXGI_FORMAT_R16_UNORM, 2},
+		{"depth32", gputypes.TextureFormatDepth32Float, 0, d3d12.DXGI_FORMAT_R32_FLOAT, 4},
+		{"depth32 of depth32 stencil8", gputypes.TextureFormatDepth32FloatStencil8, 0, d3d12.DXGI_FORMAT_R32_FLOAT, 4},
+		{"stencil of depth32 stencil8", gputypes.TextureFormatDepth32FloatStencil8, 1, d3d12.DXGI_FORMAT_R8_UINT, 1},
+		{"stencil of depth24 stencil8", gputypes.TextureFormatDepth24PlusStencil8, 1, d3d12.DXGI_FORMAT_R8_UINT, 1},
+		{"stencil8", gputypes.TextureFormatStencil8, 1, d3d12.DXGI_FORMAT_R8_UINT, 1},
+		{"depth of depth24 stencil8", gputypes.TextureFormatDepth24PlusStencil8, 0, d3d12.DXGI_FORMAT_UNKNOWN, 0},
+		{"depth24", gputypes.TextureFormatDepth24Plus, 0, d3d12.DXGI_FORMAT_UNKNOWN, 0},
+		{"stencil of depth32", gputypes.TextureFormatDepth32Float, 1, d3d12.DXGI_FORMAT_UNKNOWN, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			format, bytes := textureCopyFormat(tt.format, tt.plane)
+			if format != tt.expect || bytes != tt.bytes {
+				t.Fatalf("textureCopyFormat = (%d, %d), want (%d, %d)", format, bytes, tt.expect, tt.bytes)
+			}
+		})
+	}
+}
+
+func TestPlanBufferTextureCopiesDepthStencilPlanes(t *testing.T) {
+	texture := testTexture(gputypes.TextureFormatDepth32FloatStencil8, gputypes.TextureDimension2D, 64, 4, 1, 1)
+	size := hal.Extent3D{Width: 64, Height: 4, DepthOrArrayLayers: 1}
+
+	depth := planBufferTextureCopies(texture, hal.ImageCopyTexture{Aspect: gputypes.TextureAspectDepthOnly}, hal.ImageDataLayout{BytesPerRow: 256}, size)
+	if len(depth) != 1 || depth[0].plane != 0 || depth[0].subresource != 0 || depth[0].rowPitch != 256 {
+		t.Fatalf("depth plans = %#v, want one plane-0 plan of 256-byte rows", depth)
+	}
+	stencil := planBufferTextureCopies(texture, hal.ImageCopyTexture{Aspect: gputypes.TextureAspectStencilOnly}, hal.ImageDataLayout{BytesPerRow: 256}, size)
+	if len(stencil) != 1 || stencil[0].plane != 1 || stencil[0].subresource != 1 {
+		t.Fatalf("stencil plans = %#v, want one plane-1 plan", stencil)
+	}
+	if planBufferTextureCopies(texture, hal.ImageCopyTexture{Aspect: gputypes.TextureAspectAll}, hal.ImageDataLayout{BytesPerRow: 256}, size) != nil {
+		t.Fatal("both planes of a depth/stencil texture cannot be one copy")
+	}
+	if planBufferTextureCopies(texture, hal.ImageCopyTexture{Aspect: gputypes.TextureAspectDepthOnly}, hal.ImageDataLayout{BytesPerRow: 128}, size) != nil {
+		t.Fatal("a 128-byte row cannot hold 64 depth values")
+	}
+
+	stencil8 := testTexture(gputypes.TextureFormatStencil8, gputypes.TextureDimension2D, 64, 4, 1, 1)
+	if plans := planBufferTextureCopies(stencil8, hal.ImageCopyTexture{Aspect: gputypes.TextureAspectAll}, hal.ImageDataLayout{BytesPerRow: 256}, size); len(plans) != 1 || plans[0].plane != 1 {
+		t.Fatalf("stencil8 plans = %#v, want one plane-1 plan", plans)
+	}
+	depth24 := testTexture(gputypes.TextureFormatDepth24Plus, gputypes.TextureDimension2D, 64, 4, 1, 1)
+	if planBufferTextureCopies(depth24, hal.ImageCopyTexture{Aspect: gputypes.TextureAspectDepthOnly}, hal.ImageDataLayout{BytesPerRow: 256}, size) != nil {
+		t.Fatal("24-bit depth has no buffer copy")
 	}
 }

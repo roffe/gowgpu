@@ -6,20 +6,35 @@
 package dx12
 
 import (
+	"fmt"
+
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/dx12/d3d12"
 )
+
+// planRegionCopies plans every region of a buffer/texture copy, or records
+// the copy as the encoder's error when a region has no plan, so that the
+// command buffer fails instead of silently missing the copy.
+func (e *CommandEncoder) planRegionCopies(texture *Texture, regions []hal.BufferTextureCopy) [][]bufferTextureCopyPlan {
+	regionPlans := make([][]bufferTextureCopyPlan, len(regions))
+	for i, region := range regions {
+		regionPlans[i] = planBufferTextureCopies(texture, region.TextureBase, region.BufferLayout, region.Size)
+		if regionPlans[i] == nil {
+			e.fail(fmt.Errorf("dx12: buffer/texture copy of %v aspect %v at %+v size %+v with layout %+v cannot be recorded", texture.format, region.TextureBase.Aspect, region.TextureBase.Origin, region.Size, region.BufferLayout))
+		}
+	}
+	return regionPlans
+}
 
 func (e *CommandEncoder) copyBufferToTexture(src *Buffer, texture *Texture, regions []hal.BufferTextureCopy) {
 	barriers := make([]stateBarrierPlan, 0, 1+len(regions))
 	if before, barrier := e.stateTracker.transitionBuffer(src, d3d12.D3D12_RESOURCE_STATE_COPY_SOURCE); barrier {
 		barriers = append(barriers, stateBarrierPlan{resource: src, subresource: d3d12.D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, before: before, after: d3d12.D3D12_RESOURCE_STATE_COPY_SOURCE})
 	}
-	regionPlans := make([][]bufferTextureCopyPlan, len(regions))
-	for i, region := range regions {
-		regionPlans[i] = planBufferTextureCopies(texture, region.TextureBase, region.BufferLayout, region.Size)
-		for _, copyPlan := range regionPlans[i] {
+	regionPlans := e.planRegionCopies(texture, regions)
+	for _, plans := range regionPlans {
+		for _, copyPlan := range plans {
 			if before, barrier := e.stateTracker.transitionTexture(texture, copyPlan.subresource, d3d12.D3D12_RESOURCE_STATE_COPY_DEST); barrier {
 				barriers = append(barriers, stateBarrierPlan{resource: texture, subresource: copyPlan.subresource, before: before, after: d3d12.D3D12_RESOURCE_STATE_COPY_DEST})
 			}
@@ -48,10 +63,9 @@ func (e *CommandEncoder) copyTextureToBuffer(src *Texture, dst *Buffer, regions 
 	if before, barrier := e.stateTracker.transitionBuffer(dst, d3d12.D3D12_RESOURCE_STATE_COPY_DEST); barrier {
 		barriers = append(barriers, stateBarrierPlan{resource: dst, subresource: d3d12.D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, before: before, after: d3d12.D3D12_RESOURCE_STATE_COPY_DEST})
 	}
-	regionPlans := make([][]bufferTextureCopyPlan, len(regions))
-	for i, region := range regions {
-		regionPlans[i] = planBufferTextureCopies(src, region.TextureBase, region.BufferLayout, region.Size)
-		for _, copyPlan := range regionPlans[i] {
+	regionPlans := e.planRegionCopies(src, regions)
+	for _, plans := range regionPlans {
+		for _, copyPlan := range plans {
 			if before, barrier := e.stateTracker.transitionTexture(src, copyPlan.subresource, d3d12.D3D12_RESOURCE_STATE_COPY_SOURCE); barrier {
 				barriers = append(barriers, stateBarrierPlan{resource: src, subresource: copyPlan.subresource, before: before, after: d3d12.D3D12_RESOURCE_STATE_COPY_SOURCE})
 			}
@@ -106,11 +120,12 @@ func (e *CommandEncoder) copyTextureToTexture(src, dst *Texture, regions []hal.T
 }
 
 func placedFootprintLocation(buffer *Buffer, format gputypes.TextureFormat, plan bufferTextureCopyPlan) d3d12.D3D12_TEXTURE_COPY_LOCATION {
+	copyFormat, _ := textureCopyFormat(format, plan.plane)
 	location := d3d12.D3D12_TEXTURE_COPY_LOCATION{Resource: buffer.raw, Type: d3d12.D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT}
 	location.SetPlacedFootprint(d3d12.D3D12_PLACED_SUBRESOURCE_FOOTPRINT{
 		Offset: plan.bufferOffset,
 		Footprint: d3d12.D3D12_SUBRESOURCE_FOOTPRINT{
-			Format:   textureFormatToD3D12(format),
+			Format:   copyFormat,
 			Width:    plan.footprintWidth,
 			Height:   plan.footprintHeight,
 			Depth:    plan.footprintDepth,

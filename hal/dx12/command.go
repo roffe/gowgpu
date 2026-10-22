@@ -58,6 +58,16 @@ type CommandEncoder struct {
 	descriptorHeapCount int
 
 	stateTracker commandStateTracker
+
+	// err is the first command that could not be recorded; EndEncoding
+	// returns it in place of a command buffer that lacks the command.
+	err error
+}
+
+func (e *CommandEncoder) fail(err error) {
+	if e.err == nil {
+		e.err = err
+	}
 }
 
 // BeginEncoding begins command recording.
@@ -65,6 +75,7 @@ type CommandEncoder struct {
 // The allocator is permanently owned by this encoder — not acquired per-call.
 func (e *CommandEncoder) BeginEncoding(label string) error {
 	e.label = label
+	e.err = nil
 
 	// Try reusing a command list from the free pool.
 	if len(e.freeLists) > 0 {
@@ -97,6 +108,10 @@ func (e *CommandEncoder) BeginEncoding(label string) error {
 func (e *CommandEncoder) EndEncoding() (hal.CommandBuffer, error) {
 	if !e.isRecording {
 		return nil, fmt.Errorf("dx12: command encoder is not recording")
+	}
+	if e.err != nil {
+		e.DiscardEncoding()
+		return nil, e.err
 	}
 
 	if hal.DebugEnabled() {

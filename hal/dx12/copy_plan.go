@@ -10,6 +10,7 @@ import (
 
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/gowgpu/hal/dx12/d3d12"
 )
 
 const d3d12TexturePlacementAlignment = 512
@@ -20,6 +21,7 @@ const d3d12TexturePlacementAlignment = 512
 // logical byte range inside an aligned, possibly enlarged footprint.
 type bufferTextureCopyPlan struct {
 	subresource     uint32
+	plane           uint32
 	bufferOffset    uint64
 	bufferOriginX   uint32
 	bufferOriginY   uint32
@@ -48,8 +50,33 @@ type textureBlockInfo struct {
 	bytes  uint32
 }
 
-func textureBlockInfoForFormat(format gputypes.TextureFormat) (textureBlockInfo, bool) {
-	bytes := format.BlockCopySize()
+// textureCopyFormat is the format a buffer copy of one physical plane of a
+// texture of format goes through and the bytes per block of it: the format
+// itself for a colour texture, and for a depth/stencil texture the plane's
+// own, as D3D12 copies depth as R16_UNORM or R32_FLOAT and stencil as
+// R8_UINT. A plane with no copy, 24-bit depth, has no format.
+func textureCopyFormat(format gputypes.TextureFormat, plane uint32) (d3d12.DXGI_FORMAT, uint32) {
+	if !format.IsDepthStencil() {
+		return textureFormatToD3D12(format), format.BlockCopySize()
+	}
+	if plane == 1 {
+		if format.HasStencil() {
+			return d3d12.DXGI_FORMAT_R8_UINT, 1
+		}
+		return d3d12.DXGI_FORMAT_UNKNOWN, 0
+	}
+	switch format {
+	case gputypes.TextureFormatDepth16Unorm:
+		return d3d12.DXGI_FORMAT_R16_UNORM, 2
+	case gputypes.TextureFormatDepth32Float, gputypes.TextureFormatDepth32FloatStencil8:
+		return d3d12.DXGI_FORMAT_R32_FLOAT, 4
+	default:
+		return d3d12.DXGI_FORMAT_UNKNOWN, 0
+	}
+}
+
+func textureBlockInfoForPlane(format gputypes.TextureFormat, plane uint32) (textureBlockInfo, bool) {
+	_, bytes := textureCopyFormat(format, plane)
 	if bytes == 0 {
 		return textureBlockInfo{}, false
 	}
@@ -82,7 +109,7 @@ func textureFormatIsBC(format gputypes.TextureFormat) bool {
 }
 
 func textureFormatBlockHeight(format gputypes.TextureFormat) uint32 {
-	if info, ok := textureBlockInfoForFormat(format); ok {
+	if info, ok := textureBlockInfoForPlane(format, 0); ok {
 		return info.height
 	}
 	return 1
@@ -175,11 +202,22 @@ func planPlacedBufferSlice(logicalOffset uint64, rowPitch, blockWidth, blockHeig
 	}, true
 }
 
-func normalizedCopyLayout(texture *Texture, layout hal.ImageDataLayout, size hal.Extent3D) (textureBlockInfo, uint32, uint32, bool) {
+// copyPlane is the one physical plane a buffer copy of aspect of texture
+// touches. The planes of a depth/stencil texture have different layouts,
+// so a copy addresses one of them.
+func copyPlane(texture *Texture, aspect gputypes.TextureAspect) (uint32, bool) {
+	planes := textureAspectPlanes(texture, aspect)
+	if len(planes) != 1 {
+		return 0, false
+	}
+	return planes[0], true
+}
+
+func normalizedCopyLayout(texture *Texture, plane uint32, layout hal.ImageDataLayout, size hal.Extent3D) (textureBlockInfo, uint32, uint32, bool) {
 	if texture == nil {
 		return textureBlockInfo{}, 0, 0, false
 	}
-	info, ok := textureBlockInfoForFormat(texture.format)
+	info, ok := textureBlockInfoForPlane(texture.format, plane)
 	if !ok {
 		return textureBlockInfo{}, 0, 0, false
 	}
@@ -216,11 +254,15 @@ func textureWriteSourceOffset(base uint64, sourceBytesPerRow, blockRows, slice, 
 	return base + uint64(slice)*uint64(sourceBytesPerRow)*uint64(blockRows) + uint64(row)*uint64(sourceBytesPerRow)
 }
 
-func writeTextureNativeLayout(texture *Texture, layout hal.ImageDataLayout, size hal.Extent3D) (textureBlockInfo, hal.ImageDataLayout, uint32, uint32, bool) {
+func writeTextureNativeLayout(texture *Texture, aspect gputypes.TextureAspect, layout hal.ImageDataLayout, size hal.Extent3D) (textureBlockInfo, hal.ImageDataLayout, uint32, uint32, bool) {
 	if texture == nil || size.Width == 0 {
 		return textureBlockInfo{}, hal.ImageDataLayout{}, 0, 0, false
 	}
-	info, ok := textureBlockInfoForFormat(texture.format)
+	plane, ok := copyPlane(texture, aspect)
+	if !ok {
+		return textureBlockInfo{}, hal.ImageDataLayout{}, 0, 0, false
+	}
+	info, ok := textureBlockInfoForPlane(texture.format, plane)
 	if !ok {
 		return textureBlockInfo{}, hal.ImageDataLayout{}, 0, 0, false
 	}
@@ -250,7 +292,7 @@ func writeTextureNativeLayout(texture *Texture, layout hal.ImageDataLayout, size
 	}
 	sourceBlockRows := (sourceRowsPerImage + info.height - 1) / info.height
 	nativeLayout.RowsPerImage = size.Height
-	if _, _, _, valid := normalizedCopyLayout(texture, nativeLayout, size); !valid {
+	if _, _, _, valid := normalizedCopyLayout(texture, plane, nativeLayout, size); !valid {
 		return textureBlockInfo{}, hal.ImageDataLayout{}, 0, 0, false
 	}
 	return info, nativeLayout, sourceBytesPerRow, sourceBlockRows, true
@@ -260,8 +302,12 @@ func writeTextureNativeLayout(texture *Texture, layout hal.ImageDataLayout, size
 // per D3D12 subresource or 3D depth slice. It returns nil when the layout
 // cannot be represented without changing logical byte addresses.
 func planBufferTextureCopies(texture *Texture, region hal.ImageCopyTexture, layout hal.ImageDataLayout, size hal.Extent3D) []bufferTextureCopyPlan {
-	info, rowPitch, blockRows, ok := normalizedCopyLayout(texture, layout, size)
-	if !ok || texture == nil {
+	plane, ok := copyPlane(texture, region.Aspect)
+	if !ok {
+		return nil
+	}
+	info, rowPitch, blockRows, ok := normalizedCopyLayout(texture, plane, layout, size)
+	if !ok {
 		return nil
 	}
 	widthBlocks, heightBlocks, ok := copyExtentBlocks(info, region.Origin, size)
@@ -278,49 +324,44 @@ func planBufferTextureCopies(texture *Texture, region hal.ImageCopyTexture, layo
 	if !validTextureCopyDepth(texture, region.Origin.Z, depth) {
 		return nil
 	}
-	planes := textureAspectPlanes(texture, region.Aspect)
-	if len(planes) == 0 {
-		return nil
-	}
 	stride := uint64(rowPitch) * uint64(blockRows)
 	if stride > math.MaxUint64/uint64(depth) {
 		return nil
 	}
-	plans := make([]bufferTextureCopyPlan, 0, len(planes)*int(depth))
-	for _, plane := range planes {
-		for slice := uint32(0); slice < depth; slice++ {
-			logicalOffset := layout.Offset + uint64(slice)*stride
-			if logicalOffset < layout.Offset {
-				return nil
-			}
-			placed, representable := planPlacedBufferSlice(
-				logicalOffset, rowPitch, info.width, info.height, info.bytes,
-				widthBlocks*info.width, heightBlocks*info.height)
-			if !representable {
-				return nil
-			}
-			subresource := texture.subresourceIndexForPlane(region.MipLevel, 0, plane)
-			textureOriginZ := region.Origin.Z + slice
-			if texture.dimension != gputypes.TextureDimension3D {
-				subresource = texture.subresourceIndexForPlane(region.MipLevel, region.Origin.Z+slice, plane)
-				textureOriginZ = 0
-			}
-			plans = append(plans, bufferTextureCopyPlan{
-				subresource:     subresource,
-				bufferOffset:    placed.bufferOffset,
-				bufferOriginX:   placed.bufferOriginX,
-				bufferOriginY:   placed.bufferOriginY,
-				footprintWidth:  placed.footprintWidth,
-				footprintHeight: placed.footprintHeight,
-				footprintDepth:  1,
-				textureOriginX:  region.Origin.X,
-				textureOriginY:  region.Origin.Y,
-				textureOriginZ:  textureOriginZ,
-				rowPitch:        rowPitch,
-				copyWidth:       widthBlocks * info.width,
-				copyHeight:      heightBlocks * info.height,
-			})
+	plans := make([]bufferTextureCopyPlan, 0, depth)
+	for slice := uint32(0); slice < depth; slice++ {
+		logicalOffset := layout.Offset + uint64(slice)*stride
+		if logicalOffset < layout.Offset {
+			return nil
 		}
+		placed, representable := planPlacedBufferSlice(
+			logicalOffset, rowPitch, info.width, info.height, info.bytes,
+			widthBlocks*info.width, heightBlocks*info.height)
+		if !representable {
+			return nil
+		}
+		subresource := texture.subresourceIndexForPlane(region.MipLevel, 0, plane)
+		textureOriginZ := region.Origin.Z + slice
+		if texture.dimension != gputypes.TextureDimension3D {
+			subresource = texture.subresourceIndexForPlane(region.MipLevel, region.Origin.Z+slice, plane)
+			textureOriginZ = 0
+		}
+		plans = append(plans, bufferTextureCopyPlan{
+			subresource:     subresource,
+			plane:           plane,
+			bufferOffset:    placed.bufferOffset,
+			bufferOriginX:   placed.bufferOriginX,
+			bufferOriginY:   placed.bufferOriginY,
+			footprintWidth:  placed.footprintWidth,
+			footprintHeight: placed.footprintHeight,
+			footprintDepth:  1,
+			textureOriginX:  region.Origin.X,
+			textureOriginY:  region.Origin.Y,
+			textureOriginZ:  textureOriginZ,
+			rowPitch:        rowPitch,
+			copyWidth:       widthBlocks * info.width,
+			copyHeight:      heightBlocks * info.height,
+		})
 	}
 	return plans
 }
