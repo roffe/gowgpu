@@ -144,6 +144,21 @@ func (c *AdapterContext) bindKept(surf egl.EGLSurface) {
 	c.onHelper = true
 }
 
+// ReleaseSurface makes the context current on its pbuffer instead of surf
+// when surf is what it draws to, so that surf can be destroyed: a kept
+// context (keepCurrent) stays on the window surface the last Present used,
+// and destroying a current surface only marks it while the native window
+// under it goes away. The lock must be held.
+func (c *AdapterContext) ReleaseSurface(surf egl.EGLSurface) {
+	if c.eglCtx == nil || surf == egl.NoSurface || egl.GetCurrentSurface(egl.Draw) != surf {
+		return
+	}
+	pb := c.eglCtx.Pbuffer()
+	if egl.MakeCurrent(c.eglCtx.Display(), pb, pb, c.eglCtx.EGLContext()) == egl.False {
+		slog.Error("gles: AdapterContext.ReleaseSurface MakeCurrent failed", "err", fmt.Sprintf("0x%x", egl.GetError()))
+	}
+}
+
 // OnHelper reports whether the lock held runs on the helper context, where
 // only shared objects exist and glFinish finishes nothing of the queue's.
 func (c *AdapterContext) OnHelper() bool { return c.onHelper }

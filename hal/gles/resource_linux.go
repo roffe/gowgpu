@@ -234,6 +234,7 @@ func (s *Surface) Unconfigure(_ hal.Device) {
 	if s.ctx != nil {
 		glCtx := s.ctx.Lock()
 		destroySwapchainFBO(glCtx, s.swapchainFBO, s.colorRenderbuffer)
+		s.ctx.ReleaseSurface(s.eglSurface)
 		s.ctx.Unlock()
 	}
 	s.swapchainFBO = 0
@@ -285,6 +286,7 @@ func (s *Surface) Destroy() {
 	if s.ctx != nil {
 		glCtx := s.ctx.Lock()
 		destroySwapchainFBO(glCtx, s.swapchainFBO, s.colorRenderbuffer)
+		s.ctx.ReleaseSurface(s.eglSurface)
 		s.ctx.Unlock()
 	}
 	s.swapchainFBO = 0
