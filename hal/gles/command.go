@@ -852,15 +852,20 @@ func (e *ComputePassEncoder) SetBindGroup(index uint32, group hal.BindGroup, off
 	if !ok {
 		return
 	}
+	var samplerMap *[maxTextureSlots]int8
 	var groupInfos []BindGroupLayoutInfo
-	if e.pipeline != nil && e.pipeline.layout != nil {
-		groupInfos = e.pipeline.layout.groupInfos
+	if e.pipeline != nil {
+		samplerMap = &e.pipeline.samplerBindMap
+		if e.pipeline.layout != nil {
+			groupInfos = e.pipeline.layout.groupInfos
+		}
 	}
 	cmd := e.encoder.store().bindGroups.put(SetBindGroupCommand{
 		index:           index,
 		group:           bg,
 		maxTextureUnits: e.encoder.maxTextureUnits,
 		groupInfos:      groupInfos,
+		samplerBindMap:  samplerMap,
 	})
 	cmd.setOffsets(offsets)
 	e.encoder.commands = append(e.encoder.commands, cmd)

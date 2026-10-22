@@ -558,23 +558,7 @@ func (d *Device) CreateRenderPipeline(desc *RenderPipelineDescriptor) (hal.Rende
 		vertexBuffers:     desc.Vertex.Buffers,
 	}
 
-	// Build SamplerBindMap from TextureMappings using pre-computed BindingMap.
-	// For each combined sampler2D, map texture's GL slot to sampler's GL slot.
-	for i := range pipeline.samplerBindMap {
-		pipeline.samplerBindMap[i] = -1 // no sampler
-	}
-	for _, tm := range fragmentTranslationInfo.TextureMappings {
-		if tm.SamplerBinding == nil {
-			continue
-		}
-		texKey := glsl.BindingMapKey{Group: tm.TextureBinding.Group, Binding: tm.TextureBinding.Binding}
-		samplerKey := glsl.BindingMapKey{Group: tm.SamplerBinding.Group, Binding: tm.SamplerBinding.Binding}
-		texUnit, texOk := layout.bindingMap[texKey]
-		samplerUnit, samplerOk := layout.bindingMap[samplerKey]
-		if texOk && samplerOk && texUnit < maxTextureSlots {
-			pipeline.samplerBindMap[texUnit] = int8(samplerUnit)
-		}
-	}
+	pipeline.samplerBindMap = samplerBindMapFor(layout, vertexTranslationInfo, fragmentTranslationInfo)
 
 	return pipeline, nil
 }
@@ -676,9 +660,10 @@ func (d *Device) CreateComputePipeline(desc *ComputePipelineDescriptor) (hal.Com
 	)
 
 	return &ComputePipeline{
-		programID: programID,
-		layout:    layout,
-		glCtx:     glCtx,
+		programID:      programID,
+		layout:         layout,
+		glCtx:          glCtx,
+		samplerBindMap: samplerBindMapFor(layout, computeTranslationInfo),
 	}, nil
 }
 

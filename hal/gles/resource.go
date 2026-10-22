@@ -225,6 +225,30 @@ type RenderPipeline struct {
 
 const maxTextureSlots = 32
 
+// samplerBindMapFor maps each texture unit to the unit of the sampler the
+// combined sampler2D in infos samples it with, -1 for none, by the GL slots
+// of layout.
+func samplerBindMapFor(layout *PipelineLayout, infos ...glsl.TranslationInfo) (m [maxTextureSlots]int8) {
+	for i := range m {
+		m[i] = -1
+	}
+	for _, info := range infos {
+		for _, tm := range info.TextureMappings {
+			if tm.SamplerBinding == nil {
+				continue
+			}
+			texKey := glsl.BindingMapKey{Group: tm.TextureBinding.Group, Binding: tm.TextureBinding.Binding}
+			samplerKey := glsl.BindingMapKey{Group: tm.SamplerBinding.Group, Binding: tm.SamplerBinding.Binding}
+			texUnit, texOk := layout.bindingMap[texKey]
+			samplerUnit, samplerOk := layout.bindingMap[samplerKey]
+			if texOk && samplerOk && texUnit < maxTextureSlots {
+				m[texUnit] = int8(samplerUnit)
+			}
+		}
+	}
+	return m
+}
+
 // Destroy releases the render pipeline.
 func (p *RenderPipeline) Destroy() {
 	if p.programID != 0 && p.glCtx != nil {
@@ -235,9 +259,10 @@ func (p *RenderPipeline) Destroy() {
 
 // ComputePipeline implements hal.ComputePipeline for OpenGL.
 type ComputePipeline struct {
-	programID uint32
-	layout    *PipelineLayout
-	glCtx     *gl.Context
+	programID      uint32
+	layout         *PipelineLayout
+	glCtx          *gl.Context
+	samplerBindMap [maxTextureSlots]int8 // as RenderPipeline's
 }
 
 // Destroy releases the compute pipeline.
