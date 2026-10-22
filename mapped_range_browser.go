@@ -106,6 +106,10 @@ func (m *MappedRange) Release() {
 	if m.dirty && m.valid && m.buf != nil && m.buf.browser != nil {
 		_ = m.buf.browser.WriteMappedRange(m.offset, m.cached)
 	}
+	m.detach()
+}
+
+func (m *MappedRange) detach() {
 	m.valid = false
 	m.buf = nil
 	m.cached = nil

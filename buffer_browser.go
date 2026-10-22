@@ -19,6 +19,9 @@ type Buffer struct {
 
 	// mapState tracks the current mapping state. Updated by MapAsync/Unmap.
 	mapState MapState
+
+	// ranges are the MappedRange handles out for the current mapping.
+	ranges []*MappedRange
 }
 
 // Size returns the buffer size in bytes.
@@ -44,6 +47,7 @@ func (b *Buffer) Release() {
 	}
 	b.released = true
 	b.mapState = MapStateDestroyed
+	b.detachRanges()
 	if b.browser != nil {
 		b.browser.Destroy()
 	}
@@ -182,12 +186,14 @@ func (b *Buffer) MappedRange(offset, size uint64) (*MappedRange, error) {
 		return nil, ErrMapRangeOverflow
 	}
 
-	return &MappedRange{
+	r := &MappedRange{
 		buf:    b,
 		offset: offset,
 		size:   size,
 		valid:  true,
-	}, nil
+	}
+	b.ranges = append(b.ranges, r)
+	return r, nil
 }
 
 // Unmap releases the current mapping and invalidates all outstanding
@@ -205,7 +211,15 @@ func (b *Buffer) Unmap() error {
 	}
 	b.browser.Unmap()
 	b.mapState = MapStateUnmapped
+	b.detachRanges()
 	return nil
+}
+
+func (b *Buffer) detachRanges() {
+	for _, r := range b.ranges {
+		r.detach()
+	}
+	b.ranges = nil
 }
 
 // validateMapArgs performs synchronous validation of mapping parameters.
