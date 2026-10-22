@@ -372,13 +372,7 @@ func (f *Fence) Wait(waitValue uint64, timeout time.Duration) bool {
 		return false // value not yet signaled
 	}
 
-	// Convert timeout to nanoseconds for glClientWaitSync.
-	timeoutNS := uint64(timeout.Nanoseconds())
-	if timeoutNS > uint64(^uint32(0)) {
-		timeoutNS = uint64(^uint32(0)) // cap to max u32 for safety
-	}
-
-	status := f.glCtx.ClientWaitSync(target.sync, gl.SYNC_FLUSH_COMMANDS_BIT, timeoutNS)
+	status := f.glCtx.ClientWaitSync(target.sync, gl.SYNC_FLUSH_COMMANDS_BIT, uint64(max(timeout, 0).Nanoseconds()))
 
 	signaled := status == gl.ALREADY_SIGNALED || status == gl.CONDITION_SATISFIED
 	if signaled {
