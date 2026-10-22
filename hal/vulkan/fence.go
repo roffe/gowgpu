@@ -7,6 +7,7 @@ package vulkan
 
 import (
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"unsafe"
 
@@ -35,12 +36,15 @@ type deviceFence struct {
 	// Incremented atomically for each submit on both paths.
 	lastSignaled atomic.Uint64
 
-	// lastCompleted tracks the value known to be completed by the GPU.
-	// Updated after successful wait. On binary path, this mirrors pool.lastCompleted.
-	lastCompleted uint64
+	// lastCompleted is the highest value known to be completed by the GPU,
+	// raised by waits and polls. On the binary path it mirrors
+	// pool.lastCompleted.
+	lastCompleted atomic.Uint64
 
 	// pool manages binary VkFences for the fallback path (VK-IMPL-003).
-	// nil on the timeline path.
+	// nil on the timeline path. mu guards it: the queue signals under its
+	// own lock, the swapchain's acquire and a queue write wait without it.
+	mu   sync.Mutex
 	pool *fencePool
 
 	// isTimeline indicates which path is active.
@@ -100,6 +104,44 @@ func (f *deviceFence) currentSignalValue() uint64 {
 	return f.lastSignaled.Load()
 }
 
+// completed records that the GPU has completed value, and so every value
+// before it.
+func (f *deviceFence) completed(value uint64) {
+	for {
+		cur := f.lastCompleted.Load()
+		if value <= cur || f.lastCompleted.CompareAndSwap(cur, value) {
+			return
+		}
+	}
+}
+
+// signal returns the fence of the binary path to pass to vkQueueSubmit for
+// the submission with value, recycling the signaled ones first.
+func (f *deviceFence) signal(cmds *vk.Commands, device vk.Device, value uint64) (vk.Fence, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	fence, err := f.pool.signal(cmds, device, value)
+	f.completed(f.pool.lastCompleted)
+	return fence, err
+}
+
+// poll returns the highest value the GPU has completed without blocking.
+func (f *deviceFence) poll(cmds *vk.Commands, device vk.Device) uint64 {
+	if !f.isTimeline {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		f.pool.maintain(cmds, device)
+		f.completed(f.pool.lastCompleted)
+		return f.pool.lastCompleted
+	}
+	var value uint64
+	if cmds.GetSemaphoreCounterValue(device, f.timelineSemaphore, &value) != vk.Success {
+		return f.lastCompleted.Load()
+	}
+	f.completed(value)
+	return value
+}
+
 // waitForValue waits until the GPU completes the submission with the specified value.
 // Returns immediately if the value is already completed.
 // timeoutNs is the timeout in nanoseconds.
@@ -109,16 +151,18 @@ func (f *deviceFence) currentSignalValue() uint64 {
 func (f *deviceFence) waitForValue(cmds *vk.Commands, device vk.Device, value uint64, timeoutNs uint64) error {
 	if !f.isTimeline {
 		// Binary path: delegate to fence pool (VK-IMPL-003).
+		f.mu.Lock()
+		defer f.mu.Unlock()
 		if err := f.pool.wait(cmds, device, value, timeoutNs); err != nil {
 			return err
 		}
-		f.lastCompleted = f.pool.lastCompleted
+		f.completed(f.pool.lastCompleted)
 		return nil
 	}
 
 	// Timeline path.
 	// Fast path: already completed.
-	if value <= f.lastCompleted {
+	if value <= f.lastCompleted.Load() {
 		return nil
 	}
 
@@ -137,7 +181,7 @@ func (f *deviceFence) waitForValue(cmds *vk.Commands, device vk.Device, value ui
 	result := cmds.WaitSemaphores(device, &waitInfo, timeoutNs)
 	switch result {
 	case vk.Success:
-		f.lastCompleted = value
+		f.completed(value)
 		return nil
 	case vk.Timeout:
 		return fmt.Errorf("vulkan: timeline semaphore wait timed out (value=%d)", value)
@@ -155,10 +199,12 @@ func (f *deviceFence) waitForValue(cmds *vk.Commands, device vk.Device, value ui
 // Binary path (VK-IMPL-003): delegates to fencePool.waitForLatest().
 func (f *deviceFence) waitForLatest(cmds *vk.Commands, device vk.Device, timeoutNs uint64) error {
 	if !f.isTimeline {
+		f.mu.Lock()
+		defer f.mu.Unlock()
 		if err := f.pool.waitForLatest(cmds, device, timeoutNs); err != nil {
 			return err
 		}
-		f.lastCompleted = f.pool.lastCompleted
+		f.completed(f.pool.lastCompleted)
 		return nil
 	}
 	return f.waitForValue(cmds, device, f.currentSignalValue(), timeoutNs)
@@ -172,6 +218,8 @@ func (f *deviceFence) destroy(cmds *vk.Commands, device vk.Device) {
 		cmds.DestroySemaphore(device, f.timelineSemaphore, nil)
 		f.timelineSemaphore = 0
 	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if f.pool != nil {
 		f.pool.destroy(cmds, device)
 		f.pool = nil

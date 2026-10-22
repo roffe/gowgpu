@@ -1453,7 +1453,7 @@ func (sc *Swapchain) ensurePresentLayout(queue *Queue) error {
 			PSignalSemaphoreValues:    &signalValues[0],
 		}
 		submitInfo.PNext = (*uintptr)(unsafe.Pointer(&timelineInfo))
-	} else if fence, err = tf.pool.signal(sc.device.cmds, sc.device.handle, signalValue); err != nil {
+	} else if fence, err = tf.signal(sc.device.cmds, sc.device.handle, signalValue); err != nil {
 		return fmt.Errorf("vulkan: barrier fence: %w", err)
 	}
 	result = sc.device.cmds.QueueSubmit(queue.handle, 1, &submitInfo, fence)

@@ -418,13 +418,12 @@ func (q *Queue) Submit(commandBuffers []hal.CommandBuffer) (uint64, error) {
 	// BUG-GOGPU-004 FIX: Always use pool fence directly — single vkQueueSubmit per frame.
 	// Previously, user-provided fences caused a double submit (real + empty for pool tracking).
 	// Now the HAL manages fences internally, eliminating the double submit entirely.
-	pool := q.device.timelineFence.pool
 
 	// VK-IMPL-004: Record fence value for pre-acquire wait (binary path).
 	if consumedAcquire {
 		q.activeSwapchain.acquireFenceValues[q.activeSwapchain.currentAcquireIdx] = signalValue
 	}
-	poolFence, err := pool.signal(q.device.cmds, q.device.handle, signalValue)
+	poolFence, err := q.device.timelineFence.signal(q.device.cmds, q.device.handle, signalValue)
 	if err != nil {
 		if consumedAcquire {
 			q.activeSwapchain.markBroken(fmt.Errorf("vulkan: Submit fencePool signal: %w", err))
@@ -478,7 +477,7 @@ func (q *Queue) consumeAcquire(sc *Swapchain) error {
 		submitInfo.PNext = (*uintptr)(unsafe.Pointer(&timelineInfo))
 	} else {
 		var err error
-		if fence, err = tf.pool.signal(q.device.cmds, q.device.handle, signalValue); err != nil {
+		if fence, err = tf.signal(q.device.cmds, q.device.handle, signalValue); err != nil {
 			return fmt.Errorf("vulkan: discard fence: %w", err)
 		}
 	}
@@ -495,25 +494,7 @@ func (q *Queue) consumeAcquire(sc *Swapchain) error {
 func (q *Queue) PollCompleted() uint64 {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-
-	if q.device.timelineFence.isTimeline {
-		// Timeline path: query the semaphore counter value.
-		var value uint64
-		result := q.device.cmds.GetSemaphoreCounterValue(q.device.handle, q.device.timelineFence.timelineSemaphore, &value)
-		if result == vk.Success {
-			if value > q.device.timelineFence.lastCompleted {
-				q.device.timelineFence.lastCompleted = value
-			}
-			return value
-		}
-		return q.device.timelineFence.lastCompleted
-	}
-
-	// Binary path: poll fences in the pool.
-	pool := q.device.timelineFence.pool
-	pool.maintain(q.device.cmds, q.device.handle)
-	q.device.timelineFence.lastCompleted = pool.lastCompleted
-	return pool.lastCompleted
+	return q.device.timelineFence.poll(q.device.cmds, q.device.handle)
 }
 
 // SubmitForPresent submits command buffers with swapchain synchronization.
@@ -655,13 +636,12 @@ func (q *Queue) SubmitForPresent(commandBuffers []hal.CommandBuffer, swapchain *
 
 	// Binary path (VK-IMPL-003): Track submission with fence pool for waitForGPU
 	// and VK-IMPL-004 pre-acquire semaphore wait.
-	pool := q.device.timelineFence.pool
 	signalValue := q.device.timelineFence.nextSignalValue()
 
 	// VK-IMPL-004: Record which submission consumed this acquire semaphore.
 	swapchain.acquireFenceValues[swapchain.currentAcquireIdx] = signalValue
 
-	poolFence, err := pool.signal(q.device.cmds, q.device.handle, signalValue)
+	poolFence, err := q.device.timelineFence.signal(q.device.cmds, q.device.handle, signalValue)
 	if err != nil {
 		swapchain.markBroken(fmt.Errorf("vulkan: SubmitForPresent fencePool signal: %w", err))
 		return fmt.Errorf("vulkan: SubmitForPresent fencePool signal: %w", err)
