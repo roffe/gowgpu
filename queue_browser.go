@@ -90,6 +90,7 @@ func (q *Queue) WriteTexture(dst *ImageCopyTexture, data []byte, layout *ImageDa
 		dst.Texture.browser.Ref(),
 		dst.MipLevel,
 		dst.Origin.X, dst.Origin.Y, dst.Origin.Z,
+		dst.Aspect,
 	)
 
 	jsLayout := browser.BuildTexelCopyBufferLayout(

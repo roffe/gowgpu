@@ -73,6 +73,7 @@ func (e *CommandEncoder) CopyBufferToTexture(src *Buffer, dst *Texture, regions 
 			dst.browser.Ref(),
 			r.TextureBase.MipLevel,
 			r.TextureBase.Origin.X, r.TextureBase.Origin.Y, r.TextureBase.Origin.Z,
+			r.TextureBase.Aspect,
 		)
 		sizeObj := browser.BuildExtent3D(r.Size.Width, r.Size.Height, r.Size.DepthOrArrayLayers)
 		e.browser.CopyBufferToTexture(srcObj, dstObj, sizeObj)
@@ -101,6 +102,7 @@ func (e *CommandEncoder) CopyTextureToBuffer(src *Texture, dst *Buffer, regions 
 			src.browser.Ref(),
 			r.TextureBase.MipLevel,
 			r.TextureBase.Origin.X, r.TextureBase.Origin.Y, r.TextureBase.Origin.Z,
+			r.TextureBase.Aspect,
 		)
 		dstObj := browser.BuildImageCopyBuffer(
 			dst.browser.Ref(),
@@ -123,11 +125,13 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst *Texture, regions []Textu
 			src.browser.Ref(),
 			r.Source.MipLevel,
 			r.Source.Origin.X, r.Source.Origin.Y, r.Source.Origin.Z,
+			r.Source.Aspect,
 		)
 		dstObj := browser.BuildImageCopyTexture(
 			dst.browser.Ref(),
 			r.Destination.MipLevel,
 			r.Destination.Origin.X, r.Destination.Origin.Y, r.Destination.Origin.Z,
+			r.Destination.Aspect,
 		)
 		sizeObj := browser.BuildExtent3D(r.Size.Width, r.Size.Height, r.Size.DepthOrArrayLayers)
 		e.browser.CopyTextureToTexture(srcObj, dstObj, sizeObj)

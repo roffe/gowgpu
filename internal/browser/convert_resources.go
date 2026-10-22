@@ -844,7 +844,8 @@ func BuildImageCopyBuffer(buffer js.Value, offset uint64, bytesPerRow, rowsPerIm
 }
 
 // BuildImageCopyTexture constructs a JS GPUTexelCopyTextureInfo (formerly GPUImageCopyTexture).
-func BuildImageCopyTexture(texture js.Value, mipLevel uint32, originX, originY, originZ uint32) js.Value {
+// The aspect is set for DepthOnly and StencilOnly; All is the browser's default.
+func BuildImageCopyTexture(texture js.Value, mipLevel uint32, originX, originY, originZ uint32, aspect gputypes.TextureAspect) js.Value {
 	obj := newJSObject()
 	obj.Set("texture", texture)
 	if mipLevel > 0 {
@@ -856,6 +857,10 @@ func BuildImageCopyTexture(texture js.Value, mipLevel uint32, originX, originY, 
 		origin.Set("y", originY)
 		origin.Set("z", originZ)
 		obj.Set("origin", origin)
+	}
+	switch aspect {
+	case gputypes.TextureAspectDepthOnly, gputypes.TextureAspectStencilOnly:
+		obj.Set("aspect", TextureAspectToJS(aspect))
 	}
 	return obj
 }
