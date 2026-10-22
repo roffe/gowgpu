@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/roffe/gowgpu/core/track"
+	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 
 	_ "github.com/roffe/gowgpu/hal/noop"
@@ -440,6 +441,64 @@ func TestCoreTextureViewFrom_NilTexture(t *testing.T) {
 	cv := coreTextureViewFrom(v)
 	if cv.Parent != nil {
 		t.Error("Parent should be nil when texture is nil")
+	}
+}
+
+// A render pass compares the extents of the mip levels its views are of:
+// mip 1 of a 64x64 texture draws next to a 32x32 one.
+func TestRenderPass_AttachmentsAgreeAtTheirMipLevel(t *testing.T) {
+	_, _, device := newTestDeviceWithTracker(t)
+	t.Cleanup(device.Release) // after the textures' cleanups
+
+	makeTex := func(side, mips uint32) *Texture {
+		tex, err := device.CreateTexture(&TextureDescriptor{
+			Size:          Extent3D{Width: side, Height: side, DepthOrArrayLayers: 1},
+			Dimension:     TextureDimension2D,
+			Format:        TextureFormatRGBA8Unorm,
+			Usage:         TextureUsageRenderAttachment,
+			MipLevelCount: mips,
+			SampleCount:   1,
+		})
+		if err != nil {
+			t.Fatalf("CreateTexture(%d): %v", side, err)
+		}
+		t.Cleanup(tex.Release)
+		return tex
+	}
+	big, small := makeTex(64, 2), makeTex(32, 1)
+	mip1, err := device.CreateTextureView(big, &TextureViewDescriptor{BaseMipLevel: 1, MipLevelCount: 1})
+	if err != nil {
+		t.Fatalf("CreateTextureView: %v", err)
+	}
+	defer mip1.Release()
+	if cv := coreTextureViewFrom(mip1); cv.BaseMipLevel != 1 {
+		t.Fatalf("core.TextureView.BaseMipLevel = %d, want 1", cv.BaseMipLevel)
+	}
+	smallView, err := device.CreateTextureView(small, nil)
+	if err != nil {
+		t.Fatalf("CreateTextureView: %v", err)
+	}
+	defer smallView.Release()
+
+	enc, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	pass, err := enc.BeginRenderPass(&RenderPassDescriptor{
+		ColorAttachments: []RenderPassColorAttachment{
+			{View: mip1, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore},
+			{View: smallView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore},
+		},
+	})
+	if err != nil {
+		t.Fatalf("BeginRenderPass: %v", err)
+	}
+	if err := pass.End(); err != nil {
+		t.Fatalf("End: %v", err)
+	}
+	finishAndSubmit(t, device, enc)
+	if err := device.WaitIdle(); err != nil {
+		t.Fatalf("WaitIdle: %v", err)
 	}
 }
 

@@ -2647,6 +2647,46 @@ func TestValidateRenderPassDescriptor_HeightOnlyMismatch(t *testing.T) {
 	}
 }
 
+// Attachments agree on the extent of the mip level their views are of, not
+// on their textures' base size.
+func TestValidateRenderPassDescriptor_MipLevelExtents(t *testing.T) {
+	big := testTexture(gputypes.TextureFormatRGBA8Unorm, 1024, 768, 1)
+	small := testTexture(gputypes.TextureFormatRGBA8Unorm, 512, 384, 1)
+	depth := testTexture(gputypes.TextureFormatDepth24Plus, 1024, 768, 1)
+
+	desc := &RenderPassDescriptor{
+		Label: "MipLevelExtents",
+		ColorAttachments: []RenderPassColorAttachment{
+			{View: &TextureView{Parent: big, BaseMipLevel: 1}, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore},
+			{View: testView(small), LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore},
+		},
+		DepthStencilAttachment: &RenderPassDepthStencilAttachment{
+			View:         &TextureView{Parent: depth, BaseMipLevel: 1},
+			DepthLoadOp:  gputypes.LoadOpClear,
+			DepthStoreOp: gputypes.StoreOpStore,
+		},
+	}
+	if _, err := ValidateRenderPassDescriptor(desc, gputypes.DefaultLimits()); err != nil {
+		t.Fatalf("mip 1 of 1024x768 next to 512x384: %v", err)
+	}
+
+	desc.DepthStencilAttachment.View.BaseMipLevel = 0
+	_, err := ValidateRenderPassDescriptor(desc, gputypes.DefaultLimits())
+	var rpve *RenderPassValidationError
+	if !errors.As(err, &rpve) || rpve.Kind != RenderPassErrorDimensionMismatch {
+		t.Fatalf("mip 0 of the depth texture next to 512x384: got %v, want DimensionMismatch", err)
+	}
+	if rpve.AttachmentIndex != -1 || rpve.ActualWidth != 1024 || rpve.ActualHeight != 768 {
+		t.Errorf("got attachment %d at %dx%d, want depth/stencil at 1024x768", rpve.AttachmentIndex, rpve.ActualWidth, rpve.ActualHeight)
+	}
+
+	// A level a shift would take to zero is one texel wide.
+	tiny := &TextureView{Parent: testTexture(gputypes.TextureFormatRGBA8Unorm, 4, 4, 1), BaseMipLevel: 5}
+	if w, h := renderExtent(tiny); w != 1 || h != 1 {
+		t.Errorf("renderExtent of mip 5 of 4x4 = %dx%d, want 1x1", w, h)
+	}
+}
+
 func TestValidateRenderPassDescriptor_NilView_Skipped(t *testing.T) {
 	tex := testTexture(gputypes.TextureFormatRGBA8Unorm, 800, 600, 1)
 	desc := &RenderPassDescriptor{

@@ -222,6 +222,7 @@ func (d *Device) CreateTextureView(texture *Texture, desc *TextureViewDescriptor
 		hal:          halView,
 		device:       d,
 		texture:      texture,
+		baseMipLevel: halDesc.BaseMipLevel,
 		surface:      texture.surface,
 		surfaceLease: texture.surfaceLease,
 	}, nil

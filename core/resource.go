@@ -1024,6 +1024,11 @@ type TextureView struct {
 	// one core Texture across the swapchain images. The barriers into a
 	// render pass are recorded against it; nil means Parent.Raw.
 	Texture hal.Texture
+
+	// BaseMipLevel is the first mip level of Parent the view is of. A render
+	// pass draws into that level's extent, which its attachments must agree
+	// on.
+	BaseMipLevel uint32
 }
 
 // Sampler represents a texture sampler with HAL integration.

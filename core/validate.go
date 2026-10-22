@@ -1122,7 +1122,7 @@ func validateRenderPassDescriptor(desc *RenderPassDescriptor, limits gputypes.Li
 
 		tex := ca.View.Parent
 		ctx.ColorFormats[i] = tex.Format()
-		texSize := tex.Size()
+		texWidth, texHeight := renderExtent(ca.View)
 		texSamples := tex.SampleCount()
 
 		// MRT-2: All color attachments must have the same sample count.
@@ -1143,11 +1143,11 @@ func validateRenderPassDescriptor(desc *RenderPassDescriptor, limits gputypes.Li
 
 		// MRT-3: All color attachments must have the same width/height.
 		if !hasDimensions {
-			width = texSize.Width
-			height = texSize.Height
+			width = texWidth
+			height = texHeight
 			refDimIdx = i
 			hasDimensions = true
-		} else if texSize.Width != width || texSize.Height != height {
+		} else if texWidth != width || texHeight != height {
 			return &RenderPassValidationError{
 				Kind:            RenderPassErrorDimensionMismatch,
 				Label:           desc.Label,
@@ -1155,8 +1155,8 @@ func validateRenderPassDescriptor(desc *RenderPassDescriptor, limits gputypes.Li
 				ReferenceIndex:  refDimIdx,
 				ExpectedWidth:   width,
 				ExpectedHeight:  height,
-				ActualWidth:     texSize.Width,
-				ActualHeight:    texSize.Height,
+				ActualWidth:     texWidth,
+				ActualHeight:    texHeight,
 			}
 		}
 	}
@@ -1194,7 +1194,7 @@ func validateDepthStencilAttachment(
 
 	dsTex := desc.DepthStencilAttachment.View.Parent
 	ctx.DepthStencilFormat = dsTex.Format()
-	dsSize := dsTex.Size()
+	dsWidth, dsHeight := renderExtent(desc.DepthStencilAttachment.View)
 	dsSamples := dsTex.SampleCount()
 
 	if !*hasSampleCount {
@@ -1212,10 +1212,10 @@ func validateDepthStencilAttachment(
 	}
 
 	if !*hasDimensions {
-		*width = dsSize.Width
-		*height = dsSize.Height
+		*width = dsWidth
+		*height = dsHeight
 		*hasDimensions = true
-	} else if dsSize.Width != *width || dsSize.Height != *height {
+	} else if dsWidth != *width || dsHeight != *height {
 		return &RenderPassValidationError{
 			Kind:            RenderPassErrorDimensionMismatch,
 			Label:           desc.Label,
@@ -1223,12 +1223,22 @@ func validateDepthStencilAttachment(
 			ReferenceIndex:  refDimIdx,
 			ExpectedWidth:   *width,
 			ExpectedHeight:  *height,
-			ActualWidth:     dsSize.Width,
-			ActualHeight:    dsSize.Height,
+			ActualWidth:     dsWidth,
+			ActualHeight:    dsHeight,
 		}
 	}
 
 	return nil
+}
+
+// renderExtent returns the width and height of the mip level an attachment
+// view is of, what a render pass with it draws into.
+//
+// Reference: WebGPU GPUTextureView render extent, wgpu-core
+// TextureView.render_extent
+func renderExtent(v *TextureView) (width, height uint32) {
+	size := v.Parent.Size()
+	return max(size.Width>>v.BaseMipLevel, 1), max(size.Height>>v.BaseMipLevel, 1)
 }
 
 // addUint64 adds a and b, returning the result and whether it overflowed.

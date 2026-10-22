@@ -163,6 +163,7 @@ type TextureView struct {
 	hal          hal.TextureView
 	device       *Device
 	texture      *Texture
+	baseMipLevel uint32
 	released     bool
 	surface      *core.Surface
 	surfaceLease uint64
