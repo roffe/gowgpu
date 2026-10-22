@@ -371,10 +371,13 @@ func (b *stagingBelt) allocateChunked(totalSize uint64, data []byte) (stagingAll
 		}
 		alloc, err := b.allocateSingleOversized(chunkSize, chunkData)
 		if err != nil {
-			// Clean up any chunks we already allocated.
-			for _, ca := range b.chunkedAllocs {
-				b.halDevice.DestroyBuffer(ca.buffer)
+			// The chunks made so far are the tail of b.oversized.
+			kept := len(b.oversized) - len(b.chunkedAllocs)
+			for _, c := range b.oversized[kept:] {
+				b.halDevice.DestroyBuffer(c.buffer)
 			}
+			clear(b.oversized[kept:])
+			b.oversized = b.oversized[:kept]
 			b.chunkedAllocs = b.chunkedAllocs[:0]
 			return stagingAllocation{}, fmt.Errorf("staging belt: allocate chunk at offset %d: %w", dataOffset, err)
 		}

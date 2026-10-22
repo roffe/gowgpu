@@ -3,10 +3,33 @@
 package wgpu
 
 import (
+	"errors"
 	"testing"
 
+	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/noop"
 )
+
+// failingDevice is a noop device whose CreateBuffer fails once left buffers
+// have been made, counting the buffers destroyed on it.
+type failingDevice struct {
+	*noop.Device
+	left      int
+	destroyed int
+}
+
+func (d *failingDevice) CreateBuffer(desc *hal.BufferDescriptor) (hal.Buffer, error) {
+	if d.left == 0 {
+		return nil, errors.New("out of memory")
+	}
+	d.left--
+	return d.Device.CreateBuffer(desc)
+}
+
+func (d *failingDevice) DestroyBuffer(b hal.Buffer) {
+	d.destroyed++
+	d.Device.DestroyBuffer(b)
+}
 
 func createTestBelt(t *testing.T, chunkSize uint64) *stagingBelt {
 	t.Helper()
@@ -528,6 +551,24 @@ func TestStagingBelt_ChunkedShortData(t *testing.T) {
 	}
 	if q.writeBufferCalls != 3 || len(q.lastWriteData) != 0 {
 		t.Errorf("got %d writes, the last of %d bytes; want 3, the last empty", q.writeBufferCalls, len(q.lastWriteData))
+	}
+}
+
+// A chunked allocation that fails part way destroys the chunks it made
+// once: they were in the oversized list too, which destroyed them again.
+func TestStagingBelt_ChunkedFailureDestroysChunksOnce(t *testing.T) {
+	dev := &failingDevice{Device: &noop.Device{}, left: 2}
+	belt := newStagingBelt(dev, &mockBatchingQueue{}, 64, 0, 100)
+
+	if _, err := belt.allocate(300, make([]byte, 300)); err == nil {
+		t.Fatal("allocate: no error from the third chunk")
+	}
+	if dev.destroyed != 2 || len(belt.oversized) != 0 || len(belt.chunkedAllocs) != 0 {
+		t.Fatalf("after the failure: %d destroyed, %d oversized, %d chunked; want 2, 0, 0", dev.destroyed, len(belt.oversized), len(belt.chunkedAllocs))
+	}
+	belt.destroy()
+	if dev.destroyed != 2 {
+		t.Fatalf("destroy() destroyed the chunks again: %d destroys", dev.destroyed)
 	}
 }
 
