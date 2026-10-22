@@ -890,6 +890,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		sampleCount = 1
 	}
 	_ = MsgSend(pipelineDesc, Sel("setSampleCount:"), uintptr(sampleCount))
+	msgSendVoid(pipelineDesc, Sel("setAlphaToCoverageEnabled:"), argBool(desc.Multisample.AlphaToCoverageEnabled))
 
 	// Create pipeline state. ICB support stays entirely private: eligible
 	// pipelines get one flagged attempt and transparently retry ordinary
