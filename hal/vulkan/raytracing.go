@@ -281,6 +281,11 @@ func (d *Device) CreateAccelerationStructure(desc *hal.AccelerationStructureDesc
 		}
 	}
 
+	d.live.buffers.add(rawBuffer)
+	d.live.accelerationStructures.add(rawAS)
+	if queryPool != 0 {
+		d.live.queryPools.add(queryPool)
+	}
 	return &AccelerationStructure{
 		raw:       rawAS,
 		buffer:    rawBuffer,
@@ -298,9 +303,12 @@ func (d *Device) DestroyAccelerationStructure(as hal.AccelerationStructure) {
 	}
 
 	if vkAS.queryPool != 0 {
+		d.live.queryPools.remove(vkAS.queryPool)
 		d.cmds.DestroyQueryPool(d.handle, vkAS.queryPool, nil)
 	}
 
+	d.live.accelerationStructures.remove(vkAS.raw)
+	d.live.buffers.remove(vkAS.buffer)
 	d.cmds.DestroyAccelerationStructureKHR(d.handle, vkAS.raw, nil)
 	d.cmds.DestroyBuffer(d.handle, vkAS.buffer, nil)
 

@@ -20,6 +20,7 @@ type QuerySet struct {
 // Destroy releases the Vulkan query pool.
 func (q *QuerySet) Destroy() {
 	if q.pool != 0 && q.device != nil {
+		q.device.live.queryPools.remove(q.pool)
 		q.device.cmds.DestroyQueryPool(q.device.handle, q.pool, nil)
 		q.pool = 0
 	}
@@ -66,6 +67,7 @@ func (d *Device) CreateQuerySet(desc *hal.QuerySetDescriptor) (hal.QuerySet, err
 		queryType: desc.Type,
 		count:     desc.Count,
 	}
+	d.live.queryPools.add(pool)
 	if desc.Label != "" {
 		d.setObjectName(vk.ObjectTypeQueryPool, uint64(pool), desc.Label)
 	} else {

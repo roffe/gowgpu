@@ -605,6 +605,7 @@ func (e *CommandEncoder) SetPoolManaged(managed bool) {
 // Must be called when the encoder is permanently retired (e.g., device shutdown).
 func (e *CommandEncoder) Destroy() {
 	if e.device != nil && e.pool != 0 {
+		e.device.live.commandPools.remove(e.pool)
 		vkDestroyCommandPool(e.device.cmds, e.device.handle, e.pool, nil)
 	}
 	e.pool = 0

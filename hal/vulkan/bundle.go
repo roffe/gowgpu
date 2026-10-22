@@ -203,6 +203,7 @@ func (d *Device) CreateRenderBundleEncoder(_ *hal.RenderBundleEncoderDescriptor)
 		return nil, fmt.Errorf("vulkan: failed to begin secondary command buffer: %d", result)
 	}
 
+	d.live.commandPools.add(pool)
 	return &RenderBundleEncoder{
 		device:        d,
 		pool:          pool,
@@ -223,6 +224,7 @@ func (d *Device) DestroyRenderBundle(bundle hal.RenderBundle) {
 		vkBundle.commandBuffer = 0
 	}
 	if vkBundle.pool != 0 {
+		d.live.commandPools.remove(vkBundle.pool)
 		vkDestroyCommandPool(d.cmds, d.handle, vkBundle.pool, nil)
 		vkBundle.pool = 0
 	}

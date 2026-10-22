@@ -350,6 +350,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		layout: pipelineLayout,
 		device: d,
 	}
+	d.live.pipelines.add(pipeline)
 	if desc.Label != "" {
 		d.setObjectName(vk.ObjectTypePipeline, uint64(pipeline), desc.Label)
 	} else {
@@ -366,6 +367,7 @@ func (d *Device) DestroyRenderPipeline(pipeline hal.RenderPipeline) {
 	}
 
 	if vkPipeline.handle != 0 {
+		d.live.pipelines.remove(vkPipeline.handle)
 		vkDestroyPipeline(d.cmds, d.handle, vkPipeline.handle, nil)
 		vkPipeline.handle = 0
 	}
@@ -450,6 +452,7 @@ func (d *Device) CreateComputePipeline(desc *hal.ComputePipelineDescriptor) (hal
 		layout: pipelineLayout,
 		device: d,
 	}
+	d.live.pipelines.add(pipeline)
 	if desc.Label != "" {
 		d.setObjectName(vk.ObjectTypePipeline, uint64(pipeline), desc.Label)
 	} else {
@@ -466,6 +469,7 @@ func (d *Device) DestroyComputePipeline(pipeline hal.ComputePipeline) {
 	}
 
 	if vkPipeline.handle != 0 {
+		d.live.pipelines.remove(vkPipeline.handle)
 		vkDestroyPipeline(d.cmds, d.handle, vkPipeline.handle, nil)
 		vkPipeline.handle = 0
 	}

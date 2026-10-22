@@ -124,6 +124,10 @@ type Device struct {
 	surfaceMu          sync.Mutex
 	configuredSurfaces map[*Surface]struct{}
 	destroying         bool
+
+	// live are the child objects still alive, for Destroy to sweep what
+	// was never destroyed.
+	live liveObjects
 }
 
 func (d *Device) registerConfiguredSurface(surface *Surface) error {
@@ -411,6 +415,7 @@ func (d *Device) CreateBuffer(desc *hal.BufferDescriptor) (hal.Buffer, error) {
 		usage:  desc.Usage,
 		device: d,
 	}
+	d.live.buffers.add(buffer)
 	if desc.Label != "" {
 		d.setObjectName(vk.ObjectTypeBuffer, uint64(buffer), desc.Label)
 	} else {
@@ -548,6 +553,7 @@ func (d *Device) DestroyBuffer(buffer hal.Buffer) {
 	}
 
 	if vkBuffer.handle != 0 {
+		d.live.buffers.remove(vkBuffer.handle)
 		d.cmds.DestroyBuffer(d.handle, vkBuffer.handle, nil)
 		vkBuffer.handle = 0
 	}
@@ -685,6 +691,7 @@ func (d *Device) CreateTexture(desc *hal.TextureDescriptor) (hal.Texture, error)
 		dimension:   desc.Dimension,
 		device:      d,
 	}
+	d.live.images.add(image)
 	if desc.Label != "" {
 		d.setObjectName(vk.ObjectTypeImage, uint64(image), desc.Label)
 	} else {
@@ -701,6 +708,7 @@ func (d *Device) DestroyTexture(texture hal.Texture) {
 	}
 
 	if vkTexture.handle != 0 && !vkTexture.isExternal {
+		d.live.images.remove(vkTexture.handle)
 		d.cmds.DestroyImage(d.handle, vkTexture.handle, nil)
 		vkTexture.handle = 0
 	}
@@ -857,6 +865,7 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 		image:       imageHandle,
 		isSwapchain: isSwapchain,
 	}
+	d.live.imageViews.add(imageView)
 	if desc.Label != "" {
 		d.setObjectName(vk.ObjectTypeImageView, uint64(imageView), desc.Label)
 	} else {
@@ -890,6 +899,7 @@ func (d *Device) DestroyTextureView(view hal.TextureView) {
 		if d.renderPassCache != nil {
 			d.renderPassCache.InvalidateFramebuffer(vkView.handle)
 		}
+		d.live.imageViews.remove(vkView.handle)
 		vkDestroyImageView(d.cmds, d.handle, vkView.handle, nil)
 		vkView.handle = 0
 	}
@@ -955,6 +965,7 @@ func (d *Device) CreateSampler(desc *hal.SamplerDescriptor) (hal.Sampler, error)
 		handle: sampler,
 		device: d,
 	}
+	d.live.samplers.add(sampler)
 	if desc.Label != "" {
 		d.setObjectName(vk.ObjectTypeSampler, uint64(sampler), desc.Label)
 	} else {
@@ -971,6 +982,7 @@ func (d *Device) DestroySampler(sampler hal.Sampler) {
 	}
 
 	if vkSampler.handle != 0 {
+		d.live.samplers.remove(vkSampler.handle)
 		vkDestroySampler(d.cmds, d.handle, vkSampler.handle, nil)
 		vkSampler.handle = 0
 	}
@@ -1051,6 +1063,7 @@ func (d *Device) CreateBindGroupLayout(desc *hal.BindGroupLayoutDescriptor) (hal
 		bindingTypes: bindingTypes,
 		device:       d,
 	}
+	d.live.setLayouts.add(layout)
 	if desc.Label != "" {
 		d.setObjectName(vk.ObjectTypeDescriptorSetLayout, uint64(layout), desc.Label)
 	} else {
@@ -1067,6 +1080,7 @@ func (d *Device) DestroyBindGroupLayout(layout hal.BindGroupLayout) {
 	}
 
 	if vkLayout.handle != 0 {
+		d.live.setLayouts.remove(vkLayout.handle)
 		vkDestroyDescriptorSetLayout(d.cmds, d.handle, vkLayout.handle, nil)
 		vkLayout.handle = 0
 	}
@@ -1262,6 +1276,7 @@ func (d *Device) CreatePipelineLayout(desc *hal.PipelineLayoutDescriptor) (hal.P
 		handle: layout,
 		device: d,
 	}
+	d.live.pipelineLayouts.add(layout)
 	if desc.Label != "" {
 		d.setObjectName(vk.ObjectTypePipelineLayout, uint64(layout), desc.Label)
 	} else {
@@ -1278,6 +1293,7 @@ func (d *Device) DestroyPipelineLayout(layout hal.PipelineLayout) {
 	}
 
 	if vkLayout.handle != 0 {
+		d.live.pipelineLayouts.remove(vkLayout.handle)
 		vkDestroyPipelineLayout(d.cmds, d.handle, vkLayout.handle, nil)
 		vkLayout.handle = 0
 	}
@@ -1341,6 +1357,7 @@ func (d *Device) CreateShaderModule(desc *hal.ShaderModuleDescriptor) (hal.Shade
 		handle: module,
 		device: d,
 	}
+	d.live.shaderModules.add(module)
 	if desc.Label != "" {
 		d.setObjectName(vk.ObjectTypeShaderModule, uint64(module), desc.Label)
 	} else {
@@ -1357,6 +1374,7 @@ func (d *Device) DestroyShaderModule(module hal.ShaderModule) {
 	}
 
 	if vkModule.handle != 0 {
+		d.live.shaderModules.remove(vkModule.handle)
 		vkDestroyShaderModule(d.cmds, d.handle, vkModule.handle, nil)
 		vkModule.handle = 0
 	}
@@ -1397,6 +1415,7 @@ func (d *Device) acquireAllocator() (commandAllocator, error) {
 	}
 
 	d.setObjectName(vk.ObjectTypeCommandPool, uint64(pool), "CommandPool")
+	d.live.commandPools.add(pool)
 
 	return commandAllocator{pool: pool}, nil
 }
@@ -1494,6 +1513,7 @@ func (d *Device) destroyAllocators() {
 
 	for _, alloc := range d.freeAllocators {
 		// Destroying a pool implicitly frees all command buffers allocated from it.
+		d.live.commandPools.remove(alloc.pool)
 		vkDestroyCommandPool(d.cmds, d.handle, alloc.pool, nil)
 	}
 	d.freeAllocators = d.freeAllocators[:0]
@@ -1516,6 +1536,7 @@ func (d *Device) CreateFence() (hal.Fence, error) {
 		handle: fence,
 		device: d,
 	}
+	d.live.fences.add(fence)
 	d.setObjectName(vk.ObjectTypeFence, uint64(fence), "Fence")
 	return f, nil
 }
@@ -1528,6 +1549,7 @@ func (d *Device) DestroyFence(fence hal.Fence) {
 	}
 
 	if vkFence.handle != 0 {
+		d.live.fences.remove(vkFence.handle)
 		vkDestroyFence(d.cmds, d.handle, vkFence.handle, nil)
 		vkFence.handle = 0
 	}
@@ -1638,6 +1660,10 @@ func (d *Device) Destroy() {
 	}
 
 	d.destroyPipelineCache()
+
+	if drained {
+		d.sweepLive()
+	}
 
 	if d.allocator != nil {
 		d.allocator.Destroy()
