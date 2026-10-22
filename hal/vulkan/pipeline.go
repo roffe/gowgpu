@@ -269,7 +269,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 	// This is critical for MRT: the pipeline and render pass must agree on
 	// the number and format of color attachments (Vulkan spec VUID-VkGraphicsPipelineCreateInfo).
 	rpKey := RenderPassKey{
-		ColorCount:  len(colorFormats),
+		ColorCount:  min(len(colorFormats), hal.MaxColorAttachments),
 		SampleCount: vk.SampleCountFlagBits(sampleCount),
 	}
 	for i, cf := range colorFormats {

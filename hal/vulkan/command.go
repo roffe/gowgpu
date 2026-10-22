@@ -1194,7 +1194,7 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 
 	// Build render pass key and framebuffer key from ALL color attachments.
 	rpKey := RenderPassKey{
-		ColorCount:  len(desc.ColorAttachments),
+		ColorCount:  min(len(desc.ColorAttachments), hal.MaxColorAttachments),
 		SampleCount: sampleCount,
 	}
 	fbKey := FramebufferKey{
