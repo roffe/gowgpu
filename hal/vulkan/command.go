@@ -908,14 +908,31 @@ func (e *CommandEncoder) CopyTextureToBuffer(src hal.Texture, dst hal.Buffer, re
 	)
 }
 
+// imageCopyLayers is the subresource of one side of an image copy, and the
+// z of its offset: a 1D or 2D image takes the copy's layers from Origin.Z,
+// a 3D one its slices.
+func imageCopyLayers(base hal.ImageCopyTexture, format gputypes.TextureFormat, dimension gputypes.TextureDimension, layers uint32) (vk.ImageSubresourceLayers, int32) {
+	sub := vk.ImageSubresourceLayers{
+		AspectMask: textureAspectToVk(base.Aspect, format),
+		MipLevel:   base.MipLevel,
+		LayerCount: 1,
+	}
+	if dimension == gputypes.TextureDimension3D {
+		return sub, int32(base.Origin.Z)
+	}
+	sub.BaseArrayLayer = base.Origin.Z
+	sub.LayerCount = layers
+	return sub, 0
+}
+
 // CopyTextureToTexture copies data between textures.
 func (e *CommandEncoder) CopyTextureToTexture(src, dst hal.Texture, regions []hal.TextureCopy) {
 	if e.active == 0 {
 		return
 	}
 
-	srcImage, srcFormat, _, srcOk := imageOf(src)
-	dstImage, dstFormat, _, dstOk := imageOf(dst)
+	srcImage, srcFormat, srcDimension, srcOk := imageOf(src)
+	dstImage, dstFormat, dstDimension, dstOk := imageOf(dst)
 	if !srcOk || !dstOk || len(regions) == 0 {
 		return
 	}
@@ -929,33 +946,29 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst hal.Texture, regions []ha
 	}
 	vkRegions = vkRegions[:len(regions)]
 	for i, r := range regions {
+		depth := max(r.Size.DepthOrArrayLayers, 1)
+		srcLayers, srcZ := imageCopyLayers(r.SrcBase, srcFormat, srcDimension, depth)
+		dstLayers, dstZ := imageCopyLayers(r.DstBase, dstFormat, dstDimension, depth)
+		if srcDimension != gputypes.TextureDimension3D && dstDimension != gputypes.TextureDimension3D {
+			depth = 1
+		}
 		vkRegions[i] = vk.ImageCopy{
-			SrcSubresource: vk.ImageSubresourceLayers{
-				AspectMask:     textureAspectToVk(r.SrcBase.Aspect, srcFormat),
-				MipLevel:       r.SrcBase.MipLevel,
-				BaseArrayLayer: 0,
-				LayerCount:     1,
-			},
+			SrcSubresource: srcLayers,
 			SrcOffset: vk.Offset3D{
 				X: int32(r.SrcBase.Origin.X),
 				Y: int32(r.SrcBase.Origin.Y),
-				Z: int32(r.SrcBase.Origin.Z),
+				Z: srcZ,
 			},
-			DstSubresource: vk.ImageSubresourceLayers{
-				AspectMask:     textureAspectToVk(r.DstBase.Aspect, dstFormat),
-				MipLevel:       r.DstBase.MipLevel,
-				BaseArrayLayer: 0,
-				LayerCount:     1,
-			},
+			DstSubresource: dstLayers,
 			DstOffset: vk.Offset3D{
 				X: int32(r.DstBase.Origin.X),
 				Y: int32(r.DstBase.Origin.Y),
-				Z: int32(r.DstBase.Origin.Z),
+				Z: dstZ,
 			},
 			Extent: vk.Extent3D{
 				Width:  r.Size.Width,
 				Height: r.Size.Height,
-				Depth:  r.Size.DepthOrArrayLayers,
+				Depth:  depth,
 			},
 		}
 	}
