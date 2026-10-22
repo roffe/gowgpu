@@ -88,6 +88,7 @@ func (d *Device) CreateBuffer(desc *BufferDescriptor) (hal.Buffer, error) {
 	// Handle MappedAtCreation
 	if desc.MappedAtCreation {
 		buf.mapped = make([]byte, desc.Size)
+		buf.mapSize = desc.Size
 	}
 
 	return buf, nil
@@ -122,6 +123,7 @@ func (d *Device) MapBuffer(buffer hal.Buffer, offset, size uint64) (hal.BufferMa
 
 	if buf.mapped == nil {
 		buf.mapped = make([]byte, buf.size)
+		buf.mapOffset, buf.mapSize = offset, size
 		if buf.usage&gputypes.BufferUsageMapRead != 0 {
 			switch {
 			case len(buf.data) == int(buf.size):
@@ -167,9 +169,9 @@ func (d *Device) UnmapBuffer(buffer hal.Buffer) error {
 	// flush, data written via MappedRange is silently discarded and the GL
 	// buffer remains zero-filled — uniform buffers get zero matrices, vertex
 	// buffers get zero positions, etc.
-	if buf.id != 0 {
+	if buf.id != 0 && buf.mapSize > 0 {
 		glCtx.BindBuffer(buf.target, buf.id)
-		glCtx.BufferSubData(buf.target, 0, len(buf.mapped), unsafe.Pointer(&buf.mapped[0]))
+		glCtx.BufferSubData(buf.target, int(buf.mapOffset), int(buf.mapSize), unsafe.Pointer(&buf.mapped[buf.mapOffset]))
 		glCtx.BindBuffer(buf.target, 0)
 	}
 	buf.mapped = nil

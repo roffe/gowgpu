@@ -105,3 +105,64 @@ func TestClearBufferValidation(t *testing.T) {
 		})
 	}
 }
+
+// A write mapping of part of a buffer uploads that part at Unmap and nothing
+// else. GL kept a zero shadow of the whole buffer for a buffer without MapRead
+// and uploaded all of it, over what lay outside the mapped range.
+// GOWGPU_TEST_BACKEND picks the backend.
+func TestMapWriteRangeKeepsTheRest(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	const size, from, n = 1024, 256, 256
+	buf := clearTestBuffer(t, device, BufferUsageMapWrite|BufferUsageCopySrc, size)
+	st := clearTestBuffer(t, device, BufferUsageCopyDst|BufferUsageMapRead, size)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	fill := func(offset, length uint64, b byte) {
+		t.Helper()
+		if err := buf.Map(ctx, MapModeWrite, offset, length); err != nil {
+			t.Fatalf("Map(%d, %d): %v", offset, length, err)
+		}
+		rng, err := buf.MappedRange(offset, length)
+		if err != nil {
+			t.Fatalf("MappedRange: %v", err)
+		}
+		data := rng.Bytes()
+		for i := range data {
+			data[i] = b
+		}
+		if err := buf.Unmap(); err != nil {
+			t.Fatalf("Unmap: %v", err)
+		}
+	}
+	fill(0, size, 0xab)
+	fill(from, n, 0x11)
+
+	enc, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	enc.CopyBufferToBuffer(buf, 0, st, 0, size)
+	finishAndSubmit(t, device, enc)
+	device.Poll(PollWait)
+
+	if err := st.Map(ctx, MapModeRead, 0, size); err != nil {
+		t.Fatalf("Map: %v", err)
+	}
+	rng, err := st.MappedRange(0, size)
+	if err != nil {
+		t.Fatalf("MappedRange: %v", err)
+	}
+	for i, b := range rng.Bytes() {
+		want := byte(0xab)
+		if i >= from && i < from+n {
+			want = 0x11
+		}
+		if b != want {
+			t.Fatalf("byte %d is %#x, want %#x", i, b, want)
+		}
+	}
+	if err := st.Unmap(); err != nil {
+		t.Fatalf("Unmap: %v", err)
+	}
+	assertNoValidation(t, h)
+}

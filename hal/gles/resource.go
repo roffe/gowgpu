@@ -26,7 +26,10 @@ type Buffer struct {
 	usage  gputypes.BufferUsage
 	glCtx  *gl.Context
 	mapped []byte // For mapped buffers
-	data   []byte // CPU-side storage for readback (populated by CopyTextureToBuffer)
+	// mapOffset and mapSize are the range of mapped the mapping covers,
+	// what Unmap uploads.
+	mapOffset, mapSize uint64
+	data               []byte // CPU-side storage for readback (populated by CopyTextureToBuffer)
 }
 
 // Destroy releases the buffer.
