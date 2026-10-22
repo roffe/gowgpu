@@ -774,6 +774,10 @@ func (d *Device) ResetFence(fence hal.Fence) error {
 	if !ok {
 		return fmt.Errorf("gles: invalid fence type")
 	}
+	if d.ctx != nil {
+		d.ctx.Lock()
+		defer d.ctx.Unlock()
+	}
 	f.Reset()
 	return nil
 }
@@ -783,6 +787,10 @@ func (d *Device) GetFenceStatus(fence hal.Fence) (bool, error) {
 	f, ok := fence.(*Fence)
 	if !ok {
 		return false, fmt.Errorf("gles: invalid fence type")
+	}
+	if d.ctx != nil {
+		d.ctx.Lock()
+		defer d.ctx.Unlock()
 	}
 	return f.GetValue() > 0, nil
 }
