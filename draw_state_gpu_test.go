@@ -72,9 +72,10 @@ func newDynamicRig(t *testing.T, device *Device) *dynamicRig {
 	if err := device.Queue().WriteBuffer(colors, 0, raw); err != nil {
 		t.Fatalf("WriteBuffer: %v", err)
 	}
+	// Out of binding order here too: GL took the offsets in entry order.
 	group, err := device.CreateBindGroup(&BindGroupDescriptor{Layout: bgl, Entries: []BindGroupEntry{
-		{Binding: 0, Buffer: colors, Size: 16},
 		{Binding: 1, Buffer: out, Size: 16},
+		{Binding: 0, Buffer: colors, Size: 16},
 	}})
 	if err != nil {
 		t.Fatalf("CreateBindGroup: %v", err)

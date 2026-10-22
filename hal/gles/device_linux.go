@@ -6,7 +6,9 @@
 package gles
 
 import (
+	"cmp"
 	"fmt"
+	"slices"
 	"time"
 	"unsafe"
 
@@ -393,9 +395,12 @@ func (d *Device) CreateBindGroup(desc *BindGroupDescriptor) (hal.BindGroup, erro
 		return nil, fmt.Errorf("gles: invalid bind group layout type")
 	}
 
+	// The dynamic offsets go by binding number, whatever order the entries came in.
+	entries := slices.Clone(desc.Entries)
+	slices.SortFunc(entries, func(a, b gputypes.BindGroupEntry) int { return cmp.Compare(a.Binding, b.Binding) })
 	return &BindGroup{
 		layout:  layout,
-		entries: desc.Entries,
+		entries: entries,
 	}, nil
 }
 
