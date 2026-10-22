@@ -79,7 +79,7 @@ func (p *ComputePassEncoder) SetBindGroup(index uint32, group *BindGroup, offset
 	p.binder.assign(index, group.layout)
 	p.binder.assignBindGroup(index, group)
 	p.assignedBindGroups[index] = group
-	p.assignedDynOffsets[index] = offsets
+	p.assignedDynOffsets[index] = append(p.assignedDynOffsets[index][:0], offsets...)
 	// Keeps the group and its buffers alive and lists the group for
 	// submit-time validation, once per encoder. Its textures and buffers
 	// enter a usage scope only when a dispatch runs with it (recordDispatch),
