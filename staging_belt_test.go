@@ -467,6 +467,48 @@ func TestStagingBelt_ChunkedExactMultiple(t *testing.T) {
 	}
 }
 
+// The chunks of a chunked allocation are the caller's until the next
+// allocate, which starts without them: a write after a chunked one used to
+// copy from the stale chunks too.
+func TestStagingBelt_AllocateResetsChunkedAllocs(t *testing.T) {
+	dev := &noop.Device{}
+	q := &mockBatchingQueue{}
+	belt := newStagingBelt(dev, q, 64, 0, 100)
+	defer belt.destroy()
+
+	if _, err := belt.allocate(300, make([]byte, 300)); err != nil {
+		t.Fatalf("allocate chunked: %v", err)
+	}
+	if len(belt.chunkedAllocs) != 3 {
+		t.Fatalf("expected 3 chunks, got %d", len(belt.chunkedAllocs))
+	}
+	if _, err := belt.allocate(32, make([]byte, 32)); err != nil {
+		t.Fatalf("allocate: %v", err)
+	}
+	if len(belt.chunkedAllocs) != 0 {
+		t.Errorf("expected no chunks left from the earlier allocation, got %d", len(belt.chunkedAllocs))
+	}
+}
+
+// A chunked allocation whose data stops short of its size, as a texture
+// write's can, writes the data there is and no more.
+func TestStagingBelt_ChunkedShortData(t *testing.T) {
+	dev := &noop.Device{}
+	q := &mockBatchingQueue{}
+	belt := newStagingBelt(dev, q, 64, 0, 100)
+	defer belt.destroy()
+
+	if _, err := belt.allocate(300, make([]byte, 150)); err != nil {
+		t.Fatalf("allocate chunked: %v", err)
+	}
+	if len(belt.chunkedAllocs) != 3 {
+		t.Fatalf("expected 3 chunks, got %d", len(belt.chunkedAllocs))
+	}
+	if q.writeBufferCalls != 3 || len(q.lastWriteData) != 0 {
+		t.Errorf("got %d writes, the last of %d bytes; want 3, the last empty", q.writeBufferCalls, len(q.lastWriteData))
+	}
+}
+
 func TestStagingBelt_MaxStagingBufferSizeDefault(t *testing.T) {
 	dev := &noop.Device{}
 	q := &mockBatchingQueue{}

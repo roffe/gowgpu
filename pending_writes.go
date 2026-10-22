@@ -457,6 +457,9 @@ func (pw *pendingWrites) writeTextureLocked(
 	}
 
 	stagingSize := uint64(alignedBytesPerRow) * uint64(rowsPerImage) * uint64(depthOrLayers)
+	if stagingSize > pw.belt.maxStagingBufferSize {
+		return pw.writeTextureInRunsLocked(owner, dst, data, layout, size, bytesPerRow, alignedBytesPerRow, rowsPerImage, depthOrLayers)
+	}
 
 	// CPU copy with row pitch alignment. Returns data directly when no padding needed,
 	// otherwise writes into pw.alignBuf (grown on demand, never shrunk, reused each call).
@@ -474,6 +477,49 @@ func (pw *pendingWrites) writeTextureLocked(
 		return fmt.Errorf("wgpu: pending writes: staging belt allocate texture: %w", err)
 	}
 	return pw.copyToTextureLocked(owner, dst, alloc.buffer, alloc.offset, alignedBytesPerRow, rowsPerImage, size)
+}
+
+// writeTextureInRunsLocked is writeTextureLocked for a write whose staging
+// data is over what one staging buffer holds: each image of the copy goes up
+// in runs of rows that fit one, each a copy of its own. bytesPerRow,
+// alignedBytesPerRow and rowsPerImage are in rows of blocks, images the
+// layers or depth slices of the copy.
+func (pw *pendingWrites) writeTextureInRunsLocked(
+	owner *Texture,
+	dst *hal.ImageCopyTexture,
+	data []byte,
+	layout *hal.ImageDataLayout,
+	size *hal.Extent3D,
+	bytesPerRow, alignedBytesPerRow, rowsPerImage, images uint32,
+) error {
+	blockHeight := uint32(1)
+	if owner != nil {
+		_, blockHeight = owner.format.BlockDimensions()
+	}
+	rows := (size.Height + blockHeight - 1) / blockHeight
+	rowsPerRun := uint32(min(pw.belt.maxStagingBufferSize/uint64(alignedBytesPerRow), uint64(rows)))
+	if rowsPerRun == 0 {
+		return fmt.Errorf("wgpu: pending writes: a %d byte row is over the %d byte staging buffer cap", alignedBytesPerRow, pw.belt.maxStagingBufferSize)
+	}
+	runDst := *dst
+	runSize := hal.Extent3D{Width: size.Width, DepthOrArrayLayers: 1}
+	for image := range images {
+		runDst.Origin.Z = dst.Origin.Z + image
+		for row := uint32(0); row < rows; row += rowsPerRun {
+			n := min(rowsPerRun, rows-row)
+			runDst.Origin.Y = dst.Origin.Y + row*blockHeight
+			runSize.Height = min(n*blockHeight, size.Height-row*blockHeight)
+			runLayout := hal.ImageDataLayout{
+				Offset:       layout.Offset + (uint64(image)*uint64(rowsPerImage)+uint64(row))*uint64(bytesPerRow),
+				BytesPerRow:  bytesPerRow,
+				RowsPerImage: n,
+			}
+			if err := pw.writeTextureLocked(owner, &runDst, data, &runLayout, &runSize); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // copyToTextureLocked records a copy from src at offset into dst, between the

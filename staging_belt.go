@@ -72,8 +72,8 @@ type stagingBelt struct {
 
 	// chunkedAllocs temporarily holds chunk allocations from allocateChunked.
 	// Consumed by pendingWrites.writeBuffer to issue CopyBufferToBuffer for
-	// each chunk. Reset at the start of each allocateChunked call.
-	// Only valid between allocateChunked and the next writeBuffer call.
+	// each chunk. Reset at the start of each allocate call, so it holds the
+	// chunks of the latest allocation only.
 	chunkedAllocs []stagingChunkedAllocation
 }
 
@@ -164,6 +164,7 @@ type stagingAllocation struct {
 //
 // Zero allocations in steady state — all chunks are pre-allocated.
 func (b *stagingBelt) allocate(size uint64, data []byte) (stagingAllocation, error) {
+	b.chunkedAllocs = b.chunkedAllocs[:0]
 	if size == 0 {
 		return stagingAllocation{}, nil
 	}
@@ -351,15 +352,17 @@ func (b *stagingBelt) allocateChunked(totalSize uint64, data []byte) (stagingAll
 	remaining := totalSize
 	dataOffset := uint64(0)
 
-	b.chunkedAllocs = b.chunkedAllocs[:0]
-
 	for remaining > 0 {
 		chunkSize := remaining
 		if chunkSize > maxChunk {
 			chunkSize = maxChunk
 		}
 
-		chunkData := data[dataOffset : dataOffset+chunkSize]
+		// The data may stop short of the size, as a texture write's can.
+		var chunkData []byte
+		if dataOffset < uint64(len(data)) {
+			chunkData = data[dataOffset:min(dataOffset+chunkSize, uint64(len(data)))]
+		}
 		alloc, err := b.allocateSingleOversized(chunkSize, chunkData)
 		if err != nil {
 			// Clean up any chunks we already allocated.
