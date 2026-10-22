@@ -34,7 +34,7 @@ func (e *RenderPassEncoder) vulkanIndirectCountBuffers(
 ) (vulkanIndirectCountBuffers, bool) {
 	buf, ok := buffer.(*Buffer)
 	countBuf, countOK := countBuffer.(*Buffer)
-	if !ok || !countOK || e.encoder.active == 0 || maxDrawCount == 0 {
+	if !ok || !countOK || e.encoder.active == 0 || !e.begun || maxDrawCount == 0 {
 		return vulkanIndirectCountBuffers{}, false
 	}
 	return vulkanIndirectCountBuffers{indirect: buf, count: countBuf}, true

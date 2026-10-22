@@ -1596,9 +1596,11 @@ func (e *RenderPassEncoder) SetStencilReference(ref uint32) {
 	vkCmdSetStencilReference(e.encoder.device.cmds, e.encoder.active, vk.StencilFaceFlags(vk.StencilFaceFrontAndBack), ref)
 }
 
-// Draw draws primitives.
+// Draw draws primitives. Like every draw below it records nothing in a
+// pass that was never begun (no attachment to define it): a draw outside a
+// render pass instance is not allowed.
 func (e *RenderPassEncoder) Draw(args gputypes.DrawArgs) {
-	if e.encoder.active == 0 {
+	if e.encoder.active == 0 || !e.begun {
 		return
 	}
 	vkCmdDraw(e.encoder.device.cmds, e.encoder.active, args.VertexCount, args.InstanceCount, args.FirstVertex, args.FirstInstance)
@@ -1606,7 +1608,7 @@ func (e *RenderPassEncoder) Draw(args gputypes.DrawArgs) {
 
 // DrawIndexed draws indexed primitives.
 func (e *RenderPassEncoder) DrawIndexed(args gputypes.DrawIndexedArgs) {
-	if e.encoder.active == 0 {
+	if e.encoder.active == 0 || !e.begun {
 		return
 	}
 
@@ -1616,7 +1618,7 @@ func (e *RenderPassEncoder) DrawIndexed(args gputypes.DrawIndexedArgs) {
 // DrawIndirect draws primitives with GPU-generated parameters.
 func (e *RenderPassEncoder) DrawIndirect(buffer hal.Buffer, offset uint64, drawCount uint32) {
 	buf, ok := buffer.(*Buffer)
-	if !ok || e.encoder.active == 0 || drawCount == 0 {
+	if !ok || e.encoder.active == 0 || !e.begun || drawCount == 0 {
 		return
 	}
 	if !indirect.RangeFits(buf.size, offset, uint64(drawIndirectStride), drawCount) {
@@ -1643,7 +1645,7 @@ func (e *RenderPassEncoder) DrawIndirect(buffer hal.Buffer, offset uint64, drawC
 // otherwise emit the exact single-record loop.
 func (e *RenderPassEncoder) DrawIndexedIndirect(buffer hal.Buffer, offset uint64, drawCount uint32) {
 	buf, ok := buffer.(*Buffer)
-	if !ok || e.encoder.active == 0 || drawCount == 0 {
+	if !ok || e.encoder.active == 0 || !e.begun || drawCount == 0 {
 		return
 	}
 	if !indirect.RangeFits(buf.size, offset, uint64(drawIndexedIndirectStride), drawCount) {
@@ -1736,7 +1738,7 @@ func indexedIndirectRecordOffset(offset uint64, index uint32) (uint64, bool) {
 // ExecuteBundle executes a pre-recorded render bundle.
 func (e *RenderPassEncoder) ExecuteBundle(bundle hal.RenderBundle) {
 	vkBundle, ok := bundle.(*RenderBundle)
-	if !ok || vkBundle == nil || e.encoder.active == 0 {
+	if !ok || vkBundle == nil || e.encoder.active == 0 || !e.begun {
 		return
 	}
 
