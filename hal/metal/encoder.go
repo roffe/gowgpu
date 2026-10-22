@@ -444,21 +444,23 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 	}
 	if desc.DepthStencilAttachment != nil {
 		dsa := desc.DepthStencilAttachment
+		tv, _ := dsa.View.(*TextureView)
 
-		// Depth attachment
-		depthAttachment := MsgSend(rpDesc, Sel("depthAttachment"))
-		if tv, ok := dsa.View.(*TextureView); ok && tv != nil {
+		// A stencil-only format gets no depth attachment, just as a depth-only
+		// one gets no stencil attachment below.
+		if tv != nil && tv.texture != nil && tv.texture.format.HasDepth() {
+			depthAttachment := MsgSend(rpDesc, Sel("depthAttachment"))
 			_ = MsgSend(depthAttachment, Sel("setTexture:"), uintptr(tv.raw))
+			depthLoad := loadOpToMTL(dsa.DepthLoadOp)
+			if dsa.DepthReadOnly {
+				depthLoad = MTLLoadActionLoad
+			}
+			_ = MsgSend(depthAttachment, Sel("setLoadAction:"), uintptr(depthLoad))
+			if dsa.DepthLoadOp == gputypes.LoadOpClear {
+				msgSendVoid(depthAttachment, Sel("setClearDepth:"), argFloat64(float64(dsa.DepthClearValue)))
+			}
+			_ = MsgSend(depthAttachment, Sel("setStoreAction:"), uintptr(storeOpToMTL(dsa.DepthStoreOp)))
 		}
-		depthLoad := loadOpToMTL(dsa.DepthLoadOp)
-		if dsa.DepthReadOnly {
-			depthLoad = MTLLoadActionLoad
-		}
-		_ = MsgSend(depthAttachment, Sel("setLoadAction:"), uintptr(depthLoad))
-		if dsa.DepthLoadOp == gputypes.LoadOpClear {
-			msgSendVoid(depthAttachment, Sel("setClearDepth:"), argFloat64(float64(dsa.DepthClearValue)))
-		}
-		_ = MsgSend(depthAttachment, Sel("setStoreAction:"), uintptr(storeOpToMTL(dsa.DepthStoreOp)))
 
 		// Stencil attachment — same texture, separate load/store/clear.
 		// Metal requires both depth and stencil attachments to be configured
@@ -471,7 +473,7 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 		// goes by HasStencil too), and Metal rejects a pass whose stencil
 		// attachment the pipeline does not match.
 		// Reference: Rust wgpu-hal metal/command.rs:705-727.
-		if tv, ok := dsa.View.(*TextureView); ok && tv != nil && tv.texture != nil && tv.texture.format.HasStencil() {
+		if tv != nil && tv.texture != nil && tv.texture.format.HasStencil() {
 			stencilAttachment := MsgSend(rpDesc, Sel("stencilAttachment"))
 			_ = MsgSend(stencilAttachment, Sel("setTexture:"), uintptr(tv.raw))
 			stencilLoad := loadOpToMTL(dsa.StencilLoadOp)
