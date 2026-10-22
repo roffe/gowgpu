@@ -515,6 +515,7 @@ func (d *Device) CreateBuffer(desc *gputypes.BufferDescriptor) (*Buffer, error) 
 			// HAL can't map the buffer despite MappedAtCreation — roll
 			// back and report as a CreateBuffer failure.
 			(*halDevice).DestroyBuffer(halBuffer)
+			buffer.trackingData.Release()
 			return nil, &CreateBufferError{
 				Kind:     CreateBufferErrorHAL,
 				Label:    desc.Label,
