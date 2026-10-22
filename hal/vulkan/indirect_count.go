@@ -24,10 +24,6 @@ type vulkanIndirectCountNativeCmd func(
 	maxDrawCount uint32,
 )
 
-func supportsDrawIndirectCountFeature(apiVersion uint32) bool {
-	return apiVersion >= vkMakeVersion(1, 2, 0)
-}
-
 func (e *RenderPassEncoder) vulkanIndirectCountBuffers(
 	buffer, countBuffer hal.Buffer,
 	maxDrawCount uint32,

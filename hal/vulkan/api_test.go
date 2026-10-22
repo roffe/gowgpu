@@ -580,7 +580,7 @@ func TestFeaturesFromPhysicalDevice(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := featuresFromPhysicalDevice(&tt.features, vkMakeVersion(1, 0, 0))
+			got := featuresFromPhysicalDevice(&tt.features, false)
 			if got != tt.want {
 				t.Errorf("featuresFromPhysicalDevice() = %v, want %v", got, tt.want)
 			}

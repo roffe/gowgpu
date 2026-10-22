@@ -218,9 +218,20 @@ func (i *Instance) EnumerateAdapters(surfaceHint hal.Surface) []hal.ExposedAdapt
 		var props vk.PhysicalDeviceProperties
 		i.cmds.GetPhysicalDeviceProperties(device, &props)
 
-		// Get device features
+		// Get device features, and the Vulkan 1.2 ones the adapter offers
+		// as features too: drawIndirectCount is optional and must be
+		// enabled, being 1.2 is not enough.
 		var features vk.PhysicalDeviceFeatures
 		i.cmds.GetPhysicalDeviceFeatures(device, &features)
+		var features12 vk.PhysicalDeviceVulkan12Features
+		if i.cmds.HasPhysicalDeviceFeatures2() && props.ApiVersion >= vkMakeVersion(1, 2, 0) {
+			features12.SType = vk.StructureTypePhysicalDeviceVulkan12Features
+			features2 := vk.PhysicalDeviceFeatures2{
+				SType: vk.StructureTypePhysicalDeviceFeatures2,
+				PNext: (*uintptr)(unsafe.Pointer(&features12)),
+			}
+			i.cmds.GetPhysicalDeviceFeatures2(device, &features2)
+		}
 
 		// Convert device type
 		deviceType := gputypes.DeviceTypeOther
@@ -277,7 +288,7 @@ func (i *Instance) EnumerateAdapters(surfaceHint hal.Surface) []hal.ExposedAdapt
 					vkVersionPatch(props.ApiVersion)),
 				Backend: gputypes.BackendVulkan,
 			},
-			Features: featuresFromPhysicalDevice(&features, props.ApiVersion),
+			Features: featuresFromPhysicalDevice(&features, features12.DrawIndirectCount != 0),
 			Capabilities: hal.Capabilities{
 				Limits: limitsFromProps(&props),
 				AlignmentsMask: hal.Alignments{
@@ -538,7 +549,7 @@ func vendorIDToName(id uint32) string {
 
 // featuresFromPhysicalDevice maps Vulkan physical device features to WebGPU features.
 // Reference: wgpu-hal/src/vulkan/adapter.rs:584-829
-func featuresFromPhysicalDevice(features *vk.PhysicalDeviceFeatures, apiVersion uint32) gputypes.Features {
+func featuresFromPhysicalDevice(features *vk.PhysicalDeviceFeatures, drawIndirectCount bool) gputypes.Features {
 	var result gputypes.Features
 
 	// Texture compression features
@@ -560,8 +571,8 @@ func featuresFromPhysicalDevice(features *vk.PhysicalDeviceFeatures, apiVersion 
 		result |= gputypes.Features(gputypes.FeatureMultiDrawIndirect)
 	}
 
-	// DrawIndirectCount is core in Vulkan 1.2+ (FeatureMultiDrawIndirectCount).
-	if supportsDrawIndirectCountFeature(apiVersion) {
+	// drawIndirectCount is an optional Vulkan 1.2 feature (FeatureMultiDrawIndirectCount).
+	if drawIndirectCount {
 		result |= gputypes.Features(gputypes.FeatureMultiDrawIndirectCount)
 	}
 

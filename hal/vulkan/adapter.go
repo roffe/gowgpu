@@ -150,6 +150,11 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 	)
 	if hasTimelineSemaphore {
 		vulkan12Enable.TimelineSemaphore = vk.Bool32(vk.True)
+	}
+	if has12.DrawIndirectCount != 0 {
+		vulkan12Enable.DrawIndirectCount = vk.Bool32(vk.True)
+	}
+	if hasTimelineSemaphore || has12.DrawIndirectCount != 0 {
 		deviceCreateInfo.PNext = (*uintptr)(unsafe.Pointer(&vulkan12Enable))
 	}
 	if video != nil {
@@ -184,7 +189,7 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 		graphicsFamily:             graphicsFamily,
 		cmds:                       &deviceCmds,
 		supportsMultiDrawIndirect:  a.features.MultiDrawIndirect != 0,
-		supportsDrawIndirectCount:  supportsDrawIndirectCountFeature(a.properties.ApiVersion),
+		supportsDrawIndirectCount:  has12.DrawIndirectCount != 0,
 		maxDrawIndirectCount:       a.properties.Limits.MaxDrawIndirectCount,
 		supportsIncrementalPresent: hasIncrementalPresent,
 	}
