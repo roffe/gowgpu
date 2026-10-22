@@ -196,8 +196,10 @@ func (b *Buffer) MappedRange(offset, size uint64) (*MappedRange, error) {
 	return r, nil
 }
 
-// Unmap releases the current mapping and invalidates all outstanding
-// MappedRange handles. Safe to call multiple times; a second call returns
+// Unmap flushes the ranges written through BytesMut, releases the current
+// mapping and invalidates all outstanding MappedRange handles. The buffer
+// is unmapped even when a flush fails, and the first such error is
+// returned. Safe to call multiple times; a second call returns
 // ErrMapNotMapped.
 func (b *Buffer) Unmap() error {
 	if b == nil || b.browser == nil {
@@ -209,10 +211,16 @@ func (b *Buffer) Unmap() error {
 	if b.mapState != MapStateMapped && b.mapState != MapStatePending {
 		return ErrMapNotMapped
 	}
+	var err error
+	for _, r := range b.ranges {
+		if e := r.Flush(); e != nil && err == nil {
+			err = e
+		}
+	}
 	b.browser.Unmap()
 	b.mapState = MapStateUnmapped
 	b.detachRanges()
-	return nil
+	return err
 }
 
 func (b *Buffer) detachRanges() {

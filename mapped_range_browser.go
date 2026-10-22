@@ -48,19 +48,15 @@ func (m *MappedRange) Bytes() []byte {
 
 // BytesMut returns a mutable byte slice for writing into the mapped region.
 //
-// The returned slice is a Go-heap copy. Changes are NOT visible on the GPU
-// until Flush() is called (or the buffer is unmapped, which auto-flushes
-// dirty ranges). This matches the Rust wgpu pattern where Drop on
-// WebBufferMappedRange writes back if temporary_mapping_modified is true.
+// The returned slice is a Go-heap copy of the mapped data. Changes reach
+// the GPU when Flush is called or the buffer is unmapped, which flushes
+// every range written through BytesMut.
 func (m *MappedRange) BytesMut() []byte {
-	if m == nil || !m.valid || m.buf == nil || m.buf.browser == nil {
-		return nil
+	data := m.Bytes()
+	if data != nil {
+		m.dirty = true
 	}
-	if m.cached == nil {
-		m.cached = make([]byte, m.size)
-	}
-	m.dirty = true
-	return m.cached
+	return data
 }
 
 // Flush writes the cached data back to the JS ArrayBuffer.
