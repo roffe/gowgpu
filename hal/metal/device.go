@@ -420,6 +420,12 @@ func (d *Device) CreateSampler(desc *hal.SamplerDescriptor) (hal.Sampler, error)
 	_ = MsgSend(sampDesc, Sel("setTAddressMode:"), uintptr(addressModeToMTL(desc.AddressModeV)))
 	_ = MsgSend(sampDesc, Sel("setRAddressMode:"), uintptr(addressModeToMTL(desc.AddressModeW)))
 
+	msgSendVoid(sampDesc, Sel("setLodMinClamp:"), argFloat32(desc.LodMinClamp))
+	// 0 keeps Metal's upper bound, as it keeps Vulkan's.
+	if desc.LodMaxClamp > 0 {
+		msgSendVoid(sampDesc, Sel("setLodMaxClamp:"), argFloat32(desc.LodMaxClamp))
+	}
+
 	if desc.Anisotropy > 1 {
 		_ = MsgSend(sampDesc, Sel("setMaxAnisotropy:"), uintptr(desc.Anisotropy))
 	}
