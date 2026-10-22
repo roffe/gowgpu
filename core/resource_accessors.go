@@ -54,11 +54,6 @@ func (t *Texture) Label() string {
 // After calling Destroy(), Raw() returns nil and the tracker index
 // is returned to the allocator for reuse.
 func (t *Texture) Destroy() {
-	// Release the tracker index first (safe to call multiple times).
-	if t.trackingData != nil {
-		t.trackingData.Release()
-	}
-
 	untrackResource(uintptr(unsafe.Pointer(t))) //nolint:gosec // debug tracking uses pointer as unique ID
 
 	if t.device == nil || t.device.SnatchLock() == nil || t.raw == nil {
@@ -76,6 +71,15 @@ func (t *Texture) Destroy() {
 	halTexture := t.raw.Snatch(exclusiveGuard)
 	if halTexture == nil {
 		return
+	}
+
+	// Give the tracker index back after clearing what the device tracker
+	// kept for it, so the next texture to get the index starts untracked.
+	if t.trackingData != nil {
+		if t.device.tracker != nil {
+			t.device.tracker.RemoveTexture(t.trackingData.Index())
+		}
+		t.trackingData.Release()
 	}
 
 	halDevice.DestroyTexture(*halTexture)
