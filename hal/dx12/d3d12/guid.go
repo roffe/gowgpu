@@ -330,12 +330,12 @@ var IID_ID3D12DeviceRemovedExtendedDataSettings = GUID{
 
 // IID_ID3D12DeviceRemovedExtendedData1 is the interface ID for
 // ID3D12DeviceRemovedExtendedData1 (query DRED data after device removal).
-// {8727A009-F2F4-424F-8B91-B9C9C472D8E6}
+// {9727A022-CF1D-4DDA-9EBA-EFFA653FC506}
 var IID_ID3D12DeviceRemovedExtendedData1 = GUID{
-	Data1: 0x8727A009,
-	Data2: 0xF2F4,
-	Data3: 0x424F,
-	Data4: [8]byte{0x8B, 0x91, 0xB9, 0xC9, 0xC4, 0x72, 0xD8, 0xE6},
+	Data1: 0x9727A022,
+	Data2: 0xCF1D,
+	Data3: 0x4DDA,
+	Data4: [8]byte{0x9E, 0xBA, 0xEF, 0xFA, 0x65, 0x3F, 0xC5, 0x06},
 }
 
 // ID3DBlob GUID
