@@ -79,6 +79,10 @@ type CommandEncoder struct {
 	// for destroyed state. Matches Rust wgpu-core's cmd_buf_data.trackers.bind_groups
 	// (device/queue.rs:1815-1817).
 	usedBindGroups []*BindGroup
+
+	// usedQuerySets tracks the query sets ResolveQuerySet reads for
+	// submit-time validation: a released one fails the submit.
+	usedQuerySets []*QuerySet
 }
 
 // encoderSerials hands out CommandEncoder serials. Zero is never handed out,
@@ -97,7 +101,7 @@ func (e *CommandEncoder) recycle() {
 	}
 	e.pooled = false
 	e.core, e.device, e.halEncoder = nil, nil, nil
-	e.trackedRefs, e.usedBuffers, e.usedTextures, e.usedBindGroups = nil, nil, nil, nil
+	e.trackedRefs, e.usedBuffers, e.usedTextures, e.usedBindGroups, e.usedQuerySets = nil, nil, nil, nil, nil
 	e.passSerial = 0
 	e.cb = CommandBuffer{}
 	cmdEncoderObjPool.Put(e)
@@ -131,6 +135,7 @@ type usedLists struct {
 	buffers    []*Buffer
 	textures   []*Texture
 	bindGroups []*BindGroup
+	querySets  []*QuerySet
 }
 
 // usedListPool keeps the emptied validation lists of spent command buffers,
@@ -158,13 +163,14 @@ func (p *usedListPool) get() usedLists {
 
 // put clears the lists, so they stop pinning resources, and keeps them.
 func (p *usedListPool) put(l usedLists) {
-	if cap(l.buffers)+cap(l.textures)+cap(l.bindGroups) == 0 {
+	if cap(l.buffers)+cap(l.textures)+cap(l.bindGroups)+cap(l.querySets) == 0 {
 		return
 	}
 	clear(l.buffers)
 	clear(l.textures)
 	clear(l.bindGroups)
-	l.buffers, l.textures, l.bindGroups = l.buffers[:0], l.textures[:0], l.bindGroups[:0]
+	clear(l.querySets)
+	l.buffers, l.textures, l.bindGroups, l.querySets = l.buffers[:0], l.textures[:0], l.bindGroups[:0], l.querySets[:0]
 	p.mu.Lock()
 	if len(p.free) < maxFreeUsedLists {
 		p.free = append(p.free, l)
@@ -218,6 +224,14 @@ func (e *CommandEncoder) trackBuffer(buf *Buffer) {
 		e.keepAlive(buf.core.Ref)
 	}
 	e.usedBuffers = append(e.usedBuffers, buf)
+}
+
+// trackQuerySet records a query set for submit-time validation.
+func (e *CommandEncoder) trackQuerySet(qs *QuerySet) {
+	if qs == nil || !qs.mark.claim(e.id()) {
+		return
+	}
+	e.usedQuerySets = append(e.usedQuerySets, qs)
 }
 
 // trackTexture records a texture reference for submit-time validation (VAL-A6).
@@ -1074,6 +1088,11 @@ func (e *CommandEncoder) ResolveQuerySet(querySet *QuerySet, firstQuery, queryCo
 		return
 	}
 
+	if !e.recordCopyUsages(raw, nil, []copyBufferUsage{{buffer: dst, usage: track.BufferUsesCopyDst}}) {
+		return
+	}
+	e.trackBuffer(dst)
+	e.trackQuerySet(querySet)
 	raw.ResolveQuerySet(halQuerySet, firstQuery, queryCount, halDestination, dstOffset)
 }
 
@@ -1173,6 +1192,7 @@ func (e *CommandEncoder) Finish() (*CommandBuffer, error) {
 		usedBuffers:    e.usedBuffers,
 		usedTextures:   e.usedTextures,
 		usedBindGroups: e.usedBindGroups,
+		usedQuerySets:  e.usedQuerySets,
 		enc:            e,
 		serial:         e.id(),
 	}
@@ -1181,6 +1201,7 @@ func (e *CommandEncoder) Finish() (*CommandBuffer, error) {
 	e.usedBuffers = nil    // ownership transferred
 	e.usedTextures = nil   // ownership transferred
 	e.usedBindGroups = nil // ownership transferred
+	e.usedQuerySets = nil  // ownership transferred
 	return cb, nil
 }
 
@@ -1336,6 +1357,10 @@ type CommandBuffer struct {
 	// (device/queue.rs:1815-1817).
 	usedBindGroups []*BindGroup
 
+	// usedQuerySets tracks the query sets ResolveQuerySet reads, validated
+	// at Submit time: a released one causes an error.
+	usedQuerySets []*QuerySet
+
 	// submitted is set to true after this command buffer has been submitted
 	// to a queue. A command buffer cannot be submitted twice.
 	// Matches Rust wgpu-core's CommandBuffer::take_finished() which consumes
@@ -1433,22 +1458,24 @@ func (cb *CommandBuffer) Release() {
 // lists go back to the device for the next encoder.
 func (cb *CommandBuffer) dropUsedSets() {
 	if cb.device != nil {
-		cb.device.usedLists.put(usedLists{cb.usedBuffers, cb.usedTextures, cb.usedBindGroups})
+		cb.device.usedLists.put(usedLists{cb.usedBuffers, cb.usedTextures, cb.usedBindGroups, cb.usedQuerySets})
 	}
 	cb.usedBuffers = nil
 	cb.usedTextures = nil
 	cb.usedBindGroups = nil
+	cb.usedQuerySets = nil
 }
 
 // dropUsedLists is dropUsedSets for an encoder that will not produce a
 // command buffer.
 func (e *CommandEncoder) dropUsedLists() {
 	if e.device != nil {
-		e.device.usedLists.put(usedLists{e.usedBuffers, e.usedTextures, e.usedBindGroups})
+		e.device.usedLists.put(usedLists{e.usedBuffers, e.usedTextures, e.usedBindGroups, e.usedQuerySets})
 	}
 	e.usedBuffers = nil
 	e.usedTextures = nil
 	e.usedBindGroups = nil
+	e.usedQuerySets = nil
 }
 
 // halBufferList returns all HAL command buffers in submission order.

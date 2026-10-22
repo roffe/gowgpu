@@ -14,6 +14,9 @@ type QuerySet struct {
 	core     *core.QuerySet
 	device   *Device
 	released bool
+
+	// mark is the last command encoder that tracked this query set.
+	mark encoderMark
 }
 
 // Type returns the query set type.

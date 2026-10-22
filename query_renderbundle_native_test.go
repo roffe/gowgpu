@@ -364,6 +364,44 @@ func TestResolveQuerySetAndExecuteBundles(t *testing.T) {
 	}
 }
 
+// ResolveQuerySet writes its destination, so the buffer is listed for
+// submit validation, and the query set is too: releasing it before the
+// submit fails the submit instead of destroying it under the resolve.
+func TestResolveQuerySetTracksItsResources(t *testing.T) {
+	resource := &testHALResource{}
+	command := &captureCommandEncoder{CommandEncoder: &noop.CommandEncoder{}}
+	device := newCaptureDevice(&captureDevice{Device: &noop.Device{}, commandEncoder: command})
+
+	buffer, err := device.CreateBuffer(&BufferDescriptor{Size: 256, Usage: BufferUsageQueryResolve | BufferUsageCopySrc})
+	if err != nil {
+		t.Fatalf("CreateBuffer() error = %v", err)
+	}
+	encoder, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder() error = %v", err)
+	}
+	querySet := newTestQuerySet(resource, device)
+	encoder.ResolveQuerySet(querySet, 0, 1, buffer, 0)
+	encoder.ResolveQuerySet(querySet, 1, 1, buffer, 8)
+	cb, err := encoder.Finish()
+	if err != nil {
+		t.Fatalf("Finish() error = %v", err)
+	}
+	if len(cb.usedBuffers) != 1 || cb.usedBuffers[0] != buffer {
+		t.Fatalf("usedBuffers = %v, want the destination once", cb.usedBuffers)
+	}
+	if len(cb.usedQuerySets) != 1 || cb.usedQuerySets[0] != querySet {
+		t.Fatalf("usedQuerySets = %v, want the query set once", cb.usedQuerySets)
+	}
+	if err := validateCommandBufferForSubmit(cb, 0); err != nil {
+		t.Fatalf("validateCommandBufferForSubmit() error = %v", err)
+	}
+	querySet.released = true
+	if err := validateCommandBufferForSubmit(cb, 0); !errors.Is(err, ErrReleased) {
+		t.Fatalf("validateCommandBufferForSubmit() with a released query set = %v, want ErrReleased", err)
+	}
+}
+
 func TestResolveQuerySetGuards(t *testing.T) {
 	resource := &testHALResource{}
 	command := &captureCommandEncoder{CommandEncoder: &noop.CommandEncoder{}}

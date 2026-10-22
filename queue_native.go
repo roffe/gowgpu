@@ -669,6 +669,14 @@ func validateCommandBufferForSubmit(cb *CommandBuffer, index int) error {
 		}
 	}
 
+	// 6. Check the query sets ResolveQuerySet reads.
+	for _, qs := range cb.usedQuerySets {
+		if qs.released {
+			return fmt.Errorf("wgpu: Submit: command buffer at index %d references released query set: %w",
+				index, ErrReleased)
+		}
+	}
+
 	return nil
 }
 

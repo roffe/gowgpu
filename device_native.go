@@ -977,7 +977,7 @@ func (d *Device) CreateCommandEncoder(desc *CommandEncoderDescriptor) (*CommandE
 		e.serial = encoderSerials.Add(1)
 		e.halEncoder = halEnc
 		e.trackedRefs = refs
-		e.usedBuffers, e.usedTextures, e.usedBindGroups = lists.buffers, lists.textures, lists.bindGroups
+		e.usedBuffers, e.usedTextures, e.usedBindGroups, e.usedQuerySets = lists.buffers, lists.textures, lists.bindGroups, lists.querySets
 		e.pooled = true
 		return e, nil
 	}
