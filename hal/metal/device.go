@@ -229,6 +229,11 @@ func (d *Device) CreateTexture(desc *hal.TextureDescriptor) (hal.Texture, error)
 	_ = MsgSend(texDesc, Sel("setSampleCount:"), uintptr(sampleCount))
 
 	usage := textureUsageToMTL(desc.Usage)
+	// A stencil-only view of a combined depth-stencil texture is a view in
+	// another pixel format.
+	if desc.Format.HasDepth() && desc.Format.HasStencil() {
+		usage |= MTLTextureUsagePixelFormatView
+	}
 	_ = MsgSend(texDesc, Sel("setUsage:"), uintptr(usage))
 
 	// Select storage mode based on GPU family and sample count.
@@ -312,6 +317,14 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 		format = mtlTexture.format
 	}
 	pixelFormat := d.adapter.mapTextureFormat(format)
+	if desc.Aspect == gputypes.TextureAspectStencilOnly {
+		switch pixelFormat {
+		case MTLPixelFormatDepth24UnormStencil8:
+			pixelFormat = MTLPixelFormatX24Stencil8
+		case MTLPixelFormatDepth32FloatStencil8:
+			pixelFormat = MTLPixelFormatX32Stencil8
+		}
+	}
 
 	baseMip := desc.BaseMipLevel
 	mipCount := desc.MipLevelCount
