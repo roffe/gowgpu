@@ -58,7 +58,10 @@ type Swapchain struct {
 	// barrierPool is a dedicated VkCommandPool for recording layout transition
 	// barriers before present. Separate from user command pools to avoid
 	// interference with encoder lifecycle. Created lazily on first barrier need.
+	// barrierCmd is its one command buffer, recorded again for every barrier
+	// once the deferred pool reset has taken it back.
 	barrierPool vk.CommandPool
+	barrierCmd  vk.CommandBuffer
 
 	// ADR-059: barrierPending tracks whether a barrier command buffer from
 	// ensurePresentLayout is still potentially in-flight on the GPU. The pool
@@ -921,6 +924,7 @@ func (sc *Swapchain) destroyResourcesAfterIdle() error {
 		// guarantee before this teardown.
 		sc.device.cmds.DestroyCommandPool(sc.device.handle, sc.barrierPool, nil)
 		sc.barrierPool = 0
+		sc.barrierCmd = 0
 	}
 	sc.barrierPending = false
 	sc.imageLayouts = nil
@@ -1010,6 +1014,7 @@ func (sc *Swapchain) abandonDeviceResources() {
 	sc.imageLayouts = nil
 	sc.acquireFence = 0
 	sc.barrierPool = 0
+	sc.barrierCmd = 0
 	sc.barrierPending = false
 	sc.currentAcquireSem = 0
 	sc.imageAcquired = false
@@ -1360,25 +1365,28 @@ func (sc *Swapchain) ensurePresentLayout(queue *Queue) error {
 		sc.barrierPool = pool
 	}
 
-	// Allocate a one-shot command buffer from the barrier pool.
-	allocInfo := vk.CommandBufferAllocateInfo{
-		SType:              vk.StructureTypeCommandBufferAllocateInfo,
-		CommandPool:        sc.barrierPool,
-		Level:              vk.CommandBufferLevelPrimary,
-		CommandBufferCount: 1,
+	if sc.barrierCmd == 0 {
+		allocInfo := vk.CommandBufferAllocateInfo{
+			SType:              vk.StructureTypeCommandBufferAllocateInfo,
+			CommandPool:        sc.barrierPool,
+			Level:              vk.CommandBufferLevelPrimary,
+			CommandBufferCount: 1,
+		}
+		result := sc.device.cmds.AllocateCommandBuffers(sc.device.handle, &allocInfo, &sc.barrierCmd)
+		if result != vk.Success {
+			return fmt.Errorf("vulkan: vkAllocateCommandBuffers (barrier) failed: %d", result)
+		}
 	}
-	var cmdBuf vk.CommandBuffer
-	result := sc.device.cmds.AllocateCommandBuffers(sc.device.handle, &allocInfo, &cmdBuf)
-	if result != vk.Success {
-		return fmt.Errorf("vulkan: vkAllocateCommandBuffers (barrier) failed: %d", result)
-	}
+	cmdBuf := sc.barrierCmd
 
-	// Begin recording.
+	// Begin recording. The pool allows a reset of its one buffer, so a begin
+	// after a failed record resets it; after a submit the deferred pool
+	// reset in acquireNextImage has.
 	beginInfo := vk.CommandBufferBeginInfo{
 		SType: vk.StructureTypeCommandBufferBeginInfo,
 		Flags: vk.CommandBufferUsageFlags(vk.CommandBufferUsageOneTimeSubmitBit),
 	}
-	result = sc.device.cmds.BeginCommandBuffer(cmdBuf, &beginInfo)
+	result := sc.device.cmds.BeginCommandBuffer(cmdBuf, &beginInfo)
 	if result != vk.Success {
 		return fmt.Errorf("vulkan: vkBeginCommandBuffer (barrier) failed: %d", result)
 	}
