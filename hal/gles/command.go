@@ -279,6 +279,8 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 	// Reference wgpu sets viewport at render pass start — required for correct rendering.
 	if len(desc.ColorAttachments) > 0 {
 		e.setupColorAttachment(desc, rpe)
+	} else if desc.DepthStencilAttachment != nil {
+		e.setupDepthOnlyTarget(desc.DepthStencilAttachment)
 	}
 
 	// Set draw buffers for MRT. Matches Rust wgpu-hal GLES
@@ -393,6 +395,24 @@ func (e *CommandEncoder) setupSurfaceTarget(desc *hal.RenderPassDescriptor, tv *
 	// Fallback: no surface texture (shouldn't normally happen for isSurface=true
 	// views, but preserves prior behavior for tests / degenerate cases).
 	e.commands = append(e.commands, e.store().framebuffers.put(BindFramebufferCommand{fbo: 0}))
+}
+
+// setupDepthOnlyTarget binds the framebuffer that has the pass's depth/stencil
+// texture as its only attachment and sets the viewport and scissor to its
+// size, for a pass with no colour attachment.
+func (e *CommandEncoder) setupDepthOnlyTarget(dsa *hal.RenderPassDepthStencilAttachment) {
+	dsView, ok := dsa.View.(*TextureView)
+	if !ok || dsView.texture == nil {
+		return
+	}
+	tex := dsView.texture
+	e.commands = append(e.commands, &EnsureDepthOnlyFBOCommand{texture: tex})
+	e.commands = append(e.commands, e.store().viewports.put(SetViewportCommand{
+		width:    float32(tex.size.Width),
+		height:   float32(tex.size.Height),
+		maxDepth: 1,
+	}))
+	e.resetScissor(tex.size.Width, tex.size.Height)
 }
 
 // resetScissor opens the scissor to the whole target at pass start, as a
@@ -578,6 +598,10 @@ func (e *RenderPassEncoder) End() {
 			if !tv.isSurface && tv.texture != nil {
 				e.encoder.commands = append(e.encoder.commands, e.encoder.store().framebuffers.put(BindFramebufferCommand{fbo: 0}))
 			}
+		}
+	} else if e.desc.DepthStencilAttachment != nil {
+		if tv, ok := e.desc.DepthStencilAttachment.View.(*TextureView); ok && tv.texture != nil {
+			e.encoder.commands = append(e.encoder.commands, e.encoder.store().framebuffers.put(BindFramebufferCommand{fbo: 0}))
 		}
 	}
 }
@@ -960,6 +984,32 @@ func (c *EnsureOffscreenFBOCommand) Execute(ctx *gl.Context) {
 	} else {
 		ctx.BindFramebuffer(gl.FRAMEBUFFER, c.texture.fbo)
 	}
+}
+
+// EnsureDepthOnlyFBOCommand binds the framebuffer that has texture as its
+// depth/stencil attachment and nothing else, making it the first time.
+type EnsureDepthOnlyFBOCommand struct {
+	texture *Texture
+}
+
+// noDrawBuffers is the draw buffer list of a framebuffer without colour.
+var noDrawBuffers = []uint32{gl.NONE}
+
+func (c *EnsureDepthOnlyFBOCommand) Execute(ctx *gl.Context) {
+	if c.texture.fbo != 0 {
+		ctx.BindFramebuffer(gl.FRAMEBUFFER, c.texture.fbo)
+		return
+	}
+	fbo := ctx.GenFramebuffers(1)
+	ctx.BindFramebuffer(gl.FRAMEBUFFER, fbo)
+	ctx.FramebufferTexture2D(gl.FRAMEBUFFER, depthStencilAttachmentPoint(c.texture.format), c.texture.target, c.texture.id, 0)
+	ctx.DrawBuffers(noDrawBuffers)
+	if ctx.CheckFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE {
+		ctx.DeleteFramebuffers(fbo)
+		ctx.BindFramebuffer(gl.FRAMEBUFFER, 0)
+		return
+	}
+	c.texture.fbo = fbo
 }
 
 // AttachDepthStencilCommand attaches a depth/stencil texture to the currently

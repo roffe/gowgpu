@@ -238,6 +238,7 @@ const (
 	CCW            = 0x0901
 
 	// Framebuffer
+	NONE                     = 0
 	FRAMEBUFFER              = 0x8D40
 	FRAMEBUFFER_BINDING      = 0x8CA6
 	READ_FRAMEBUFFER         = 0x8CA8
@@ -307,6 +308,9 @@ const (
 
 	// VAO
 	VERTEX_ARRAY_BINDING = 0x85B5
+
+	// Viewport, four ints for glGetIntegerv
+	VIEWPORT = 0x0BA2
 
 	// Sync objects
 	SYNC_GPU_COMMANDS_COMPLETE = 0x9117
