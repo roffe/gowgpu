@@ -1700,7 +1700,7 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 		case gputypes.TextureViewDimensionCube:
 			srvDesc.SetTextureCube(baseMip, mipCount, 0)
 		case gputypes.TextureViewDimensionCubeArray:
-			srvDesc.SetTextureCubeArray(baseMip, mipCount, baseLayer/6, layerCount/6, 0)
+			srvDesc.SetTextureCubeArray(baseMip, mipCount, baseLayer, layerCount/6, 0)
 		case gputypes.TextureViewDimension3D:
 			srvDesc.SetTexture3D(baseMip, mipCount, 0)
 		}
