@@ -57,6 +57,18 @@ func (d *D3D12_SHADER_RESOURCE_VIEW_DESC) SetTexture2DArray(mostDetailedMip, mip
 	binary.LittleEndian.PutUint32(d.Union[20:24], floatBits(resourceMinLODClamp))
 }
 
+// SetTexture2DMS sets up a multisampled 2D texture SRV.
+func (d *D3D12_SHADER_RESOURCE_VIEW_DESC) SetTexture2DMS() {
+	d.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMS
+}
+
+// SetTexture2DMSArray sets up a multisampled 2D texture array SRV.
+func (d *D3D12_SHADER_RESOURCE_VIEW_DESC) SetTexture2DMSArray(firstArraySlice, arraySize uint32) {
+	d.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY
+	binary.LittleEndian.PutUint32(d.Union[0:4], firstArraySlice)
+	binary.LittleEndian.PutUint32(d.Union[4:8], arraySize)
+}
+
 // SetTexture3D sets up a 3D texture SRV.
 func (d *D3D12_SHADER_RESOURCE_VIEW_DESC) SetTexture3D(mostDetailedMip, mipLevels uint32, resourceMinLODClamp float32) {
 	d.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D

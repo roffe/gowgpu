@@ -286,10 +286,16 @@ func shaderResourceViewDesc(view *TextureView, format d3d12.DXGI_FORMAT, plane u
 	case gputypes.TextureViewDimension1D:
 		desc.SetTexture1D(view.baseMip, view.mipCount, 0)
 	case gputypes.TextureViewDimension2D, gputypes.TextureViewDimension2DArray:
-		if first, count, array := view.arraySlices(); array {
-			desc.SetTexture2DArray(view.baseMip, view.mipCount, first, count, plane, 0)
-		} else {
+		first, count, array := view.arraySlices()
+		switch {
+		case !array && view.multisampled():
+			desc.SetTexture2DMS()
+		case !array:
 			desc.SetTexture2D(view.baseMip, view.mipCount, plane, 0)
+		case view.multisampled():
+			desc.SetTexture2DMSArray(first, count)
+		default:
+			desc.SetTexture2DArray(view.baseMip, view.mipCount, first, count, plane, 0)
 		}
 	case gputypes.TextureViewDimensionCube, gputypes.TextureViewDimensionCubeArray:
 		cubes := view.layerCount / 6
