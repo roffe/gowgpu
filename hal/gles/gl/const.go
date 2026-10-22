@@ -40,6 +40,7 @@ const (
 	CULL_FACE           = 0x0B44
 	DEPTH_TEST          = 0x0B71
 	DITHER              = 0x0BD0
+	FRAMEBUFFER_SRGB    = 0x8DB9
 	POLYGON_OFFSET_FILL = 0x8037
 	SCISSOR_TEST        = 0x0C11
 	STENCIL_TEST        = 0x0B90

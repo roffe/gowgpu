@@ -41,6 +41,12 @@ func (a *Adapter) Open(_ gputypes.Features, _ gputypes.Limits) (hal.OpenDevice, 
 	glCtx := a.ctx.Lock()
 	defer a.ctx.Unlock()
 
+	// An sRGB attachment encodes what the shader writes, as WebGPU's sRGB
+	// formats do: GLES always, desktop GL only with this enabled.
+	if !glCtx.IsGLES() {
+		glCtx.Enable(gl.FRAMEBUFFER_SRGB)
+	}
+
 	// VAO is created lazily in CreateCommandEncoder — ensures it's allocated
 	// on the window surface (after Configure), not on the pbuffer (during Open).
 	vao := uint32(0)

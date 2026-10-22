@@ -98,6 +98,11 @@ func (s *Surface) blitSwapchainToDefaultWith(glCtx *gl.Context) {
 	}
 
 	glCtx.Disable(gl.SCISSOR_TEST)
+	// The blit copies the swapchain's bytes as they are, encoded or not.
+	srgb := !glCtx.IsGLES()
+	if srgb {
+		glCtx.Disable(gl.FRAMEBUFFER_SRGB)
+	}
 
 	glCtx.BindFramebuffer(gl.READ_FRAMEBUFFER, s.swapchainFBO)
 	glCtx.BindFramebuffer(gl.DRAW_FRAMEBUFFER, 0)
@@ -118,6 +123,9 @@ func (s *Surface) blitSwapchainToDefaultWith(glCtx *gl.Context) {
 
 	glCtx.BindFramebuffer(gl.READ_FRAMEBUFFER, 0)
 	glCtx.BindFramebuffer(gl.DRAW_FRAMEBUFFER, 0)
+	if srgb {
+		glCtx.Enable(gl.FRAMEBUFFER_SRGB)
+	}
 }
 
 // reconfigureSwapchainFBOWith destroys the existing swapchain FBO and
