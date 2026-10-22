@@ -193,6 +193,7 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 		maxDrawIndirectCount:       a.properties.Limits.MaxDrawIndirectCount,
 		supportsIncrementalPresent: hasIncrementalPresent,
 	}
+	dev.depth24, dev.depth24Stencil8 = depth24Formats(a.supportsDepthAttachment)
 
 	// Initialize synchronization fence (VK-IMPL-001 / VK-IMPL-003).
 	// Prefer timeline semaphore (Vulkan 1.2+); fall back to fencePool of binary
@@ -305,9 +306,30 @@ func selectGraphicsQueueFamily(families []vk.QueueFamilyProperties, requested *u
 	return 0, fmt.Errorf("vulkan: no graphics queue family found")
 }
 
+// supportsDepthAttachment reports whether the device can render depth to an
+// optimally tiled image of format.
+func (a *Adapter) supportsDepthAttachment(format vk.Format) bool {
+	var props vk.FormatProperties
+	a.instance.cmds.GetPhysicalDeviceFormatProperties(a.physicalDevice, format, &props)
+	return props.OptimalTilingFeatures&vk.FormatFeatureFlags(vk.FormatFeatureDepthStencilAttachmentBit) != 0
+}
+
+// vkFormat is the Vulkan format of format on this device, see depth24Formats.
+func (a *Adapter) vkFormat(format gputypes.TextureFormat) vk.Format {
+	switch format {
+	case gputypes.TextureFormatDepth24Plus, gputypes.TextureFormatDepth24PlusStencil8:
+		depth, depthStencil := depth24Formats(a.supportsDepthAttachment)
+		if format == gputypes.TextureFormatDepth24Plus {
+			return depth
+		}
+		return depthStencil
+	}
+	return textureFormatToVk(format)
+}
+
 // TextureFormatCapabilities returns capabilities for a texture format.
 func (a *Adapter) TextureFormatCapabilities(format gputypes.TextureFormat) hal.TextureFormatCapabilities {
-	vkFormat := textureFormatToVk(format)
+	vkFormat := a.vkFormat(format)
 	if vkFormat == vk.FormatUndefined {
 		return hal.TextureFormatCapabilities{}
 	}

@@ -228,6 +228,48 @@ func TestTextureFormatToVk(t *testing.T) {
 	}
 }
 
+// TestDepth24Formats: the 24-bit depth formats where the device renders to
+// them, 32-bit float ones where it does not, chosen for each on its own, and
+// Device.vkFormat hands out what was chosen.
+func TestDepth24Formats(t *testing.T) {
+	tests := []struct {
+		name                string
+		supported           []vk.Format
+		depth, depthStencil vk.Format
+	}{
+		{"both", []vk.Format{vk.FormatX8D24UnormPack32, vk.FormatD24UnormS8Uint}, vk.FormatX8D24UnormPack32, vk.FormatD24UnormS8Uint},
+		{"neither", nil, vk.FormatD32Sfloat, vk.FormatD32SfloatS8Uint},
+		{"depth only", []vk.Format{vk.FormatX8D24UnormPack32}, vk.FormatX8D24UnormPack32, vk.FormatD32SfloatS8Uint},
+		{"depth stencil only", []vk.Format{vk.FormatD24UnormS8Uint}, vk.FormatD32Sfloat, vk.FormatD24UnormS8Uint},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			supports := func(f vk.Format) bool {
+				for _, s := range tt.supported {
+					if s == f {
+						return true
+					}
+				}
+				return false
+			}
+			depth, depthStencil := depth24Formats(supports)
+			if depth != tt.depth || depthStencil != tt.depthStencil {
+				t.Fatalf("depth24Formats() = %v, %v, want %v, %v", depth, depthStencil, tt.depth, tt.depthStencil)
+			}
+			d := &Device{depth24: depth, depth24Stencil8: depthStencil}
+			if got := d.vkFormat(gputypes.TextureFormatDepth24Plus); got != depth {
+				t.Errorf("vkFormat(Depth24Plus) = %v, want %v", got, depth)
+			}
+			if got := d.vkFormat(gputypes.TextureFormatDepth24PlusStencil8); got != depthStencil {
+				t.Errorf("vkFormat(Depth24PlusStencil8) = %v, want %v", got, depthStencil)
+			}
+			if got := d.vkFormat(gputypes.TextureFormatDepth32Float); got != vk.FormatD32Sfloat {
+				t.Errorf("vkFormat(Depth32Float) = %v, want %v", got, vk.FormatD32Sfloat)
+			}
+		})
+	}
+}
+
 // TestAddressModeToVk tests address mode conversions.
 func TestAddressModeToVk(t *testing.T) {
 	tests := []struct {

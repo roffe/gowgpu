@@ -216,7 +216,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 
 	if desc.Fragment != nil {
 		for _, target := range desc.Fragment.Targets {
-			colorFormats = append(colorFormats, textureFormatToVk(target.Format))
+			colorFormats = append(colorFormats, d.vkFormat(target.Format))
 
 			attachment := vk.PipelineColorBlendAttachmentState{
 				ColorWriteMask: colorWriteMaskToVk(target.WriteMask),
@@ -285,7 +285,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		}
 	}
 	if desc.DepthStencil != nil {
-		depthFormat := textureFormatToVk(desc.DepthStencil.Format)
+		depthFormat := d.vkFormat(desc.DepthStencil.Format)
 		if depthFormat != vk.FormatUndefined {
 			rpKey.DepthFormat = depthFormat
 			rpKey.DepthLoadOp = vk.AttachmentLoadOpClear

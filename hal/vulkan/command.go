@@ -1208,7 +1208,7 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 		// Determine color format from the view.
 		var colorFormat vk.Format
 		if view.texture != nil {
-			colorFormat = textureFormatToVk(view.texture.format)
+			colorFormat = e.device.vkFormat(view.texture.format)
 		} else if view.isSwapchain {
 			colorFormat = view.vkFormat
 		}
@@ -1284,7 +1284,7 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 	if desc.DepthStencilAttachment != nil {
 		dsa := desc.DepthStencilAttachment
 		if dsView, ok := dsa.View.(*TextureView); ok && dsView.texture != nil {
-			rpKey.DepthFormat = textureFormatToVk(dsView.texture.format)
+			rpKey.DepthFormat = e.device.vkFormat(dsView.texture.format)
 			rpKey.DepthReadOnly = dsa.DepthReadOnly && dsa.StencilReadOnly
 			rpKey.DepthLoadOp = loadOpToVk(dsa.DepthLoadOp)
 			rpKey.DepthStoreOp = storeOpToVk(dsa.DepthStoreOp)

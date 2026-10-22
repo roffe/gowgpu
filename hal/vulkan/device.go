@@ -72,6 +72,10 @@ type Device struct {
 	pipelineCache             vk.PipelineCache     // Driver-compiled ISA cache (#331)
 	pipelineCachePath         string               // Disk path for pipeline cache persistence
 
+	// depth24 and depth24Stencil8 are the Vulkan formats of Depth24Plus and
+	// Depth24PlusStencil8 on this device, see depth24Formats.
+	depth24, depth24Stencil8 vk.Format
+
 	// supportsIncrementalPresent is true when VK_KHR_incremental_present
 	// is enabled on this device. When true, Present can chain
 	// VkPresentRegionsKHR into VkPresentInfoKHR.PNext to hint the
@@ -163,6 +167,24 @@ func (d *Device) beginDestroy() ([]*Surface, bool) {
 	}
 	clear(d.configuredSurfaces)
 	return surfaces, true
+}
+
+// vkFormat is the Vulkan format of format on this device: the one the
+// adapter chose for Depth24Plus and Depth24PlusStencil8, see depth24Formats.
+// Every image, view, render pass and pipeline of the device takes its format
+// from here, so they agree.
+func (d *Device) vkFormat(format gputypes.TextureFormat) vk.Format {
+	switch format {
+	case gputypes.TextureFormatDepth24Plus:
+		if d.depth24 != 0 {
+			return d.depth24
+		}
+	case gputypes.TextureFormatDepth24PlusStencil8:
+		if d.depth24Stencil8 != 0 {
+			return d.depth24Stencil8
+		}
+	}
+	return textureFormatToVk(format)
 }
 
 // initAllocator initializes the memory allocator for this device.
@@ -549,7 +571,7 @@ func (d *Device) CreateTexture(desc *hal.TextureDescriptor) (hal.Texture, error)
 	}
 
 	// Convert parameters
-	vkFormat := textureFormatToVk(desc.Format)
+	vkFormat := d.vkFormat(desc.Format)
 	vkUsage := textureUsageToVk(desc.Usage)
 	imageType := textureDimensionToVkImageType(desc.Dimension)
 
@@ -729,7 +751,7 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 				image:       t.handle,
 				isSwapchain: true,
 				swapchain:   t.swapchain,
-				vkFormat:    textureFormatToVk(t.format),
+				vkFormat:    d.vkFormat(t.format),
 			}
 		}
 		return t.textureView, nil
@@ -789,7 +811,7 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 		SType:    vk.StructureTypeImageViewCreateInfo,
 		Image:    imageHandle,
 		ViewType: viewType,
-		Format:   textureFormatToVk(format),
+		Format:   d.vkFormat(format),
 		Components: vk.ComponentMapping{
 			R: vk.ComponentSwizzleIdentity,
 			G: vk.ComponentSwizzleIdentity,

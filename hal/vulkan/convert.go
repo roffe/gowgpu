@@ -86,6 +86,21 @@ func textureFormatToVk(format gputypes.TextureFormat) vk.Format {
 	return vk.FormatUndefined
 }
 
+// depth24Formats are the Vulkan formats of Depth24Plus and
+// Depth24PlusStencil8 on a device: the 24-bit ones where supports says the
+// device can render depth to them, else the 32-bit float ones, which every
+// device can. AMD has no 24-bit depth.
+func depth24Formats(supports func(vk.Format) bool) (depth, depthStencil vk.Format) {
+	depth, depthStencil = vk.FormatX8D24UnormPack32, vk.FormatD24UnormS8Uint
+	if !supports(depth) {
+		depth = vk.FormatD32Sfloat
+	}
+	if !supports(depthStencil) {
+		depthStencil = vk.FormatD32SfloatS8Uint
+	}
+	return depth, depthStencil
+}
+
 // textureFormatMap maps WebGPU texture formats to Vulkan formats.
 var textureFormatMap = map[gputypes.TextureFormat]vk.Format{
 	// 8-bit formats
