@@ -320,21 +320,31 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 		mipCount = mtlTexture.mipLevels - baseMip
 	}
 
-	baseLayer := desc.BaseArrayLayer
-	layerCount := desc.ArrayLayerCount
-	if layerCount == 0 {
-		// 0 means "all remaining array layers" in WebGPU spec
-		layerCount = mtlTexture.depth - baseLayer
-		if layerCount == 0 {
-			layerCount = 1
-		}
-	}
-
 	var viewType MTLTextureType
 	if desc.Dimension == gputypes.TextureViewDimensionUndefined {
 		viewType = textureTypeFromDimension(mtlTexture.dimension, mtlTexture.samples, mtlTexture.depth)
 	} else {
 		viewType = textureViewDimensionToMTL(desc.Dimension)
+	}
+
+	// A 3D texture has one array layer: its depth is the slices of that layer.
+	layers := mtlTexture.depth
+	if mtlTexture.dimension == gputypes.TextureDimension3D {
+		layers = 1
+	}
+	baseLayer := desc.BaseArrayLayer
+	layerCount := desc.ArrayLayerCount
+	if layerCount == 0 {
+		// 0 means "all remaining array layers" in WebGPU spec, as many as the
+		// view type can hold.
+		switch viewType {
+		case MTLTextureType1DArray, MTLTextureType2DArray, MTLTextureTypeCubeArray:
+			layerCount = max(layers-baseLayer, 1)
+		case MTLTextureTypeCube:
+			layerCount = 6
+		default:
+			layerCount = 1
+		}
 	}
 
 	// Metal requires the texture view type to match the source texture's
@@ -348,7 +358,7 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 	// framebufferOnly, which allows no views.
 	if pixelFormat == d.adapter.mapTextureFormat(mtlTexture.format) &&
 		viewType == textureTypeFromDimension(mtlTexture.dimension, mtlTexture.samples, mtlTexture.depth) &&
-		baseMip == 0 && mipCount == mtlTexture.mipLevels && baseLayer == 0 && layerCount == max(mtlTexture.depth, 1) {
+		baseMip == 0 && mipCount == mtlTexture.mipLevels && baseLayer == 0 && layerCount == layers {
 		return &TextureView{raw: Retain(mtlTexture.raw), texture: mtlTexture, device: d}, nil
 	}
 
