@@ -1367,13 +1367,19 @@ func (e *CoreCommandEncoder) beginPassScope(desc *RenderPassDescriptor, guard Sn
 	return nil
 }
 
-// depthStencilUsage returns the appropriate texture usage for a depth/stencil
-// attachment. When both depth and stencil aspects are read-only, it returns
-// DEPTH_STENCIL_READ; otherwise DEPTH_STENCIL_WRITE.
+// depthStencilUsage returns the usage a depth/stencil attachment makes of
+// its texture: DEPTH_STENCIL_READ when every aspect its format has is
+// read-only, DEPTH_STENCIL_WRITE otherwise. A view without a parent is taken
+// to have both aspects.
 //
 // Reference: Rust wgpu-core command/render.rs depth stencil usage selection
 func depthStencilUsage(ds *RenderPassDepthStencilAttachment) track.TextureUses {
-	if ds.DepthReadOnly && ds.StencilReadOnly {
+	depth, stencil := true, true
+	if ds.View != nil && ds.View.Parent != nil {
+		f := ds.View.Parent.Format()
+		depth, stencil = hasDepthAspect(f), hasStencilAspect(f)
+	}
+	if (ds.DepthReadOnly || !depth) && (ds.StencilReadOnly || !stencil) {
 		return track.TextureUsesDepthStencilRead
 	}
 	return track.TextureUsesDepthStencilWrite

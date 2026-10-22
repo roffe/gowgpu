@@ -344,6 +344,34 @@ func TestBeginRenderPass_PopulatesTextureScope_DepthReadOnly(t *testing.T) {
 	}
 }
 
+// A depth/stencil attachment is read-only when every aspect its format has
+// is read-only: the flag of an aspect the format lacks does not count.
+func TestDepthStencilUsage_PerAspect(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		format         gputypes.TextureFormat
+		depth, stencil bool
+		want           track.TextureUses
+	}{
+		{"depth-only format, depth read-only", gputypes.TextureFormatDepth24Plus, true, false, track.TextureUsesDepthStencilRead},
+		{"depth-only format, nothing read-only", gputypes.TextureFormatDepth24Plus, false, false, track.TextureUsesDepthStencilWrite},
+		{"stencil-only format, stencil read-only", gputypes.TextureFormatStencil8, false, true, track.TextureUsesDepthStencilRead},
+		{"both aspects, depth read-only", gputypes.TextureFormatDepth24PlusStencil8, true, false, track.TextureUsesDepthStencilWrite},
+		{"both aspects, both read-only", gputypes.TextureFormatDepth24PlusStencil8, true, true, track.TextureUsesDepthStencilRead},
+		{"no parent, depth read-only", gputypes.TextureFormatUndefined, true, false, track.TextureUsesDepthStencilWrite},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ds := &RenderPassDepthStencilAttachment{DepthReadOnly: tc.depth, StencilReadOnly: tc.stencil}
+			if tc.format != gputypes.TextureFormatUndefined {
+				ds.View = &TextureView{Parent: &Texture{format: tc.format}}
+			}
+			if got := depthStencilUsage(ds); got != tc.want {
+				t.Errorf("depthStencilUsage = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestBeginRenderPass_PopulatesTextureScope_MultipleAttachments(t *testing.T) {
 	halDevice := &mockHALDevice{}
 	device := NewDevice(halDevice, &Adapter{}, gputypes.Features(0), gputypes.DefaultLimits(), "TestDevice")
