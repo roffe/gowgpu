@@ -1264,8 +1264,13 @@ func (d *Device) Poll(pollType PollType) bool {
 		if halDev, ok := d.core.HalDeviceHandle(); ok {
 			_ = halDev.WaitIdle()
 		}
-		// Drain with a sentinel "all indices completed".
-		return d.core.PollMaps(^uint64(0))
+		// Everything submitted before the wait is done; a map against a
+		// submission made since is not, so ask rather than assume all.
+		completed := ^uint64(0)
+		if d.queue != nil && d.queue.hal != nil {
+			completed = d.queue.hal.PollCompleted()
+		}
+		return d.core.PollMaps(completed)
 	default:
 		completed := uint64(0)
 		if d.queue != nil && d.queue.hal != nil {

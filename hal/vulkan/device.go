@@ -1418,7 +1418,7 @@ func (d *Device) CreateCommandEncoder(desc *hal.CommandEncoderDescriptor) (hal.C
 
 // WaitIdle waits for all GPU operations to complete.
 func (d *Device) WaitIdle() error {
-	result := d.cmds.DeviceWaitIdle(d.handle)
+	result := vkDeviceWaitIdle(d)
 	if result != vk.Success {
 		return fmt.Errorf("vulkan: vkDeviceWaitIdle failed: %d", result)
 	}
