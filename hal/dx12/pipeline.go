@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"os"
+	"runtime"
 	"unsafe"
 
 	"github.com/gogpu/naga/hlsl"
@@ -492,6 +493,10 @@ func (d *Device) createRootSignatureFromLayouts(layouts []hal.BindGroupLayout) (
 
 	// Serialize root signature
 	blob, errorBlob, err := d.instance.d3d12Lib.SerializeRootSignature(&desc, d3d12.D3D_ROOT_SIGNATURE_VERSION_1_0)
+	// The ranges are only reachable through the root parameters' unions,
+	// which the GC does not see as pointers.
+	runtime.KeepAlive(allRanges)
+	runtime.KeepAlive(rootParams)
 	if err != nil {
 		if errorBlob != nil {
 			errorBlob.Release()
