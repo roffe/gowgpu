@@ -748,6 +748,23 @@ func TestTextureFormatToDXGI(t *testing.T) {
 }
 
 // TestCompositeAlphaModeToDXGI tests composite alpha mode conversions.
+func TestSwapchainFormatToDXGIDropsSrgb(t *testing.T) {
+	tests := []struct {
+		format gputypes.TextureFormat
+		expect dxgi.DXGI_FORMAT
+	}{
+		{gputypes.TextureFormatBGRA8UnormSrgb, dxgi.DXGI_FORMAT_B8G8R8A8_UNORM},
+		{gputypes.TextureFormatRGBA8UnormSrgb, dxgi.DXGI_FORMAT_R8G8B8A8_UNORM},
+		{gputypes.TextureFormatBGRA8Unorm, dxgi.DXGI_FORMAT_B8G8R8A8_UNORM},
+		{gputypes.TextureFormatRGBA16Float, dxgi.DXGI_FORMAT_R16G16B16A16_FLOAT},
+	}
+	for _, tt := range tests {
+		if got := swapchainFormatToDXGI(tt.format); got != tt.expect {
+			t.Errorf("swapchainFormatToDXGI(%v) = %d, want %d", tt.format, got, tt.expect)
+		}
+	}
+}
+
 func TestCompositeAlphaModeToDXGI(t *testing.T) {
 	tests := []struct {
 		name   string

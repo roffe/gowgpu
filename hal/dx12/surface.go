@@ -35,8 +35,7 @@ func (s *Surface) createSwapchain(device *Device, config *hal.SurfaceConfigurati
 	// Store device reference
 	s.device = device
 
-	// Determine DXGI format
-	format := textureFormatToDXGI(config.Format)
+	format := swapchainFormatToDXGI(config.Format)
 	if format == dxgi.DXGI_FORMAT_UNKNOWN {
 		return fmt.Errorf("dx12: unsupported surface format: %v", config.Format)
 	}
@@ -246,8 +245,9 @@ func (s *Surface) createBackBufferRTVs() error {
 		// Track heap index for recycling on release
 		rtvIndex := s.device.rtvHeap.HandleToIndex(rtvHandle)
 
-		// Create RTV (nil desc = use resource format)
-		s.device.raw.CreateRenderTargetView(resource, nil, rtvHandle)
+		rtvDesc := d3d12.D3D12_RENDER_TARGET_VIEW_DESC{Format: textureFormatToD3D12(s.halFormat)}
+		rtvDesc.SetTexture2D(0, 0)
+		s.device.raw.CreateRenderTargetView(resource, &rtvDesc, rtvHandle)
 
 		s.backBuffers[i] = backBuffer{
 			resource: resource,
@@ -309,8 +309,7 @@ func (s *Surface) resizeSwapchain(config *hal.SurfaceConfiguration) error {
 	// Release existing back buffer resources
 	s.releaseBackBuffers()
 
-	// Determine new format
-	format := textureFormatToDXGI(config.Format)
+	format := swapchainFormatToDXGI(config.Format)
 	if format == dxgi.DXGI_FORMAT_UNKNOWN {
 		return fmt.Errorf("dx12: unsupported surface format: %v", config.Format)
 	}
@@ -341,6 +340,20 @@ func (s *Surface) resizeSwapchain(config *hal.SurfaceConfiguration) error {
 // querySwapChain4 queries IDXGISwapChain1 for IDXGISwapChain4 interface.
 func querySwapChain4(swapchain1 *dxgi.IDXGISwapChain1) (*dxgi.IDXGISwapChain4, error) {
 	return swapchain1.QueryInterface()
+}
+
+// swapchainFormatToDXGI is the format a swap chain of a surface format is
+// created with. A flip-model swap chain takes no sRGB format: its buffers are
+// the linear twin, and the sRGB format goes in their render target views.
+func swapchainFormatToDXGI(format gputypes.TextureFormat) dxgi.DXGI_FORMAT {
+	switch format {
+	case gputypes.TextureFormatBGRA8UnormSrgb:
+		return dxgi.DXGI_FORMAT_B8G8R8A8_UNORM
+	case gputypes.TextureFormatRGBA8UnormSrgb:
+		return dxgi.DXGI_FORMAT_R8G8B8A8_UNORM
+	default:
+		return textureFormatToDXGI(format)
+	}
 }
 
 // textureFormatToDXGI converts WebGPU TextureFormat to DXGI_FORMAT.
