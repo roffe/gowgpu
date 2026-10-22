@@ -85,7 +85,7 @@ func (i *Instance) EnumerateAdapters(surfaceHint hal.Surface) []hal.ExposedAdapt
 		adapter := &Adapter{
 			instance:              i,
 			raw:                   device,
-			formatDepth24Stencil8: MsgSendBool(device, Sel("isDepth24Stencil8PixelFormatSupported")),
+			formatDepth24Stencil8: DeviceSupportsDepth24Stencil8(device),
 		}
 
 		maxBuf := DeviceMaxBufferLength(device)

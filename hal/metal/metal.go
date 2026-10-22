@@ -174,28 +174,36 @@ func DeviceRegistryID(device ID) uint64 {
 	return uint64(MsgSend(device, Sel("registryID")))
 }
 
-// DeviceIsLowPower returns true if the device is low-power.
-func DeviceIsLowPower(device ID) bool {
+// deviceBool asks device the BOOL property sel, false when it has no such
+// property: the macOS ones below are not there on an iOS device, where the
+// message would raise.
+func deviceBool(device ID, sel string) bool {
 	if device == 0 {
 		return false
 	}
-	return MsgSendBool(device, Sel("isLowPower"))
+	s := Sel(sel)
+	return MsgSendBool(device, Sel("respondsToSelector:"), uintptr(s)) && MsgSendBool(device, s)
+}
+
+// DeviceIsLowPower returns true if the device is low-power.
+func DeviceIsLowPower(device ID) bool {
+	return deviceBool(device, "isLowPower")
 }
 
 // DeviceIsHeadless returns true if the device is headless (no display).
 func DeviceIsHeadless(device ID) bool {
-	if device == 0 {
-		return false
-	}
-	return MsgSendBool(device, Sel("isHeadless"))
+	return deviceBool(device, "isHeadless")
 }
 
 // DeviceIsRemovable returns true if the device is removable (eGPU).
 func DeviceIsRemovable(device ID) bool {
-	if device == 0 {
-		return false
-	}
-	return MsgSendBool(device, Sel("isRemovable"))
+	return deviceBool(device, "isRemovable")
+}
+
+// DeviceSupportsDepth24Stencil8 returns true if the device has the
+// Depth24Unorm_Stencil8 pixel format, which only macOS can.
+func DeviceSupportsDepth24Stencil8(device ID) bool {
+	return deviceBool(device, "isDepth24Stencil8PixelFormatSupported")
 }
 
 // DeviceMaxBufferLength returns the maximum buffer length for the device.
