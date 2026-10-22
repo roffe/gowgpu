@@ -2135,10 +2135,20 @@ func vertexFormatToGL(format gputypes.VertexFormat) (size int32, typ uint32, nor
 		return 3, gl.INT, false
 	case gputypes.VertexFormatSint32x4:
 		return 4, gl.INT, false
+	case gputypes.VertexFormatFloat16x2:
+		return 2, gl.HALF_FLOAT, false
+	case gputypes.VertexFormatFloat16x4:
+		return 4, gl.HALF_FLOAT, false
 	default:
+		if _, warned := unhandledVertexFormats.LoadOrStore(format, true); !warned {
+			hal.Logger().Warn("gles: vertex format not handled, bound as four floats", "format", format)
+		}
 		return 4, gl.FLOAT, false
 	}
 }
+
+// unhandledVertexFormats holds the formats vertexFormatToGL has warned about.
+var unhandledVertexFormats sync.Map
 
 // stencilOpToGL converts a HAL stencil operation to the corresponding GL constant.
 func stencilOpToGL(op gputypes.StencilOperation) uint32 {
