@@ -491,8 +491,10 @@ func swapchainImageBarrier(image vk.Image, oldLayout, newLayout vk.ImageLayout, 
 // image in layout: the source side of a barrier out of the layout, the
 // destination side of one into it. PRESENT_SRC_KHR is the present engine's,
 // which has no access of its own; a barrier out of it chains behind the one
-// that put it there, at the bottom of the pipe. UNDEFINED has nothing before
-// it.
+// that put it there, at the bottom of the pipe. UNDEFINED is a freshly
+// acquired image, which the present engine may still be reading: a barrier
+// out of it waits at the stages the acquire semaphore releases, so the
+// transition comes after the acquire.
 func layoutAccess(layout vk.ImageLayout) (vk.AccessFlags, vk.PipelineStageFlags) {
 	switch layout {
 	case vk.ImageLayoutColorAttachmentOptimal:
@@ -509,7 +511,7 @@ func layoutAccess(layout vk.ImageLayout) (vk.AccessFlags, vk.PipelineStageFlags)
 	case vk.ImageLayoutPresentSrcKhr:
 		return 0, vk.PipelineStageFlags(vk.PipelineStageBottomOfPipeBit)
 	default:
-		return 0, vk.PipelineStageFlags(vk.PipelineStageTopOfPipeBit)
+		return 0, acquireWaitStages
 	}
 }
 
