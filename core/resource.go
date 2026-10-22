@@ -232,6 +232,20 @@ func (d *Device) Raw(guard SnatchGuard) hal.Device {
 	return *ptr
 }
 
+// RawExclusive is Raw for a caller holding the device's exclusive snatch
+// guard, under which Destroy cannot snatch the HAL device: resources destroy
+// their HAL handles on the device this returns while they hold it.
+func (d *Device) RawExclusive(_ ExclusiveSnatchGuard) hal.Device {
+	if d.raw == nil {
+		return nil
+	}
+	ptr := d.raw.Get(SnatchGuard{})
+	if ptr == nil {
+		return nil
+	}
+	return *ptr
+}
+
 // IsValid returns true if the device is still valid for use.
 //
 // A device becomes invalid after Destroy() is called.
@@ -775,20 +789,13 @@ func (b *Buffer) Destroy() {
 		return
 	}
 
-	// First, get the HAL device reference while holding a read lock.
-	// This must be done before acquiring the exclusive lock.
-	readGuard := b.device.SnatchLock().Read()
-	halDevice := b.device.Raw(readGuard)
-	readGuard.Release()
-
-	if halDevice == nil {
-		// Device already destroyed, can't destroy buffer properly
-		return
-	}
-
-	// Now acquire exclusive lock for the actual destruction
 	exclusiveGuard := b.device.SnatchLock().Write()
 	defer exclusiveGuard.Release()
+
+	halDevice := b.device.RawExclusive(exclusiveGuard)
+	if halDevice == nil {
+		return
+	}
 
 	// Snatch the HAL buffer
 	halBuffer := b.raw.Snatch(exclusiveGuard)

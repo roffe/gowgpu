@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -318,5 +319,46 @@ func TestDevice_AssociatedQueue(t *testing.T) {
 	device.SetAssociatedQueue(queue)
 	if device.AssociatedQueue() != queue {
 		t.Error("Should return set queue")
+	}
+}
+
+// gatedHALDevice is a mockHALDevice that notices a buffer destroyed on it
+// after the device itself was.
+type gatedHALDevice struct {
+	mockHALDevice
+	gone     atomic.Bool
+	tooLate  atomic.Bool
+	destroys atomic.Int32
+}
+
+func (g *gatedHALDevice) Destroy() { g.gone.Store(true) }
+
+func (g *gatedHALDevice) DestroyBuffer(_ hal.Buffer) {
+	g.destroys.Add(1)
+	if g.gone.Load() {
+		g.tooLate.Store(true)
+	}
+}
+
+// A buffer destroyed while its device is being destroyed either destroys
+// its HAL buffer before the device goes, or not at all.
+func TestBuffer_Destroy_RacingDeviceDestroy(t *testing.T) {
+	for range 200 {
+		halDevice := &gatedHALDevice{}
+		device := NewDevice(halDevice, &Adapter{}, gputypes.Features(0), gputypes.DefaultLimits(), "TestDevice")
+		buffer := NewBuffer(mockBuffer{}, device, gputypes.BufferUsageCopyDst, 16, "racer")
+
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() { defer wg.Done(); device.Destroy() }()
+		go func() { defer wg.Done(); buffer.Destroy() }()
+		wg.Wait()
+
+		if halDevice.tooLate.Load() {
+			t.Fatal("DestroyBuffer ran on a destroyed HAL device")
+		}
+		if halDevice.destroys.Load() == 0 && !buffer.IsDestroyed() {
+			t.Fatal("buffer neither destroyed its HAL buffer nor was snatched")
+		}
 	}
 }

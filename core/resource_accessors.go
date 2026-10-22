@@ -65,16 +65,13 @@ func (t *Texture) Destroy() {
 		return
 	}
 
-	readGuard := t.device.SnatchLock().Read()
-	halDevice := t.device.Raw(readGuard)
-	readGuard.Release()
+	exclusiveGuard := t.device.SnatchLock().Write()
+	defer exclusiveGuard.Release()
 
+	halDevice := t.device.RawExclusive(exclusiveGuard)
 	if halDevice == nil {
 		return
 	}
-
-	exclusiveGuard := t.device.SnatchLock().Write()
-	defer exclusiveGuard.Release()
 
 	halTexture := t.raw.Snatch(exclusiveGuard)
 	if halTexture == nil {
@@ -112,16 +109,13 @@ func (s *Sampler) Destroy() {
 		return
 	}
 
-	readGuard := s.device.SnatchLock().Read()
-	halDevice := s.device.Raw(readGuard)
-	readGuard.Release()
+	exclusiveGuard := s.device.SnatchLock().Write()
+	defer exclusiveGuard.Release()
 
+	halDevice := s.device.RawExclusive(exclusiveGuard)
 	if halDevice == nil {
 		return
 	}
-
-	exclusiveGuard := s.device.SnatchLock().Write()
-	defer exclusiveGuard.Release()
 
 	halSampler := s.raw.Snatch(exclusiveGuard)
 	if halSampler == nil {
@@ -172,16 +166,13 @@ func (bgl *BindGroupLayout) Destroy() {
 		return
 	}
 
-	readGuard := bgl.device.SnatchLock().Read()
-	halDevice := bgl.device.Raw(readGuard)
-	readGuard.Release()
+	exclusiveGuard := bgl.device.SnatchLock().Write()
+	defer exclusiveGuard.Release()
 
+	halDevice := bgl.device.RawExclusive(exclusiveGuard)
 	if halDevice == nil {
 		return
 	}
-
-	exclusiveGuard := bgl.device.SnatchLock().Write()
-	defer exclusiveGuard.Release()
 
 	halLayout := bgl.raw.Snatch(exclusiveGuard)
 	if halLayout == nil {
@@ -224,16 +215,13 @@ func (pl *PipelineLayout) Destroy() {
 		return
 	}
 
-	readGuard := pl.device.SnatchLock().Read()
-	halDevice := pl.device.Raw(readGuard)
-	readGuard.Release()
+	exclusiveGuard := pl.device.SnatchLock().Write()
+	defer exclusiveGuard.Release()
 
+	halDevice := pl.device.RawExclusive(exclusiveGuard)
 	if halDevice == nil {
 		return
 	}
-
-	exclusiveGuard := pl.device.SnatchLock().Write()
-	defer exclusiveGuard.Release()
 
 	halLayout := pl.raw.Snatch(exclusiveGuard)
 	if halLayout == nil {
@@ -271,16 +259,13 @@ func (bg *BindGroup) Destroy() {
 		return
 	}
 
-	readGuard := bg.device.SnatchLock().Read()
-	halDevice := bg.device.Raw(readGuard)
-	readGuard.Release()
+	exclusiveGuard := bg.device.SnatchLock().Write()
+	defer exclusiveGuard.Release()
 
+	halDevice := bg.device.RawExclusive(exclusiveGuard)
 	if halDevice == nil {
 		return
 	}
-
-	exclusiveGuard := bg.device.SnatchLock().Write()
-	defer exclusiveGuard.Release()
 
 	halGroup := bg.raw.Snatch(exclusiveGuard)
 	if halGroup == nil {
@@ -318,16 +303,13 @@ func (sm *ShaderModule) Destroy() {
 		return
 	}
 
-	readGuard := sm.device.SnatchLock().Read()
-	halDevice := sm.device.Raw(readGuard)
-	readGuard.Release()
+	exclusiveGuard := sm.device.SnatchLock().Write()
+	defer exclusiveGuard.Release()
 
+	halDevice := sm.device.RawExclusive(exclusiveGuard)
 	if halDevice == nil {
 		return
 	}
-
-	exclusiveGuard := sm.device.SnatchLock().Write()
-	defer exclusiveGuard.Release()
 
 	halModule := sm.raw.Snatch(exclusiveGuard)
 	if halModule == nil {
@@ -365,16 +347,13 @@ func (rp *RenderPipeline) Destroy() {
 		return
 	}
 
-	readGuard := rp.device.SnatchLock().Read()
-	halDevice := rp.device.Raw(readGuard)
-	readGuard.Release()
+	exclusiveGuard := rp.device.SnatchLock().Write()
+	defer exclusiveGuard.Release()
 
+	halDevice := rp.device.RawExclusive(exclusiveGuard)
 	if halDevice == nil {
 		return
 	}
-
-	exclusiveGuard := rp.device.SnatchLock().Write()
-	defer exclusiveGuard.Release()
 
 	halPipeline := rp.raw.Snatch(exclusiveGuard)
 	if halPipeline == nil {
@@ -412,16 +391,13 @@ func (cp *ComputePipeline) Destroy() {
 		return
 	}
 
-	readGuard := cp.device.SnatchLock().Read()
-	halDevice := cp.device.Raw(readGuard)
-	readGuard.Release()
+	exclusiveGuard := cp.device.SnatchLock().Write()
+	defer exclusiveGuard.Release()
 
+	halDevice := cp.device.RawExclusive(exclusiveGuard)
 	if halDevice == nil {
 		return
 	}
-
-	exclusiveGuard := cp.device.SnatchLock().Write()
-	defer exclusiveGuard.Release()
 
 	halPipeline := cp.raw.Snatch(exclusiveGuard)
 	if halPipeline == nil {
@@ -469,16 +445,13 @@ func (qs *QuerySet) Destroy() {
 		return
 	}
 
-	readGuard := qs.device.SnatchLock().Read()
-	halDevice := qs.device.Raw(readGuard)
-	readGuard.Release()
+	exclusiveGuard := qs.device.SnatchLock().Write()
+	defer exclusiveGuard.Release()
 
+	halDevice := qs.device.RawExclusive(exclusiveGuard)
 	if halDevice == nil {
 		return
 	}
-
-	exclusiveGuard := qs.device.SnatchLock().Write()
-	defer exclusiveGuard.Release()
 
 	halQuerySet := qs.raw.Snatch(exclusiveGuard)
 	if halQuerySet == nil {
