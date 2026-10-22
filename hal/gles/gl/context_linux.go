@@ -190,6 +190,7 @@ type Context struct {
 	glBindFramebuffer        unsafe.Pointer
 	glFramebufferTexture2D   unsafe.Pointer
 	glCheckFramebufferStatus unsafe.Pointer
+	glDrawBuffer             unsafe.Pointer // desktop GL only
 	glDrawBuffers            unsafe.Pointer
 	glClearBufferfv          unsafe.Pointer // GL 3.0+ — per-buffer float clear
 
@@ -394,6 +395,9 @@ func (c *Context) Load(getProcAddr ProcAddressFunc, isGLES ...bool) error {
 	c.glBindFramebuffer = getProcAddr("glBindFramebuffer")
 	c.glFramebufferTexture2D = getProcAddr("glFramebufferTexture2D")
 	c.glCheckFramebufferStatus = getProcAddr("glCheckFramebufferStatus")
+	if !gles {
+		c.glDrawBuffer = getProcAddr("glDrawBuffer")
+	}
 	c.glDrawBuffers = getProcAddr("glDrawBuffers")
 	c.glClearBufferfv = getProcAddr("glClearBufferfv")
 
@@ -946,6 +950,15 @@ func (c *Context) CheckFramebufferStatus(target uint32) uint32 {
 	var result uint32
 	result = uint32(C.gl_i_i(C.uintptr_t(uintptr(c.glCheckFramebufferStatus)), C.uint32_t(target)))
 	return result
+}
+
+// IsGLES reports whether the context is OpenGL ES rather than desktop GL.
+func (c *Context) IsGLES() bool { return c.isGLES }
+
+// DrawBuffer selects the draw buffer of the default framebuffer on desktop
+// GL, where glDrawBuffers takes GL_BACK only since 4.5.
+func (c *Context) DrawBuffer(buf uint32) {
+	C.gl_v_i(C.uintptr_t(uintptr(c.glDrawBuffer)), C.uint32_t(buf))
 }
 
 // DrawBuffers specifies a list of color buffers to be drawn into.

@@ -76,7 +76,8 @@ func destroySwapchainFBO(glCtx *gl.Context, fbo, colorRbo uint32) {
 	}
 }
 
-// defaultDrawBuffer is the window's back buffer. GL sets the default
+// defaultDrawBuffer is the window's back buffer, for GLES, whose
+// glDrawBuffers takes it for the default framebuffer. GL sets the default
 // framebuffer's draw buffer the first time a context is made current: one
 // first made current without a surface (surfaceless, or on Wayland before the
 // window surface exists) draws to GL_NONE, and keeps doing so once a window
@@ -100,7 +101,11 @@ func (s *Surface) blitSwapchainToDefaultWith(glCtx *gl.Context) {
 
 	glCtx.BindFramebuffer(gl.READ_FRAMEBUFFER, s.swapchainFBO)
 	glCtx.BindFramebuffer(gl.DRAW_FRAMEBUFFER, 0)
-	glCtx.DrawBuffers(defaultDrawBuffer)
+	if glCtx.IsGLES() {
+		glCtx.DrawBuffers(defaultDrawBuffer)
+	} else {
+		glCtx.DrawBuffer(gl.BACK)
+	}
 
 	w := int32(s.fboWidth)
 	h := int32(s.fboHeight)
