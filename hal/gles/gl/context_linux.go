@@ -43,6 +43,8 @@ package gl
 #cgo nocallback gl_v_f
 #cgo noescape gl_v_ff
 #cgo nocallback gl_v_ff
+#cgo noescape gl_v_fff
+#cgo nocallback gl_v_fff
 #cgo noescape gl_v_ffff
 #cgo nocallback gl_v_ffff
 #cgo noescape gl_v_i
@@ -220,6 +222,8 @@ type Context struct {
 	glStencilOpSeparate   unsafe.Pointer
 	glStencilMaskSeparate unsafe.Pointer
 	glColorMask           unsafe.Pointer
+	glPolygonOffset       unsafe.Pointer
+	glPolygonOffsetClamp  unsafe.Pointer // GL 4.6 / ARB_polygon_offset_clamp, EXT_polygon_offset_clamp; optional
 
 	// Face culling
 	glCullFace  unsafe.Pointer
@@ -426,6 +430,13 @@ func (c *Context) Load(getProcAddr ProcAddressFunc, isGLES ...bool) error {
 	c.glStencilOpSeparate = getProcAddr("glStencilOpSeparate")
 	c.glStencilMaskSeparate = getProcAddr("glStencilMaskSeparate")
 	c.glColorMask = getProcAddr("glColorMask")
+	c.glPolygonOffset = getProcAddr("glPolygonOffset")
+	if !gles {
+		c.glPolygonOffsetClamp = getProcAddr("glPolygonOffsetClamp")
+	}
+	if c.glPolygonOffsetClamp == nil {
+		c.glPolygonOffsetClamp = getProcAddr("glPolygonOffsetClampEXT")
+	}
 
 	// Face culling
 	c.glCullFace = getProcAddr("glCullFace")
@@ -1123,6 +1134,22 @@ func (c *Context) CullFace(mode uint32) {
 
 func (c *Context) FrontFace(mode uint32) {
 	C.gl_v_i(C.uintptr_t(uintptr(c.glFrontFace)), C.uint32_t(mode))
+}
+
+// PolygonOffset sets the depth bias of filled primitives: units are added
+// as a constant and factor times the depth slope.
+func (c *Context) PolygonOffset(factor, units float32) {
+	C.gl_v_ff(C.uintptr_t(uintptr(c.glPolygonOffset)), C.float(factor), C.float(units))
+}
+
+// PolygonOffsetClamp is PolygonOffset with the bias clamped to at most clamp.
+func (c *Context) PolygonOffsetClamp(factor, units, clamp float32) {
+	C.gl_v_fff(C.uintptr_t(uintptr(c.glPolygonOffsetClamp)), C.float(factor), C.float(units), C.float(clamp))
+}
+
+// SupportsPolygonOffsetClamp reports whether the depth bias can be clamped.
+func (c *Context) SupportsPolygonOffsetClamp() bool {
+	return c.glPolygonOffsetClamp != nil
 }
 
 // --- Instancing ---

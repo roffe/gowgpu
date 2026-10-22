@@ -16,6 +16,7 @@ static inline void gl_v_d(uintptr_t fn, double a0) { ((void (*)(double))fn)(a0);
 static inline void gl_v_dd(uintptr_t fn, double a0, double a1) { ((void (*)(double, double))fn)(a0, a1); }
 static inline void gl_v_f(uintptr_t fn, float a0) { ((void (*)(float))fn)(a0); }
 static inline void gl_v_ff(uintptr_t fn, float a0, float a1) { ((void (*)(float, float))fn)(a0, a1); }
+static inline void gl_v_fff(uintptr_t fn, float a0, float a1, float a2) { ((void (*)(float, float, float))fn)(a0, a1, a2); }
 static inline void gl_v_ffff(uintptr_t fn, float a0, float a1, float a2, float a3) { ((void (*)(float, float, float, float))fn)(a0, a1, a2, a3); }
 static inline void gl_v_i(uintptr_t fn, uint32_t a0) { ((void (*)(uint32_t))fn)(a0); }
 static inline void gl_v_ii(uintptr_t fn, uint32_t a0, uint32_t a1) { ((void (*)(uint32_t, uint32_t))fn)(a0, a1); }

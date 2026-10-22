@@ -1347,6 +1347,7 @@ func (c *SetPipelineStateCommand) applyDepthStencilState(ctx *gl.Context) {
 	if c.depthStencil == nil {
 		ctx.Disable(gl.DEPTH_TEST)
 		ctx.Disable(gl.STENCIL_TEST)
+		ctx.Disable(gl.POLYGON_OFFSET_FILL)
 		return
 	}
 
@@ -1357,6 +1358,18 @@ func (c *SetPipelineStateCommand) applyDepthStencilState(ctx *gl.Context) {
 		ctx.DepthFunc(compareFunctionToGL(c.depthStencil.DepthCompare))
 	} else {
 		ctx.Disable(gl.DEPTH_TEST)
+	}
+
+	// Depth bias
+	if ds := c.depthStencil; ds.DepthBias != 0 || ds.DepthBiasSlopeScale != 0 {
+		ctx.Enable(gl.POLYGON_OFFSET_FILL)
+		if ds.DepthBiasClamp != 0 && ctx.SupportsPolygonOffsetClamp() {
+			ctx.PolygonOffsetClamp(ds.DepthBiasSlopeScale, float32(ds.DepthBias), ds.DepthBiasClamp)
+		} else {
+			ctx.PolygonOffset(ds.DepthBiasSlopeScale, float32(ds.DepthBias))
+		}
+	} else {
+		ctx.Disable(gl.POLYGON_OFFSET_FILL)
 	}
 
 	// Stencil test

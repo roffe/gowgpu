@@ -128,6 +128,8 @@ type Context struct {
 	glStencilOpSeparate   uintptr
 	glStencilMaskSeparate uintptr
 	glColorMask           uintptr
+	glPolygonOffset       uintptr
+	glPolygonOffsetClamp  uintptr // GL 4.6 / ARB_polygon_offset_clamp, EXT_polygon_offset_clamp; optional
 
 	// Face culling
 	glCullFace  uintptr
@@ -305,6 +307,11 @@ func (c *Context) Load(getProcAddr ProcAddressFunc) error {
 	c.glStencilOpSeparate = getProcAddr("glStencilOpSeparate")
 	c.glStencilMaskSeparate = getProcAddr("glStencilMaskSeparate")
 	c.glColorMask = getProcAddr("glColorMask")
+	c.glPolygonOffset = getProcAddr("glPolygonOffset")
+	c.glPolygonOffsetClamp = getProcAddr("glPolygonOffsetClamp")
+	if c.glPolygonOffsetClamp == 0 {
+		c.glPolygonOffsetClamp = getProcAddr("glPolygonOffsetClampEXT")
+	}
 
 	// Face culling
 	c.glCullFace = getProcAddr("glCullFace")
@@ -988,6 +995,27 @@ func (c *Context) CullFace(mode uint32) {
 
 func (c *Context) FrontFace(mode uint32) {
 	syscall.SyscallN(c.glFrontFace, uintptr(mode))
+}
+
+// PolygonOffset sets the depth bias of filled primitives: units are added
+// as a constant and factor times the depth slope.
+func (c *Context) PolygonOffset(factor, units float32) {
+	syscall.SyscallN(c.glPolygonOffset,
+		uintptr(*(*uint32)(unsafe.Pointer(&factor))),
+		uintptr(*(*uint32)(unsafe.Pointer(&units))))
+}
+
+// PolygonOffsetClamp is PolygonOffset with the bias clamped to at most clamp.
+func (c *Context) PolygonOffsetClamp(factor, units, clamp float32) {
+	syscall.SyscallN(c.glPolygonOffsetClamp,
+		uintptr(*(*uint32)(unsafe.Pointer(&factor))),
+		uintptr(*(*uint32)(unsafe.Pointer(&units))),
+		uintptr(*(*uint32)(unsafe.Pointer(&clamp))))
+}
+
+// SupportsPolygonOffsetClamp reports whether the depth bias can be clamped.
+func (c *Context) SupportsPolygonOffsetClamp() bool {
+	return c.glPolygonOffsetClamp != 0
 }
 
 // --- Instancing ---

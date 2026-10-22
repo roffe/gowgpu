@@ -36,12 +36,13 @@ const (
 	INVALID_FRAMEBUFFER_OPERATION = 0x0506
 
 	// Capabilities
-	BLEND        = 0x0BE2
-	CULL_FACE    = 0x0B44
-	DEPTH_TEST   = 0x0B71
-	DITHER       = 0x0BD0
-	SCISSOR_TEST = 0x0C11
-	STENCIL_TEST = 0x0B90
+	BLEND               = 0x0BE2
+	CULL_FACE           = 0x0B44
+	DEPTH_TEST          = 0x0B71
+	DITHER              = 0x0BD0
+	POLYGON_OFFSET_FILL = 0x8037
+	SCISSOR_TEST        = 0x0C11
+	STENCIL_TEST        = 0x0B90
 
 	// Buffer targets
 	ARRAY_BUFFER              = 0x8892
