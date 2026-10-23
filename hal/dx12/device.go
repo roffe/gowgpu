@@ -620,8 +620,8 @@ func (d *Device) waitForFrameSlot(slot uint64) error {
 func (d *Device) advanceFrame() {
 	d.fenceMu.Lock()
 	d.frames[d.frameIndex%maxFramesInFlight].fenceValue = d.fenceValue
-	d.fenceMu.Unlock()
 	d.frameIndex++
+	d.fenceMu.Unlock()
 }
 
 // recycleFrameSlot waits for the GPU to finish the old frame occupying the
@@ -629,7 +629,9 @@ func (d *Device) advanceFrame() {
 // of each frame (from AcquireTexture) to ensure the slot is free before
 // the CPU begins recording new commands into it.
 func (d *Device) recycleFrameSlot() error {
+	d.fenceMu.Lock()
 	slot := d.frameIndex % maxFramesInFlight
+	d.fenceMu.Unlock()
 
 	// Wait for the old frame that occupied this slot to finish on GPU.
 	if err := d.waitForFrameSlot(slot); err != nil {

@@ -6,6 +6,7 @@
 package dx12
 
 import (
+	"sync"
 	"testing"
 	"time"
 )
@@ -36,4 +37,25 @@ func TestFenceWaitAfterATimedOutWait(t *testing.T) {
 	if done, err := dev.Wait(fence, 2, 50*time.Millisecond); err != nil || done {
 		t.Fatalf("Wait(2) with the fence at 1 = %v, %v; want a timeout", done, err)
 	}
+}
+
+// TestFrameIndexAcrossGoroutines advances frames on one goroutine while
+// another recycles frame slots, as two surfaces of one device presenting
+// from two goroutines do. It needs -race to see anything.
+func TestFrameIndexAcrossGoroutines(t *testing.T) {
+	d := &Device{}
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for range 1000 {
+			d.advanceFrame()
+		}
+	}()
+	for range 1000 {
+		if err := d.recycleFrameSlot(); err != nil {
+			t.Fatalf("recycleFrameSlot: %v", err)
+		}
+	}
+	wg.Wait()
 }
