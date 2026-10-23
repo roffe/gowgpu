@@ -92,9 +92,6 @@ func TestTextureCopyBufferRefHeldUntilQueueRetirement(t *testing.T) {
 			defer device.Release()
 
 			queue := device.Queue()
-			delayed := &delayedCompletionQueue{Queue: queue.hal}
-			queue.hal = delayed
-
 			buffer, err := device.CreateBuffer(&BufferDescriptor{
 				Label: "texture-copy-lifetime-buffer",
 				Size:  256,
@@ -105,6 +102,16 @@ func TestTextureCopyBufferRefHeldUntilQueueRetirement(t *testing.T) {
 			}
 			texture := createCopyScopeTexture(t, device, "texture-copy-lifetime", tt.textureUse)
 			defer texture.Release()
+			// The zeroing of the new buffer and texture goes in a submit of
+			// its own, which holds the buffer until it is done.
+			if _, err := queue.Submit(); err != nil {
+				t.Fatalf("Submit: %v", err)
+			}
+			if err := device.WaitIdle(); err != nil {
+				t.Fatalf("WaitIdle: %v", err)
+			}
+			delayed := &delayedCompletionQueue{Queue: queue.hal, completed: queue.hal.PollCompleted()}
+			queue.hal = delayed
 
 			ref := buffer.core.Ref
 			if got := ref.RefCount(); got != 1 {

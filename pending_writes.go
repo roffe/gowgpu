@@ -112,8 +112,10 @@ type pendingWrites struct {
 	// written yet. WebGPU hands out textures zeroed, the backends hand out
 	// whatever was in the memory before, so a partial write and flush zero
 	// them first. A write or render pass that covers the whole texture takes
-	// it off without zeroing.
-	zero map[*Texture]struct{}
+	// it off without zeroing. zeroBufs is the same for buffers, of the
+	// backends that hand those out with old memory too.
+	zero     map[*Texture]struct{}
+	zeroBufs map[*Buffer]struct{}
 
 	// views are what the passes that zero textures in the batch render to
 	// (clearTextureLocked). flush hands them to flushedViews, which Submit
@@ -297,6 +299,14 @@ func (pw *pendingWrites) writeBufferFor(owner *Buffer, buffer hal.Buffer, usage 
 	if dataLen == 0 {
 		return nil
 	}
+	if _, ok := pw.zeroBufs[owner]; ok {
+		delete(pw.zeroBufs, owner)
+		if offset != 0 || dataLen < owner.Size() {
+			if err := pw.zeroBufferLocked(owner); err != nil {
+				return err
+			}
+		}
+	}
 
 	// Allocate from staging belt (ring-buffer of reusable chunks).
 	// Zero heap allocations in steady state — chunks are pre-allocated
@@ -361,6 +371,81 @@ func (pw *pendingWrites) writeBufferFor(owner *Buffer, buffer hal.Buffer, usage 
 	pw.dstBuffers[buffer] = dstBuffer{usage: usage, owner: owner}
 
 	return nil
+}
+
+// queueZeroBuffer zeroes a new buffer that came with old memory and that
+// CreateBuffer could not reach through a mapping. Where writes are batched it
+// goes on the list of buffers to zero, which flush clears ahead of the
+// command buffers that can use them; elsewhere it is written with zeros
+// straight away.
+//
+// Reference: wgpu-core device/resource.rs create_buffer (pending_writes
+// clear_buffer)
+func (pw *pendingWrites) queueZeroBuffer(b *Buffer) error {
+	pw.mu.Lock()
+	defer pw.mu.Unlock()
+	if pw.usesBatching {
+		if pw.zeroBufs == nil {
+			pw.zeroBufs = make(map[*Buffer]struct{})
+		}
+		pw.zeroBufs[b] = struct{}{}
+		return nil
+	}
+	raw := b.halBuffer()
+	if raw == nil {
+		return nil
+	}
+	size := halBufferSize(b)
+	for offset := uint64(0); offset < size; offset += zeroBand {
+		n := min(size-offset, zeroBand)
+		if uint64(len(pw.zeros)) < n {
+			pw.zeros = make([]byte, n)
+		}
+		if err := pw.halQueue.WriteBuffer(raw, offset, pw.zeros[:n]); err != nil {
+			return err
+		}
+	}
+	b.core.MarkInitialized(0, b.Size())
+	return nil
+}
+
+// forgetZeroBuffer takes b off the list of buffers to zero: it was released.
+func (pw *pendingWrites) forgetZeroBuffer(b *Buffer) {
+	pw.mu.Lock()
+	defer pw.mu.Unlock()
+	delete(pw.zeroBufs, b)
+}
+
+// zeroBufferLocked records the clear of a buffer from the list of buffers to
+// zero into the batch. pw.mu is held.
+func (pw *pendingWrites) zeroBufferLocked(b *Buffer) error {
+	raw := b.halBuffer()
+	if raw == nil {
+		return nil
+	}
+	enc, err := pw.activate()
+	if err != nil {
+		return fmt.Errorf("wgpu: pending writes: activate encoder: %w", err)
+	}
+	// Nothing has used the buffer: the clear needs no barrier, and the
+	// barriers of the writes and submits after it start from it.
+	if idx, ok := pw.trackedBufferIndex(b); ok {
+		pw.tracker.InsertBuffer(idx, track.BufferUsesCopyDst)
+	}
+	enc.ClearBuffer(raw, 0, halBufferSize(b))
+	if _, seen := pw.dstBuffers[raw]; !seen && b.core.Ref != nil {
+		b.core.Ref.Clone()
+		pw.refs = append(pw.refs, b.core.Ref)
+	}
+	pw.dstBuffers[raw] = dstBuffer{usage: b.Usage(), owner: b}
+	b.core.MarkInitialized(0, b.Size())
+	return nil
+}
+
+// halBufferSize is the size of b's HAL buffer, its size rounded up to the
+// copy alignment.
+func halBufferSize(b *Buffer) uint64 {
+	return (b.Size() + 3) &^ 3
 }
 
 // pendingWritesRowPitchAlignment is the row pitch alignment used for staging
@@ -1160,6 +1245,12 @@ func (pw *pendingWrites) flush() (hal.CommandBuffer, hal.CommandEncoder, []hal.T
 		}
 	}
 	clear(pw.zero)
+	for b := range pw.zeroBufs {
+		if err := pw.zeroBufferLocked(b); err != nil {
+			Logger().Warn("wgpu: buffer keeps its old memory", "label", b.Label(), "err", err)
+		}
+	}
+	clear(pw.zeroBufs)
 
 	if !pw.isRecording {
 		return nil, nil, nil, nil, nil

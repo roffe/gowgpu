@@ -478,6 +478,13 @@ func (d *Device) CreateBuffer(desc *gputypes.BufferDescriptor) (*Buffer, error) 
 		Usage:            desc.Usage,
 		MappedAtCreation: desc.MappedAtCreation,
 	}
+	// A buffer that does not come zeroed and that CreateBuffer cannot zero
+	// through a mapping is cleared by the queue, which needs it as a copy
+	// destination. Rust's wgpu-core adds COPY_DST the same way.
+	zeroed := buffersStartZeroed(d.Backend())
+	if !zeroed && !desc.MappedAtCreation {
+		halDesc.Usage |= gputypes.BufferUsageCopyDst
+	}
 	// The indirect dispatch validation reads an indirect buffer as storage,
 	// which Vulkan only allows on a buffer created for it. Rust's wgpu-core
 	// adds STORAGE_READ_ONLY the same way.
@@ -509,8 +516,13 @@ func (d *Device) CreateBuffer(desc *gputypes.BufferDescriptor) (*Buffer, error) 
 
 	// 11. Handle MappedAtCreation — install the HAL mapping eagerly so
 	// the caller can write via Buffer.MappedRange without going through
-	// the Pending state machine.
-	if desc.MappedAtCreation {
+	// the Pending state machine. The buffer is zeroed: through that mapping,
+	// or through one of its own for a buffer made for mapping, which has
+	// host-visible memory. Any other buffer is left uninitialized for the
+	// queue to clear.
+	mappable := desc.Usage&(gputypes.BufferUsageMapRead|gputypes.BufferUsageMapWrite) != 0
+	switch {
+	case desc.MappedAtCreation:
 		if err := buffer.InstallMappedAtCreation(guard, *halDevice); err != nil {
 			// HAL can't map the buffer despite MappedAtCreation — roll
 			// back and report as a CreateBuffer failure.
@@ -522,10 +534,34 @@ func (d *Device) CreateBuffer(desc *gputypes.BufferDescriptor) (*Buffer, error) 
 				HALError: err,
 			}
 		}
+		if base, _, size, ok := buffer.MappingInfo(); ok && base != nil && !zeroed {
+			clear(unsafe.Slice((*byte)(base), size))
+		}
+		buffer.MarkInitialized(0, desc.Size)
+	case zeroed, mappable && zeroMapped(*halDevice, halBuffer, alignedSize):
 		buffer.MarkInitialized(0, desc.Size)
 	}
 
 	return buffer, nil
+}
+
+// buffersStartZeroed reports whether the backend's new buffers hold zeros,
+// as WebGPU hands them out: D3D12 committed resources and Metal's
+// newBufferWithLength do. Vulkan suballocates memory that a freed buffer
+// may have written, and GL's glBufferData without data leaves it undefined.
+func buffersStartZeroed(b gputypes.Backend) bool {
+	return b == gputypes.BackendDX12 || b == gputypes.BackendMetal
+}
+
+// zeroMapped writes zeros over the first size bytes of a buffer through a
+// mapping, and reports whether it could.
+func zeroMapped(halDevice hal.Device, buf hal.Buffer, size uint64) bool {
+	mapping, err := halDevice.MapBuffer(buf, 0, size)
+	if err != nil || mapping.Ptr == nil {
+		return false
+	}
+	clear(unsafe.Slice((*byte)(mapping.Ptr), size))
+	return halDevice.UnmapBuffer(buf) == nil
 }
 
 // Queue represents a command queue for a device.

@@ -69,6 +69,9 @@ func (b *Buffer) Release() {
 	if b.core == nil {
 		return
 	}
+	if b.device != nil && b.device.queue != nil && b.device.queue.pending != nil {
+		b.device.queue.pending.forgetZeroBuffer(b)
+	}
 
 	if b.core.Ref != nil {
 		b.core.Ref.Drop()

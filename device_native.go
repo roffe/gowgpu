@@ -96,6 +96,11 @@ func (d *Device) CreateBuffer(desc *BufferDescriptor) (*Buffer, error) {
 	})
 
 	buf := &Buffer{core: coreBuffer, device: d, released: new(atomic.Bool)}
+	if !coreBuffer.IsInitialized(0, desc.Size) && d.queue != nil && d.queue.pending != nil {
+		if err := d.queue.pending.queueZeroBuffer(buf); err != nil {
+			Logger().Warn("wgpu: buffer keeps its old memory", "label", desc.Label, "err", err)
+		}
+	}
 
 	// Safety net: if the buffer is garbage collected without Release(),
 	// schedule deferred destruction via DestroyQueue. This prevents
