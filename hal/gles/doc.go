@@ -3,7 +3,8 @@
 // Copyright 2025 The GoGPU Authors
 // SPDX-License-Identifier: MIT
 
-// Package gles implements the HAL backend for OpenGL 3.3 and OpenGL ES 3.0.
+// Package gles implements the HAL backend for OpenGL 3.3 and newer and
+// OpenGL ES 3.0 and newer.
 //
 // It's the fallback for machines without Vulkan, Metal or DX12, so
 // hal/allbackends registers it but the default instance leaves it out: ask
@@ -12,7 +13,8 @@
 // # Platforms
 //
 //   - Linux: EGL (subpackage egl), on X11, Wayland or surfaceless. Desktop
-//     GL 3.3 core first, GLES 3.0 when that's all EGL offers.
+//     GL core, the first of 4.6 down to 4.3 and then 3.3 the driver makes,
+//     GLES 3.0 when that's all EGL offers.
 //   - Android: GLES 3.0 through EGL. The context lives on the Instance, on
 //     EGL's default display, so what a device made survives the window
 //     Android replaces on every resume.

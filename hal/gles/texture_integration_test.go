@@ -97,9 +97,8 @@ func TestETC2TextureOnES(t *testing.T) {
 	}
 }
 
-// An adapter made without a surface has the capabilities of its context:
-// it had none, and its device wrote GLSL 3.30 core for every context, ES
-// included, which no ES driver compiles.
+// An adapter made without a surface has the capabilities of its context,
+// and its device writes the GLSL of that context, GLSL ES on an ES one.
 func TestHeadlessAdapterHasCapabilities(t *testing.T) {
 	for _, tc := range []struct {
 		name string

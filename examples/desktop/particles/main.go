@@ -8,12 +8,11 @@
 // they chase a point moving on its own.
 //
 //	cd examples/desktop
-//	go run ./particles [-n 200000] [-backend vulkan|dx12|metal] [-frames 300]
+//	go run ./particles [-n 200000] [-backend vulkan|dx12|metal|gl] [-frames 300]
 //
 // -frames exits after that many frames, a smoke test that walks the whole
-// setup and teardown. The GL backend cannot run this one: it compiles compute
-// shaders as GLSL 3.30, where naga declares a storage buffer as a uniform
-// block, so the shader fails to compile.
+// setup and teardown. -backend gl needs a context with compute shaders,
+// desktop GL 4.3 or GLES 3.1.
 package main
 
 import (
@@ -141,7 +140,7 @@ fn fs_main(in: Vertex) -> @location(0) vec4<f32> {
 
 func main() {
 	n := flag.Int("n", 200_000, "how many particles")
-	backend := flag.String("backend", "", "vulkan, dx12 or metal; by default whichever is there")
+	backend := flag.String("backend", "", "vulkan, dx12, metal or gl; by default whichever of vulkan, dx12 and metal is there")
 	frames := flag.Int("frames", 0, "exit after this many frames, 0 runs until the window is closed")
 	flag.Parse()
 	if *n <= 0 || *n > math.MaxUint32 {

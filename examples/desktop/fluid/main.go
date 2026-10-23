@@ -9,12 +9,11 @@
 // one to blast it away.
 //
 //	cd examples/desktop
-//	go run ./fluid [-n 16384] [-backend vulkan|dx12|metal] [-frames 300]
+//	go run ./fluid [-n 16384] [-backend vulkan|dx12|metal|gl] [-frames 300]
 //
 // -frames exits after that many frames, a smoke test that walks the whole
-// setup and teardown. The GL backend cannot run this one: it compiles compute
-// shaders as GLSL 3.30, where naga declares a storage buffer as a uniform
-// block, so the shaders fail to compile.
+// setup and teardown. -backend gl needs a context with compute shaders,
+// desktop GL 4.3 or GLES 3.1.
 package main
 
 import (
@@ -324,7 +323,7 @@ fn fs_main(in: Vertex) -> @location(0) vec4<f32> {
 
 func main() {
 	n := flag.Int("n", 16384, "how many particles")
-	backend := flag.String("backend", "", "vulkan, dx12 or metal; by default whichever is there")
+	backend := flag.String("backend", "", "vulkan, dx12, metal or gl; by default whichever of vulkan, dx12 and metal is there")
 	frames := flag.Int("frames", 0, "exit after this many frames, 0 runs until the window is closed")
 	flag.Parse()
 	if *n <= 0 || *n > maxParticles {

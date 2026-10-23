@@ -55,8 +55,9 @@ type ContextConfig struct {
 	WindowKind *WindowKind
 }
 
-// DefaultContextConfig returns a sensible default context configuration.
-// Creates an OpenGL 3.3 core profile context.
+// DefaultContextConfig returns a sensible default context configuration:
+// desktop OpenGL 3.3 core. Where EGL takes a version, NewContext asks for
+// 4.6 down to 4.3 first.
 func DefaultContextConfig() ContextConfig {
 	return ContextConfig{
 		GLVersionMajor: 3,

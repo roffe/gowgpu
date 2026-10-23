@@ -405,19 +405,8 @@ type ComputeState struct {
 
 	// Constants are pipeline-overridable constants (WebGPU spec: "pipeline constants").
 	// Keys are constant names defined in the shader with @id or by identifier,
-	// values are their overridden float64 values.
-	//
-	// Rust wgpu-hal passes these as &naga::back::PipelineConstants and calls
-	// naga::back::pipeline_constants::process_overrides() in each backend before
-	// shader compilation (Vulkan device.rs:783, DX12 device.rs:328, Metal device.rs:134,
-	// GLES device.rs:226).
-	//
-	// TODO(compute-constants): Each backend must apply these constants during shader
-	// compilation via naga's override processing. Currently plumbed but not consumed.
-	// - Vulkan: map to VkSpecializationInfo or naga override processing
-	// - DX12: apply via naga pipeline_constants::process_overrides before HLSL/DXIL emit
-	// - Metal: apply via MTLFunctionConstantValues or naga override processing
-	// - GLES: apply via naga override processing before GLSL emit
+	// values are their overridden float64 values. Each backend applies them
+	// with naga's ProcessOverrides before it compiles the stage.
 	Constants map[string]float64
 
 	// ZeroInitializeWorkgroupMemory controls whether workgroup-scoped shared memory

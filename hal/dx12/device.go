@@ -2685,12 +2685,6 @@ func (d *Device) DestroyRenderPipeline(pipeline hal.RenderPipeline) {
 
 // CreateComputePipeline creates a compute pipeline.
 //
-// TODO(compute-constants): Apply desc.Compute.Constants via naga's
-// pipeline_constants::process_overrides before HLSL/DXIL emission. Rust
-// wgpu-hal DX12 calls naga::back::pipeline_constants::process_overrides()
-// in compile_stage (dx12/device.rs:328) and passes the processed module to
-// the HLSL/DXIL writer.
-//
 // TODO(zero-init-workgroup): Pass desc.Compute.ZeroInitializeWorkgroupMemory
 // to naga HLSL/DXIL options. Rust wgpu-hal sets naga_options.zero_initialize_workgroup_memory
 // per-stage (dx12/device.rs:299). The default layout naga_options already has it true
