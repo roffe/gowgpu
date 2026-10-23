@@ -100,46 +100,13 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (_ uint64, err error) {
 	if q.released() {
 		return 0, ErrReleased
 	}
-
-	// Validate user command buffers before closing the pending-write encoder.
-	// A validation error leaves buffered writes intact for a later valid Submit
-	// and cannot strand an ended internal command buffer.
-	for i, cb := range commandBuffers {
-		if cb == nil {
-			return 0, fmt.Errorf("wgpu: command buffer at index %d is nil", i)
-		}
-		if q.device.foreign(cb.device) {
-			return 0, errForeign("Queue.Submit", fmt.Sprintf("command buffer %d", i))
-		}
-		if j := slices.Index(commandBuffers[:i], cb); j >= 0 {
-			return 0, fmt.Errorf("wgpu: Submit: command buffer at index %d is also at index %d: %w",
-				i, j, ErrSubmitCommandBufferInvalid)
-		}
-		if err := validateCommandBufferForSubmit(cb, i); err != nil {
-			return 0, err
-		}
+	if err := q.validateSubmit(commandBuffers); err != nil {
+		return 0, err
 	}
 
-	// Flush pending writes under lock, then release lock before HAL submit.
-	var pendingCmdBuf hal.CommandBuffer
-	var flushedEncoder hal.CommandEncoder
-	var flushedDstTextures []hal.Texture
-	var flushedDstBuffers []hal.Buffer
-	var zeros [][]*Texture
-
-	if q.pending != nil {
-		q.pending.mu.Lock()
-		q.pending.forgetClearsLocked(commandBuffers)
-		var err error
-		pendingCmdBuf, flushedEncoder, flushedDstTextures, flushedDstBuffers, err = q.pending.flush()
-		if err == nil {
-			zeros = q.pending.queueDiscardedLocked(commandBuffers)
-			q.writtenSurfaces = append(q.writtenSurfaces[:0], q.pending.flushedSurfaces...)
-		}
-		q.pending.mu.Unlock()
-		if err != nil {
-			return 0, fmt.Errorf("wgpu: flush pending writes: %w", err)
-		}
+	flushed, zeros, err := q.flushWrites(commandBuffers)
+	if err != nil {
+		return 0, fmt.Errorf("wgpu: flush pending writes: %w", err)
 	}
 
 	// ADR-060: Submit-time texture barrier injection via DeviceTracker.
@@ -150,7 +117,7 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (_ uint64, err error) {
 	//
 	// Reference: wgpu-core device/queue.rs pre_submit_for_command_buffers
 	if err := q.injectBarriers(commandBuffers, zeros); err != nil {
-		q.cancelSubmit(pendingCmdBuf, flushedEncoder, flushedDstTextures)
+		q.cancelSubmit(flushed)
 		return 0, fmt.Errorf("wgpu: submit barrier injection: %w", err)
 	}
 	defer clear(q.cbBarriers)
@@ -165,8 +132,8 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (_ uint64, err error) {
 	//
 	// Reference: wgpu-core device/queue.rs, active_executions.insert(0, pending_execution)
 	q.submitBufs = q.submitBufs[:0]
-	if pendingCmdBuf != nil {
-		q.submitBufs = append(q.submitBufs, pendingCmdBuf)
+	if flushed.cmdBuf != nil {
+		q.submitBufs = append(q.submitBufs, flushed.cmdBuf)
 	}
 
 	// Flatten multi-CB command buffers: each CommandBuffer may contain
@@ -184,7 +151,7 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (_ uint64, err error) {
 	err = q.presentSurfaces(commandBuffers, q.writtenSurfaces)
 	clear(q.writtenSurfaces)
 	if err != nil {
-		q.cancelSubmit(pendingCmdBuf, flushedEncoder, flushedDstTextures)
+		q.cancelSubmit(flushed)
 		return 0, fmt.Errorf("wgpu: submit barrier injection: %w", err)
 	}
 	allBuffers := q.submitBufs
@@ -200,7 +167,7 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (_ uint64, err error) {
 		var err error
 		subIdx, err = q.hal.Submit(allBuffers)
 		if err != nil && subIdx == 0 {
-			q.cancelSubmit(pendingCmdBuf, flushedEncoder, flushedDstTextures)
+			q.cancelSubmit(flushed)
 			return 0, fmt.Errorf("wgpu: submit failed: %w", err)
 		}
 		if err != nil {
@@ -213,36 +180,7 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (_ uint64, err error) {
 	// One completion query serves everything below: the belt, the destroy
 	// queue and the pending maps all ask the same question.
 	completed := q.hal.PollCompleted()
-
-	// Record inflight resources and clean up completed ones.
-	// dstTextures/dstBuffers prevent premature Release (BUG-DX12-006: use-after-free).
-	if q.pending != nil {
-		q.pending.mu.Lock()
-		hasInflightWork := pendingCmdBuf != nil || flushedDstTextures != nil
-		if hasInflightWork {
-			q.pending.inflight = append(q.pending.inflight, inflightSubmission{
-				submissionIndex: subIdx,
-				staging:         nil, // staging managed by belt
-				cmdBuf:          pendingCmdBuf,
-				encoder:         flushedEncoder,
-				dstTextures:     flushedDstTextures,
-				dstBuffers:      flushedDstBuffers,
-				views:           q.pending.flushedViews,
-				destroys:        q.pending.flushedDestroys,
-				refs:            q.pending.flushedRefs,
-			})
-		}
-		q.pending.flushedViews = nil
-		q.pending.flushedDestroys, q.pending.flushedRefs = nil, nil
-		q.pending.forgetUndo()
-		// Update the staging belt with the actual submission index
-		// (belt.finish() was called during flush() before Submit).
-		if q.pending.belt != nil {
-			q.pending.belt.setLastSubmissionIndex(subIdx)
-		}
-		q.pending.maintain(completed)
-		q.pending.mu.Unlock()
-	}
+	q.trackFlushed(flushed, subIdx, completed)
 
 	// Post-submit bookkeeping: track refs, recycle encoders, triage destroys.
 	q.postSubmit(subIdx, completed, commandBuffers)
@@ -260,15 +198,98 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (_ uint64, err error) {
 	return subIdx, submitErr
 }
 
+// validateSubmit checks the command buffers of a Submit before the pending
+// writes are closed: a validation error leaves buffered writes intact for a
+// later valid Submit and cannot strand an ended internal command buffer.
+func (q *Queue) validateSubmit(commandBuffers []*CommandBuffer) error {
+	for i, cb := range commandBuffers {
+		if cb == nil {
+			return fmt.Errorf("wgpu: command buffer at index %d is nil", i)
+		}
+		if q.device.foreign(cb.device) {
+			return errForeign("Queue.Submit", fmt.Sprintf("command buffer %d", i))
+		}
+		if j := slices.Index(commandBuffers[:i], cb); j >= 0 {
+			return fmt.Errorf("wgpu: Submit: command buffer at index %d is also at index %d: %w",
+				i, j, ErrSubmitCommandBufferInvalid)
+		}
+		if err := validateCommandBufferForSubmit(cb, i); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// flushedWrites is the batch of queue writes a Submit closed.
+type flushedWrites struct {
+	cmdBuf   hal.CommandBuffer
+	encoder  hal.CommandEncoder
+	textures []hal.Texture
+	buffers  []hal.Buffer
+}
+
+// flushWrites closes the batch of queue writes ahead of commandBuffers,
+// and returns it with the textures to zero ahead of each of them.
+func (q *Queue) flushWrites(commandBuffers []*CommandBuffer) (flushedWrites, [][]*Texture, error) {
+	var f flushedWrites
+	if q.pending == nil {
+		return f, nil, nil
+	}
+	q.pending.mu.Lock()
+	defer q.pending.mu.Unlock()
+	q.pending.forgetClearsLocked(commandBuffers)
+	var err error
+	f.cmdBuf, f.encoder, f.textures, f.buffers, err = q.pending.flush()
+	if err != nil {
+		return f, nil, err
+	}
+	q.writtenSurfaces = append(q.writtenSurfaces[:0], q.pending.flushedSurfaces...)
+	return f, q.pending.queueDiscardedLocked(commandBuffers), nil
+}
+
+// trackFlushed keeps the batch a Submit ran, as submission subIdx, until
+// the GPU is done with it, and recycles what earlier ones used.
+func (q *Queue) trackFlushed(f flushedWrites, subIdx, completed uint64) {
+	if q.pending == nil {
+		return
+	}
+	pw := q.pending
+	pw.mu.Lock()
+	defer pw.mu.Unlock()
+	// dstTextures/dstBuffers prevent premature Release (BUG-DX12-006: use-after-free).
+	if f.cmdBuf != nil || f.textures != nil {
+		pw.inflight = append(pw.inflight, inflightSubmission{
+			submissionIndex: subIdx,
+			staging:         nil, // staging managed by belt
+			cmdBuf:          f.cmdBuf,
+			encoder:         f.encoder,
+			dstTextures:     f.textures,
+			dstBuffers:      f.buffers,
+			views:           pw.flushedViews,
+			destroys:        pw.flushedDestroys,
+			refs:            pw.flushedRefs,
+		})
+	}
+	pw.flushedViews = nil
+	pw.flushedDestroys, pw.flushedRefs = nil, nil
+	pw.forgetUndo()
+	// Update the staging belt with the actual submission index
+	// (belt.finish() was called during flush() before Submit).
+	if pw.belt != nil {
+		pw.belt.setLastSubmissionIndex(subIdx)
+	}
+	pw.maintain(completed)
+}
+
 // cancelSubmit gives back what Submit set up before it failed: the flushed
 // pending writes, what they and the command buffers changed of the zero
 // lists, and the barrier encoder, which the next Submit would otherwise
 // overwrite without returning it to the pool.
-func (q *Queue) cancelSubmit(pendingCmdBuf hal.CommandBuffer, flushedEncoder hal.CommandEncoder, flushedDstTextures []hal.Texture) {
+func (q *Queue) cancelSubmit(f flushedWrites) {
 	if q.pending != nil {
 		q.pending.mu.Lock()
-		if pendingCmdBuf != nil {
-			q.pending.cancelFlush(pendingCmdBuf, flushedEncoder, flushedDstTextures)
+		if f.cmdBuf != nil {
+			q.pending.cancelFlush(f.cmdBuf, f.encoder, f.textures)
 		} else {
 			q.pending.rollback()
 		}

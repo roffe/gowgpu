@@ -1049,10 +1049,7 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst *Texture, regions []Textu
 	if raw == nil {
 		return
 	}
-	for _, r := range halRegions {
-		e.copyRegionUsage(src, r.SrcBase, r.Size, track.TextureUsesCopySrc)
-		e.copyRegionUsage(dst, r.DstBase, r.Size, track.TextureUsesCopyDst)
-	}
+	e.textureCopyUsages(src, dst, halRegions)
 	if !e.recordCopyUsages(raw, e.copyReq, nil) {
 		return
 	}
@@ -1064,6 +1061,15 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst *Texture, regions []Textu
 	e.trackTexture(dst)
 	if len(halRegions) > 0 {
 		raw.CopyTextureToTexture(halSrc, halDst, halRegions)
+	}
+}
+
+// textureCopyUsages notes the subresources the regions of a copy from src
+// to dst read and write.
+func (e *CommandEncoder) textureCopyUsages(src, dst *Texture, regions []hal.TextureCopy) {
+	for _, r := range regions {
+		e.copyRegionUsage(src, r.SrcBase, r.Size, track.TextureUsesCopySrc)
+		e.copyRegionUsage(dst, r.DstBase, r.Size, track.TextureUsesCopyDst)
 	}
 }
 

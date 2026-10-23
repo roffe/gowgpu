@@ -180,7 +180,7 @@ func TestInjectBarriers_ResolversEmptyAfterFirstSubmit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("injectBarriers: %v", err)
 	}
-	defer q.cancelSubmit(nil, nil, nil)
+	defer q.cancelSubmit(flushedWrites{})
 	if barrierCB == nil {
 		t.Fatal("expected a barrier command buffer for Resource->ColorTarget")
 	}
