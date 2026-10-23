@@ -53,6 +53,9 @@ func (p *RenderPassEncoder) executeIndirectCountDraw(cfg indirectCountDrawConfig
 		return
 	}
 	p.trackIndirectCountBuffers(cfg.indirectBuffer, cfg.countBuffer)
+	if p.stubPipeline {
+		return
+	}
 	indexed := cfg.recordStride == drawIndexedIndirectRecordSize
 	if p.validatedIndirect(cfg.indirectBuffer, cfg.countBuffer, cfg.indirectOffset, cfg.maxDrawCount, cfg.recordStride, indexed,
 		func(raw hal.RenderPassEncoder, dst hal.Buffer, dstOffset uint64, count hal.Buffer) {

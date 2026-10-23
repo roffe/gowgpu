@@ -23,6 +23,10 @@ type RenderPassEncoder struct {
 	// pipelineSet tracks whether SetPipeline has been called.
 	// Draw commands require a pipeline to be set first.
 	pipelineSet bool
+	// stubPipeline is set while the pipeline is one CreateRenderPipeline did
+	// not make, a test's, with no backend pipeline to draw with: its draws
+	// are checked and go no further.
+	stubPipeline bool
 	// binder tracks bind group assignments and validates compatibility
 	// at draw time, matching Rust wgpu-core's Binder pattern.
 	binder binder
@@ -86,6 +90,7 @@ func (p *RenderPassEncoder) SetPipeline(pipeline *RenderPipeline) {
 		}
 	}
 	p.pipelineSet = true
+	p.stubPipeline = pipeline.hal == nil
 	p.vertexSteps = pipeline.vertexSteps
 	p.currentStripIndexFormat = pipeline.stripIndexFormat
 	if pipeline.blendConstantRequired {
@@ -308,7 +313,9 @@ func (p *RenderPassEncoder) Draw(args gputypes.DrawArgs) {
 		!p.checkVertexRanges("Draw", uint64(args.FirstVertex)+uint64(args.VertexCount), uint64(args.FirstInstance)+uint64(args.InstanceCount)) {
 		return
 	}
-	p.core.Draw(args)
+	if !p.stubPipeline {
+		p.core.Draw(args)
+	}
 }
 
 // DrawIndexed draws indexed primitives.
@@ -341,7 +348,9 @@ func (p *RenderPassEncoder) DrawIndexed(args gputypes.DrawIndexedArgs) {
 	if !p.checkVertexRanges("DrawIndexed", 0, uint64(args.FirstInstance)+uint64(args.InstanceCount)) {
 		return
 	}
-	p.core.DrawIndexed(args)
+	if !p.stubPipeline {
+		p.core.DrawIndexed(args)
+	}
 }
 
 // DrawIndirect draws primitives with GPU-generated parameters.
@@ -402,6 +411,9 @@ func (p *RenderPassEncoder) MultiDrawIndirect(buffer *Buffer, offset uint64, dra
 		return
 	}
 	p.encoder.trackBuffer(buffer)
+	if p.stubPipeline {
+		return
+	}
 	if p.validatedIndirect(buffer, nil, offset, drawCount, drawIndirectRecordSize, false, func(raw hal.RenderPassEncoder, dst hal.Buffer, dstOffset uint64, _ hal.Buffer) {
 		raw.DrawIndirect(dst, dstOffset, drawCount)
 	}) {
@@ -481,6 +493,9 @@ func (p *RenderPassEncoder) MultiDrawIndexedIndirect(buffer *Buffer, offset uint
 		return
 	}
 	p.encoder.trackBuffer(buffer)
+	if p.stubPipeline {
+		return
+	}
 	if p.validatedIndirect(buffer, nil, offset, drawCount, drawIndexedIndirectRecordSize, true, func(raw hal.RenderPassEncoder, dst hal.Buffer, dstOffset uint64, _ hal.Buffer) {
 		raw.DrawIndexedIndirect(dst, dstOffset, drawCount)
 	}) {
