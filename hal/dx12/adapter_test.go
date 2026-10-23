@@ -21,6 +21,17 @@ func TestFeaturesLeaveOutShaderF16(t *testing.T) {
 	}
 }
 
+func TestFeaturesHaveIndirectFirstInstance(t *testing.T) {
+	for name, features := range map[string]gputypes.Features{
+		"Adapter":       (&Adapter{}).Features(),
+		"AdapterLegacy": (&AdapterLegacy{}).Features(),
+	} {
+		if !features.Contains(gputypes.FeatureIndirectFirstInstance) {
+			t.Errorf("%s leaves out IndirectFirstInstance, which ExecuteIndirect draws have", name)
+		}
+	}
+}
+
 func TestAdaptersThisBackendCanNotUse(t *testing.T) {
 	haswell := dxgi.DXGI_ADAPTER_DESC1{VendorID: 0x8086, DeviceID: 0x0416}
 	if !skippedAdapter(&haswell) {
