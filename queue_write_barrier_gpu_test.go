@@ -15,9 +15,6 @@ import (
 // validation layer checks.
 func TestQueueWriteBarriersTakeTheWholeTexture(t *testing.T) {
 	device, h := newValidatedDevice(t)
-	if h.backend == gputypes.BackendGL {
-		t.Skip("the GL backend renders into a view's texture, not its layer")
-	}
 
 	tex, err := device.CreateTexture(&TextureDescriptor{
 		Size: Extent3D{Width: pixSide, Height: pixSide, DepthOrArrayLayers: 2}, MipLevelCount: 1, SampleCount: 1,
@@ -54,6 +51,9 @@ func TestQueueWriteBarriersTakeTheWholeTexture(t *testing.T) {
 	copyOut(enc, tex, out)
 	finishAndSubmit(t, device, enc)
 	expectPixels(t, "layer 0 after a write into layer 1", readback(t, out), 0, 255, 0, 255)
+	if h.backend == gputypes.BackendGL {
+		t.Skip("the GL backend writes no stencil aspect of a combined depth/stencil texture")
+	}
 
 	depthStencil, err := device.CreateTexture(&TextureDescriptor{
 		Size: Extent3D{Width: pixSide, Height: pixSide, DepthOrArrayLayers: 1}, MipLevelCount: 1, SampleCount: 1,

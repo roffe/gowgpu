@@ -107,7 +107,7 @@ func TestDepthCopyWithoutAspect(t *testing.T) {
 func TestStencilAspectUploads(t *testing.T) {
 	device, h := newValidatedDevice(t)
 	if h.backend == gputypes.BackendGL {
-		t.Skip("GL reads no stencil back")
+		t.Skip("the GL backend writes no stencil aspect of a combined depth/stencil texture")
 	}
 	rows := make([]byte, pixSide*pixSide)
 	for y := range pixSide {
