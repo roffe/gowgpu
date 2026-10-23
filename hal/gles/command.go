@@ -1882,18 +1882,14 @@ func (c *CopyTextureToBufferCommand) Execute(ctx *gl.Context) {
 		return
 	}
 
-	// Rows come out in the texture's own format, a block copy size a texel:
-	// read as RGBA8, an R8 or RG8 texture gave 4 bytes a texel.
-	bpp := c.srcTexture.format.BlockCopySize()
-	if bpp == 0 {
-		bpp = 4
-	}
-	rowBytes := uint32(width) * bpp
+	// Rows come out in the texture's own transfer format, sized by what
+	// glReadPixels writes for it.
+	format, dataType := c.srcTexture.glf.format, c.srcTexture.glf.typ
+	rowBytes := uint32(width) * pixelSize(format, dataType)
 	pitch := uint64(rowBytes)
 	if c.bytesPerRow != 0 {
 		pitch = uint64(c.bytesPerRow) // usually wider: copies align rows to 256 bytes
 	}
-	_, format, dataType := textureFormatToGL(c.srcTexture.format)
 
 	// Save the current FBO binding so we can restore it after the read.
 	var prevFBO int32
@@ -1961,7 +1957,7 @@ func (c *CopyBufferToTextureCommand) Execute(ctx *gl.Context) {
 		return
 	}
 
-	_, format, dataType := textureFormatToGL(c.dstTex.format)
+	format, dataType := c.dstTex.glf.format, c.dstTex.glf.typ
 
 	// Bind source buffer as pixel unpack buffer (PBO).
 	ctx.BindBuffer(gl.PIXEL_UNPACK_BUFFER, c.srcBuffer.id)

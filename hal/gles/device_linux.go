@@ -29,6 +29,7 @@ type Device struct {
 	vao             uint32 // persistent VAO (Core Profile requires one bound)
 	maxTextureUnits int32  // GL_MAX_TEXTURE_IMAGE_UNITS (queried at init)
 	maxMSAA         int32  // GL_MAX_SAMPLES (validate MSAA in CreateTexture)
+	formats         formatCaps
 
 	// glslVersion is the target GLSL version for shader compilation, detected
 	// from the adapter's GL_SHADING_LANGUAGE_VERSION at Open time.
@@ -183,127 +184,11 @@ func (d *Device) UnmapBuffer(buffer hal.Buffer) error {
 func (d *Device) CreateTexture(desc *TextureDescriptor) (hal.Texture, error) {
 	glCtx := d.ctx.Lock()
 	defer d.ctx.Unlock()
-
-	id := glCtx.GenTextures(1)
-
-	sampleCount := desc.SampleCount
-	if sampleCount == 0 {
-		sampleCount = 1
+	t, err := createTexture(glCtx, d.formats, d.maxMSAA, desc)
+	if err != nil {
+		return nil, err
 	}
-
-	// Validate MSAA sample count against driver capability (Rust wgpu-hal parity).
-	// Mesa d3d12 GL 4.1 may only support 1x-2x for certain formats.
-	if sampleCount > 1 && d.maxMSAA > 0 && int32(sampleCount) > d.maxMSAA {
-		hal.Logger().Warn("gles: MSAA sample count clamped",
-			"requested", sampleCount, "maxMSAA", d.maxMSAA)
-		sampleCount = uint32(d.maxMSAA)
-	}
-
-	// Map dimension to GL target
-	target := uint32(gl.TEXTURE_2D)
-	switch desc.Dimension {
-	case gputypes.TextureDimension1D:
-		// GL doesn't have 1D textures in ES, use 2D with height=1
-		target = gl.TEXTURE_2D
-	case gputypes.TextureDimension2D:
-		switch {
-		case sampleCount > 1:
-			target = gl.TEXTURE_2D_MULTISAMPLE
-		case desc.Size.DepthOrArrayLayers > 1:
-			target = gl.TEXTURE_2D_ARRAY
-		default:
-			target = gl.TEXTURE_2D
-		}
-	case gputypes.TextureDimension3D:
-		target = gl.TEXTURE_3D
-	}
-
-	// Handle cube maps (only for single-sample textures)
-	if sampleCount <= 1 && desc.ViewFormats != nil {
-		for _, vf := range desc.ViewFormats {
-			if vf == desc.Format {
-				// Check if this should be a cube map
-				if desc.Size.DepthOrArrayLayers == 6 {
-					target = gl.TEXTURE_CUBE_MAP
-				}
-			}
-		}
-	}
-
-	glCtx.BindTexture(target, id)
-
-	// Get GL format info
-	internalFormat, format, dataType := textureFormatToGL(desc.Format)
-
-	// Allocate texture storage
-	switch target {
-	case gl.TEXTURE_2D_MULTISAMPLE:
-		glCtx.TexImage2DMultisample(target, int32(sampleCount), internalFormat,
-			int32(desc.Size.Width), int32(desc.Size.Height), true)
-		if glErr := glCtx.GetError(); glErr != 0 {
-			glCtx.DeleteTextures(id)
-			return nil, fmt.Errorf("gles: TexImage2DMultisample failed: GL error 0x%x (format=0x%x, samples=%d, %dx%d)",
-				glErr, internalFormat, sampleCount, desc.Size.Width, desc.Size.Height)
-		}
-
-	case gl.TEXTURE_2D:
-		for level := uint32(0); level < desc.MipLevelCount; level++ {
-			width := maxInt32(1, int32(desc.Size.Width>>level))
-			height := maxInt32(1, int32(desc.Size.Height>>level))
-			glCtx.TexImage2D(target, int32(level), int32(internalFormat),
-				width, height, 0, format, dataType, 0)
-			if glErr := glCtx.GetError(); glErr != 0 {
-				glCtx.DeleteTextures(id)
-				return nil, fmt.Errorf("gles: TexImage2D failed: GL error 0x%x (format=0x%x, level=%d, %dx%d)",
-					glErr, internalFormat, level, width, height)
-			}
-		}
-
-	case gl.TEXTURE_CUBE_MAP:
-		for face := uint32(0); face < 6; face++ {
-			faceTarget := gl.TEXTURE_CUBE_MAP_POSITIVE_X + face
-			for level := uint32(0); level < desc.MipLevelCount; level++ {
-				width := maxInt32(1, int32(desc.Size.Width>>level))
-				height := maxInt32(1, int32(desc.Size.Height>>level))
-				glCtx.TexImage2D(faceTarget, int32(level), int32(internalFormat),
-					width, height, 0, format, dataType, 0)
-			}
-		}
-	}
-
-	// Set default texture parameters (multisample textures don't support these).
-	if target != gl.TEXTURE_2D_MULTISAMPLE {
-		// Set NEAREST filter and MAX_LEVEL on all textures for completeness.
-		// Default GL_TEXTURE_MIN_FILTER is GL_NEAREST_MIPMAP_LINEAR and default
-		// GL_TEXTURE_MAX_LEVEL is 1000. For non-mipmapped textures (MipLevelCount=1),
-		// this makes the texture INCOMPLETE — sampling returns (0,0,0,0).
-		// Setting MAX_LEVEL = MipLevelCount-1 tells GL the actual mip chain length.
-		glCtx.TexParameteri(target, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-		glCtx.TexParameteri(target, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-		glCtx.TexParameteri(target, gl.TEXTURE_MAX_LEVEL, int32(desc.MipLevelCount-1))
-		glCtx.TexParameteri(target, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-		glCtx.TexParameteri(target, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-	}
-
-	glCtx.BindTexture(target, 0)
-
-	hal.Logger().Debug("gles: texture created",
-		"label", desc.Label,
-		"format", desc.Format,
-		"width", desc.Size.Width,
-		"height", desc.Size.Height,
-	)
-
-	return &Texture{
-		id:          id,
-		target:      target,
-		format:      desc.Format,
-		dimension:   desc.Dimension,
-		size:        desc.Size,
-		mipLevels:   desc.MipLevelCount,
-		sampleCount: sampleCount,
-		glCtx:       glCtx,
-	}, nil
+	return t, nil
 }
 
 // DestroyTexture destroys a GPU texture.
@@ -871,57 +756,6 @@ type (
 	ComputePipelineDescriptor = hal.ComputePipelineDescriptor
 	CommandEncoderDescriptor  = hal.CommandEncoderDescriptor
 )
-
-// textureFormatToGL converts a WebGPU texture format to GL format info.
-func textureFormatToGL(format gputypes.TextureFormat) (internalFormat, dataFormat, dataType uint32) {
-	switch format {
-	case gputypes.TextureFormatR8Unorm:
-		return gl.R8, gl.RED, gl.UNSIGNED_BYTE
-	case gputypes.TextureFormatRG8Unorm:
-		return gl.RG8, gl.RG, gl.UNSIGNED_BYTE
-	case gputypes.TextureFormatRGBA8Unorm:
-		return gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE
-	case gputypes.TextureFormatRGBA8UnormSrgb:
-		return gl.SRGB8_ALPHA8, gl.RGBA, gl.UNSIGNED_BYTE
-	case gputypes.TextureFormatBGRA8Unorm:
-		return gl.RGBA8, gl.BGRA, gl.UNSIGNED_BYTE
-	case gputypes.TextureFormatBGRA8UnormSrgb:
-		return gl.SRGB8_ALPHA8, gl.BGRA, gl.UNSIGNED_BYTE
-	case gputypes.TextureFormatR16Float:
-		return gl.R16F, gl.RED, gl.HALF_FLOAT
-	case gputypes.TextureFormatRG16Float:
-		return gl.RG16F, gl.RG, gl.HALF_FLOAT
-	case gputypes.TextureFormatRGBA16Float:
-		return gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT
-	case gputypes.TextureFormatR32Float:
-		return gl.R32F, gl.RED, gl.FLOAT
-	case gputypes.TextureFormatRG32Float:
-		return gl.RG32F, gl.RG, gl.FLOAT
-	case gputypes.TextureFormatRGBA32Float:
-		return gl.RGBA32F, gl.RGBA, gl.FLOAT
-	case gputypes.TextureFormatDepth16Unorm:
-		return gl.DEPTH_COMPONENT16, gl.DEPTH_COMPONENT, gl.UNSIGNED_SHORT
-	case gputypes.TextureFormatDepth24Plus:
-		return gl.DEPTH_COMPONENT24, gl.DEPTH_COMPONENT, gl.UNSIGNED_INT
-	case gputypes.TextureFormatDepth24PlusStencil8:
-		return gl.DEPTH24_STENCIL8, gl.DEPTH_STENCIL, gl.UNSIGNED_INT_24_8
-	case gputypes.TextureFormatDepth32Float:
-		return gl.DEPTH_COMPONENT32, gl.DEPTH_COMPONENT, gl.FLOAT
-	case gputypes.TextureFormatDepth32FloatStencil8:
-		return gl.DEPTH32F_STENCIL8, gl.DEPTH_STENCIL, gl.FLOAT
-	default:
-		// Default to RGBA8
-		return gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE
-	}
-}
-
-// maxInt32 returns the larger of a or b.
-func maxInt32(a, b int32) int32 {
-	if a > b {
-		return a
-	}
-	return b
-}
 
 // compileFragmentShader compiles a fragment shader from WGSL source via GLSL.
 func (d *Device) compileFragmentShader(frag *hal.FragmentState, bindingMap map[glsl.BindingMapKey]uint8) (uint32, glsl.TranslationInfo, error) {

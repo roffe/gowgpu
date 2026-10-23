@@ -23,7 +23,7 @@ func allocateSwapchainFBO(glCtx *gl.Context, format gputypes.TextureFormat, widt
 		return 0, 0, hal.ErrZeroArea
 	}
 
-	internalFormat, _, _ := textureFormatToGL(format)
+	internalFormat := swapchainFormat(format)
 
 	colorRbo = glCtx.GenRenderbuffers(1)
 	if colorRbo == 0 {

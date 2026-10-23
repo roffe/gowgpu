@@ -48,6 +48,7 @@ type Texture struct {
 	id          uint32 // GL texture object ID
 	target      uint32 // GL_TEXTURE_2D, GL_TEXTURE_2D_MULTISAMPLE, etc.
 	format      gputypes.TextureFormat
+	glf         glFormat
 	dimension   gputypes.TextureDimension
 	size        hal.Extent3D
 	mipLevels   uint32

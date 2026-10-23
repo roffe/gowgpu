@@ -70,6 +70,8 @@ func (a *Adapter) Open(_ gputypes.Features, _ gputypes.Limits) (hal.OpenDevice, 
 		ctx:                 a.ctx,
 		vao:                 vao,
 		maxTextureUnits:     maxTexUnits,
+		maxMSAA:             a.caps.MaxMSAASamples,
+		formats:             newFormatCaps(&a.caps),
 		glslVersion:         glslVer,
 		shaderBindingLayout: glslVer.SupportsExplicitLocations(),
 	}

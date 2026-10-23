@@ -121,46 +121,7 @@ func (q *Queue) WriteTexture(dst *hal.ImageCopyTexture, data []byte, layout *hal
 
 	glCtx := q.ctx.Lock()
 	defer q.ctx.Unlock()
-
-	_, format, dataType := textureFormatToGL(tex.format)
-
-	glCtx.BindTexture(tex.target, tex.id)
-
-	if tex.target == gl.TEXTURE_2D {
-		// The copy lands at dst.Origin, and the source rows may be longer
-		// than the copy (a region of a larger image): an atlas fills in one
-		// small rectangle at a time.
-		if layout != nil && layout.Offset > 0 {
-			data = data[layout.Offset:]
-		}
-		var rowLength int32
-		if bpp := tex.format.BlockCopySize(); layout != nil && bpp > 0 && layout.BytesPerRow > size.Width*bpp {
-			rowLength = int32(layout.BytesPerRow / bpp)
-			glCtx.PixelStorei(gl.UNPACK_ROW_LENGTH, rowLength)
-		}
-		narrow := tex.format.BlockCopySize() < 4 // rows of R8 or RG8 need not start 4-byte aligned
-		if narrow {
-			glCtx.PixelStorei(gl.UNPACK_ALIGNMENT, 1)
-		}
-		glCtx.TexSubImage2D(tex.target, int32(dst.MipLevel),
-			int32(dst.Origin.X), int32(dst.Origin.Y), int32(size.Width), int32(size.Height), format, dataType,
-			unsafe.Pointer(&data[0]))
-		if rowLength != 0 {
-			glCtx.PixelStorei(gl.UNPACK_ROW_LENGTH, 0)
-		}
-		if narrow {
-			glCtx.PixelStorei(gl.UNPACK_ALIGNMENT, 4)
-		}
-	}
-
-	glCtx.BindTexture(tex.target, 0)
-
-	hal.Logger().Debug("gles: texture written",
-		"format", tex.format,
-		"width", size.Width,
-		"height", size.Height,
-	)
-
+	writeTexture(glCtx, tex, dst, data, layout, size)
 	return nil
 }
 

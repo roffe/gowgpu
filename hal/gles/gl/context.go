@@ -696,10 +696,12 @@ func (c *Context) TexParameteri(target, pname uint32, param int32) {
 	syscall.SyscallN(c.glTexParameteri, uintptr(target), uintptr(pname), uintptr(param))
 }
 
-func (c *Context) TexImage2D(target uint32, level int32, internalformat int32, width, height int32, border int32, format, typ uint32, pixels unsafe.Pointer) {
+// TexImage2D specifies a 2D image of a texture level. pixels is 0 for no
+// data, or an offset into the bound GL_PIXEL_UNPACK_BUFFER.
+func (c *Context) TexImage2D(target uint32, level int32, internalformat int32, width, height int32, border int32, format, typ uint32, pixels uintptr) {
 	syscall.SyscallN(c.glTexImage2D, uintptr(target), uintptr(level),
 		uintptr(internalformat), uintptr(width), uintptr(height), uintptr(border),
-		uintptr(format), uintptr(typ), uintptr(pixels))
+		uintptr(format), uintptr(typ), pixels)
 }
 
 func (c *Context) TexSubImage2D(target uint32, level int32, xoffset, yoffset, width, height int32, format, typ uint32, pixels unsafe.Pointer) {
