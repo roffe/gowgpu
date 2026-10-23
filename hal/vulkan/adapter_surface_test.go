@@ -155,3 +155,19 @@ func TestDepth32FloatStencil8Feature(t *testing.T) {
 		t.Error("no Depth32FloatStencil8 with D32_SFLOAT_S8_UINT")
 	}
 }
+
+// A loader without vkEnumerateInstanceVersion is Vulkan 1.0, which fails an
+// instance asking for more, and a device works at the lower of its version
+// and the instance's.
+func TestAPIVersions(t *testing.T) {
+	if got := instanceAPIVersion(&vk.Commands{}); got != vkMakeVersion(1, 0, 0) {
+		t.Errorf("instance version on a 1.0 loader = %#x, want 1.0", got)
+	}
+	a := &Adapter{instance: &Instance{apiVersion: vkMakeVersion(1, 0, 0)}, properties: vk.PhysicalDeviceProperties{ApiVersion: vkMakeVersion(1, 3, 280)}}
+	if got := a.apiVersion(); got != vkMakeVersion(1, 0, 0) {
+		t.Errorf("1.3 device on a 1.0 instance works at %#x, want 1.0", got)
+	}
+	if v := shaderOptions(a.apiVersion()).Version; v.Major != 1 || v.Minor != 0 {
+		t.Errorf("SPIR-V %d.%d on a 1.0 device, want 1.0", v.Major, v.Minor)
+	}
+}

@@ -78,22 +78,18 @@ func (Backend) CreateInstance(desc *hal.InstanceDescriptor) (hal.Instance, error
 		ApplicationVersion: vkMakeVersion(1, 0, 0),
 		PEngineName:        &engineName[0],
 		EngineVersion:      vkMakeVersion(0, 1, 0),
-		ApiVersion:         vkMakeVersion(1, 3, 0), // a video decoder sharing the device needs 1.3
+		ApiVersion:         instanceAPIVersion(cmds),
 	}
 
-	// Required extensions
-	extensions := []string{
-		"VK_KHR_surface\x00",
-	}
-
-	// Enable every platform WSI extension that this loader exposes. Linux can
-	// legitimately use Xlib and Wayland in the same process (for example
-	// XWayland), so ambient session variables must not select the instance ABI.
+	// Enable VK_KHR_surface and every platform WSI extension that this
+	// loader exposes. Linux can legitimately use Xlib and Wayland in the
+	// same process (for example XWayland), so ambient session variables must
+	// not select the instance ABI.
 	availableExtensions, err := enumerateInstanceExtensions(cmds)
 	if err != nil {
 		return nil, fmt.Errorf("vulkan: enumerate instance extensions: %w", err)
 	}
-	extensions = append(extensions, selectAvailableExtensions(platformSurfaceExtensions(), availableExtensions)...)
+	extensions := selectAvailableExtensions(append([]string{"VK_KHR_surface\x00"}, platformSurfaceExtensions()...), availableExtensions)
 
 	// Optional: validation layers for debug (only if available)
 	var layers []string
@@ -160,6 +156,7 @@ func (Backend) CreateInstance(desc *hal.InstanceDescriptor) (hal.Instance, error
 	inst := &Instance{
 		handle:       instance,
 		cmds:         *cmds,
+		apiVersion:   appInfo.ApiVersion,
 		debugEnabled: validationEnabled,
 		platform:     platform,
 		extensions:   trimNUL(extensions),
@@ -179,10 +176,24 @@ func (Backend) CreateInstance(desc *hal.InstanceDescriptor) (hal.Instance, error
 	return inst, nil
 }
 
+// instanceAPIVersion is the Vulkan version an instance asks for: 1.3, which
+// a video decoder sharing the device needs, unless the loader is Vulkan 1.0,
+// which fails an instance asking for more (VK_ERROR_INCOMPATIBLE_DRIVER).
+// From 1.1 on a loader takes any version, and a device's is the lower of it
+// and its own.
+func instanceAPIVersion(cmds *vk.Commands) uint32 {
+	var loader uint32
+	if cmds.EnumerateInstanceVersion(&loader) != vk.Success {
+		return vkMakeVersion(1, 0, 0)
+	}
+	return vkMakeVersion(1, 3, 0)
+}
+
 // Instance implements hal.Instance for Vulkan.
 type Instance struct {
 	handle         vk.Instance
 	cmds           vk.Commands
+	apiVersion     uint32 // asked for, see instanceAPIVersion
 	debugMessenger vk.DebugUtilsMessengerEXT
 	debugEnabled   bool
 	platform       platformInstanceState
@@ -224,7 +235,7 @@ func (i *Instance) EnumerateAdapters(surfaceHint hal.Surface) []hal.ExposedAdapt
 		var features vk.PhysicalDeviceFeatures
 		i.cmds.GetPhysicalDeviceFeatures(device, &features)
 		var features12 vk.PhysicalDeviceVulkan12Features
-		if i.cmds.HasPhysicalDeviceFeatures2() && props.ApiVersion >= vkMakeVersion(1, 2, 0) {
+		if i.cmds.HasPhysicalDeviceFeatures2() && min(props.ApiVersion, i.apiVersion) >= vkMakeVersion(1, 2, 0) {
 			features12.SType = vk.StructureTypePhysicalDeviceVulkan12Features
 			features2 := vk.PhysicalDeviceFeatures2{
 				SType: vk.StructureTypePhysicalDeviceFeatures2,

@@ -65,9 +65,10 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 	}
 	hasIncrementalPresent := available["VK_KHR_incremental_present"]
 
-	// Required extensions
-	extensions := []string{
-		"VK_KHR_swapchain\x00",
+	// VK_KHR_swapchain where the device has it: one without can still compute.
+	var extensions []string
+	if available["VK_KHR_swapchain"] {
+		extensions = append(extensions, "VK_KHR_swapchain\x00")
 	}
 	// Optional: VK_KHR_incremental_present for damage-aware presentation.
 	// Allows chaining VkPresentRegionsKHR into VkPresentInfoKHR.PNext
@@ -80,7 +81,7 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 	if ext := externalMemoryExtension(); available[ext] {
 		extensions = append(extensions, ext+"\x00")
 	}
-	storeOpNone := a.properties.ApiVersion >= vkMakeVersion(1, 3, 0)
+	storeOpNone := a.apiVersion() >= vkMakeVersion(1, 3, 0)
 	for _, ext := range []string{"VK_KHR_load_store_op_none", "VK_EXT_load_store_op_none", "VK_QCOM_render_pass_store_ops"} {
 		if !storeOpNone && available[ext] {
 			extensions = append(extensions, ext+"\x00")
@@ -95,18 +96,20 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 	// Detect timeline semaphore support (VK-IMPL-001), and on Vulkan 1.3 what
 	// a video decoder sharing the device needs.
 	// Query via PhysicalDeviceVulkan12Features with PNext chain on GetPhysicalDeviceFeatures2.
+	// The 1.2 and 1.3 feature structs only where the device is that version:
+	// newer core functionality is not to be used on an older device.
 	hasTimelineSemaphore := false
 	var (
 		has11 = vk.PhysicalDeviceVulkan11Features{SType: vk.StructureTypePhysicalDeviceVulkan11Features}
 		has12 = vk.PhysicalDeviceVulkan12Features{SType: vk.StructureTypePhysicalDeviceVulkan12Features}
 		has13 = vk.PhysicalDeviceVulkan13Features{SType: vk.StructureTypePhysicalDeviceVulkan13Features}
 	)
-	if a.instance.cmds.HasPhysicalDeviceFeatures2() {
+	if a.instance.cmds.HasPhysicalDeviceFeatures2() && a.apiVersion() >= vkMakeVersion(1, 2, 0) {
 		features2 := vk.PhysicalDeviceFeatures2{
 			SType: vk.StructureTypePhysicalDeviceFeatures2,
 			PNext: (*uintptr)(unsafe.Pointer(&has12)),
 		}
-		if a.properties.ApiVersion >= vkMakeVersion(1, 3, 0) {
+		if a.apiVersion() >= vkMakeVersion(1, 3, 0) {
 			features2.PNext = (*uintptr)(unsafe.Pointer(&has11))
 			has11.PNext = (*uintptr)(unsafe.Pointer(&has12))
 			has12.PNext = (*uintptr)(unsafe.Pointer(&has13))
@@ -114,7 +117,7 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 		a.instance.cmds.GetPhysicalDeviceFeatures2(a.physicalDevice, &features2)
 		hasTimelineSemaphore = usesTimelineSemaphore(a.properties.VendorID, has12.TimelineSemaphore)
 	}
-	video := videoDecodeSetup(a.properties.ApiVersion, available, queueFamilies, graphicsFamily, &has11, &has12, &has13)
+	video := videoDecodeSetup(a.apiVersion(), available, queueFamilies, graphicsFamily, &has11, &has12, &has13)
 
 	// The graphics queue, and with video a compute and a video decode queue
 	// gowgpu leaves to the decoder.
@@ -140,12 +143,14 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 
 	// Device create info
 	deviceCreateInfo := vk.DeviceCreateInfo{
-		SType:                   vk.StructureTypeDeviceCreateInfo,
-		QueueCreateInfoCount:    uint32(len(queueCreateInfos)),
-		PQueueCreateInfos:       &queueCreateInfos[0],
-		EnabledExtensionCount:   uint32(len(extensions)),
-		PpEnabledExtensionNames: &extensionPtrs[0],
-		PEnabledFeatures:        &a.features,
+		SType:                 vk.StructureTypeDeviceCreateInfo,
+		QueueCreateInfoCount:  uint32(len(queueCreateInfos)),
+		PQueueCreateInfos:     &queueCreateInfos[0],
+		EnabledExtensionCount: uint32(len(extensions)),
+		PEnabledFeatures:      &a.features,
+	}
+	if len(extensionPtrs) > 0 {
+		deviceCreateInfo.PpEnabledExtensionNames = &extensionPtrs[0]
 	}
 
 	// Enable timeline semaphore feature if supported.
@@ -200,7 +205,7 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 		maxDrawIndirectCount:       a.properties.Limits.MaxDrawIndirectCount,
 		supportsIncrementalPresent: hasIncrementalPresent,
 		storeOpNone:                storeOpNone,
-		shaderOptions:              shaderOptions(a.properties.ApiVersion),
+		shaderOptions:              shaderOptions(a.apiVersion()),
 	}
 	dev.depth24, dev.depth24Stencil8 = depth24Formats(a.supportsDepthAttachment)
 	dev.stencil8 = stencil8Format(a.supportsDepthAttachment, dev.depth24Stencil8)
@@ -289,6 +294,15 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 		Device: dev,
 		Queue:  q,
 	}, nil
+}
+
+// apiVersion is the Vulkan version of a device of the adapter: the lower of
+// the device's and the instance's.
+func (a *Adapter) apiVersion() uint32 {
+	if a.instance != nil && a.instance.apiVersion != 0 {
+		return min(a.properties.ApiVersion, a.instance.apiVersion)
+	}
+	return a.properties.ApiVersion
 }
 
 // vendorVeriSilicon is VK_VENDOR_ID_VSI.
