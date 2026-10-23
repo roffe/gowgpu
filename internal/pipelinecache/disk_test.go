@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -208,15 +209,19 @@ func TestLoadBlobRejectsPartialBlobs(t *testing.T) {
 
 // TestConcurrentSavesLeaveOneWholeBlob saves different blobs to one path
 // from several goroutines at once, as processes sharing an adapter's cache
-// do: what is left is one of them, whole.
+// do: what is left is one of them, whole. Windows refuses a rename over a
+// file another rename is replacing, so there some of the saves fail.
 func TestConcurrentSavesLeaveOneWholeBlob(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "cache.bin")
 	var wg sync.WaitGroup
+	var saved atomic.Int32
 	for g := range 8 {
 		wg.Go(func() {
 			blob := bytes.Repeat([]byte{byte('a' + g)}, 64<<10+g)
 			for range 20 {
-				if err := SaveBlob(path, blob); err != nil {
+				if err := SaveBlob(path, blob); err == nil {
+					saved.Add(1)
+				} else if runtime.GOOS != "windows" {
 					t.Error(err)
 					return
 				}
@@ -224,6 +229,9 @@ func TestConcurrentSavesLeaveOneWholeBlob(t *testing.T) {
 		})
 	}
 	wg.Wait()
+	if saved.Load() == 0 {
+		t.Fatal("no save succeeded")
+	}
 	data, err := LoadBlob(path)
 	if err != nil {
 		t.Fatal(err)
