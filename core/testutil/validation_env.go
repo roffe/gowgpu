@@ -115,7 +115,7 @@ func (e *ValidationEnv) CreateBindGroupWithR32FloatTexture() error {
 		},
 	}
 	textures := []core.BindGroupTextureInfo{
-		{Binding: 0, Format: gputypes.TextureFormatR32Float},
+		{Binding: 0, Format: gputypes.TextureFormatR32Float, Usage: gputypes.TextureUsageTextureBinding, SampleCount: 1},
 	}
 	return core.ValidateBindGroupDescriptor(desc, layoutEntries, nil, nil, textures, e.Limits, e.Features)
 }

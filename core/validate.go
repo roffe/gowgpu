@@ -830,6 +830,10 @@ func ValidateBindGroupDescriptor(
 		}
 	}
 
+	if err := validateBindGroupResources(desc.Label, layoutByBinding, bufferInfos, samplerInfos, textureInfos, features); err != nil {
+		return err
+	}
+
 	// BG4-BG9: Buffer binding validation.
 	// Rust: wgpu-core device/resource.rs:2747-2834
 	if err := validateBindGroupBufferEntries(desc.Label, layoutByBinding, bufferInfos, limits); err != nil {

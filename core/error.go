@@ -903,6 +903,10 @@ const (
 	CreateBindGroupErrorMinBindingSizeMismatch
 	// CreateBindGroupErrorHAL indicates the HAL backend failed.
 	CreateBindGroupErrorHAL
+	// CreateBindGroupErrorWrongResource indicates an entry whose resource,
+	// or its texture, view or sampler, does not fit its layout entry;
+	// Reason says how.
+	CreateBindGroupErrorWrongResource
 )
 
 // CreateBindGroupError represents an error during bind group creation.
@@ -920,6 +924,7 @@ type CreateBindGroupError struct {
 	MaxSize        uint64 // maximum allowed binding size (for BindingSizeTooLarge)
 	Alignment      uint64 // required alignment (for alignment errors)
 	MinBindingSize uint64 // layout-declared minimum binding size (for MinBindingSizeMismatch)
+	Reason         string // how the resource does not fit (for WrongResource)
 	HALError       error
 }
 
@@ -931,6 +936,8 @@ func (e *CreateBindGroupError) Error() string {
 	}
 
 	switch e.Kind {
+	case CreateBindGroupErrorWrongResource:
+		return fmt.Sprintf("bind group %q: binding %d: %s", label, e.Binding, e.Reason)
 	case CreateBindGroupErrorMissingLayout:
 		return fmt.Sprintf("bind group %q: layout must not be nil", label)
 	case CreateBindGroupErrorBindingsNumMismatch:

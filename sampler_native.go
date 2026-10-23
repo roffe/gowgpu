@@ -17,10 +17,11 @@ type Sampler struct {
 	// that bind the sampler; the HAL sampler is destroyed once all are
 	// dropped.
 	ref *core.ResourceRef
-	// Filter modes retained for bind-time float32-filterable validation (VAL-C21).
+	// Filter modes and comparison retained for bind-time validation.
 	magFilter    gputypes.FilterMode
 	minFilter    gputypes.FilterMode
 	mipmapFilter gputypes.FilterMode
+	compare      gputypes.CompareFunction
 }
 
 // Release drops the application's reference to the sampler. The HAL sampler

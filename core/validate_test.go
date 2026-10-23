@@ -2000,8 +2000,8 @@ func TestValidateBindGroupDescriptor_StorageBufferValid(t *testing.T) {
 }
 
 func TestValidateBindGroupDescriptor_BufferNoBufferLayoutEntry(t *testing.T) {
-	// Buffer info provided for a binding whose layout entry is a sampler, not a buffer.
-	// The buffer validation should skip this entry gracefully.
+	// Buffer info provided for a binding whose layout entry is a sampler, not a buffer:
+	// the wrong kind of resource for the binding.
 	layoutEntries := []gputypes.BindGroupLayoutEntry{
 		{
 			Binding: 0,
@@ -2029,8 +2029,9 @@ func TestValidateBindGroupDescriptor_BufferNoBufferLayoutEntry(t *testing.T) {
 	limits := gputypes.DefaultLimits()
 
 	err := ValidateBindGroupDescriptor(desc, layoutEntries, bufferInfos, nil, nil, limits, gputypes.Features(0))
-	if err != nil {
-		t.Fatalf("expected nil error when buffer info binding has no buffer layout, got: %v", err)
+	var cbge *CreateBindGroupError
+	if !errors.As(err, &cbge) || cbge.Kind != CreateBindGroupErrorWrongResource {
+		t.Fatalf("a buffer at a binding the layout has no buffer for: %v, want CreateBindGroupErrorWrongResource", err)
 	}
 }
 

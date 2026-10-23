@@ -296,6 +296,7 @@ func (d *Device) CreateSampler(desc *SamplerDescriptor) (*Sampler, error) {
 		magFilter:    halDesc.MagFilter,
 		minFilter:    halDesc.MinFilter,
 		mipmapFilter: halDesc.MipmapFilter,
+		compare:      halDesc.Compare,
 	}
 	return sampler.withRef(halDesc.Label), nil
 }
@@ -571,14 +572,25 @@ func buildBindGroupValidationInfos(entries []BindGroupEntry) (
 					MagFilter:    entry.Sampler.magFilter,
 					MinFilter:    entry.Sampler.minFilter,
 					MipmapFilter: entry.Sampler.mipmapFilter,
+					Compare:      entry.Sampler.compare,
 				},
 			})
 		}
-		if entry.TextureView != nil && entry.TextureView.texture != nil {
-			textureInfos = append(textureInfos, core.BindGroupTextureInfo{
-				Binding: entry.Binding,
-				Format:  entry.TextureView.texture.Format(),
-			})
+		if v := entry.TextureView; v != nil && v.texture != nil {
+			info := core.BindGroupTextureInfo{
+				Binding:       entry.Binding,
+				Format:        v.texture.Format(),
+				ViewFormat:    v.desc.Format,
+				ViewDimension: v.desc.Dimension,
+				Aspect:        v.desc.Aspect,
+				MipLevelCount: v.desc.MipLevelCount,
+			}
+			if ct := v.texture.coreTexture; ct != nil {
+				info.Usage, info.SampleCount = ct.Usage(), ct.SampleCount()
+			} else {
+				info.Usage, info.SampleCount = gputypes.TextureUsageTextureBinding|gputypes.TextureUsageStorageBinding, 1
+			}
+			textureInfos = append(textureInfos, info)
 		}
 	}
 	return bufferInfos, samplerInfos, textureInfos

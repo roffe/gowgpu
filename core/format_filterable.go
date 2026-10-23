@@ -37,10 +37,18 @@ type BindGroupSamplerInfo struct {
 	Desc    *hal.SamplerDescriptor
 }
 
-// BindGroupTextureInfo carries texture metadata for bind-group validation.
+// BindGroupTextureInfo carries texture metadata for bind-group validation:
+// the texture's format, usage and sample count, and the view's resolved
+// format, dimension, aspect and mip count.
 type BindGroupTextureInfo struct {
-	Binding uint32
-	Format  gputypes.TextureFormat
+	Binding       uint32
+	Format        gputypes.TextureFormat
+	Usage         gputypes.TextureUsage
+	SampleCount   uint32
+	ViewFormat    gputypes.TextureFormat
+	ViewDimension gputypes.TextureViewDimension
+	Aspect        gputypes.TextureAspect
+	MipLevelCount uint32
 }
 
 // validateFloat32FilterableBindings checks VAL-C21: filtering unfilterable
