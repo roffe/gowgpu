@@ -1304,12 +1304,18 @@ func (h *halPassDescriptor) fill(e *CoreCommandEncoder, desc *RenderPassDescript
 			StencilClearValue: ds.StencilClearValue,
 			StencilReadOnly:   ds.StencilReadOnly,
 		}
-		// A read-only channel takes no ops; the backends load and keep it,
-		// as wgpu-core's ResolvedPassChannel::ReadOnly does.
-		if ds.DepthReadOnly {
+		// A read-only channel, and one the format lacks, takes no ops; the
+		// backends load and keep it, as wgpu-core resolves both to
+		// ResolvedPassChannel::ReadOnly.
+		if ds.View != nil && ds.View.Parent != nil {
+			f := ds.View.ViewFormat()
+			h.depth.DepthReadOnly = ds.DepthReadOnly || !f.HasDepth()
+			h.depth.StencilReadOnly = ds.StencilReadOnly || !f.HasStencil()
+		}
+		if h.depth.DepthReadOnly {
 			h.depth.DepthLoadOp, h.depth.DepthStoreOp = gputypes.LoadOpLoad, gputypes.StoreOpStore
 		}
-		if ds.StencilReadOnly {
+		if h.depth.StencilReadOnly {
 			h.depth.StencilLoadOp, h.depth.StencilStoreOp = gputypes.LoadOpLoad, gputypes.StoreOpStore
 		}
 		if ds.View != nil {
