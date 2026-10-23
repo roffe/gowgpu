@@ -242,6 +242,34 @@ fn helper() { out[0] = arrayLength(&out); }
 	}
 }
 
+// TestOptionsClampFragDepth checks that a fragment entry point that writes
+// frag_depth takes the range it clamps it to at the slot after the sizes,
+// and that one that doesn't, and a vertex entry point, take none.
+func TestOptionsClampFragDepth(t *testing.T) {
+	t.Parallel()
+
+	module := lower(t, `
+@vertex fn vs() -> @builtin(position) vec4<f32> { return vec4<f32>(0.0); }
+struct Out { @location(0) color: vec4<f32>, @builtin(frag_depth) depth: f32 }
+@fragment fn depth() -> Out { return Out(vec4<f32>(1.0), 0.75); }
+@fragment fn color() -> @location(0) vec4<f32> { return vec4<f32>(1.0); }
+`)
+	for _, tc := range []struct {
+		stage ir.ShaderStage
+		name  string
+		want  string
+	}{
+		{ir.StageFragment, "depth", "buffer(4)"},
+		{ir.StageFragment, "color", ""},
+		{ir.StageVertex, "vs", ""},
+	} {
+		source := compileEntryPoint(t, module, tc.stage, tc.name, nil, 3)
+		if got := slots(source)["_frag_depth_range"]; got != tc.want {
+			t.Errorf("%s: frag_depth range at %q, want %q\nMSL:\n%s", tc.name, got, tc.want, source)
+		}
+	}
+}
+
 // TestOptionsRejectsOutOfRangeSlot checks the guard for a slot that does not
 // fit in a uint8.
 func TestOptionsRejectsOutOfRangeSlot(t *testing.T) {

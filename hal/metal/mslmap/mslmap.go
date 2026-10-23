@@ -117,7 +117,10 @@ func targetKind(t msl.BindTarget) int {
 // Options returns the MSL options that compile the entry point name of stage
 // in module against a pipeline layout numbered by Resources, with naga's
 // `_buffer_sizes` argument at buffer slot sizesSlot. Every resource the entry
-// point uses must be in the layout, as a resource of the same kind.
+// point uses must be in the layout, as a resource of the same kind. A
+// fragment entry point that writes frag_depth clamps it to the range at
+// buffer slot sizesSlot+1, where the encoder binds the viewport's depth
+// range: WebGPU clamps frag_depth to it.
 //
 // sizesSlot is the first buffer slot after the layout's buffers, as in Rust
 // wgpu-hal.
@@ -152,7 +155,35 @@ func Options(module *ir.Module, stage ir.ShaderStage, name string, resources map
 	opts.PerEntryPointMap = map[string]msl.EntryPointResources{
 		name: {Resources: resources, SizesBuffer: &slot},
 	}
+	if writesFragDepth(module, stage, name) {
+		if sizesSlot == maxBufferSlot {
+			return opts, fmt.Errorf("mslmap: no buffer slot after %d for the frag_depth range", sizesSlot)
+		}
+		opts.ClampFragDepth = &msl.ClampFragDepth{Buffer: slot + 1}
+	}
 	return opts, nil
+}
+
+// writesFragDepth reports whether the entry point name of stage in module is
+// a fragment entry point that returns frag_depth, as its result or a member
+// of it.
+func writesFragDepth(module *ir.Module, stage ir.ShaderStage, name string) bool {
+	i := slices.IndexFunc(module.EntryPoints, func(ep ir.EntryPoint) bool { return ep.Name == name && ep.Stage == stage })
+	if stage != ir.StageFragment || i < 0 || module.EntryPoints[i].Function.Result == nil {
+		return false
+	}
+	result := module.EntryPoints[i].Function.Result
+	isFragDepth := func(b *ir.Binding) bool {
+		if b == nil {
+			return false
+		}
+		bb, ok := (*b).(ir.BuiltinBinding)
+		return ok && bb.Builtin == ir.BuiltinFragDepth
+	}
+	if st, ok := module.Types[result.Type].Inner.(ir.StructType); ok {
+		return slices.ContainsFunc(st.Members, func(m ir.StructMember) bool { return isFragDepth(m.Binding) })
+	}
+	return isFragDepth(result.Binding)
 }
 
 // SizesBindings returns the bindings whose byte sizes the entry point name of

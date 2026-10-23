@@ -663,6 +663,9 @@ type RenderPassEncoder struct {
 	// sizesStale is set when the pipeline or a bind group changed since the
 	// stages' `_buffer_sizes` were last set.
 	sizesStale bool
+	// depthRangeStale is set when the pipeline or the viewport changed since
+	// the fragment stage's frag_depth range was last set.
+	depthRangeStale bool
 }
 
 const (
@@ -807,6 +810,7 @@ func (e *RenderPassEncoder) SetPipeline(pipeline hal.RenderPipeline) {
 	e.pipeline = p
 	e.currentLayout = p.layout // store for SetBindGroup slot offset lookup
 	e.sizesStale = true
+	e.depthRangeStale = true
 	if e.raw == 0 {
 		return
 	}
@@ -982,6 +986,7 @@ func (e *RenderPassEncoder) SetViewport(vp gputypes.Viewport) {
 		e.pending.viewport = viewport
 		e.pending.viewportSet = true
 	}
+	e.depthRangeStale = true
 	if e.raw == 0 {
 		return
 	}
@@ -1048,7 +1053,25 @@ func (e *RenderPassEncoder) beginDraw() bool {
 		e.bindBufferSizes(Sel("setVertexBytes:length:atIndex:"), e.pipeline.vertexSizes, e.pipeline.pulledBuffers)
 		e.bindBufferSizes(Sel("setFragmentBytes:length:atIndex:"), e.pipeline.fragmentSizes, nil)
 	}
+	if e.depthRangeStale && e.pipeline != nil {
+		e.depthRangeStale = false
+		e.bindFragDepthRange()
+	}
 	return true
+}
+
+// bindFragDepthRange sets the range the fragment stage clamps the frag_depth
+// it writes to, when it does: the viewport's depth range, 0 to 1 until the
+// pass sets a viewport.
+func (e *RenderPassEncoder) bindFragDepthRange() {
+	if !e.pipeline.clampsFragDepth {
+		return
+	}
+	depthRange := [2]float32{0, 1}
+	if e.pending != nil && e.pending.viewportSet {
+		depthRange = [2]float32{float32(e.pending.viewport.ZNear), float32(e.pending.viewport.ZFar)}
+	}
+	_ = msgSendSetBytes(e.raw, Sel("setFragmentBytes:length:atIndex:"), unsafe.Pointer(&depthRange[0]), 8, NSUInteger(e.pipeline.sizesSlot+1))
 }
 
 // bindBufferSizes sets a stage's `_buffer_sizes` argument, the byte sizes of

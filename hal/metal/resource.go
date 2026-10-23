@@ -276,6 +276,10 @@ type RenderPipeline struct {
 	// pulledBuffers are the vertex buffer slots whose bound sizes follow
 	// vertexSizes in the vertex stage's `_buffer_sizes`.
 	pulledBuffers []uint32
+
+	// clampsFragDepth is set when the fragment stage clamps the frag_depth
+	// it writes to the range it takes at buffer slot sizesSlot+1.
+	clampsFragDepth bool
 }
 
 // Destroy releases the render pipeline.

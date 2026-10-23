@@ -635,6 +635,9 @@ type compiledLibrary struct {
 	// pulls follow them.
 	sizesBindings []ir.ResourceBinding
 	sizesSlot     int
+	// clampsFragDepth is set when the fragment function clamps the
+	// frag_depth it writes to the range at buffer slot sizesSlot+1.
+	clampsFragDepth bool
 }
 
 func (c *compiledLibrary) release() {
@@ -721,7 +724,8 @@ func (d *Device) compileLibrary(module *ShaderModule, layout *PipelineLayout, st
 		return nil, fmt.Errorf("metal: function '%s' not found", name)
 	}
 
-	return &compiledLibrary{library: library, function: function, sizesBindings: sizesBindings, sizesSlot: sizesSlot}, nil
+	return &compiledLibrary{library: library, function: function, sizesBindings: sizesBindings, sizesSlot: sizesSlot,
+		clampsFragDepth: options.ClampFragDepth != nil}, nil
 }
 
 // newCompileOptions returns +1 MTLCompileOptions with Metal's defaults, but
@@ -806,6 +810,10 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 			return nil, err
 		}
 		defer fragment.release()
+		if fragment.clampsFragDepth && layoutBuffers+2 > maxVertexBuffers {
+			return nil, fmt.Errorf("metal: the layout's %d buffers, the buffer sizes and the frag_depth range don't fit in %d buffer slots",
+				layoutBuffers, maxVertexBuffers)
+		}
 	}
 
 	// Create pipeline descriptor
@@ -977,6 +985,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 	}
 	if fragment != nil {
 		pipeline.fragmentSizes = fragment.sizesBindings
+		pipeline.clampsFragDepth = fragment.clampsFragDepth
 	}
 	return pipeline, nil
 }
