@@ -1300,12 +1300,21 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 	if desc.DepthStencilAttachment != nil {
 		dsa := desc.DepthStencilAttachment
 		if dsView, ok := dsa.View.(*TextureView); ok && dsView.texture != nil {
-			rpKey.DepthFormat = e.device.vkFormat(dsView.texture.format)
-			rpKey.DepthReadOnly = dsa.DepthReadOnly && dsa.StencilReadOnly
-			rpKey.DepthLoadOp = loadOpToVk(dsa.DepthLoadOp)
-			rpKey.DepthStoreOp = storeOpToVk(dsa.DepthStoreOp)
-			rpKey.StencilLoadOp = loadOpToVk(dsa.StencilLoadOp)
-			rpKey.StencilStoreOp = storeOpToVk(dsa.StencilStoreOp)
+			// An aspect the format lacks has no ops, and counts as
+			// read-only for the layout, as in the core's usage of the
+			// attachment, which decides the layout of the barriers.
+			format := dsView.texture.format
+			hasDepth, hasStencil := format.HasDepth(), hasStencilAspect(format)
+			rpKey.DepthFormat = e.device.vkFormat(format)
+			rpKey.DepthReadOnly = (dsa.DepthReadOnly || !hasDepth) && (dsa.StencilReadOnly || !hasStencil)
+			rpKey.DepthLoadOp, rpKey.DepthStoreOp = vk.AttachmentLoadOpDontCare, vk.AttachmentStoreOpDontCare
+			rpKey.StencilLoadOp, rpKey.StencilStoreOp = vk.AttachmentLoadOpDontCare, vk.AttachmentStoreOpDontCare
+			if hasDepth {
+				rpKey.DepthLoadOp, rpKey.DepthStoreOp = e.device.aspectOps(dsa.DepthLoadOp, dsa.DepthStoreOp, dsa.DepthReadOnly)
+			}
+			if hasStencil {
+				rpKey.StencilLoadOp, rpKey.StencilStoreOp = e.device.aspectOps(dsa.StencilLoadOp, dsa.StencilStoreOp, dsa.StencilReadOnly)
+			}
 
 			fbKey.Views[fbKey.ViewCount] = dsView.handle
 			fbKey.ViewCount++
@@ -2049,6 +2058,10 @@ func textureBarrierState(tex *Texture, uses hal.TextureUses) (vk.AccessFlags, vk
 	}
 	if uses&hal.TextureUsesDepthStencilRead != 0 {
 		access |= vk.AccessFlags(vk.AccessDepthStencilAttachmentReadBit)
+		// Stored without STORE_OP_NONE, see aspectOps.
+		if tex != nil && tex.device != nil && !tex.device.storeOpNone {
+			access |= vk.AccessFlags(vk.AccessDepthStencilAttachmentWriteBit)
+		}
 		stage |= vk.PipelineStageFlags(vk.PipelineStageEarlyFragmentTestsBit | vk.PipelineStageLateFragmentTestsBit)
 	}
 	if uses&hal.TextureUsesDepthStencilWrite != 0 {
@@ -2125,6 +2138,20 @@ func arrayLayerCountOrRemaining(count uint32) uint32 {
 		return vk.RemainingArrayLayers
 	}
 	return count
+}
+
+// aspectOps are the load and store ops of a depth or stencil aspect. A
+// read-only aspect keeps its contents whatever ops WebGPU left unset: it is
+// loaded, and not written back where the device has STORE_OP_NONE.
+func (d *Device) aspectOps(load gputypes.LoadOp, store gputypes.StoreOp, readOnly bool) (vk.AttachmentLoadOp, vk.AttachmentStoreOp) {
+	switch {
+	case !readOnly:
+		return loadOpToVk(load), storeOpToVk(store)
+	case d.storeOpNone:
+		return vk.AttachmentLoadOpLoad, vk.AttachmentStoreOpNone
+	default:
+		return vk.AttachmentLoadOpLoad, vk.AttachmentStoreOpStore
+	}
 }
 
 func loadOpToVk(op gputypes.LoadOp) vk.AttachmentLoadOp {

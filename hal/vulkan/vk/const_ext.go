@@ -65,6 +65,11 @@ const (
 	// StructureTypeCommandBufferInheritanceRenderingInfo = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_RENDERING_INFO
 	StructureTypeCommandBufferInheritanceRenderingInfo StructureType = 1000044004
 
+	// AttachmentStoreOpNone = VK_ATTACHMENT_STORE_OP_NONE, Vulkan 1.3 core and
+	// VK_KHR_load_store_op_none, VK_EXT_load_store_op_none and
+	// VK_QCOM_render_pass_store_ops: the attachment is not written back.
+	AttachmentStoreOpNone AttachmentStoreOp = 1000301000
+
 	// === VK_KHR_buffer_device_address (Vulkan 1.2 Core) ===
 
 	// StructureTypeBufferDeviceAddressInfo = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO

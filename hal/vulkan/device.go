@@ -82,6 +82,11 @@ type Device struct {
 	// compositor about which surface regions changed (damage rects).
 	supportsIncrementalPresent bool
 
+	// storeOpNone is whether the device takes VK_ATTACHMENT_STORE_OP_NONE,
+	// which a read-only depth or stencil aspect is stored with: without it
+	// the aspect is stored, a write that the barriers after the pass wait for.
+	storeOpNone bool
+
 	// Timeline semaphore fence (VK-IMPL-001).
 	// When available (Vulkan 1.2+), replaces both frame fences and transfer fence
 	// with a single timeline semaphore. Falls back to binary fences on older drivers.

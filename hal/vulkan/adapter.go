@@ -80,6 +80,13 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 	if ext := externalMemoryExtension(); available[ext] {
 		extensions = append(extensions, ext+"\x00")
 	}
+	storeOpNone := a.properties.ApiVersion >= vkMakeVersion(1, 3, 0)
+	for _, ext := range []string{"VK_KHR_load_store_op_none", "VK_EXT_load_store_op_none", "VK_QCOM_render_pass_store_ops"} {
+		if !storeOpNone && available[ext] {
+			extensions = append(extensions, ext+"\x00")
+			storeOpNone = true
+		}
+	}
 	extensionPtrs := make([]*byte, len(extensions))
 	for i, ext := range extensions {
 		extensionPtrs[i] = unsafe.StringData(ext)
@@ -192,6 +199,7 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 		supportsDrawIndirectCount:  has12.DrawIndirectCount != 0,
 		maxDrawIndirectCount:       a.properties.Limits.MaxDrawIndirectCount,
 		supportsIncrementalPresent: hasIncrementalPresent,
+		storeOpNone:                storeOpNone,
 	}
 	dev.depth24, dev.depth24Stencil8 = depth24Formats(a.supportsDepthAttachment)
 

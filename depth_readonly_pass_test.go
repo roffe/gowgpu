@@ -383,3 +383,55 @@ func TestDepthSampledInLaterPass(t *testing.T) {
 		})
 	}
 }
+
+// TestDepthReadOnlyOneAspect attaches a Depth32Float texture with only
+// DepthReadOnly set, which WebGPU allows for a format without stencil, and
+// its ops unset as WebGPU wants them for a read-only aspect, samples it in
+// that pass, then writes it in the next. Vulkan made a writable render pass
+// whose layout disagreed with the read-only barrier ahead of it, loaded the
+// depth DONT_CARE, and stored it with a write no barrier waited for.
+func TestDepthReadOnlyOneAspect(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	skipDepthSamplingOnGL(t, h)
+	rig := newDepthRig(t, device, true)
+	_, depthView := depthTexture(t, device)
+	dst, dstView := pixTexture(t, device, "depth-one-aspect-dst", TextureUsageRenderAttachment|TextureUsageCopySrc)
+	defer releaseTextureView(dst, dstView)
+	group := rig.group(t, device, depthView)
+	st := readbackBuffer(t, device, "depth-one-aspect-st")
+
+	enc, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	clearDepth(t, enc, depthView, 0.25)
+	pass, err := enc.BeginRenderPass(&RenderPassDescriptor{
+		ColorAttachments:       []RenderPassColorAttachment{{View: dstView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore, ClearValue: black}},
+		DepthStencilAttachment: &RenderPassDepthStencilAttachment{View: depthView, DepthReadOnly: true},
+	})
+	if err != nil {
+		t.Fatalf("BeginRenderPass(read-only depth): %v", err)
+	}
+	pass.SetPipeline(rig.pipeline)
+	pass.SetBindGroup(0, group, nil)
+	pass.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1})
+	if err := pass.End(); err != nil {
+		t.Fatalf("End(read-only depth): %v", err)
+	}
+	pass, err = enc.BeginRenderPass(&RenderPassDescriptor{
+		DepthStencilAttachment: &RenderPassDepthStencilAttachment{
+			View: depthView, DepthLoadOp: gputypes.LoadOpLoad, DepthStoreOp: gputypes.StoreOpStore,
+		},
+	})
+	if err != nil {
+		t.Fatalf("BeginRenderPass(write): %v", err)
+	}
+	if err := pass.End(); err != nil {
+		t.Fatalf("End(write): %v", err)
+	}
+	copyOut(enc, dst, st)
+	finishAndSubmit(t, device, enc)
+
+	expectDepthPixels(t, "depth sampled in a pass with only DepthReadOnly set", readback(t, st), 0.25)
+	assertNoValidation(t, h)
+}

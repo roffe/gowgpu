@@ -957,6 +957,52 @@ func TestStoreOpToVk(t *testing.T) {
 	}
 }
 
+// TestAspectOps: a read-only depth or stencil aspect is loaded and kept
+// whatever ops it was given (WebGPU leaves them unset), and with
+// STORE_OP_NONE not written back.
+func TestAspectOps(t *testing.T) {
+	tests := []struct {
+		name        string
+		storeOpNone bool
+		load        gputypes.LoadOp
+		store       gputypes.StoreOp
+		readOnly    bool
+		wantLoad    vk.AttachmentLoadOp
+		wantStore   vk.AttachmentStoreOp
+	}{
+		{"writable", true, gputypes.LoadOpClear, gputypes.StoreOpDiscard, false, vk.AttachmentLoadOpClear, vk.AttachmentStoreOpDontCare},
+		{"read-only, unset ops", true, gputypes.LoadOpUndefined, gputypes.StoreOpUndefined, true, vk.AttachmentLoadOpLoad, vk.AttachmentStoreOpNone},
+		{"read-only, store", true, gputypes.LoadOpLoad, gputypes.StoreOpStore, true, vk.AttachmentLoadOpLoad, vk.AttachmentStoreOpNone},
+		{"read-only without STORE_OP_NONE", false, gputypes.LoadOpUndefined, gputypes.StoreOpDiscard, true, vk.AttachmentLoadOpLoad, vk.AttachmentStoreOpStore},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := &Device{storeOpNone: tt.storeOpNone}
+			load, store := d.aspectOps(tt.load, tt.store, tt.readOnly)
+			if load != tt.wantLoad || store != tt.wantStore {
+				t.Errorf("aspectOps = (%v, %v), want (%v, %v)", load, store, tt.wantLoad, tt.wantStore)
+			}
+		})
+	}
+}
+
+// TestDepthStencilReadBarrierAccess: a read-only depth attachment stored
+// without STORE_OP_NONE is written at the end of the pass, so a barrier out
+// of the read-only state waits for that write too.
+func TestDepthStencilReadBarrierAccess(t *testing.T) {
+	write := vk.AccessFlags(vk.AccessDepthStencilAttachmentWriteBit)
+	for _, storeOpNone := range []bool{true, false} {
+		tex := &Texture{format: gputypes.TextureFormatDepth32Float, device: &Device{storeOpNone: storeOpNone}}
+		access, _, layout := textureBarrierState(tex, hal.TextureUsesDepthStencilRead)
+		if got := access&write != 0; got == storeOpNone {
+			t.Errorf("storeOpNone %v: access %#x, write access %v", storeOpNone, access, got)
+		}
+		if layout != vk.ImageLayoutDepthStencilReadOnlyOptimal {
+			t.Errorf("storeOpNone %v: layout %v, want DEPTH_STENCIL_READ_ONLY_OPTIMAL", storeOpNone, layout)
+		}
+	}
+}
+
 // TestPresentModeToVk tests present mode conversions.
 func TestPresentModeToVk(t *testing.T) {
 	tests := []struct {
