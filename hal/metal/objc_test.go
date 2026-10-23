@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"unsafe"
@@ -477,4 +478,18 @@ func msgSendClearColorReturn(t *testing.T, obj ID, sel SEL) MTLClearColor {
 		t.Fatalf("msgSend failed: %v", err)
 	}
 	return result
+}
+
+// TestGoStringOfLongNSString reads back an NSString longer than any one
+// page of text, as a long Metal compiler log is.
+func TestGoStringOfLongNSString(t *testing.T) {
+	if err := Init(); err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+	want := strings.Repeat("error: line too long; ", 1000)
+	ns := NSString(want)
+	defer Release(ns)
+	if got := GoString(ns); got != want {
+		t.Fatalf("GoString of a %d-byte NSString returned %d bytes", len(want), len(got))
+	}
 }

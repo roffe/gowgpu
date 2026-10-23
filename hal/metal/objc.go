@@ -607,27 +607,7 @@ func GoString(nsstr ID) string {
 	if cstr == 0 {
 		return ""
 	}
-	return goStringFromCStr(uintptr(cstr))
-}
-
-func goStringFromCStr(cstr uintptr) string {
-	if cstr == 0 {
-		return ""
-	}
-	length := 0
-	ptr := (*byte)(cPointer(cstr))
-	for i := 0; i < 4096; i++ {
-		b := unsafe.Slice(ptr, i+1)
-		if b[i] == 0 {
-			length = i
-			break
-		}
-	}
-	if length == 0 {
-		return ""
-	}
-	result := unsafe.Slice(ptr, length)
-	return string(result)
+	return C.GoString((*C.char)(cPointer(uintptr(cstr))))
 }
 
 // --------------------------------------------------------------------------
