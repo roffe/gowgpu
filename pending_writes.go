@@ -516,13 +516,6 @@ func (pw *pendingWrites) writeTextureLocked(
 		return nil
 	}
 
-	// Host-writable textures (Metal Shared on Apple Silicon UMA) accept direct
-	// CPU writes without staging buffers or GPU copy commands. Bypass the
-	// staging belt to avoid allocating ~width*height*4 bytes per frame.
-	if hw, ok := dst.Texture.(interface{ IsHostWritable() bool }); ok && hw.IsHostWritable() {
-		return pw.halQueue.WriteTexture(dst, data, layout, size)
-	}
-
 	// Calculate aligned row pitch.
 	bytesPerRow := layout.BytesPerRow
 	if bytesPerRow == 0 {
@@ -945,14 +938,8 @@ func (pw *pendingWrites) zeroTextureLocked(t *Texture) error {
 	if raw == nil {
 		return nil
 	}
-	// A host-writable texture takes writes on the CPU straight away, which a
-	// copy made at the submit would land on top of, and GL writes nothing any
-	// other way. Both zero a color render target from the CPU too.
-	// ponytail: a depth texture gets its clear pass even when it is
-	// host-writable (Metal on Apple GPUs), so a WriteTexture into part of
-	// one before its first submit lands under the clear.
-	hw, ok := raw.(interface{ IsHostWritable() bool })
-	cpu := !pw.usesBatching || ok && hw.IsHostWritable()
+	// GL writes nothing any other way, a color render target included.
+	cpu := !pw.usesBatching
 	ct := t.coreTexture
 	f := ct.Format()
 	if zeroByPass(f, ct.Dimension(), ct.SampleCount(), ct.Usage()) && (!cpu || f.IsDepthStencil()) {

@@ -306,6 +306,37 @@ func TestPendingWrites_WriteTextureNonBatching(t *testing.T) {
 	}
 }
 
+// hostWritableTexture is a texture the CPU can write, as Metal's Shared ones
+// on Apple GPUs are.
+type hostWritableTexture struct{ noop.Texture }
+
+func (*hostWritableTexture) IsHostWritable() bool { return true }
+
+// A write into a texture the CPU could write directly goes through the batch
+// all the same: written at call time it would land under the GPU work still
+// running on the texture and ahead of the batch's earlier commands.
+func TestPendingWrites_WriteTextureHostWritableIsBatched(t *testing.T) {
+	pw, _, q := createBatchingPW(t)
+	defer pw.destroy()
+
+	tex := &hostWritableTexture{}
+	dst := &hal.ImageCopyTexture{Texture: tex}
+	layout := &hal.ImageDataLayout{BytesPerRow: 64, RowsPerImage: 2}
+	size := &hal.Extent3D{Width: 16, Height: 2, DepthOrArrayLayers: 1}
+	if err := pw.writeTexture(dst, make([]byte, 128), layout, size); err != nil {
+		t.Fatalf("writeTexture: %v", err)
+	}
+	if q.writeTextureCalls != 0 {
+		t.Errorf("HAL WriteTexture calls = %d, want 0", q.writeTextureCalls)
+	}
+	pw.mu.Lock()
+	_, tracked := pw.dstTextures[tex]
+	pw.mu.Unlock()
+	if !pw.isRecording || !tracked {
+		t.Error("the write is not in the batch")
+	}
+}
+
 func TestPendingWrites_WriteTextureBatching(t *testing.T) {
 	pw, _, q := createBatchingPW(t)
 	defer pw.destroy()
