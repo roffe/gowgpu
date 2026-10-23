@@ -213,11 +213,9 @@ func (e *CommandEncoder) CopyBufferToTexture(src hal.Buffer, dst hal.Texture, re
 		return
 	}
 	srcBuf, ok := src.(*Buffer)
-	if !ok || srcBuf == nil {
-		return
-	}
-	dstTex, ok := dst.(*Texture)
-	if !ok || dstTex == nil {
+	dstTex := metalTexture(dst)
+	if !ok || srcBuf == nil || dstTex == nil {
+		e.failRecording(fmt.Errorf("metal: CopyBufferToTexture: invalid buffer or texture"))
 		return
 	}
 	for _, region := range regions {
@@ -258,12 +256,10 @@ func (e *CommandEncoder) CopyTextureToBuffer(src hal.Texture, dst hal.Buffer, re
 	if e.cmdBuffer == 0 || len(regions) == 0 {
 		return
 	}
-	srcTex, ok := src.(*Texture)
-	if !ok || srcTex == nil {
-		return
-	}
+	srcTex := metalTexture(src)
 	dstBuf, ok := dst.(*Buffer)
-	if !ok || dstBuf == nil {
+	if !ok || srcTex == nil || dstBuf == nil {
+		e.failRecording(fmt.Errorf("metal: CopyTextureToBuffer: invalid texture or buffer"))
 		return
 	}
 	for _, region := range regions {
@@ -304,12 +300,9 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst hal.Texture, regions []ha
 	if e.cmdBuffer == 0 || len(regions) == 0 {
 		return
 	}
-	srcTex, ok := src.(*Texture)
-	if !ok || srcTex == nil {
-		return
-	}
-	dstTex, ok := dst.(*Texture)
-	if !ok || dstTex == nil {
+	srcTex, dstTex := metalTexture(src), metalTexture(dst)
+	if srcTex == nil || dstTex == nil {
+		e.failRecording(fmt.Errorf("metal: CopyTextureToTexture: invalid texture"))
 		return
 	}
 	for _, region := range regions {

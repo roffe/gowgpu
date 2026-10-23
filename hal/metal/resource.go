@@ -85,6 +85,20 @@ func (t *Texture) Destroy() {
 // NativeHandle returns the raw MTLTexture handle.
 func (t *Texture) NativeHandle() uintptr { return uintptr(t.raw) }
 
+// metalTexture is the Texture behind t, a texture or a surface texture, or
+// nil.
+func metalTexture(t hal.Texture) *Texture {
+	switch t := t.(type) {
+	case *Texture:
+		return t
+	case *SurfaceTexture:
+		if t != nil {
+			return t.texture
+		}
+	}
+	return nil
+}
+
 // TextureView implements hal.TextureView for Metal.
 type TextureView struct {
 	raw     ID // id<MTLTexture>

@@ -293,15 +293,7 @@ func (d *Device) DestroyTexture(texture hal.Texture) {
 
 // CreateTextureView creates a view into a texture.
 func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDescriptor) (hal.TextureView, error) {
-	var mtlTexture *Texture
-	switch t := texture.(type) {
-	case *Texture:
-		mtlTexture = t
-	case *SurfaceTexture:
-		if t != nil {
-			mtlTexture = t.texture
-		}
-	}
+	mtlTexture := metalTexture(texture)
 	if mtlTexture == nil {
 		return nil, fmt.Errorf("metal: invalid texture")
 	}

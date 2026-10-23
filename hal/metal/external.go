@@ -44,7 +44,7 @@ func (e *CommandEncoder) CopyExternalPlanes(src uintptr, layout, _ uint32, dsts 
 	}
 	c := externalCopy{src: ID(src)}
 	for i, dst := range dsts {
-		c.dsts[i], _ = dst.(*Texture)
+		c.dsts[i] = metalTexture(dst)
 	}
 	e.external = append(e.external, c)
 	return layout
@@ -54,8 +54,8 @@ func (e *CommandEncoder) CopyExternalPlanes(src uintptr, layout, _ uint32, dsts 
 // another API fills, into dst whole, its rows bytesPerRow apart. Like
 // CopyExternalPlanes it runs in the next Submit, after the events.
 func (e *CommandEncoder) CopyExternalBuffer(src uintptr, bytesPerRow uint32, dst hal.Texture) {
-	t, ok := dst.(*Texture)
-	if e.cmdBuffer == 0 || src == 0 || bytesPerRow == 0 || !ok || t == nil {
+	t := metalTexture(dst)
+	if e.cmdBuffer == 0 || src == 0 || bytesPerRow == 0 || t == nil {
 		return
 	}
 	e.external = append(e.external, externalCopy{src: ID(src), bytesPerRow: bytesPerRow, dsts: [3]*Texture{t}})
