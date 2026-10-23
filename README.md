@@ -138,7 +138,6 @@ The fixes from the vet on 2026-10-23 (see the [CHANGELOG](CHANGELOG.md)) have on
 
 ## Known issues
 
-- naga keeps identifiers that start with `gl_` when it writes GLSL, and strict drivers like Mali refuse them. Don't name things `gl_*` in WGSL.
 - A storage buffer with a dynamic offset on DX12: `arrayLength()` on it counts from the bind group's offset to the end of the buffer, not to the end of the binding, as in Rust's wgpu.
 - Usage is tracked per mip level and array layer but not per aspect, as in wgpu-core: a pass that writes the depth of a depth/stencil texture can't sample its stencil, or the other way round.
 - On Vulkan `frag_depth` is clamped to the viewport's depth range through a push constant, so a pipeline whose layout has push constants of its own writes it unclamped. Only HAL users can make one, the root package has no push constant ranges.

@@ -258,10 +258,10 @@ func (a *Adapter) Features() gputypes.Features {
 		features |= gputypes.Features(gputypes.FeatureDepth32FloatStencil8)
 	}
 
-	// No FeatureShaderF16: FXC compiles shader model 5.1, where half is a
-	// 32-bit float, and the DXIL path shader model 6.0, which has no 16-bit
-	// types either. Rust's wgpu-hal wants shader model 6.2 and
-	// Native16BitShaderOpsSupported for it.
+	// No FeatureShaderF16: FXC, the default, compiles shader model 5.1,
+	// where half is a 32-bit float. Rust's wgpu-hal offers it with shader
+	// model 6.2 and Native16BitShaderOpsSupported, which only the DXIL
+	// path could back.
 
 	return features
 }
