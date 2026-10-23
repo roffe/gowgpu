@@ -30,6 +30,8 @@ func TestTextureFormatToD3D12(t *testing.T) {
 		// 16-bit formats
 		{"R16Uint", gputypes.TextureFormatR16Uint, d3d12.DXGI_FORMAT_R16_UINT},
 		{"R16Sint", gputypes.TextureFormatR16Sint, d3d12.DXGI_FORMAT_R16_SINT},
+		{"R16Unorm", gputypes.TextureFormatR16Unorm, d3d12.DXGI_FORMAT_R16_UNORM},
+		{"R16Snorm", gputypes.TextureFormatR16Snorm, d3d12.DXGI_FORMAT_R16_SNORM},
 		{"R16Float", gputypes.TextureFormatR16Float, d3d12.DXGI_FORMAT_R16_FLOAT},
 		{"RG8Unorm", gputypes.TextureFormatRG8Unorm, d3d12.DXGI_FORMAT_R8G8_UNORM},
 		{"RG8Snorm", gputypes.TextureFormatRG8Snorm, d3d12.DXGI_FORMAT_R8G8_SNORM},
@@ -42,6 +44,8 @@ func TestTextureFormatToD3D12(t *testing.T) {
 		{"R32Float", gputypes.TextureFormatR32Float, d3d12.DXGI_FORMAT_R32_FLOAT},
 		{"RG16Uint", gputypes.TextureFormatRG16Uint, d3d12.DXGI_FORMAT_R16G16_UINT},
 		{"RG16Sint", gputypes.TextureFormatRG16Sint, d3d12.DXGI_FORMAT_R16G16_SINT},
+		{"RG16Unorm", gputypes.TextureFormatRG16Unorm, d3d12.DXGI_FORMAT_R16G16_UNORM},
+		{"RG16Snorm", gputypes.TextureFormatRG16Snorm, d3d12.DXGI_FORMAT_R16G16_SNORM},
 		{"RG16Float", gputypes.TextureFormatRG16Float, d3d12.DXGI_FORMAT_R16G16_FLOAT},
 		{"RGBA8Unorm", gputypes.TextureFormatRGBA8Unorm, d3d12.DXGI_FORMAT_R8G8B8A8_UNORM},
 		{"RGBA8UnormSrgb", gputypes.TextureFormatRGBA8UnormSrgb, d3d12.DXGI_FORMAT_R8G8B8A8_UNORM_SRGB},
@@ -55,6 +59,7 @@ func TestTextureFormatToD3D12(t *testing.T) {
 		{"RGB10A2Uint", gputypes.TextureFormatRGB10A2Uint, d3d12.DXGI_FORMAT_R10G10B10A2_UINT},
 		{"RGB10A2Unorm", gputypes.TextureFormatRGB10A2Unorm, d3d12.DXGI_FORMAT_R10G10B10A2_UNORM},
 		{"RG11B10Ufloat", gputypes.TextureFormatRG11B10Ufloat, d3d12.DXGI_FORMAT_R11G11B10_FLOAT},
+		{"RGB9E5Ufloat", gputypes.TextureFormatRGB9E5Ufloat, d3d12.DXGI_FORMAT_R9G9B9E5_SHAREDEXP},
 
 		// 64-bit formats
 		{"RG32Uint", gputypes.TextureFormatRG32Uint, d3d12.DXGI_FORMAT_R32G32_UINT},
@@ -62,6 +67,8 @@ func TestTextureFormatToD3D12(t *testing.T) {
 		{"RG32Float", gputypes.TextureFormatRG32Float, d3d12.DXGI_FORMAT_R32G32_FLOAT},
 		{"RGBA16Uint", gputypes.TextureFormatRGBA16Uint, d3d12.DXGI_FORMAT_R16G16B16A16_UINT},
 		{"RGBA16Sint", gputypes.TextureFormatRGBA16Sint, d3d12.DXGI_FORMAT_R16G16B16A16_SINT},
+		{"RGBA16Unorm", gputypes.TextureFormatRGBA16Unorm, d3d12.DXGI_FORMAT_R16G16B16A16_UNORM},
+		{"RGBA16Snorm", gputypes.TextureFormatRGBA16Snorm, d3d12.DXGI_FORMAT_R16G16B16A16_SNORM},
 		{"RGBA16Float", gputypes.TextureFormatRGBA16Float, d3d12.DXGI_FORMAT_R16G16B16A16_FLOAT},
 
 		// 128-bit formats

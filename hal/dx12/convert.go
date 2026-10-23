@@ -29,6 +29,10 @@ func textureFormatToD3D12(format gputypes.TextureFormat) d3d12.DXGI_FORMAT {
 		return d3d12.DXGI_FORMAT_R16_UINT
 	case gputypes.TextureFormatR16Sint:
 		return d3d12.DXGI_FORMAT_R16_SINT
+	case gputypes.TextureFormatR16Unorm:
+		return d3d12.DXGI_FORMAT_R16_UNORM
+	case gputypes.TextureFormatR16Snorm:
+		return d3d12.DXGI_FORMAT_R16_SNORM
 	case gputypes.TextureFormatR16Float:
 		return d3d12.DXGI_FORMAT_R16_FLOAT
 	case gputypes.TextureFormatRG8Unorm:
@@ -51,6 +55,10 @@ func textureFormatToD3D12(format gputypes.TextureFormat) d3d12.DXGI_FORMAT {
 		return d3d12.DXGI_FORMAT_R16G16_UINT
 	case gputypes.TextureFormatRG16Sint:
 		return d3d12.DXGI_FORMAT_R16G16_SINT
+	case gputypes.TextureFormatRG16Unorm:
+		return d3d12.DXGI_FORMAT_R16G16_UNORM
+	case gputypes.TextureFormatRG16Snorm:
+		return d3d12.DXGI_FORMAT_R16G16_SNORM
 	case gputypes.TextureFormatRG16Float:
 		return d3d12.DXGI_FORMAT_R16G16_FLOAT
 	case gputypes.TextureFormatRGBA8Unorm:
@@ -75,6 +83,8 @@ func textureFormatToD3D12(format gputypes.TextureFormat) d3d12.DXGI_FORMAT {
 		return d3d12.DXGI_FORMAT_R10G10B10A2_UNORM
 	case gputypes.TextureFormatRG11B10Ufloat:
 		return d3d12.DXGI_FORMAT_R11G11B10_FLOAT
+	case gputypes.TextureFormatRGB9E5Ufloat:
+		return d3d12.DXGI_FORMAT_R9G9B9E5_SHAREDEXP
 
 	// 64-bit formats
 	case gputypes.TextureFormatRG32Uint:
@@ -87,6 +97,10 @@ func textureFormatToD3D12(format gputypes.TextureFormat) d3d12.DXGI_FORMAT {
 		return d3d12.DXGI_FORMAT_R16G16B16A16_UINT
 	case gputypes.TextureFormatRGBA16Sint:
 		return d3d12.DXGI_FORMAT_R16G16B16A16_SINT
+	case gputypes.TextureFormatRGBA16Unorm:
+		return d3d12.DXGI_FORMAT_R16G16B16A16_UNORM
+	case gputypes.TextureFormatRGBA16Snorm:
+		return d3d12.DXGI_FORMAT_R16G16B16A16_SNORM
 	case gputypes.TextureFormatRGBA16Float:
 		return d3d12.DXGI_FORMAT_R16G16B16A16_FLOAT
 
