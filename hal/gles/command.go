@@ -1679,9 +1679,9 @@ func (c *DrawCommand) Execute(ctx *gl.Context) {
 		// Nothing to draw, as in WebGPU; GL would draw one instance.
 	case c.baseInstance != 0:
 		ctx.DrawArraysInstancedBaseInstance(mode, int32(c.firstVertex), int32(c.vertexCount), int32(c.instanceCount), c.baseInstance)
-	case c.instanceCount == 1:
-		ctx.DrawArrays(mode, int32(c.firstVertex), int32(c.vertexCount))
 	default:
+		// Instanced even for one instance, as wgpu-hal and Dawn draw:
+		// ANGLE ignores the divisor in glDrawArrays (gfx-rs/wgpu#3578).
 		ctx.DrawArraysInstanced(mode, int32(c.firstVertex), int32(c.vertexCount), int32(c.instanceCount))
 	}
 }
@@ -1717,8 +1717,6 @@ func (c *DrawIndexedCommand) Execute(ctx *gl.Context) {
 		// Nothing to draw, as in WebGPU; GL would draw one instance.
 	case c.baseInstance != 0:
 		ctx.DrawElementsInstancedBaseInstance(mode, int32(c.indexCount), indexType, offset, int32(c.instanceCount), c.baseInstance)
-	case c.instanceCount == 1:
-		ctx.DrawElements(mode, int32(c.indexCount), indexType, offset)
 	default:
 		ctx.DrawElementsInstanced(mode, int32(c.indexCount), indexType, offset, int32(c.instanceCount))
 	}
