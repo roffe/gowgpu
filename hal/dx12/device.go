@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"math"
 	"os"
 	"path/filepath"
@@ -2243,8 +2244,10 @@ func hlslToDXILBindingMap(m map[hlsl.ResourceBinding]hlsl.BindTarget) dxil.Bindi
 	out := make(dxil.BindingMap, len(m))
 	for k, v := range m {
 		out[dxil.BindingLocation{Group: k.Group, Binding: k.Binding}] = dxil.BindTarget{
-			Space:    uint32(v.Space),
-			Register: v.Register,
+			Space:                            uint32(v.Space),
+			Register:                         v.Register,
+			RestrictIndexing:                 v.RestrictIndexing,
+			DynamicStorageBufferOffsetsIndex: v.DynamicStorageBufferOffsetsIndex,
 		}
 	}
 	return out
@@ -2372,13 +2375,21 @@ func (d *Device) compileHLSL(module *ShaderModule, ep *ir.EntryPoint, opts *hlsl
 // entry point gets a module of its own that shares everything else.
 func (d *Device) compileDXIL(module *ShaderModule, ep *ir.EntryPoint, nagaOpts *hlsl.Options) ([]byte, error) {
 	opts := dxil.DefaultOptions()
-	// ponytail: naga's DXIL backend has no dynamic storage buffer
-	// offsets, so a DXIL shader uses a dynamic storage buffer at its
-	// bind group offset, whatever the dynamic one. Needs naga to take
-	// DynamicStorageBufferOffsetsTargets for DXIL as it does for HLSL.
 	opts.BindingMap = hlslToDXILBindingMap(nagaOpts.BindingMap)
 	opts.SamplerBufferBindingMap = hlslToDXILSamplerBufferBindingMap(nagaOpts.SamplerBufferBindingMap)
 	opts.SamplerHeapTargets = hlslToDXILSamplerHeapTargets(nagaOpts.SamplerHeapTargets)
+	if t := nagaOpts.SpecialConstantsBinding; t != nil {
+		opts.SpecialConstantsBinding = &dxil.BindTarget{Space: uint32(t.Space), Register: t.Register}
+	}
+	if len(nagaOpts.DynamicStorageBufferOffsetsTargets) > 0 {
+		opts.DynamicStorageBufferOffsetsTargets = make(map[uint32]dxil.OffsetsBindTarget, len(nagaOpts.DynamicStorageBufferOffsetsTargets))
+		for group, t := range nagaOpts.DynamicStorageBufferOffsetsTargets {
+			opts.DynamicStorageBufferOffsetsTargets[group] = dxil.OffsetsBindTarget{Space: uint32(t.Space), Register: t.Register, Size: t.Size}
+		}
+	}
+	if f := nagaOpts.FragmentEntryPoint; f != nil {
+		opts.FragmentEntryPoint = &dxil.FragmentEntryPoint{Module: f.Module, Function: f.Function}
+	}
 
 	cacheKey := NewShaderCacheKey(dxilCacheSource(module.wgslSource, ep.Name, opts), ep.Name, ep.Stage, "dxil")
 	if cached, ok := d.shaderCache.Get(cacheKey); ok {
@@ -2412,8 +2423,9 @@ func (d *Device) compileDXIL(module *ShaderModule, ep *ir.EntryPoint, nagaOpts *
 }
 
 // dxilCacheSource is the source the DXIL shader cache keys an entry point
-// on: the WGSL, the entry point and the register bindings of the layout the
-// DXIL is compiled for, which the bytecode holds.
+// on: the WGSL, the entry point, the register bindings of the layout the
+// DXIL is compiled for and the locations the fragment stage reads, which
+// decide what the bytecode holds.
 func dxilCacheSource(wgslSource, entryPoint string, opts dxil.Options) string {
 	h := sha256.New()
 	h.Write([]byte(wgslSource))
@@ -2442,6 +2454,19 @@ func dxilCacheSource(wgslSource, entryPoint string, opts dxil.Options) string {
 		writeDXILBindTarget(h, "heap", t.StandardSamplers)
 		writeDXILBindTarget(h, "cmp", t.ComparisonSamplers)
 	}
+	if t := opts.SpecialConstantsBinding; t != nil {
+		writeDXILBindTarget(h, "special", *t)
+	}
+	for _, group := range slices.Sorted(maps.Keys(opts.DynamicStorageBufferOffsetsTargets)) {
+		t := opts.DynamicStorageBufferOffsetsTargets[group]
+		fmt.Fprintf(h, "\x00o%d=%d,%d,%d", group, t.Space, t.Register, t.Size)
+	}
+	if f := opts.FragmentEntryPoint; f != nil {
+		h.Write([]byte("\x00fragment"))
+		for _, loc := range fragmentInputLocations(f) {
+			fmt.Fprintf(h, ",%d", loc)
+		}
+	}
 	return string(h.Sum(nil))
 }
 
@@ -2450,7 +2475,35 @@ func writeDXILBindTarget(w io.Writer, name string, t dxil.BindTarget) {
 	if t.BindingArraySize != nil {
 		size = *t.BindingArraySize
 	}
-	fmt.Fprintf(w, "\x00%s=%d,%d,%d", name, t.Space, t.Register, size)
+	dynamic := int64(-1)
+	if t.DynamicStorageBufferOffsetsIndex != nil {
+		dynamic = int64(*t.DynamicStorageBufferOffsetsIndex)
+	}
+	fmt.Fprintf(w, "\x00%s=%d,%d,%d,%t,%d", name, t.Space, t.Register, size, t.RestrictIndexing, dynamic)
+}
+
+// fragmentInputLocations returns the locations f reads, sorted.
+func fragmentInputLocations(f *dxil.FragmentEntryPoint) []uint32 {
+	var locs []uint32
+	add := func(b *ir.Binding) {
+		if b == nil {
+			return
+		}
+		if loc, ok := (*b).(ir.LocationBinding); ok {
+			locs = append(locs, loc.Location)
+		}
+	}
+	for _, arg := range f.Function.Arguments {
+		if st, ok := f.Module.Types[arg.Type].Inner.(ir.StructType); ok {
+			for _, m := range st.Members {
+				add(m.Binding)
+			}
+			continue
+		}
+		add(arg.Binding)
+	}
+	slices.Sort(locs)
+	return locs
 }
 
 // shaderStageToTarget maps naga IR shader stage to D3DCompile target profile.
