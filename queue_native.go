@@ -456,6 +456,9 @@ func (q *Queue) WriteTexture(dst *ImageCopyTexture, data []byte, layout *ImageDa
 			return fmt.Errorf("wgpu: WriteTexture: %w", err)
 		}
 	}
+	if emptyExtent(hal.Extent3D(copySize)) {
+		return nil // valid, and nothing to write
+	}
 
 	// Into the queue's scratch: the HAL takes these by pointer and keeps
 	// none of them.

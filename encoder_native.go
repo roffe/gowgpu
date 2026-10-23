@@ -4,6 +4,7 @@ package wgpu
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -764,7 +765,9 @@ func (e *CommandEncoder) CopyTextureToBuffer(src *Texture, dst *Buffer, regions 
 	}
 	e.trackTexture(src)
 	e.trackBuffer(dst)
-	raw.CopyTextureToBuffer(halSrc, halDst, halRegions)
+	if len(halRegions) > 0 {
+		raw.CopyTextureToBuffer(halSrc, halDst, halRegions)
+	}
 }
 
 // CopyTextureToTexture copies data between textures using DMA hardware copy.
@@ -816,6 +819,9 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst *Texture, regions []Textu
 		}
 		halRegions[i].Size = hal.Extent3D(size)
 	}
+	// A region with nothing in it is valid and copies nothing, which no
+	// backend takes.
+	halRegions = slices.DeleteFunc(halRegions, func(r hal.TextureCopy) bool { return emptyExtent(r.Size) })
 	raw := e.core.RecordingEncoder()
 	if raw == nil {
 		return
@@ -832,7 +838,9 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst *Texture, regions []Textu
 	}
 	e.trackTexture(src)
 	e.trackTexture(dst)
-	raw.CopyTextureToTexture(halSrc, halDst, halRegions)
+	if len(halRegions) > 0 {
+		raw.CopyTextureToTexture(halSrc, halDst, halRegions)
+	}
 }
 
 // TransitionTextures records explicit texture barriers.
@@ -910,7 +918,9 @@ func checkCopyRowPitch(op string, regions []BufferTextureCopy) error {
 
 // bufferTextureCopies checks each region of a copy between t and buf and
 // returns the regions for the backend, on halTex, sized to the texels the
-// texture has. A texture without core state (a test stub) is not checked.
+// texture has, without the regions with nothing in them, which are valid
+// and copy nothing but no backend takes. A texture without core state (a
+// test stub) is not checked.
 func bufferTextureCopies(op string, t *Texture, halTex hal.Texture, buf *Buffer, regions []BufferTextureCopy, toTexture bool) ([]hal.BufferTextureCopy, error) {
 	halRegions := make([]hal.BufferTextureCopy, len(regions))
 	for i := range regions {
@@ -925,7 +935,11 @@ func bufferTextureCopies(op string, t *Texture, halTex hal.Texture, buf *Buffer,
 		}
 		halRegions[i].Size = hal.Extent3D(size)
 	}
-	return halRegions, nil
+	return slices.DeleteFunc(halRegions, func(r hal.BufferTextureCopy) bool { return emptyExtent(r.Size) }), nil
+}
+
+func emptyExtent(e hal.Extent3D) bool {
+	return e.Width == 0 || e.Height == 0 || e.DepthOrArrayLayers == 0
 }
 
 // texelCopy is the core side of a copy of base on t, whatever base.Texture
@@ -985,7 +999,9 @@ func (e *CommandEncoder) CopyBufferToTexture(src *Buffer, dst *Texture, regions 
 	}
 	e.trackTexture(dst)
 	e.trackBuffer(src)
-	raw.CopyBufferToTexture(halSrc, halDst, halRegions)
+	if len(halRegions) > 0 {
+		raw.CopyBufferToTexture(halSrc, halDst, halRegions)
+	}
 }
 
 func validateRenderPassTextureViews(desc *RenderPassDescriptor) error {

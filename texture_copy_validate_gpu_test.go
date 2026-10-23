@@ -145,3 +145,58 @@ func TestCompressedTextureCopiesAreChecked(t *testing.T) {
 	}
 	assertNoValidation(t, h)
 }
+
+// A copy or texture write with nothing in it is valid and does nothing: it
+// used to reach the backends, which Vulkan's rules forbid, DX12 failed the
+// command buffer over and GL panicked on for empty data.
+func TestEmptyTextureCopiesDoNothing(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	tex, err := device.CreateTexture(&TextureDescriptor{
+		Size: Extent3D{Width: 4, Height: 4, DepthOrArrayLayers: 1}, MipLevelCount: 1, SampleCount: 1,
+		Dimension: TextureDimension2D, Format: TextureFormatRGBA8Unorm, Usage: TextureUsageCopySrc | TextureUsageCopyDst,
+	})
+	if err != nil {
+		t.Fatalf("CreateTexture: %v", err)
+	}
+	defer tex.Release()
+	other, err := device.CreateTexture(&TextureDescriptor{
+		Size: Extent3D{Width: 4, Height: 4, DepthOrArrayLayers: 1}, MipLevelCount: 1, SampleCount: 1,
+		Dimension: TextureDimension2D, Format: TextureFormatRGBA8Unorm, Usage: TextureUsageCopySrc | TextureUsageCopyDst,
+	})
+	if err != nil {
+		t.Fatalf("CreateTexture: %v", err)
+	}
+	defer other.Release()
+	buf, err := device.CreateBuffer(&BufferDescriptor{Size: 1024, Usage: BufferUsageCopySrc | BufferUsageCopyDst})
+	if err != nil {
+		t.Fatalf("CreateBuffer: %v", err)
+	}
+	defer buf.Release()
+
+	region := func(size Extent3D) []BufferTextureCopy {
+		return []BufferTextureCopy{{BufferLayout: ImageDataLayout{BytesPerRow: 256}, Size: size}}
+	}
+	enc, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	enc.CopyBufferToTexture(buf, tex, region(Extent3D{Height: 4, DepthOrArrayLayers: 1}))
+	enc.CopyTextureToBuffer(tex, buf, region(Extent3D{Width: 4, DepthOrArrayLayers: 1}))
+	enc.CopyTextureToTexture(tex, other, []TextureCopy{{Size: Extent3D{Width: 4, Height: 4}}})
+	finishAndSubmit(t, device, enc)
+
+	q := device.Queue()
+	if err := q.WriteTexture(&ImageCopyTexture{Texture: tex}, nil, &ImageDataLayout{}, &Extent3D{}); err != nil {
+		t.Errorf("WriteTexture of nothing: %v", err)
+	}
+	if err := q.WriteTexture(&ImageCopyTexture{Texture: tex}, make([]byte, 64), &ImageDataLayout{BytesPerRow: 16},
+		&Extent3D{Height: 4, DepthOrArrayLayers: 1}); err != nil {
+		t.Errorf("WriteTexture of no columns: %v", err)
+	}
+	enc, err = device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	finishAndSubmit(t, device, enc)
+	assertNoValidation(t, h)
+}
