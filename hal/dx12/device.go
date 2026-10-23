@@ -1178,7 +1178,7 @@ func (d *Device) CreateBuffer(desc *hal.BufferDescriptor) (hal.Buffer, error) {
 		heapType = d3d12.D3D12_HEAP_TYPE_CUSTOM
 		cpuPageProperty = d3d12.D3D12_CPU_PAGE_PROPERTY_WRITE_BACK
 		memoryPool = d3d12.D3D12_MEMORY_POOL_L0
-		initialState = d3d12.D3D12_RESOURCE_STATE_COPY_DEST
+		initialState = d3d12.D3D12_RESOURCE_STATE_COMMON
 	case desc.Usage&gputypes.BufferUsageMapWrite != 0 || desc.MappedAtCreation:
 		// CPU-to-GPU buffer — CPU writes, GPU reads. CUSTOM heap with WRITE_COMBINE
 		// allows COMMON state which permits implicit promotion to COPY_DST.

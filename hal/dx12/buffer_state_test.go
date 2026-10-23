@@ -12,41 +12,19 @@ import (
 	"github.com/roffe/gowgpu/hal/dx12/d3d12"
 )
 
-// TestBufferInitialState verifies that buffers start in the correct D3D12 resource state
-// based on their heap type, matching the initial state set in CreateBuffer.
+// TestBufferInitialState checks buffers of every heap start tracked in
+// COMMON, the state D3D12 creates buffers in.
 func TestBufferInitialState(t *testing.T) {
-	tests := []struct {
-		name          string
-		heapType      d3d12.D3D12_HEAP_TYPE
-		expectedState d3d12.D3D12_RESOURCE_STATES
-	}{
-		{
-			name:          "default buffer starts in COMMON",
-			heapType:      d3d12.D3D12_HEAP_TYPE_DEFAULT,
-			expectedState: d3d12.D3D12_RESOURCE_STATE_COMMON,
-		},
-		{
-			name:          "readback buffer starts in COPY_DEST",
-			heapType:      d3d12.D3D12_HEAP_TYPE_READBACK,
-			expectedState: d3d12.D3D12_RESOURCE_STATE_COPY_DEST,
-		},
-		{
-			name:          "upload buffer starts in COMMON",
-			heapType:      d3d12.D3D12_HEAP_TYPE_CUSTOM,
-			expectedState: d3d12.D3D12_RESOURCE_STATE_COMMON,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			buf := &Buffer{
-				heapType:     tt.heapType,
-				currentState: tt.expectedState,
-			}
-			if buf.currentState != tt.expectedState {
-				t.Errorf("currentState = %d, want %d", buf.currentState, tt.expectedState)
-			}
-		})
+	dev, _ := openTestDevice(t)
+	for _, usage := range []gputypes.BufferUsage{
+		gputypes.BufferUsageVertex | gputypes.BufferUsageCopyDst,
+		gputypes.BufferUsageMapRead | gputypes.BufferUsageCopyDst,
+		gputypes.BufferUsageMapWrite | gputypes.BufferUsageCopySrc,
+	} {
+		buf := newTestBuffer(t, dev, 256, usage)
+		if buf.currentState != d3d12.D3D12_RESOURCE_STATE_COMMON || buf.stateOwner.bufferState != d3d12.D3D12_RESOURCE_STATE_COMMON {
+			t.Errorf("usage %v: tracked state = %#x/%#x, want COMMON", usage, buf.currentState, buf.stateOwner.bufferState)
+		}
 	}
 }
 
@@ -306,16 +284,16 @@ func TestBufferStateTransitionConstants(t *testing.T) {
 	}
 }
 
-// TestReadbackBufferNoCopyDestBarrier verifies that a readback buffer (initial
-// state COPY_DEST) does not get a redundant barrier when used as copy destination.
+// TestReadbackBufferNoCopyDestBarrier verifies that a readback buffer, which
+// buffers start in COMMON, takes a copy without a barrier.
 func TestReadbackBufferNoCopyDestBarrier(t *testing.T) {
 	buf := &Buffer{
 		usage:        gputypes.BufferUsageCopyDst | gputypes.BufferUsageMapRead,
-		currentState: d3d12.D3D12_RESOURCE_STATE_COPY_DEST,
+		currentState: d3d12.D3D12_RESOURCE_STATE_COMMON,
 	}
 
 	needs := needsExplicitBarrier(buf.currentState, d3d12.D3D12_RESOURCE_STATE_COPY_DEST)
 	if needs {
-		t.Error("readback buffer already in COPY_DEST should not need barrier")
+		t.Error("readback buffer in COMMON should promote to COPY_DEST without a barrier")
 	}
 }
