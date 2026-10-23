@@ -69,6 +69,9 @@ func (p *RenderPassEncoder) SetPipeline(pipeline *RenderPipeline) {
 		p.encoder.setError(fmt.Errorf("wgpu: RenderPass.SetPipeline: pipeline is released: %w", ErrReleased))
 		return
 	}
+	if p.encoder.foreign("RenderPass.SetPipeline", pipeline.device, "the pipeline") {
+		return
+	}
 	// A pipeline CreateRenderPipeline did not make has no attachments to
 	// check: it draws with no HAL pipeline either.
 	if pipeline.passContext.SampleCount != 0 {
@@ -100,6 +103,9 @@ func (p *RenderPassEncoder) SetBindGroup(index uint32, group *BindGroup, offsets
 		p.encoder.setError(err)
 		return
 	}
+	if p.encoder.foreign("RenderPass.SetBindGroup", group.device, "the bind group") {
+		return
+	}
 	p.binder.assign(index, group.layout)
 	p.binder.assignBindGroup(index, group)
 	p.binder.setGroup(index, group, offsets)
@@ -126,6 +132,9 @@ type boundVertexBuffer struct {
 func (p *RenderPassEncoder) SetVertexBuffer(slot uint32, buffer *Buffer, offset uint64) {
 	if buffer == nil {
 		p.encoder.setError(fmt.Errorf("wgpu: RenderPass.SetVertexBuffer: buffer is nil"))
+		return
+	}
+	if p.encoder.foreign("RenderPass.SetVertexBuffer", buffer.device, "the buffer") {
 		return
 	}
 	var err error
@@ -157,6 +166,9 @@ func (p *RenderPassEncoder) SetVertexBuffer(slot uint32, buffer *Buffer, offset 
 func (p *RenderPassEncoder) SetIndexBuffer(buffer *Buffer, format gputypes.IndexFormat, offset uint64) {
 	if buffer == nil {
 		p.encoder.setError(fmt.Errorf("wgpu: RenderPass.SetIndexBuffer: buffer is nil"))
+		return
+	}
+	if p.encoder.foreign("RenderPass.SetIndexBuffer", buffer.device, "the buffer") {
 		return
 	}
 	var err error
@@ -352,6 +364,9 @@ func (p *RenderPassEncoder) MultiDrawIndirect(buffer *Buffer, offset uint64, dra
 		p.encoder.setError(fmt.Errorf("wgpu: RenderPass.DrawIndirect: buffer is nil"))
 		return
 	}
+	if p.encoder.foreign("RenderPass.DrawIndirect", buffer.device, "the indirect buffer") {
+		return
+	}
 	// VAL-B3: Validate indirect buffer has INDIRECT usage.
 	// Matches Rust wgpu-core render.rs:2763 (check_usage(BufferUsages::INDIRECT)).
 	if buffer.Usage()&BufferUsageIndirect == 0 {
@@ -423,6 +438,9 @@ func (p *RenderPassEncoder) MultiDrawIndexedIndirect(buffer *Buffer, offset uint
 		p.encoder.setError(fmt.Errorf("wgpu: RenderPass.DrawIndexedIndirect: buffer is nil"))
 		return
 	}
+	if p.encoder.foreign("RenderPass.DrawIndexedIndirect", buffer.device, "the indirect buffer") {
+		return
+	}
 	// VAL-B3: Validate indirect buffer has INDIRECT usage.
 	// Matches Rust wgpu-core render.rs:2763 (check_usage(BufferUsages::INDIRECT)).
 	if buffer.Usage()&BufferUsageIndirect == 0 {
@@ -461,6 +479,9 @@ func (p *RenderPassEncoder) ExecuteBundles(bundles ...*RenderBundle) {
 	for _, bundle := range bundles {
 		if bundle == nil || bundle.released.Load() || bundle.hal == nil {
 			continue
+		}
+		if p.encoder.foreign("RenderPass.ExecuteBundles", bundle.device, "a bundle") {
+			return
 		}
 
 		raw.ExecuteBundle(bundle.hal)
@@ -525,6 +546,9 @@ func (p *RenderPassEncoder) validateIndirectCountBuffers(
 	}
 	if countBuffer == nil {
 		return fmt.Errorf("wgpu: RenderPass.DrawIndirect: count buffer is nil")
+	}
+	if p.encoder != nil && (p.encoder.device.foreign(indirectBuffer.device) || p.encoder.device.foreign(countBuffer.device)) {
+		return errForeign("RenderPass.DrawIndirect", "the indirect or count buffer")
 	}
 	if indirectBuffer.Usage()&BufferUsageIndirect == 0 {
 		return fmt.Errorf(

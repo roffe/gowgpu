@@ -98,6 +98,9 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (_ uint64, err error) {
 		if cb == nil {
 			return 0, fmt.Errorf("wgpu: command buffer at index %d is nil", i)
 		}
+		if q.device.foreign(cb.device) {
+			return 0, errForeign("Queue.Submit", fmt.Sprintf("command buffer %d", i))
+		}
 		if err := validateCommandBufferForSubmit(cb, i); err != nil {
 			return 0, err
 		}
@@ -364,6 +367,9 @@ func (q *Queue) WriteBuffer(buffer *Buffer, offset uint64, data []byte) (err err
 	if q.released() {
 		return ErrReleased
 	}
+	if q.device.foreign(buffer.device) {
+		return errForeign("Queue.WriteBuffer", "the buffer")
+	}
 
 	// --- VAL-A1: bounds + state validation (before HAL access) ---
 
@@ -440,6 +446,9 @@ func (q *Queue) WriteTexture(dst *ImageCopyTexture, data []byte, layout *ImageDa
 	}
 	if dst.Texture == nil {
 		return fmt.Errorf("wgpu: WriteTexture: destination texture is invalid")
+	}
+	if q.device.foreign(dst.Texture.device) {
+		return errForeign("Queue.WriteTexture", "the texture")
 	}
 	// The texture was made, or the surface configured, with CopyDst.
 	// Rust: dst.check_usage(wgt::TextureUsages::COPY_DST)

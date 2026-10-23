@@ -196,6 +196,9 @@ func (d *Device) CreateTextureView(texture *Texture, desc *TextureViewDescriptor
 	if texture == nil {
 		return nil, fmt.Errorf("wgpu: texture is nil")
 	}
+	if d.foreign(texture.device) {
+		return nil, errForeign("CreateTextureView", "the texture")
+	}
 	halTexture := texture.resolveHAL()
 	if halTexture == nil {
 		return nil, ErrReleased
@@ -419,6 +422,9 @@ func (d *Device) CreatePipelineLayout(desc *PipelineLayoutDescriptor) (_ *Pipeli
 		if layout.released {
 			return nil, ErrReleased
 		}
+		if d.foreign(layout.device) {
+			return nil, errForeign("CreatePipelineLayout", fmt.Sprintf("bind group layout %d", i))
+		}
 		halLayouts[i] = layout.hal
 	}
 
@@ -481,6 +487,9 @@ func (d *Device) CreateBindGroup(desc *BindGroupDescriptor) (_ *BindGroup, err e
 	if desc.Layout.released {
 		return nil, ErrReleased
 	}
+	if d.foreign(desc.Layout.device) {
+		return nil, errForeign("CreateBindGroup", "the layout")
+	}
 
 	halEntries := make([]gputypes.BindGroupEntry, len(desc.Entries))
 	for i, entry := range desc.Entries {
@@ -489,6 +498,10 @@ func (d *Device) CreateBindGroup(desc *BindGroupDescriptor) (_ *BindGroup, err e
 		}
 		if entry.Sampler != nil && entry.Sampler.released {
 			return nil, ErrReleased
+		}
+		if entry.Buffer != nil && d.foreign(entry.Buffer.device) || entry.TextureView != nil && d.foreign(entry.TextureView.device) ||
+			entry.Sampler != nil && d.foreign(entry.Sampler.device) {
+			return nil, errForeign("CreateBindGroup", fmt.Sprintf("the resource at binding %d", entry.Binding))
 		}
 		halEntries[i] = entry.toHAL()
 	}
@@ -778,6 +791,10 @@ func (d *Device) CreateRenderPipeline(desc *RenderPipelineDescriptor) (_ *Render
 	if desc.Layout != nil && desc.Layout.released {
 		return nil, ErrReleased
 	}
+	if desc.Layout != nil && d.foreign(desc.Layout.device) || desc.Vertex.Module != nil && d.foreign(desc.Vertex.Module.device) ||
+		desc.Fragment != nil && desc.Fragment.Module != nil && d.foreign(desc.Fragment.Module.device) {
+		return nil, errForeign("CreateRenderPipeline", "the layout or a shader module")
+	}
 
 	halDesc := desc.toHAL()
 
@@ -979,6 +996,9 @@ func (d *Device) CreateComputePipeline(desc *ComputePipelineDescriptor) (_ *Comp
 
 	if desc.Layout != nil && desc.Layout.released {
 		return nil, ErrReleased
+	}
+	if desc.Layout != nil && d.foreign(desc.Layout.device) || desc.Module != nil && d.foreign(desc.Module.device) {
+		return nil, errForeign("CreateComputePipeline", "the layout or the shader module")
 	}
 
 	halDesc := desc.toHAL()
@@ -1333,6 +1353,20 @@ func (d *Device) reportError(err *error) {
 // calls that made them return them as well.
 func (d *Device) uncapturedError(gpuErr *GPUError) {
 	hal.Logger().Debug("wgpu: uncaptured error", "type", gpuErr.Type, "message", gpuErr.Message)
+}
+
+// foreign reports whether owner, the device an object was made on, is
+// another device than d. An object made without a device is anyone's.
+//
+// Reference: wgpu-core resource.rs same_device
+func (d *Device) foreign(owner *Device) bool {
+	return d != nil && owner != nil && owner != d
+}
+
+// errForeign is the error for what, an object of another device, passed to
+// op.
+func errForeign(op, what string) error {
+	return fmt.Errorf("wgpu: %s: %s belongs to another device", op, what)
 }
 
 // WaitIdle waits for all GPU work to complete.

@@ -208,6 +208,16 @@ func (e *CommandEncoder) setError(err error) {
 	}
 }
 
+// foreign records an error for what, an object made on owner, passed to op
+// when owner is another device than e's, and reports whether it did.
+func (e *CommandEncoder) foreign(op string, owner *Device, what string) bool {
+	if !e.device.foreign(owner) {
+		return false
+	}
+	e.setError(errForeign(op, what))
+	return true
+}
+
 // keepAlive Clone()'s a ResourceRef and accumulates it for transfer to the
 // CommandBuffer on Finish(). This keeps the resource alive until the GPU
 // completes the submission. Callers go through an encoderMark first, so a
@@ -573,6 +583,9 @@ func (e *CommandEncoder) BeginRenderPass(desc *RenderPassDescriptor) (*RenderPas
 			e.setError(err)
 			return nil, err
 		}
+		if e.attachmentsForeign(desc) {
+			return nil, errForeign("BeginRenderPass", "an attachment or the timestamp query set")
+		}
 	}
 	trackRenderPassTextureViews(e, desc)
 
@@ -659,6 +672,10 @@ func (e *CommandEncoder) CopyBufferToBuffer(src *Buffer, srcOffset uint64, dst *
 		e.setError(fmt.Errorf("wgpu: CommandEncoder.CopyBufferToBuffer: destination buffer is nil"))
 		return
 	}
+	if e.foreign("CommandEncoder.CopyBufferToBuffer", src.device, "the source buffer") ||
+		e.foreign("CommandEncoder.CopyBufferToBuffer", dst.device, "the destination buffer") {
+		return
+	}
 	raw := e.core.RecordingEncoder()
 	if raw == nil {
 		return
@@ -715,6 +732,10 @@ func (e *CommandEncoder) CopyTextureToBuffer(src *Texture, dst *Buffer, regions 
 	}
 	if dst == nil {
 		e.setError(fmt.Errorf("wgpu: CommandEncoder.CopyTextureToBuffer: destination buffer is nil"))
+		return
+	}
+	if e.foreign("CommandEncoder.CopyTextureToBuffer", src.device, "the source texture") ||
+		e.foreign("CommandEncoder.CopyTextureToBuffer", dst.device, "the destination buffer") {
 		return
 	}
 	halSrc := src.resolveHAL()
@@ -782,6 +803,10 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst *Texture, regions []Textu
 	}
 	if dst == nil {
 		e.setError(fmt.Errorf("wgpu: CommandEncoder.CopyTextureToTexture: destination texture is nil"))
+		return
+	}
+	if e.foreign("CommandEncoder.CopyTextureToTexture", src.device, "the source texture") ||
+		e.foreign("CommandEncoder.CopyTextureToTexture", dst.device, "the destination texture") {
 		return
 	}
 	halSrc := src.resolveHAL()
@@ -963,6 +988,10 @@ func (e *CommandEncoder) CopyBufferToTexture(src *Buffer, dst *Texture, regions 
 		e.setError(fmt.Errorf("wgpu: CommandEncoder.CopyBufferToTexture: destination texture is nil"))
 		return
 	}
+	if e.foreign("CommandEncoder.CopyBufferToTexture", src.device, "the source buffer") ||
+		e.foreign("CommandEncoder.CopyBufferToTexture", dst.device, "the destination texture") {
+		return
+	}
 	halDst := dst.resolveHAL()
 	if halDst == nil {
 		e.setError(fmt.Errorf("wgpu: CommandEncoder.CopyBufferToTexture: destination texture is released: %w", ErrReleased))
@@ -1057,6 +1086,24 @@ func validateTimestampWrites(w *RenderPassTimestampWrites) error {
 	return nil
 }
 
+// attachmentsForeign records an error for an attachment or timestamp query
+// set of another device than e's in desc, and reports whether it did.
+func (e *CommandEncoder) attachmentsForeign(desc *RenderPassDescriptor) bool {
+	foreign := func(v *TextureView) bool {
+		return v != nil && e.foreign("BeginRenderPass", v.device, "an attachment")
+	}
+	for _, ca := range desc.ColorAttachments {
+		if foreign(ca.View) || foreign(ca.ResolveTarget) {
+			return true
+		}
+	}
+	if ds := desc.DepthStencilAttachment; ds != nil && foreign(ds.View) {
+		return true
+	}
+	w := desc.TimestampWrites
+	return w != nil && w.QuerySet != nil && e.foreign("BeginRenderPass", w.QuerySet.device, "the timestamp query set")
+}
+
 func trackRenderPassTextureViews(e *CommandEncoder, desc *RenderPassDescriptor) {
 	if e == nil || desc == nil {
 		return
@@ -1083,6 +1130,9 @@ func (e *CommandEncoder) ClearBuffer(buffer *Buffer, offset, size uint64) {
 	}
 	if buffer == nil {
 		e.setError(fmt.Errorf("wgpu: CommandEncoder.ClearBuffer: buffer is nil"))
+		return
+	}
+	if e.foreign("CommandEncoder.ClearBuffer", buffer.device, "the buffer") {
 		return
 	}
 	raw := e.core.RecordingEncoder()
@@ -1129,6 +1179,10 @@ func (e *CommandEncoder) ResolveQuerySet(querySet *QuerySet, firstQuery, queryCo
 	}
 	if dst.released == nil || dst.released.Load() {
 		e.setError(fmt.Errorf("wgpu: CommandEncoder.ResolveQuerySet: destination buffer is released: %w", ErrReleased))
+		return
+	}
+	if querySet != nil && e.foreign("CommandEncoder.ResolveQuerySet", querySet.device, "the query set") ||
+		e.foreign("CommandEncoder.ResolveQuerySet", dst.device, "the destination buffer") {
 		return
 	}
 

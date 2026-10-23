@@ -51,6 +51,9 @@ func (p *ComputePassEncoder) SetPipeline(pipeline *ComputePipeline) {
 		p.encoder.setError(fmt.Errorf("wgpu: ComputePass.SetPipeline: pipeline is released: %w", ErrReleased))
 		return
 	}
+	if p.encoder.foreign("ComputePass.SetPipeline", pipeline.device, "the pipeline") {
+		return
+	}
 	p.pipelineSet = true
 	p.currentPipeline = pipeline
 	p.binder.updateExpectations(pipeline.bindGroupLayouts)
@@ -68,6 +71,9 @@ func (p *ComputePassEncoder) SetPipeline(pipeline *ComputePipeline) {
 func (p *ComputePassEncoder) SetBindGroup(index uint32, group *BindGroup, offsets []uint32) {
 	if err := validateSetBindGroup("ComputePass", index, group, offsets, p.encoder.limits()); err != nil {
 		p.encoder.setError(err)
+		return
+	}
+	if p.encoder.foreign("ComputePass.SetBindGroup", group.device, "the bind group") {
 		return
 	}
 	p.binder.assign(index, group.layout)
@@ -174,6 +180,9 @@ func (p *ComputePassEncoder) DispatchIndirect(buffer *Buffer, offset uint64) {
 	}
 	if buffer == nil {
 		p.encoder.setError(fmt.Errorf("wgpu: ComputePass.DispatchIndirect: buffer is nil"))
+		return
+	}
+	if p.encoder.foreign("ComputePass.DispatchIndirect", buffer.device, "the indirect buffer") {
 		return
 	}
 	// VAL-B3: Validate indirect buffer has INDIRECT usage.
