@@ -119,6 +119,16 @@ func init() {
 // compressed reports whether f moves as compressed blocks.
 func (f glFormat) compressed() bool { return f.typ == 0 }
 
+// integer reports whether f's texels are integers, which shaders read
+// unnormalized, and signed whether they are signed ones.
+func (f glFormat) integer() (integer, signed bool) {
+	switch f.format {
+	case gl.RED_INTEGER, gl.RG_INTEGER, gl.RGB_INTEGER, gl.RGBA_INTEGER:
+		return true, f.typ == gl.BYTE || f.typ == gl.SHORT || f.typ == gl.INT
+	}
+	return false, false
+}
+
 // formatCaps is what a context offers beyond the formats of glFormats.
 type formatCaps struct {
 	es       bool

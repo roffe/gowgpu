@@ -11,12 +11,10 @@ import (
 
 // TestClearIntegerTargets clears an R32Uint target to 4000 and an RGBA8Sint
 // one to -5, 7, -128 and 127 and reads them back. Vulkan passed every clear
-// value as float32 bits, so the R32Uint target read 0x457a0000.
+// value as float32 bits, so the R32Uint target read 0x457a0000, and GL
+// cleared every target with glClearBufferfv.
 func TestClearIntegerTargets(t *testing.T) {
 	device, h := newValidatedDevice(t)
-	if h.backend == gputypes.BackendGL {
-		t.Skip("GL clears every colour attachment with glClearBufferfv")
-	}
 	for _, tc := range []struct {
 		format gputypes.TextureFormat
 		clear  gputypes.Color

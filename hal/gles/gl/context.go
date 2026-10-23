@@ -118,6 +118,8 @@ type Context struct {
 	glDrawBuffer             uintptr
 	glDrawBuffers            uintptr
 	glClearBufferfv          uintptr // GL 3.0+ — per-buffer float clear
+	glClearBufferiv          uintptr
+	glClearBufferuiv         uintptr
 
 	// Pixel read/store (GL 1.0+)
 	glReadPixels  uintptr
@@ -330,6 +332,8 @@ func (c *Context) Load(getProcAddr ProcAddressFunc) error {
 	c.glDrawBuffer = getProcAddr("glDrawBuffer")
 	c.glDrawBuffers = getProcAddr("glDrawBuffers")
 	c.glClearBufferfv = getProcAddr("glClearBufferfv")
+	c.glClearBufferiv = getProcAddr("glClearBufferiv")
+	c.glClearBufferuiv = getProcAddr("glClearBufferuiv")
 
 	// Pixel read/store
 	c.glReadPixels = getProcAddr("glReadPixels")
@@ -1037,6 +1041,18 @@ func (c *Context) DrawBuffers(bufs []uint32) {
 // Matches Rust wgpu-hal GLES ClearColorF (queue.rs:1222).
 func (c *Context) ClearBufferfv(buffer uint32, drawBuffer int32, value *[4]float32) {
 	syscall.SyscallN(c.glClearBufferfv, uintptr(buffer), uintptr(drawBuffer),
+		uintptr(unsafe.Pointer(value)))
+}
+
+// ClearBufferiv clears a draw buffer of signed integers to value.
+func (c *Context) ClearBufferiv(buffer uint32, drawBuffer int32, value *[4]int32) {
+	syscall.SyscallN(c.glClearBufferiv, uintptr(buffer), uintptr(drawBuffer),
+		uintptr(unsafe.Pointer(value)))
+}
+
+// ClearBufferuiv clears a draw buffer of unsigned integers to value.
+func (c *Context) ClearBufferuiv(buffer uint32, drawBuffer int32, value *[4]uint32) {
+	syscall.SyscallN(c.glClearBufferuiv, uintptr(buffer), uintptr(drawBuffer),
 		uintptr(unsafe.Pointer(value)))
 }
 

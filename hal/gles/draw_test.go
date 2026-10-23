@@ -6,6 +6,7 @@
 package gles
 
 import (
+	"math"
 	"testing"
 
 	"github.com/roffe/gowgpu/gputypes"
@@ -68,5 +69,26 @@ func TestUnusedVertexAttribsAreDisabled(t *testing.T) {
 	}
 	if len(keeps) != 2 || keeps[0] != 1|1<<3 || keeps[1] != 0 {
 		t.Errorf("attribute arrays kept %b, want 1001 at the pipeline and none at the end", keeps)
+	}
+}
+
+// An integer color attachment clears with its clear value as integers,
+// clamped to their range, which glClearBufferfv would leave undefined.
+func TestColorClearOfIntegerAttachments(t *testing.T) {
+	view := func(f gputypes.TextureFormat) *TextureView {
+		return &TextureView{texture: &Texture{format: f, glf: glFormats[f]}}
+	}
+	v := gputypes.Color{R: 4000, G: -5, B: 1e10, A: 0.5}
+	u := colorClear(1, &hal.RenderPassColorAttachment{View: view(gputypes.TextureFormatRGBA32Uint), ClearValue: v})
+	if !u.integer || u.signed || u.uints != [4]uint32{4000, 0, math.MaxUint32, 0} || u.drawBuffer != 1 {
+		t.Errorf("RGBA32Uint clear = %+v", u)
+	}
+	s := colorClear(0, &hal.RenderPassColorAttachment{View: view(gputypes.TextureFormatRGBA8Sint), ClearValue: v})
+	if !s.integer || !s.signed || s.sints != [4]int32{4000, -5, math.MaxInt32, 0} {
+		t.Errorf("RGBA8Sint clear = %+v", s)
+	}
+	f := colorClear(0, &hal.RenderPassColorAttachment{View: view(gputypes.TextureFormatRGBA16Float), ClearValue: v})
+	if f.integer || f.color != [4]float32{4000, -5, 1e10, 0.5} {
+		t.Errorf("RGBA16Float clear = %+v", f)
 	}
 }

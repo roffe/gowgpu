@@ -227,6 +227,8 @@ type Context struct {
 	glDrawBuffer             unsafe.Pointer // desktop GL only
 	glDrawBuffers            unsafe.Pointer
 	glClearBufferfv          unsafe.Pointer // GL 3.0+ — per-buffer float clear
+	glClearBufferiv          unsafe.Pointer
+	glClearBufferuiv         unsafe.Pointer
 
 	// Pixel read/store (GL 1.0+)
 	glReadPixels  unsafe.Pointer
@@ -464,6 +466,8 @@ func (c *Context) Load(getProcAddr ProcAddressFunc, isGLES ...bool) error {
 	}
 	c.glDrawBuffers = getProcAddr("glDrawBuffers")
 	c.glClearBufferfv = getProcAddr("glClearBufferfv")
+	c.glClearBufferiv = getProcAddr("glClearBufferiv")
+	c.glClearBufferuiv = getProcAddr("glClearBufferuiv")
 
 	// Pixel read/store
 	c.glReadPixels = getProcAddr("glReadPixels")
@@ -1175,6 +1179,16 @@ func (c *Context) ClearBufferfv(buffer uint32, drawBuffer int32, value *[4]float
 	db := uint32(drawBuffer)
 	pValue := unsafe.Pointer(value)
 	C.gl_v_iip(C.uintptr_t(uintptr(c.glClearBufferfv)), C.uint32_t(buffer), C.uint32_t(db), (*C.uint8_t)(pValue))
+}
+
+// ClearBufferiv clears a draw buffer of signed integers to value.
+func (c *Context) ClearBufferiv(buffer uint32, drawBuffer int32, value *[4]int32) {
+	C.gl_v_iip(C.uintptr_t(uintptr(c.glClearBufferiv)), C.uint32_t(buffer), C.uint32_t(drawBuffer), (*C.uint8_t)(unsafe.Pointer(value)))
+}
+
+// ClearBufferuiv clears a draw buffer of unsigned integers to value.
+func (c *Context) ClearBufferuiv(buffer uint32, drawBuffer int32, value *[4]uint32) {
+	C.gl_v_iip(C.uintptr_t(uintptr(c.glClearBufferuiv)), C.uint32_t(buffer), C.uint32_t(drawBuffer), (*C.uint8_t)(unsafe.Pointer(value)))
 }
 
 // --- Renderbuffers ---

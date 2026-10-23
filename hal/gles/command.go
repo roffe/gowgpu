@@ -7,6 +7,7 @@ package gles
 
 import (
 	"log/slog"
+	"math"
 	"sync"
 	"unsafe"
 
@@ -289,21 +290,12 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 		}))
 	}
 
-	// Record per-buffer clear commands. Uses glClearBufferfv for per-target
-	// clearing instead of global glClearColor+glClear(GL_COLOR_BUFFER_BIT).
-	// Matches Rust wgpu-hal GLES ClearColorF (command.rs:648-676, queue.rs:1222).
-	for i, ca := range desc.ColorAttachments {
-		if ca.LoadOp == gputypes.LoadOpClear {
-			clearColor := ca.ClearValue
-			e.commands = append(e.commands, e.store().clears.put(ClearColorBufferCommand{
-				drawBuffer: int32(i),
-				color: [4]float32{
-					float32(clearColor.R),
-					float32(clearColor.G),
-					float32(clearColor.B),
-					float32(clearColor.A),
-				},
-			}))
+	// Record per-buffer clear commands, glClearBuffer per target instead of
+	// a global glClearColor+glClear(GL_COLOR_BUFFER_BIT), as wgpu-hal does
+	// (command.rs:648-676, queue.rs:1222).
+	for i := range desc.ColorAttachments {
+		if ca := &desc.ColorAttachments[i]; ca.LoadOp == gputypes.LoadOpClear {
+			e.commands = append(e.commands, e.store().clears.put(colorClear(int32(i), ca)))
 		}
 	}
 
@@ -1064,13 +1056,37 @@ func (c *SetDrawColorBuffersCommand) Execute(ctx *gl.Context) {
 // noDrawBuffers is the draw buffer list of a framebuffer without colour.
 var noDrawBuffers = []uint32{gl.NONE}
 
-// ClearColorBufferCommand clears a specific color draw buffer using glClearBufferfv.
-// This replaces the old global glClearColor+glClear approach for MRT correctness:
-// each color attachment can have a different clear value.
-// Matches Rust wgpu-hal GLES ClearColorF (command.rs:657-663, queue.rs:1222).
+// ClearColorBufferCommand clears a color draw buffer with the glClearBuffer
+// call of its attachment's texels, as wgpu-hal clears by the format's sample
+// type: floats with color, signed integers with sints and unsigned ones with
+// uints. An integer attachment glClearBufferfv clears takes undefined values.
 type ClearColorBufferCommand struct {
-	drawBuffer int32      // 0-based draw buffer index
-	color      [4]float32 // RGBA clear value
+	drawBuffer      int32 // 0-based draw buffer index
+	color           [4]float32
+	integer, signed bool
+	sints           [4]int32
+	uints           [4]uint32
+}
+
+// colorClear is the clear of ca, the color attachment at drawBuffer, its
+// clear value in the attachment's texels: the integers clamped to their
+// range, as the Vulkan backend clears them.
+func colorClear(drawBuffer int32, ca *hal.RenderPassColorAttachment) ClearColorBufferCommand {
+	c := ClearColorBufferCommand{drawBuffer: drawBuffer}
+	if tv, ok := ca.View.(*TextureView); ok && tv.texture != nil {
+		c.integer, c.signed = tv.texture.glf.integer()
+	}
+	for i, v := range [4]float64{ca.ClearValue.R, ca.ClearValue.G, ca.ClearValue.B, ca.ClearValue.A} {
+		switch {
+		case !c.integer:
+			c.color[i] = float32(v)
+		case c.signed:
+			c.sints[i] = int32(min(max(v, math.MinInt32), math.MaxInt32))
+		default:
+			c.uints[i] = uint32(min(max(v, 0), math.MaxUint32))
+		}
+	}
+	return c
 }
 
 func (c *ClearColorBufferCommand) Execute(ctx *gl.Context) {
@@ -1080,7 +1096,14 @@ func (c *ClearColorBufferCommand) Execute(ctx *gl.Context) {
 	// sets color_mask(true,true,true,true) before clear (queue.rs:1134).
 	ctx.ColorMask(true, true, true, true)
 	ctx.Shadow.Scissor, ctx.Shadow.Pipeline = gl.ShadowScissor{}, nil // scissor off, color mask on
-	ctx.ClearBufferfv(gl.COLOR, c.drawBuffer, &c.color)
+	switch {
+	case !c.integer:
+		ctx.ClearBufferfv(gl.COLOR, c.drawBuffer, &c.color)
+	case c.signed:
+		ctx.ClearBufferiv(gl.COLOR, c.drawBuffer, &c.sints)
+	default:
+		ctx.ClearBufferuiv(gl.COLOR, c.drawBuffer, &c.uints)
+	}
 }
 
 // ClearColorCommand clears a color attachment using the legacy global clear path.
