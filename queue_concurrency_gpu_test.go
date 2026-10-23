@@ -112,3 +112,43 @@ func TestWaitIdleDuringSubmit(t *testing.T) {
 		}
 	}
 }
+
+// TestManyCommandBuffersBeforeSubmit records more command buffers than a
+// default Metal command queue holds (64) and submits them together. Metal
+// makes a command buffer when an encoder begins, and the 65th waited for
+// one of the first 64 to complete, which none of them could.
+func TestManyCommandBuffersBeforeSubmit(t *testing.T) {
+	_, _, device := newTestDevice(t)
+	defer device.Release()
+	const n = 80
+	done := make(chan error, 1)
+	go func() {
+		cbs := make([]*CommandBuffer, 0, n)
+		for range n {
+			enc, err := device.CreateCommandEncoder(nil)
+			if err != nil {
+				done <- err
+				return
+			}
+			cb, err := enc.Finish()
+			if err != nil {
+				done <- err
+				return
+			}
+			cbs = append(cbs, cb)
+		}
+		_, err := device.Queue().Submit(cbs...)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("recording or submitting %d command buffers: %v", n, err)
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatalf("recording %d command buffers before one submit did not finish in 20 s", n)
+	}
+	if err := device.WaitIdle(); err != nil {
+		t.Fatalf("WaitIdle: %v", err)
+	}
+}

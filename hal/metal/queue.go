@@ -114,8 +114,8 @@ func (q *Queue) Submit(commandBuffers []hal.CommandBuffer) (uint64, error) {
 			}
 		}
 
-		// Commit the command buffer
 		_ = MsgSend(cb.raw, Sel("commit"))
+		cb.settle()
 	}
 
 	// If there were no valid command buffers but we acquired a semaphore slot,

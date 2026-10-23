@@ -12,6 +12,7 @@ import (
 
 	"github.com/gogpu/naga/ir"
 	"github.com/roffe/gowgpu/gputypes"
+	"github.com/roffe/gowgpu/hal"
 )
 
 func TestCommandEncoderRecordingErrorKeepsFirstFailure(t *testing.T) {
@@ -386,5 +387,56 @@ func TestComputeBindSlots_PerTypeSequentialIndexing(t *testing.T) {
 			checkSlots("texture", texSlots, tt.wantTextures)
 			checkSlots("sampler", sampSlots, tt.wantSamplers)
 		})
+	}
+}
+
+// TestUncommittedCommandBuffersBalance checks the count of command buffers
+// made and not committed through every way out of an encoder, and that an
+// encoder refuses to begin once the queue could hold no committed one.
+func TestUncommittedCommandBuffersBalance(t *testing.T) {
+	device, queue := newMetalTextureCopyTestDevice(t)
+	begin := func() *CommandEncoder {
+		t.Helper()
+		enc := &CommandEncoder{device: device}
+		if err := enc.BeginEncoding("count"); err != nil {
+			t.Fatalf("BeginEncoding failed: %v", err)
+		}
+		return enc
+	}
+	end := func(enc *CommandEncoder) *CommandBuffer {
+		t.Helper()
+		cb, err := enc.EndEncoding()
+		if err != nil {
+			t.Fatalf("EndEncoding failed: %v", err)
+		}
+		return cb.(*CommandBuffer)
+	}
+
+	submitted := end(begin())
+	if _, err := queue.Submit([]hal.CommandBuffer{submitted}); err != nil {
+		t.Fatalf("Submit failed: %v", err)
+	}
+	if err := device.WaitIdle(); err != nil {
+		t.Fatalf("WaitIdle failed: %v", err)
+	}
+	submitted.Destroy()
+	begin().DiscardEncoding()
+	end(begin()).Destroy()
+	failed := begin()
+	failed.failRecording(errors.New("recording failed"))
+	if _, err := failed.EndEncoding(); err == nil {
+		t.Fatal("EndEncoding of a failed recording succeeded")
+	}
+	begin().Destroy()
+	if n := device.uncommitted.Load(); n != 0 {
+		t.Fatalf("%d command buffers counted as uncommitted, want 0", n)
+	}
+
+	device.uncommitted.Store(maxCommandBuffers - 1)
+	defer device.uncommitted.Store(0)
+	enc := &CommandEncoder{device: device}
+	if err := enc.BeginEncoding("one too many"); err == nil {
+		enc.DiscardEncoding()
+		t.Fatal("BeginEncoding succeeded with the queue's command buffers all uncommitted")
 	}
 }

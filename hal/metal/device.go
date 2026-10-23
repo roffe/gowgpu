@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -25,6 +26,12 @@ import (
 // Vertex buffer indices are assigned from the end of the range and count down.
 // This maximizes the gap between uniform/storage buffers and vertex buffers.
 const maxVertexBuffers = 31
+
+// maxCommandBuffers is how many uncompleted command buffers the command queue
+// holds, as in wgpu-hal. [MTLCommandQueue commandBuffer] blocks until one
+// completes when they are all taken, so command encoders may keep all but one
+// of them uncommitted: past that, nothing committed could ever free one.
+const maxCommandBuffers = 4096
 
 // unknownError is the default error message when Metal returns a nil NSError.
 const unknownError = "unknown error"
@@ -49,6 +56,9 @@ type Device struct {
 	isAppleGPU      bool
 	icbTranslatorMu sync.Mutex
 	icbTranslators  map[gputypes.IndexFormat]indexedICBTranslator
+	// uncommitted counts the command buffers command encoders have made and
+	// not committed or released.
+	uncommitted atomic.Int64
 }
 
 // newDevice creates a new Device from a Metal device.
@@ -57,7 +67,7 @@ func newDevice(adapter *Adapter) (*Device, error) {
 		return nil, fmt.Errorf("metal: adapter has no device")
 	}
 
-	queue := MsgSend(adapter.raw, Sel("newCommandQueue"))
+	queue := MsgSend(adapter.raw, Sel("newCommandQueueWithMaxCommandBufferCount:"), maxCommandBuffers)
 	if queue == 0 {
 		return nil, fmt.Errorf("metal: failed to create command queue")
 	}

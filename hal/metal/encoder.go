@@ -10,6 +10,7 @@ import (
 	"math"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"unsafe"
 
 	"github.com/gogpu/naga/ir"
@@ -50,6 +51,11 @@ func (e *CommandEncoder) BeginEncoding(label string) error {
 	e.recordErr = nil
 	e.external = nil
 
+	if n := e.device.uncommitted.Add(1); n >= maxCommandBuffers {
+		e.device.uncommitted.Add(-1)
+		return fmt.Errorf("metal: %d command buffers are recorded and not submitted, the queue holds %d", n-1, maxCommandBuffers)
+	}
+
 	// Scoped autorelease pool — drain immediately after creating the command buffer.
 	// The command buffer is Retained so it survives the pool drain.
 	// This prevents LIFO violations when pools from different frames overlap
@@ -58,6 +64,7 @@ func (e *CommandEncoder) BeginEncoding(label string) error {
 	defer pool.Drain()
 	e.cmdBuffer = MsgSend(e.device.commandQueue, Sel("commandBuffer"))
 	if e.cmdBuffer == 0 {
+		e.device.uncommitted.Add(-1)
 		return fmt.Errorf("metal: failed to create command buffer")
 	}
 	Retain(e.cmdBuffer)
@@ -81,12 +88,12 @@ func (e *CommandEncoder) EndEncoding() (hal.CommandBuffer, error) {
 	if e.recordErr != nil {
 		err := e.recordErr
 		e.recordErr = nil
-		Release(e.cmdBuffer)
-		e.cmdBuffer = 0
+		e.releaseCommandBuffer()
 		e.releaseICBOwners()
 		return nil, err
 	}
 	cb := &CommandBuffer{raw: e.cmdBuffer, device: e.device, icbOwners: e.icbOwners, external: e.external}
+	cb.uncommitted.Store(true)
 	e.cmdBuffer = 0 // Recording state becomes false
 	e.icbOwners = nil
 	e.external = nil
@@ -100,8 +107,7 @@ func (e *CommandEncoder) EndEncoding() (hal.CommandBuffer, error) {
 func (e *CommandEncoder) DiscardEncoding() {
 	if e.cmdBuffer != 0 {
 		hal.Logger().Debug("metal: encoding discarded")
-		Release(e.cmdBuffer)
-		e.cmdBuffer = 0 // Recording state becomes false
+		e.releaseCommandBuffer()
 	}
 	e.releaseICBOwners()
 	e.recordErr = nil
@@ -132,8 +138,7 @@ func (e *CommandEncoder) Destroy() {
 		return
 	}
 	if e.cmdBuffer != 0 {
-		Release(e.cmdBuffer)
-		e.cmdBuffer = 0
+		e.releaseCommandBuffer()
 	}
 	e.releaseICBOwners()
 	e.recordErr = nil
@@ -141,6 +146,14 @@ func (e *CommandEncoder) Destroy() {
 		e.finished.Destroy()
 		e.finished = nil
 	}
+}
+
+// releaseCommandBuffer releases the command buffer being recorded, which
+// will not be committed.
+func (e *CommandEncoder) releaseCommandBuffer() {
+	Release(e.cmdBuffer)
+	e.cmdBuffer = 0
+	e.device.uncommitted.Add(-1)
 }
 
 func (e *CommandEncoder) failRecording(err error) {
@@ -519,6 +532,17 @@ type CommandBuffer struct {
 	icbOwners []*indexedICBOwnership
 	external  []externalCopy // for Submit to encode, see externalCopy
 	destroy   sync.Once
+	// uncommitted is whether the buffer still counts in the device's
+	// uncommitted command buffers.
+	uncommitted atomic.Bool
+}
+
+// settle takes the buffer off the device's uncommitted command buffers, once
+// it is committed or released.
+func (cb *CommandBuffer) settle() {
+	if cb.uncommitted.CompareAndSwap(true, false) {
+		cb.device.uncommitted.Add(-1)
+	}
 }
 
 // Destroy releases the command buffer.
@@ -527,6 +551,7 @@ func (cb *CommandBuffer) Destroy() {
 		return
 	}
 	cb.destroy.Do(func() {
+		cb.settle()
 		if cb.raw != 0 {
 			Release(cb.raw)
 			cb.raw = 0
