@@ -273,6 +273,10 @@ func depthStencilViewDesc(view *TextureView, format d3d12.DXGI_FORMAT) d3d12.D3D
 	return desc
 }
 
+// stencilComponentMapping reads a stencil SRV as (G, 0, 0, 1): its formats
+// hold the stencil value in green, and WebGPU reads it from red.
+const stencilComponentMapping = 1 | 4<<3 | 4<<6 | 5<<9 | 1<<12
+
 // shaderResourceViewDesc describes a shader resource view of view in format,
 // reading plane. A cube view of a later cube than the first is a one-cube
 // cube-array view, since a cube view has no first face.
@@ -281,6 +285,9 @@ func shaderResourceViewDesc(view *TextureView, format d3d12.DXGI_FORMAT, plane u
 		Format:                  format,
 		ViewDimension:           textureViewDimensionToSRV(view.dimension),
 		Shader4ComponentMapping: d3d12.D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+	}
+	if format == d3d12.DXGI_FORMAT_X24_TYPELESS_G8_UINT || format == d3d12.DXGI_FORMAT_X32_TYPELESS_G8X24_UINT {
+		desc.Shader4ComponentMapping = stencilComponentMapping
 	}
 	switch view.dimension {
 	case gputypes.TextureViewDimension1D:

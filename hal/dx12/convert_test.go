@@ -937,3 +937,16 @@ func TestUnorderedAccessViewDescAddressesTheViewsLayers(t *testing.T) {
 		})
 	}
 }
+
+func TestStencilViewSwizzlesGreenToRed(t *testing.T) {
+	view := &TextureView{texture: testTexture(gputypes.TextureFormatDepth24PlusStencil8, gputypes.TextureDimension2D, 4, 4, 1, 1), dimension: gputypes.TextureViewDimension2D, aspect: gputypes.TextureAspectStencilOnly, mipCount: 1, layerCount: 1}
+	format, plane := textureFormatToSRV(view.texture.format, view.aspect)
+	if got := shaderResourceViewDesc(view, format, plane).Shader4ComponentMapping; got != 0x1B21 {
+		t.Fatalf("stencil view component mapping = %#x, want (G, 0, 0, 1), 0x1b21", got)
+	}
+	view.aspect = gputypes.TextureAspectDepthOnly
+	format, plane = textureFormatToSRV(view.texture.format, view.aspect)
+	if got := shaderResourceViewDesc(view, format, plane).Shader4ComponentMapping; got != d3d12.D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING {
+		t.Fatalf("depth view component mapping = %#x, want the default", got)
+	}
+}
