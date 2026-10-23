@@ -15,7 +15,7 @@ func mipTexture(t *testing.T, device *Device) *Texture {
 	t.Helper()
 	tex, err := device.CreateTexture(&TextureDescriptor{
 		Size: Extent3D{Width: 8, Height: 8, DepthOrArrayLayers: 1}, Format: TextureFormatRGBA8Unorm,
-		Usage:         TextureUsageTextureBinding | TextureUsageRenderAttachment | TextureUsageCopyDst,
+		Usage:         TextureUsageTextureBinding | TextureUsageRenderAttachment | TextureUsageCopyDst | TextureUsageCopySrc,
 		MipLevelCount: 2, SampleCount: 1, Dimension: TextureDimension2D,
 	})
 	if err != nil {
@@ -123,4 +123,37 @@ func TestArrayTextureLayers(t *testing.T) {
 	finishAndSubmit(t, device, enc)
 	expectPixels(t, "the cleared layer 1", loadLayerPixels(t, device, all, 1, 4, 4), 255, 0, 0, 255)
 	expectPixels(t, "layer 0 after the clear", loadLayerPixels(t, device, all, 0, 4, 4), 0x10, 0x10, 0x10, 0x10)
+}
+
+// TestCopiesUseTheirMipLevel reads mip 1 back, copies a buffer into mip 1
+// and reads both mips: GL's buffer copies wrote and read mip 0 whatever mip
+// the copy named.
+func TestCopiesUseTheirMipLevel(t *testing.T) {
+	device, _ := newValidatedDevice(t)
+	tex := mipTexture(t, device)
+	defer tex.Release()
+	mip1 := subresource{mip: 1, width: 4, height: 4, rowBytes: 16, rows: 4}
+	expectBytes(t, "mip 1 read back", readSubresources(t, device, tex, gputypes.TextureAspectAll, []subresource{mip1})[0], 0x30)
+
+	buf, err := device.CreateBuffer(&BufferDescriptor{Size: 256 * 4, Usage: BufferUsageCopySrc | BufferUsageCopyDst})
+	if err != nil {
+		t.Fatalf("CreateBuffer: %v", err)
+	}
+	defer buf.Release()
+	if err := device.Queue().WriteBuffer(buf, 0, bytes.Repeat([]byte{0x55}, 256*4)); err != nil {
+		t.Fatalf("WriteBuffer: %v", err)
+	}
+	enc, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	enc.CopyBufferToTexture(buf, tex, []BufferTextureCopy{{
+		BufferLayout: ImageDataLayout{BytesPerRow: 256, RowsPerImage: 4},
+		TextureBase:  ImageCopyTexture{Texture: tex, MipLevel: 1},
+		Size:         Extent3D{Width: 4, Height: 4, DepthOrArrayLayers: 1},
+	}})
+	finishAndSubmit(t, device, enc)
+	got := readSubresources(t, device, tex, gputypes.TextureAspectAll, []subresource{{width: 8, height: 8, rowBytes: 32, rows: 8}, mip1})
+	expectBytes(t, "mip 0 after the copy into mip 1", got[0], 0x10)
+	expectBytes(t, "mip 1 after the copy into it", got[1], 0x55)
 }

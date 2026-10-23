@@ -161,9 +161,9 @@ func (e *CommandEncoder) CopyBufferToBuffer(src, dst hal.Buffer, regions []hal.B
 }
 
 // CopyBufferToTexture copies buffer data to a texture via PBO (pixel unpack buffer).
-// Binds the source buffer as GL_PIXEL_UNPACK_BUFFER, then calls glTexSubImage2D
-// with offset 0 so that GL reads pixel data from the bound PBO.
-// Matches Rust wgpu-hal/src/gles/queue.rs CopyBufferToTexture command.
+// Binds the source buffer as GL_PIXEL_UNPACK_BUFFER, then uploads with the
+// buffer offset in place of the pixels, at the region's mip level, layers
+// and pitches. Matches Rust wgpu-hal/src/gles/queue.rs CopyBufferToTexture.
 func (e *CommandEncoder) CopyBufferToTexture(src hal.Buffer, dst hal.Texture, regions []hal.BufferTextureCopy) {
 	srcBuf, srcOK := src.(*Buffer)
 	dstTex, dstOK := dst.(*Texture)
@@ -173,19 +173,16 @@ func (e *CommandEncoder) CopyBufferToTexture(src hal.Buffer, dst hal.Texture, re
 
 	for _, region := range regions {
 		e.commands = append(e.commands, &CopyBufferToTextureCommand{
-			srcBuffer:   srcBuf,
-			dstTex:      dstTex,
-			origin:      [3]uint32{region.TextureBase.Origin.X, region.TextureBase.Origin.Y, region.TextureBase.Origin.Z},
-			copySize:    [3]uint32{region.Size.Width, region.Size.Height, region.Size.DepthOrArrayLayers},
-			bufOffset:   region.BufferLayout.Offset,
-			bytesPerRow: region.BufferLayout.BytesPerRow,
+			srcBuffer: srcBuf,
+			dstTex:    dstTex,
+			region:    region,
 		})
 	}
 }
 
 // CopyTextureToBuffer copies texture data to a buffer via FBO + glReadPixels.
-// For each region, it binds the source texture's FBO and reads pixels into the
-// destination buffer's CPU-side data slice.
+// For each region, it attaches the source mip level and layer to the read
+// framebuffer and reads its pixels into the destination buffer.
 func (e *CommandEncoder) CopyTextureToBuffer(src hal.Texture, dst hal.Buffer, regions []hal.BufferTextureCopy) {
 	srcTex, srcOK := src.(*Texture)
 	dstBuf, dstOK := dst.(*Buffer)
@@ -195,21 +192,18 @@ func (e *CommandEncoder) CopyTextureToBuffer(src hal.Texture, dst hal.Buffer, re
 
 	for _, region := range regions {
 		e.commands = append(e.commands, &CopyTextureToBufferCommand{
-			fbs:         e.fbs,
-			srcTexture:  srcTex,
-			dstBuffer:   dstBuf,
-			srcOrigin:   [3]uint32{region.TextureBase.Origin.X, region.TextureBase.Origin.Y, region.TextureBase.Origin.Z},
-			copySize:    [3]uint32{region.Size.Width, region.Size.Height, region.Size.DepthOrArrayLayers},
-			dstOffset:   region.BufferLayout.Offset,
-			bytesPerRow: region.BufferLayout.BytesPerRow,
+			fbs:        e.fbs,
+			srcTexture: srcTex,
+			dstBuffer:  dstBuf,
+			region:     region,
 		})
 	}
 }
 
 // CopyTextureToTexture copies between textures using FBO read + glCopyTexSubImage2D.
-// Attaches the source texture to the read framebuffer, then copies pixels into the
-// destination texture. This works on GL 3.0+ / ES 3.0+ without glCopyImageSubData.
-// Matches Rust wgpu-hal/src/gles/queue.rs CopyTextureToTexture command.
+// Attaches the source mip level and layer to the read framebuffer, then copies
+// pixels into the destination's. This works on GL 3.0+ / ES 3.0+ without
+// glCopyImageSubData. Matches Rust wgpu-hal/src/gles/queue.rs CopyTextureToTexture.
 func (e *CommandEncoder) CopyTextureToTexture(src, dst hal.Texture, regions []hal.TextureCopy) {
 	srcTex, srcOK := src.(*Texture)
 	dstTex, dstOK := dst.(*Texture)
@@ -219,14 +213,10 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst hal.Texture, regions []ha
 
 	for _, region := range regions {
 		e.commands = append(e.commands, &CopyTextureToTextureCommand{
-			fbs:       e.fbs,
-			srcTex:    srcTex,
-			dstTex:    dstTex,
-			srcOrigin: [3]uint32{region.SrcBase.Origin.X, region.SrcBase.Origin.Y, region.SrcBase.Origin.Z},
-			dstOrigin: [3]uint32{region.DstBase.Origin.X, region.DstBase.Origin.Y, region.DstBase.Origin.Z},
-			copySize:  [3]uint32{region.Size.Width, region.Size.Height, region.Size.DepthOrArrayLayers},
-			srcMip:    region.SrcBase.MipLevel,
-			dstMip:    region.DstBase.MipLevel,
+			fbs:    e.fbs,
+			srcTex: srcTex,
+			dstTex: dstTex,
+			region: region,
 		})
 	}
 }
@@ -1738,141 +1728,188 @@ func (c *DispatchIndirectCommand) Execute(ctx *gl.Context) {
 	ctx.MemoryBarrier(gl.SHADER_STORAGE_BARRIER_BIT | gl.VERTEX_ATTRIB_ARRAY_BARRIER_BIT | gl.BUFFER_UPDATE_BARRIER_BIT)
 }
 
-// CopyTextureToBufferCommand reads pixels from a texture's FBO into a buffer's
-// CPU-side data slice. This is the standard GLES readback path since GLES lacks
-// glGetTexImage. The approach: bind texture FBO -> glReadPixels -> copy to buffer.
+// CopyTextureToBufferCommand reads pixels from a texture level into a
+// buffer: each layer or slice of the region is attached to the read
+// framebuffer, read with glReadPixels into memory, and written row by row
+// to the buffer at WebGPU's layout. This is the standard GLES readback path
+// since GLES lacks glGetTexImage.
 type CopyTextureToBufferCommand struct {
-	fbs         *framebuffers
-	srcTexture  *Texture
-	dstBuffer   *Buffer
-	srcOrigin   [3]uint32 // x, y, z
-	copySize    [3]uint32 // width, height, depthOrArrayLayers
-	dstOffset   uint64
-	bytesPerRow uint32
+	fbs        *framebuffers
+	srcTexture *Texture
+	dstBuffer  *Buffer
+	region     hal.BufferTextureCopy
 }
 
 // Execute reads pixels from the source texture's FBO into the destination
-// buffer's GL storage, a row every bytesPerRow from dstOffset like WebGPU
-// lays it out. Mapping the buffer then reads them back from GL.
+// buffer's GL storage, a row every bytesPerRow from the layout's offset like
+// WebGPU lays it out. Mapping the buffer then reads them back from GL.
 func (c *CopyTextureToBufferCommand) Execute(ctx *gl.Context) {
-	width := int32(c.copySize[0])
-	height := int32(c.copySize[1])
+	r, tex := &c.region, c.srcTexture
+	width, height := int32(r.Size.Width), int32(r.Size.Height)
 	if width == 0 || height == 0 || c.dstBuffer.id == 0 {
 		return
 	}
-	if c.srcTexture.glf.compressed() {
+	if tex.glf.compressed() {
 		// glReadPixels reads no blocks, and ES has no glGetCompressedTexImage.
 		compressedReadbackOnce.Do(func() {
-			hal.Logger().Error("gles: CopyTextureToBuffer from a compressed texture is not supported", "format", c.srcTexture.format)
+			hal.Logger().Error("gles: CopyTextureToBuffer from a compressed texture is not supported", "format", tex.format)
 		})
 		return
 	}
 
-	// Rows come out in the texture's own transfer format, sized by what
-	// glReadPixels writes for it.
-	format, dataType := c.srcTexture.glf.format, c.srcTexture.glf.typ
+	// Rows come out in the transfer pair of the aspect copied, sized by
+	// what glReadPixels writes for it.
+	format, dataType := tex.copyPair(r.TextureBase.Aspect)
 	rowBytes := uint32(width) * pixelSize(format, dataType)
 	pitch := uint64(rowBytes)
-	if c.bytesPerRow != 0 {
-		pitch = uint64(c.bytesPerRow) // usually wider: copies align rows to 256 bytes
+	if r.BufferLayout.BytesPerRow != 0 {
+		pitch = uint64(r.BufferLayout.BytesPerRow) // usually wider: copies align rows to 256 bytes
 	}
-
-	c.fbs.bindRead(ctx, fbAttachment{tex: c.srcTexture})
+	rows := uint64(height)
+	if r.BufferLayout.RowsPerImage != 0 {
+		rows = uint64(r.BufferLayout.RowsPerImage)
+	}
 
 	// Set tight pixel packing (no row alignment padding).
 	ctx.PixelStorei(gl.PACK_ALIGNMENT, 1)
-
-	// Read pixels from the bound FBO into a temporary CPU buffer.
 	tmpBuf := make([]byte, uint64(rowBytes)*uint64(height))
-	ctx.ReadPixels(
-		int32(c.srcOrigin[0]), int32(c.srcOrigin[1]),
-		width, height,
-		format, dataType,
-		unsafe.Pointer(&tmpBuf[0]),
-	)
-
-	// Write each row to its place in the buffer. They come out top row first:
-	// textures here are stored top-down like WebGPU's, and only the blit to
-	// the window flips.
 	ctx.BindBuffer(gl.COPY_WRITE_BUFFER, c.dstBuffer.id)
-	for row := int32(0); row < height; row++ {
-		srcStart := uint64(row) * uint64(rowBytes)
-		ctx.BufferSubData(gl.COPY_WRITE_BUFFER, int(c.dstOffset+uint64(row)*pitch), int(rowBytes), unsafe.Pointer(&tmpBuf[srcStart]))
+	for layer := range max(1, r.Size.DepthOrArrayLayers) {
+		c.fbs.bindRead(ctx, fbAttachment{tex: tex, mip: r.TextureBase.MipLevel, layer: r.TextureBase.Origin.Z + layer})
+		ctx.ReadPixels(int32(r.TextureBase.Origin.X), int32(r.TextureBase.Origin.Y), width, height,
+			format, dataType, unsafe.Pointer(&tmpBuf[0]))
+
+		// Write each row to its place in the buffer. They come out top row
+		// first: textures here are stored top-down like WebGPU's, and only
+		// the blit to the window flips.
+		image := r.BufferLayout.Offset + uint64(layer)*rows*pitch
+		for row := uint64(0); row < uint64(height); row++ {
+			ctx.BufferSubData(gl.COPY_WRITE_BUFFER, int(image+row*pitch), int(rowBytes), unsafe.Pointer(&tmpBuf[row*uint64(rowBytes)]))
+		}
 	}
 	ctx.BindBuffer(gl.COPY_WRITE_BUFFER, 0)
 	ctx.BindFramebuffer(gl.READ_FRAMEBUFFER, 0)
 }
 
+// copyPair is the transfer pair a copy of aspect of t moves: the depth or
+// the stencil alone of a combined format, its own pair otherwise.
+func (t *Texture) copyPair(aspect gputypes.TextureAspect) (format, typ uint32) {
+	switch {
+	case aspect == gputypes.TextureAspectStencilOnly || t.format == gputypes.TextureFormatStencil8:
+		return gl.STENCIL_INDEX, gl.UNSIGNED_BYTE
+	case aspect == gputypes.TextureAspectDepthOnly && t.format.HasStencil():
+		return gl.DEPTH_COMPONENT, gl.FLOAT // Depth32FloatStencil8, the one copyable
+	}
+	return t.glf.format, t.glf.typ
+}
+
 // CopyBufferToTextureCommand copies buffer data to a texture using a pixel unpack
-// buffer. Binds the source GL buffer as GL_PIXEL_UNPACK_BUFFER, then calls
-// glTexSubImage2D with offset=0 so GL reads from the bound PBO.
+// buffer. Binds the source GL buffer as GL_PIXEL_UNPACK_BUFFER, then uploads
+// with the buffer offset in place of the pixels, at the region's mip level and
+// layers, its rows at the layout's pitch.
 // Matches Rust wgpu-hal/src/gles/queue.rs CopyBufferToTexture.
 type CopyBufferToTextureCommand struct {
-	srcBuffer   *Buffer
-	dstTex      *Texture
-	origin      [3]uint32 // x, y, z
-	copySize    [3]uint32 // width, height, depthOrArrayLayers
-	bufOffset   uint64
-	bytesPerRow uint32
+	srcBuffer *Buffer
+	dstTex    *Texture
+	region    hal.BufferTextureCopy
 }
 
 func (c *CopyBufferToTextureCommand) Execute(ctx *gl.Context) {
 	ctx.Shadow.ForgetTextures()
-	width := int32(c.copySize[0])
-	height := int32(c.copySize[1])
+	r, tex := &c.region, c.dstTex
+	width, height, depth := int32(r.Size.Width), int32(r.Size.Height), int32(max(1, r.Size.DepthOrArrayLayers))
 	if width == 0 || height == 0 {
 		return
 	}
 
-	format, dataType := c.dstTex.glf.format, c.dstTex.glf.typ
-
-	// Bind source buffer as pixel unpack buffer (PBO).
+	// Bind source buffer as pixel unpack buffer (PBO), and the texture.
 	ctx.BindBuffer(gl.PIXEL_UNPACK_BUFFER, c.srcBuffer.id)
-
-	// Bind destination texture.
-	ctx.BindTexture(c.dstTex.target, c.dstTex.id)
-
-	if c.dstTex.glf.compressed() {
-		c.uploadBlocks(ctx)
+	ctx.BindTexture(tex.target, tex.id)
+	defer func() {
 		ctx.BindBuffer(gl.PIXEL_UNPACK_BUFFER, 0)
-		ctx.BindTexture(c.dstTex.target, 0)
+		ctx.BindTexture(tex.target, 0)
+	}()
+
+	if tex.glf.compressed() {
+		c.uploadBlocks(ctx)
 		return
 	}
 
-	// Set pixel alignment to 1 for formats whose rows may not be 4-byte aligned.
+	format, dataType := tex.copyPair(r.TextureBase.Aspect)
+	bpp := pixelSize(format, dataType)
+	rows := uint32(height)
+	if r.BufferLayout.RowsPerImage != 0 {
+		rows = r.BufferLayout.RowsPerImage
+	}
+	pitch := uint32(width) * bpp
+	if r.BufferLayout.BytesPerRow != 0 {
+		pitch = r.BufferLayout.BytesPerRow
+	}
 	ctx.PixelStorei(gl.UNPACK_ALIGNMENT, 1)
-	ctx.PixelStorei(gl.UNPACK_ROW_LENGTH, 0) // use default (tightly packed)
+	ctx.PixelStorei(gl.UNPACK_ROW_LENGTH, int32(pitch/bpp))
+	ctx.PixelStorei(gl.UNPACK_IMAGE_HEIGHT, int32(rows))
+	defer func() {
+		ctx.PixelStorei(gl.UNPACK_ALIGNMENT, 4)
+		ctx.PixelStorei(gl.UNPACK_ROW_LENGTH, 0)
+		ctx.PixelStorei(gl.UNPACK_IMAGE_HEIGHT, 0)
+	}()
 
-	// Upload from PBO. With a PBO bound, the pixels argument is a byte offset
-	// into it. Turned into an unsafe.Pointer, an offset under 4096 is a fatal
-	// "bad pointer" to checkptr (on under -race), so it goes as an integer.
-	ctx.TexSubImage2DOffset(c.dstTex.target, 0,
-		int32(c.origin[0]), int32(c.origin[1]),
-		width, height,
-		format, dataType, uintptr(c.bufOffset))
-
-	// Restore defaults.
-	ctx.PixelStorei(gl.UNPACK_ALIGNMENT, 4)
-	ctx.BindBuffer(gl.PIXEL_UNPACK_BUFFER, 0)
-	ctx.BindTexture(c.dstTex.target, 0)
+	// With a PBO bound, the pixels argument is a byte offset into it.
+	// Turned into an unsafe.Pointer, an offset under 4096 is a fatal "bad
+	// pointer" to checkptr (on under -race), so it goes as an integer.
+	x, y, z, mip := int32(r.TextureBase.Origin.X), int32(r.TextureBase.Origin.Y), r.TextureBase.Origin.Z, int32(r.TextureBase.MipLevel)
+	offset := uintptr(r.BufferLayout.Offset)
+	switch {
+	case tex.layered():
+		ctx.TexSubImage3DOffset(tex.target, mip, x, y, int32(z), width, height, depth, format, dataType, offset)
+	case tex.target == gl.TEXTURE_CUBE_MAP:
+		for face := range uint32(depth) {
+			ctx.TexSubImage2DOffset(gl.TEXTURE_CUBE_MAP_POSITIVE_X+z+face, mip, x, y, width, height, format, dataType,
+				offset+uintptr(face*rows*pitch))
+		}
+	default:
+		ctx.TexSubImage2DOffset(tex.target, mip, x, y, width, height, format, dataType, offset)
+	}
 }
 
 // uploadBlocks copies a compressed region from the bound pixel unpack
-// buffer, a row of blocks at a time when the buffer's rows are padded: ES
-// has no row length for compressed uploads.
+// buffer, a layer at a time, and a row of blocks at a time when the
+// buffer's rows are padded: ES has no row length for compressed uploads.
 func (c *CopyBufferToTextureCommand) uploadBlocks(ctx *gl.Context) {
-	f := c.dstTex.glf
-	blocks, rowBytes := compressedRows(c.dstTex.format, c.copySize[0], c.copySize[1])
-	if c.bytesPerRow == 0 || c.bytesPerRow == rowBytes {
-		ctx.CompressedTexSubImage2DOffset(c.dstTex.target, 0, int32(c.origin[0]), int32(c.origin[1]),
-			int32(c.copySize[0]), int32(c.copySize[1]), f.internal, int32(rowBytes*blocks), uintptr(c.bufOffset))
-		return
+	r, tex := &c.region, c.dstTex
+	internal := tex.glf.internal
+	blocks, rowBytes := compressedRows(tex.format, r.Size.Width, r.Size.Height)
+	_, bh := tex.format.BlockDimensions()
+	pitch := rowBytes
+	if r.BufferLayout.BytesPerRow != 0 {
+		pitch = r.BufferLayout.BytesPerRow
 	}
-	_, bh := c.dstTex.format.BlockDimensions()
-	for r := range blocks {
-		y := r * bh
-		ctx.CompressedTexSubImage2DOffset(c.dstTex.target, 0, int32(c.origin[0]), int32(c.origin[1]+y),
-			int32(c.copySize[0]), int32(min(bh, c.copySize[1]-y)), f.internal, int32(rowBytes), uintptr(c.bufOffset+uint64(r)*uint64(c.bytesPerRow)))
+	imageRows := blocks
+	if r.BufferLayout.RowsPerImage != 0 {
+		imageRows = r.BufferLayout.RowsPerImage / bh
+	}
+	x, mip := int32(r.TextureBase.Origin.X), int32(r.TextureBase.MipLevel)
+	upload := func(layer, y, height, size uint32, offset uint64) {
+		z := r.TextureBase.Origin.Z + layer
+		switch {
+		case tex.layered():
+			ctx.CompressedTexSubImage3DOffset(tex.target, mip, x, int32(y), int32(z), int32(r.Size.Width), int32(height), 1, internal, int32(size), uintptr(offset))
+		case tex.target == gl.TEXTURE_CUBE_MAP:
+			ctx.CompressedTexSubImage2DOffset(gl.TEXTURE_CUBE_MAP_POSITIVE_X+z, mip, x, int32(y), int32(r.Size.Width), int32(height), internal, int32(size), uintptr(offset))
+		default:
+			ctx.CompressedTexSubImage2DOffset(tex.target, mip, x, int32(y), int32(r.Size.Width), int32(height), internal, int32(size), uintptr(offset))
+		}
+	}
+	y := r.TextureBase.Origin.Y
+	for layer := range max(1, r.Size.DepthOrArrayLayers) {
+		image := r.BufferLayout.Offset + uint64(layer)*uint64(imageRows)*uint64(pitch)
+		if pitch == rowBytes {
+			upload(layer, y, r.Size.Height, rowBytes*blocks, image)
+			continue
+		}
+		for row := range blocks {
+			upload(layer, y+row*bh, min(bh, r.Size.Height-row*bh), rowBytes, image+uint64(row)*uint64(pitch))
+		}
 	}
 }
 
@@ -1880,38 +1917,41 @@ func (c *CopyBufferToTextureCommand) uploadBlocks(ctx *gl.Context) {
 // texture logs.
 var compressedReadbackOnce sync.Once
 
-// CopyTextureToTextureCommand copies pixels between textures using an FBO.
-// Attaches the source texture to GL_READ_FRAMEBUFFER, then copies into the
-// destination via glCopyTexSubImage2D.
+// CopyTextureToTextureCommand copies pixels between textures: the source
+// level and layer attached to the read framebuffer, glCopyTexSubImage into
+// the destination's, a layer at a time.
 // Matches Rust wgpu-hal/src/gles/queue.rs CopyTextureToTexture.
 type CopyTextureToTextureCommand struct {
-	fbs       *framebuffers
-	srcTex    *Texture
-	dstTex    *Texture
-	srcOrigin [3]uint32 // x, y, z
-	dstOrigin [3]uint32 // x, y, z
-	copySize  [3]uint32 // width, height, depthOrArrayLayers
-	srcMip    uint32
-	dstMip    uint32
+	fbs    *framebuffers
+	srcTex *Texture
+	dstTex *Texture
+	region hal.TextureCopy
 }
 
 func (c *CopyTextureToTextureCommand) Execute(ctx *gl.Context) {
 	ctx.Shadow.ForgetTextures()
-	width := int32(c.copySize[0])
-	height := int32(c.copySize[1])
+	r, dst := &c.region, c.dstTex
+	width, height := int32(r.Size.Width), int32(r.Size.Height)
 	if width == 0 || height == 0 {
 		return
 	}
 
-	c.fbs.bindRead(ctx, fbAttachment{tex: c.srcTex, mip: c.srcMip})
-
-	// Bind destination texture and copy pixels from the read framebuffer.
-	ctx.BindTexture(c.dstTex.target, c.dstTex.id)
-	ctx.CopyTexSubImage2D(c.dstTex.target, int32(c.dstMip),
-		int32(c.dstOrigin[0]), int32(c.dstOrigin[1]),
-		int32(c.srcOrigin[0]), int32(c.srcOrigin[1]),
-		width, height)
-	ctx.BindTexture(c.dstTex.target, 0)
+	ctx.BindTexture(dst.target, dst.id)
+	x, y, mip := int32(r.DstBase.Origin.X), int32(r.DstBase.Origin.Y), int32(r.DstBase.MipLevel)
+	srcX, srcY := int32(r.SrcBase.Origin.X), int32(r.SrcBase.Origin.Y)
+	for layer := range max(1, r.Size.DepthOrArrayLayers) {
+		c.fbs.bindRead(ctx, fbAttachment{tex: c.srcTex, mip: r.SrcBase.MipLevel, layer: r.SrcBase.Origin.Z + layer})
+		z := r.DstBase.Origin.Z + layer
+		switch {
+		case dst.layered():
+			ctx.CopyTexSubImage3D(dst.target, mip, x, y, int32(z), srcX, srcY, width, height)
+		case dst.target == gl.TEXTURE_CUBE_MAP:
+			ctx.CopyTexSubImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_X+z, mip, x, y, srcX, srcY, width, height)
+		default:
+			ctx.CopyTexSubImage2D(dst.target, mip, x, y, srcX, srcY, width, height)
+		}
+	}
+	ctx.BindTexture(dst.target, 0)
 	ctx.BindFramebuffer(gl.READ_FRAMEBUFFER, 0)
 }
 
