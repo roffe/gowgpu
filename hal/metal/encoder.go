@@ -652,12 +652,7 @@ func (e *RenderPassEncoder) replayPendingState() {
 		return
 	}
 	e.applyPendingBindGroups()
-	for i := range e.pending.vertexBuffers {
-		state := &e.pending.vertexBuffers[i]
-		if state.set {
-			e.applyVertexBuffer(uint32(i), state.buffer, state.offset)
-		}
-	}
+	e.applyPendingVertexBuffers()
 	if e.pending.viewportSet {
 		msgSendVoid(e.raw, Sel("setViewport:"), argStruct(e.pending.viewport, mtlViewportType))
 	}
@@ -682,6 +677,20 @@ func (e *RenderPassEncoder) applyPendingBindGroups() {
 		state := &e.pending.bindGroups[i]
 		if state.set {
 			e.applyBindGroup(uint32(i), state.group, state.offsets[:state.offsetCount])
+		}
+	}
+}
+
+// applyPendingVertexBuffers binds the vertex buffers set so far that the
+// current pipeline reads.
+func (e *RenderPassEncoder) applyPendingVertexBuffers() {
+	if e.pending == nil {
+		return
+	}
+	for i := range e.pending.vertexBuffers {
+		state := &e.pending.vertexBuffers[i]
+		if state.set {
+			e.applyVertexBuffer(uint32(i), state.buffer, state.offset)
 		}
 	}
 }
@@ -719,6 +728,7 @@ func (e *RenderPassEncoder) SetPipeline(pipeline hal.RenderPipeline) {
 	if prev == nil || prev.layout != p.layout {
 		e.applyPendingBindGroups()
 	}
+	e.applyPendingVertexBuffers()
 }
 
 func (e *RenderPassEncoder) applyPipeline(p *RenderPipeline) {
@@ -856,6 +866,11 @@ func (e *RenderPassEncoder) SetVertexBuffer(slot uint32, buffer hal.Buffer, offs
 }
 
 func (e *RenderPassEncoder) applyVertexBuffer(slot uint32, buf *Buffer, offset uint64) {
+	// The slot of a vertex buffer the pipeline doesn't read may be one of
+	// its bind groups' slots.
+	if e.pipeline == nil || slot >= e.pipeline.vertexBuffers {
+		return
+	}
 	bufIdx := maxVertexBuffers - 1 - slot
 	_ = MsgSend(e.raw, Sel("setVertexBuffer:offset:atIndex:"), uintptr(buf.raw), uintptr(offset), uintptr(bufIdx))
 }

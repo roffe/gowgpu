@@ -144,3 +144,80 @@ func TestCompileOptionsPreserveInvariance(t *testing.T) {
 		}
 	}
 }
+
+// TestVertexBufferSlotsKeepOffBindGroups binds a vertex buffer at a slot
+// the pipeline doesn't read, whose Metal buffer index is that of the 24th
+// bind group buffer, which the fragment shader reads; and checks that a
+// pipeline whose vertex buffers would reach its bind group buffers fails.
+func TestVertexBufferSlotsKeepOffBindGroups(t *testing.T) {
+	device, queue := newMetalTextureCopyTestDevice(t)
+	const buffers = 24
+	entries := make([]gputypes.BindGroupLayoutEntry, buffers)
+	for i := range entries {
+		entries[i] = gputypes.BindGroupLayoutEntry{Binding: uint32(i), Visibility: gputypes.ShaderStageFragment,
+			Buffer: &gputypes.BufferBindingLayout{Type: gputypes.BufferBindingTypeUniform}}
+	}
+	bgl, err := device.CreateBindGroupLayout(&hal.BindGroupLayoutDescriptor{Entries: entries})
+	if err != nil {
+		t.Fatalf("CreateBindGroupLayout failed: %v", err)
+	}
+	rawLayout, err := device.CreatePipelineLayout(&hal.PipelineLayoutDescriptor{BindGroupLayouts: []hal.BindGroupLayout{bgl}})
+	if err != nil {
+		t.Fatalf("CreatePipelineLayout failed: %v", err)
+	}
+	layout := rawLayout.(*PipelineLayout)
+
+	color := createMetalTextureCopyTestUpload(t, device, 0, unsafe.Slice((*byte)(unsafe.Pointer(&[4]float32{0, 1, 0, 1})), 16))
+	defer color.Destroy()
+	junk := createMetalTextureCopyTestUpload(t, device, 0, make([]byte, 256))
+	defer junk.Destroy()
+	groupEntries := make([]gputypes.BindGroupEntry, buffers)
+	for i := range groupEntries {
+		groupEntries[i] = gputypes.BindGroupEntry{Binding: uint32(i),
+			Resource: gputypes.BufferBinding{Buffer: uintptr(color.raw), Size: 16}}
+	}
+	group, err := device.CreateBindGroup(&hal.BindGroupDescriptor{Layout: bgl, Entries: groupEntries})
+	if err != nil {
+		t.Fatalf("CreateBindGroup failed: %v", err)
+	}
+
+	pipeline := renderTestPipeline(t, device, `
+@group(0) @binding(23) var<uniform> color: vec4<f32>;
+@vertex fn vs_main(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
+	return vec4<f32>(f32(i32(vi & 1u) * 4 - 1), f32(i32(vi >> 1u) * 4 - 1), 0.0, 1.0);
+}
+@fragment fn fs_main() -> @location(0) vec4<f32> { return color; }
+`, layout, gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList})
+	pixels := renderTestDraw(t, device, queue, func(pass *RenderPassEncoder) {
+		pass.SetVertexBuffer(maxVertexBuffers-1-buffers+1, junk, 0)
+		pass.SetPipeline(pipeline)
+		pass.SetBindGroup(0, group, nil)
+		pass.SetVertexBuffer(maxVertexBuffers-1-buffers+1, junk, 0)
+		pass.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1})
+	})
+	for i := 0; i < len(pixels); i += 4 {
+		if got := pixels[i : i+4]; string(got) != string([]byte{0, 255, 0, 255}) {
+			t.Fatalf("pixel %d = %v, want the uniform's green", i/4, got)
+		}
+	}
+
+	module, err := device.CreateShaderModule(&hal.ShaderModuleDescriptor{Source: hal.ShaderSource{WGSL: `
+@vertex fn vs_main() -> @builtin(position) vec4<f32> { return vec4<f32>(0.0); }
+`}})
+	if err != nil {
+		t.Fatalf("CreateShaderModule failed: %v", err)
+	}
+	defer module.Destroy()
+	vertexBuffers := make([]gputypes.VertexBufferLayout, maxVertexBuffers-buffers)
+	for i := range vertexBuffers {
+		vertexBuffers[i] = gputypes.VertexBufferLayout{ArrayStride: 16, StepMode: gputypes.VertexStepModeVertex}
+	}
+	if p, err := device.CreateRenderPipeline(&hal.RenderPipelineDescriptor{
+		Layout:    layout,
+		Vertex:    hal.VertexState{Module: module, EntryPoint: "vs_main", Buffers: vertexBuffers},
+		Primitive: gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList},
+	}); err == nil {
+		p.Destroy()
+		t.Fatalf("a pipeline with %d vertex buffers and %d bind group buffers was made", len(vertexBuffers), buffers)
+	}
+}

@@ -269,6 +269,9 @@ type RenderPipeline struct {
 	// take at buffer slot sizesSlot, as ComputePipeline's sizesBindings.
 	vertexSizes, fragmentSizes []ir.ResourceBinding
 	sizesSlot                  int
+
+	// vertexBuffers is how many vertex buffer slots the pipeline reads.
+	vertexBuffers uint32
 }
 
 // Destroy releases the render pipeline.

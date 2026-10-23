@@ -23,9 +23,14 @@ import (
 	"github.com/roffe/gowgpu/hal/metal/mslmap"
 )
 
-// Vertex buffer indices are assigned from the end of the range and count down.
-// This maximizes the gap between uniform/storage buffers and vertex buffers.
+// maxVertexBuffers is how many buffer slots a Metal function has. Vertex buffer
+// indices are assigned from the end of the range and count down, the bind
+// groups' buffers and naga's `_buffer_sizes` from the start up.
 const maxVertexBuffers = 31
+
+// vertexBuffersLimit is the vertex buffers a pipeline may take, as Dawn
+// offers: with the sizes slot it leaves 22 slots for bind group buffers.
+const vertexBuffersLimit = 8
 
 // maxCommandBuffers is how many uncompleted command buffers the command queue
 // holds, as in wgpu-hal. [MTLCommandQueue commandBuffer] blocks until one
@@ -757,8 +762,13 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 	defer pool.Drain()
 
 	var pipeLayout *PipelineLayout
-	if pl, ok := desc.Layout.(*PipelineLayout); ok {
-		pipeLayout = pl
+	var layoutBuffers int
+	if pl, ok := desc.Layout.(*PipelineLayout); ok && pl != nil {
+		pipeLayout, layoutBuffers = pl, pl.totalBuffers
+	}
+	if n := len(desc.Vertex.Buffers); layoutBuffers+1+n > maxVertexBuffers {
+		return nil, fmt.Errorf("metal: %d vertex buffers, the layout's %d buffers and the buffer sizes don't fit in %d buffer slots",
+			n, layoutBuffers, maxVertexBuffers)
 	}
 
 	vertexModule, ok := desc.Vertex.Module.(*ShaderModule)
@@ -954,8 +964,9 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		depthSlopeScale: depthSlopeScale,
 		depthClamp:      depthClamp,
 
-		vertexSizes: vertex.sizesBindings,
-		sizesSlot:   vertex.sizesSlot,
+		vertexSizes:   vertex.sizesBindings,
+		sizesSlot:     vertex.sizesSlot,
+		vertexBuffers: uint32(len(desc.Vertex.Buffers)),
 	}
 	if fragment != nil {
 		pipeline.fragmentSizes = fragment.sizesBindings
