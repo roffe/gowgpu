@@ -328,6 +328,21 @@ type RenderPipeline struct {
 	// GLSL generates combined sampler2D on the texture's binding.
 	// Matches Rust wgpu-hal GLES SamplerBindMap pattern.
 	samplerBindMap [maxTextureSlots]int8 // -1 = no sampler, otherwise = sampler glBinding
+
+	// firstInstanceLoc is the location of naga's naga_vs_first_instance
+	// uniform, -1 when the vertex shader has none, and firstInstance the
+	// value the program has in it.
+	firstInstanceLoc int32
+	firstInstance    uint32
+}
+
+// setFirstInstance gives the program in use, p's, the first instance of the
+// draw coming: what WGSL's instance_index starts at.
+func (p *RenderPipeline) setFirstInstance(ctx *gl.Context, first uint32) {
+	if p != nil && p.firstInstanceLoc >= 0 && p.firstInstance != first {
+		ctx.Uniform1ui(p.firstInstanceLoc, first)
+		p.firstInstance = first
+	}
 }
 
 const maxTextureSlots = 32

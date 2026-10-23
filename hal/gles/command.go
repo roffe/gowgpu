@@ -679,13 +679,17 @@ func (e *RenderPassEncoder) Draw(args gputypes.DrawArgs) {
 	if e.pipeline != nil {
 		topology = e.pipeline.primitiveTopology
 	}
+	baseInstance := e.startInstanceBuffers(args.FirstInstance)
 	e.encoder.commands = append(e.encoder.commands, e.encoder.store().draws.put(DrawCommand{
 		vertexCount:   args.VertexCount,
 		instanceCount: args.InstanceCount,
 		firstVertex:   args.FirstVertex,
 		firstInstance: args.FirstInstance,
+		baseInstance:  baseInstance,
+		pipeline:      e.pipeline,
 		topology:      topology,
 	}))
+	e.endInstanceBuffers(args.FirstInstance, baseInstance)
 }
 
 // DrawIndexed draws indexed primitives.
@@ -694,16 +698,63 @@ func (e *RenderPassEncoder) DrawIndexed(args gputypes.DrawIndexedArgs) {
 	if e.pipeline != nil {
 		topology = e.pipeline.primitiveTopology
 	}
+	baseInstance := e.startInstanceBuffers(args.FirstInstance)
 	e.encoder.commands = append(e.encoder.commands, e.encoder.store().drawsIndexed.put(DrawIndexedCommand{
 		indexCount:    args.IndexCount,
 		instanceCount: args.InstanceCount,
 		firstIndex:    args.FirstIndex,
 		baseVertex:    args.BaseVertex,
 		firstInstance: args.FirstInstance,
+		baseInstance:  baseInstance,
+		pipeline:      e.pipeline,
 		indexOffset:   e.indexOffset,
 		indexFormat:   e.indexFormat,
 		topology:      topology,
 	}))
+	e.endInstanceBuffers(args.FirstInstance, baseInstance)
+}
+
+// startInstanceBuffers returns the base instance a draw from firstInstance
+// passes GL. Without base instance draws (GL 4.2, ARB/EXT_base_instance) it
+// is 0, and the per-instance vertex buffers are bound firstInstance records
+// further on instead, as wgpu-hal does.
+func (e *RenderPassEncoder) startInstanceBuffers(firstInstance uint32) uint32 {
+	if firstInstance == 0 || e.encoder.glCtx == nil || e.encoder.glCtx.SupportsBaseInstance() {
+		return firstInstance
+	}
+	e.bindInstanceBuffers(uint64(firstInstance))
+	return 0
+}
+
+// endInstanceBuffers binds the per-instance vertex buffers back where they
+// were, after a draw startInstanceBuffers moved them for.
+func (e *RenderPassEncoder) endInstanceBuffers(firstInstance, baseInstance uint32) {
+	if firstInstance != baseInstance {
+		e.bindInstanceBuffers(0)
+	}
+}
+
+// bindInstanceBuffers binds the per-instance vertex buffers first records
+// past their offsets.
+func (e *RenderPassEncoder) bindInstanceBuffers(first uint64) {
+	if e.pipeline == nil {
+		return
+	}
+	for slot, buf := range e.vertexBuffers {
+		if buf == nil || slot >= len(e.pipeline.vertexBuffers) {
+			continue
+		}
+		layout := &e.pipeline.vertexBuffers[slot]
+		if layout.StepMode != gputypes.VertexStepModeInstance {
+			continue
+		}
+		e.encoder.commands = append(e.encoder.commands, e.encoder.store().vertexBuffers.put(SetVertexBufferCommand{
+			slot:   uint32(slot), //nolint:gosec // slot index
+			buffer: buf,
+			offset: e.vertexOffsets[slot] + first*layout.ArrayStride,
+			layout: layout,
+		}))
+	}
 }
 
 // DrawIndirect is not implemented by the GLES backend.
@@ -1519,40 +1570,33 @@ func (c *SetStencilRefCommand) Execute(ctx *gl.Context) {
 		ref, c.depthStencil.StencilReadMask)
 }
 
-// DrawCommand executes a non-indexed draw.
+// DrawCommand executes a non-indexed draw. firstInstance is where WGSL's
+// instance_index starts, and baseInstance where the per-instance vertex
+// attributes are fetched from: firstInstance too, or 0 when the vertex
+// buffers were bound that much further on instead.
 type DrawCommand struct {
 	vertexCount, instanceCount uint32
 	firstVertex, firstInstance uint32
+	baseInstance               uint32
+	pipeline                   *RenderPipeline
 	topology                   gputypes.PrimitiveTopology
 }
 
 func (c *DrawCommand) Execute(ctx *gl.Context) {
 	mode := primitiveTopologyToGL(c.topology)
+	if c.instanceCount != 0 {
+		c.pipeline.setFirstInstance(ctx, c.firstInstance)
+	}
 	switch {
 	case c.instanceCount == 0:
 		// Nothing to draw, as in WebGPU; GL would draw one instance.
-	case c.firstInstance != 0 && ctx.SupportsBaseInstance():
-		ctx.DrawArraysInstancedBaseInstance(mode, int32(c.firstVertex), int32(c.vertexCount), int32(c.instanceCount), c.firstInstance)
+	case c.baseInstance != 0:
+		ctx.DrawArraysInstancedBaseInstance(mode, int32(c.firstVertex), int32(c.vertexCount), int32(c.instanceCount), c.baseInstance)
 	case c.instanceCount == 1:
-		warnNoBaseInstance(c.firstInstance)
 		ctx.DrawArrays(mode, int32(c.firstVertex), int32(c.vertexCount))
 	default:
-		warnNoBaseInstance(c.firstInstance)
 		ctx.DrawArraysInstanced(mode, int32(c.firstVertex), int32(c.vertexCount), int32(c.instanceCount))
 	}
-}
-
-// noBaseInstanceOnce guards the one warning for draws that start at an
-// instance other than the first on a context without base instance draws.
-var noBaseInstanceOnce sync.Once
-
-func warnNoBaseInstance(firstInstance uint32) {
-	if firstInstance == 0 {
-		return
-	}
-	noBaseInstanceOnce.Do(func() {
-		hal.Logger().Warn("gles: no base instance draws on this GL context (GL 4.2, ARB_base_instance or EXT_base_instance); draws start at instance 0 whatever their firstInstance")
-	})
 }
 
 // DrawIndexedCommand executes an indexed draw. indexOffset is where the bound
@@ -1564,6 +1608,8 @@ type DrawIndexedCommand struct {
 	firstIndex                uint32
 	baseVertex                int32
 	firstInstance             uint32
+	baseInstance              uint32 // as DrawCommand's
+	pipeline                  *RenderPipeline
 	indexOffset               uint64
 	indexFormat               gputypes.IndexFormat
 	topology                  gputypes.PrimitiveTopology
@@ -1580,16 +1626,17 @@ func (c *DrawIndexedCommand) Execute(ctx *gl.Context) {
 	offset := uintptr(c.indexOffset) + uintptr(c.firstIndex)*indexSize
 	mode := primitiveTopologyToGL(c.topology)
 
+	if c.instanceCount != 0 {
+		c.pipeline.setFirstInstance(ctx, c.firstInstance)
+	}
 	switch {
 	case c.instanceCount == 0:
 		// Nothing to draw, as in WebGPU; GL would draw one instance.
-	case c.firstInstance != 0 && ctx.SupportsBaseInstance():
-		ctx.DrawElementsInstancedBaseInstance(mode, int32(c.indexCount), indexType, offset, int32(c.instanceCount), c.firstInstance)
+	case c.baseInstance != 0:
+		ctx.DrawElementsInstancedBaseInstance(mode, int32(c.indexCount), indexType, offset, int32(c.instanceCount), c.baseInstance)
 	case c.instanceCount == 1:
-		warnNoBaseInstance(c.firstInstance)
 		ctx.DrawElements(mode, int32(c.indexCount), indexType, offset)
 	default:
-		warnNoBaseInstance(c.firstInstance)
 		ctx.DrawElementsInstanced(mode, int32(c.indexCount), indexType, offset, int32(c.instanceCount))
 	}
 }

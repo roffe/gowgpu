@@ -157,6 +157,7 @@ type Context struct {
 
 	// Uniforms (GL 2.0+)
 	glUniform1i        unsafe.Pointer
+	glUniform1ui       unsafe.Pointer
 	glUniform1f        unsafe.Pointer
 	glUniform2f        unsafe.Pointer
 	glUniform3f        unsafe.Pointer
@@ -364,6 +365,7 @@ func (c *Context) Load(getProcAddr ProcAddressFunc, isGLES ...bool) error {
 
 	// Uniforms
 	c.glUniform1i = getProcAddr("glUniform1i")
+	c.glUniform1ui = getProcAddr("glUniform1ui")
 	c.glUniform1f = getProcAddr("glUniform1f")
 	c.glUniform2f = getProcAddr("glUniform2f")
 	c.glUniform3f = getProcAddr("glUniform3f")
@@ -1209,6 +1211,11 @@ func (c *Context) UniformBlockBinding(program, blockIndex, blockBinding uint32) 
 }
 
 // --- Uniforms ---
+
+// Uniform1ui sets an unsigned integer uniform of the program in use.
+func (c *Context) Uniform1ui(location int32, value uint32) {
+	C.gl_v_ii(C.uintptr_t(uintptr(c.glUniform1ui)), C.uint32_t(location), C.uint32_t(value))
+}
 
 // Uniform1i sets an integer uniform value.
 func (c *Context) Uniform1i(location, value int32) {

@@ -369,12 +369,6 @@ func queryFeatures(exts map[string]bool, glMajor, glMinor int, isES bool, glCtx 
 		features.Insert(gputypes.FeatureRG11B10UfloatRenderable)
 	}
 
-	// IndirectFirstInstance -- desktop GL 4.2+ with ARB_shader_draw_parameters
-	if !isES && glMajor >= 4 && glMinor >= 2 &&
-		hasExtension(exts, "GL_ARB_shader_draw_parameters") {
-		features.Insert(gputypes.FeatureIndirectFirstInstance)
-	}
-
 	return features
 }
 

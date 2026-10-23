@@ -459,3 +459,77 @@ func TestBindGroupsAcrossLayouts(t *testing.T) {
 	expectPixels(t, "draws with group 1 across a layout change", readback(t, st), 0, 255, 0, 255)
 	assertNoValidation(t, h)
 }
+
+// instanceIndexShader draws a full-screen triangle green when its
+// instance_index is 1, red otherwise.
+const instanceIndexShader = `
+struct VSOut { @builtin(position) pos: vec4<f32>, @location(0) @interpolate(flat) instance: u32 }
+@vertex fn vs_main(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> VSOut {
+	var out: VSOut;
+	out.pos = vec4<f32>(f32(i32(vi & 1u) * 4 - 1), f32(i32(vi >> 1u) * 4 - 1), 0.0, 1.0);
+	out.instance = ii;
+	return out;
+}
+@fragment fn fs_main(in: VSOut) -> @location(0) vec4<f32> {
+	return select(vec4<f32>(1.0, 0.0, 0.0, 1.0), vec4<f32>(0.0, 1.0, 0.0, 1.0), in.instance == 1u);
+}
+`
+
+// TestInstanceIndexStartsAtFirstInstance draws instance 1 alone, with Draw
+// and with DrawIndexed: instance_index has to be 1. GL never set naga's
+// naga_vs_first_instance uniform, so it was gl_InstanceID alone, which
+// starts at 0 even in a base instance draw.
+func TestInstanceIndexStartsAtFirstInstance(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	module, err := device.CreateShaderModule(&ShaderModuleDescriptor{Label: "instance-index", WGSL: instanceIndexShader})
+	if err != nil {
+		t.Fatalf("CreateShaderModule: %v", err)
+	}
+	defer module.Release()
+	pipe, err := device.CreateRenderPipeline(&RenderPipelineDescriptor{
+		Label:     "instance-index",
+		Vertex:    VertexState{Module: module, EntryPoint: "vs_main"},
+		Primitive: gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList},
+		Fragment: &FragmentState{Module: module, EntryPoint: "fs_main",
+			Targets: []gputypes.ColorTargetState{{Format: gputypes.TextureFormatRGBA8Unorm, WriteMask: gputypes.ColorWriteMaskAll}}},
+	})
+	if err != nil {
+		t.Fatalf("CreateRenderPipeline: %v", err)
+	}
+	defer pipe.Release()
+	indices := []uint16{0, 1, 2, 0}
+	ib, err := device.CreateBuffer(&BufferDescriptor{Label: "indices", Size: 8, Usage: BufferUsageIndex | BufferUsageCopyDst})
+	if err != nil {
+		t.Fatalf("CreateBuffer: %v", err)
+	}
+	defer ib.Release()
+	if err := device.Queue().WriteBuffer(ib, 0, unsafe.Slice((*byte)(unsafe.Pointer(&indices[0])), 8)); err != nil {
+		t.Fatalf("WriteBuffer: %v", err)
+	}
+	for _, indexed := range []bool{false, true} {
+		tex, view := pixTexture(t, device, "instance-index", TextureUsageRenderAttachment|TextureUsageCopySrc)
+		st := readbackBuffer(t, device, "instance-index-st")
+		enc, err := device.CreateCommandEncoder(nil)
+		if err != nil {
+			t.Fatalf("CreateCommandEncoder: %v", err)
+		}
+		clearPass(t, enc, view, gputypes.LoadOpClear, gputypes.Color{}, func(p *RenderPassEncoder) {
+			p.SetPipeline(pipe)
+			if indexed {
+				p.SetIndexBuffer(ib, gputypes.IndexFormatUint16, 0)
+				p.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: 3, InstanceCount: 1, FirstInstance: 1})
+			} else {
+				p.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1, FirstInstance: 1})
+			}
+		})
+		copyOut(enc, tex, st)
+		finishAndSubmit(t, device, enc)
+		what := "Draw from instance 1"
+		if indexed {
+			what = "DrawIndexed from instance 1"
+		}
+		expectPixels(t, what, readback(t, st), 0, 255, 0, 255)
+		releaseTextureView(tex, view)
+	}
+	assertNoValidation(t, h)
+}
