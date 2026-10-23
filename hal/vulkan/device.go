@@ -13,6 +13,8 @@ import (
 	"unsafe"
 
 	"github.com/gogpu/naga"
+	"github.com/gogpu/naga/ir"
+	"github.com/gogpu/naga/spirv"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/vulkan/memory"
@@ -82,6 +84,9 @@ type Device struct {
 	// VkPresentRegionsKHR into VkPresentInfoKHR.PNext to hint the
 	// compositor about which surface regions changed (damage rects).
 	supportsIncrementalPresent bool
+
+	// shaderOptions are what WGSL is compiled with, see shaderOptions.
+	shaderOptions spirv.Options
 
 	// storeOpNone is whether the device takes VK_ATTACHMENT_STORE_OP_NONE,
 	// which a read-only depth or stencil aspect is stored with: without it
@@ -1326,47 +1331,45 @@ func (d *Device) DestroyPipelineLayout(layout hal.PipelineLayout) {
 }
 
 // CreateShaderModule creates a shader module.
+//
+// WGSL is compiled with the device's shaderOptions. A module with overrides
+// is compiled by each pipeline with its constants, so an override without a
+// default only needs one there.
 func (d *Device) CreateShaderModule(desc *hal.ShaderModuleDescriptor) (hal.ShaderModule, error) {
 	if desc == nil {
 		return nil, fmt.Errorf("BUG: shader module descriptor is nil in Vulkan.CreateShaderModule — core validation gap")
 	}
 
-	var spirv []uint32
+	sm := &ShaderModule{device: d}
+	var spirvCode []uint32
 
 	// Compile shader source to SPIR-V.
 	// WGSL compilation via naga is required for Intel Iris Xe compatibility -
 	// hardcoded SPIR-V from external tools can fail silently on Intel drivers.
 	switch {
 	case desc.Source.WGSL != "":
-		spirvBytes, err := naga.Compile(desc.Source.WGSL)
+		module, err := parseWGSL(desc.Source.WGSL)
 		if err != nil {
 			return nil, fmt.Errorf("vulkan: naga WGSL compilation failed: %w", err)
 		}
-		// Convert bytes to uint32 slice
-		if len(spirvBytes)%4 != 0 {
-			return nil, fmt.Errorf("vulkan: naga output size not aligned to 4 bytes")
+		sm.module = module
+		if len(module.Overrides) > 0 {
+			return sm, nil
 		}
-		spirv = make([]uint32, len(spirvBytes)/4)
-		for i := range spirv {
-			spirv[i] = binary.LittleEndian.Uint32(spirvBytes[i*4:])
+		if spirvCode, err = d.compileWGSL(module, naga.OverrideOptions{}); err != nil {
+			return nil, fmt.Errorf("vulkan: naga WGSL compilation failed: %w", err)
 		}
 	case len(desc.Source.SPIRV) > 0:
-		spirv = desc.Source.SPIRV
+		spirvCode = desc.Source.SPIRV
 	default:
 		return nil, fmt.Errorf("vulkan: shader module requires WGSL or SPIR-V source")
 	}
 
-	createInfo := vk.ShaderModuleCreateInfo{
-		SType:    vk.StructureTypeShaderModuleCreateInfo,
-		CodeSize: uintptr(len(spirv) * 4), // Size in bytes (uint32 = 4 bytes)
-		PCode:    &spirv[0],
+	handle, err := d.createVkShaderModule(spirvCode)
+	if err != nil {
+		return nil, err
 	}
-
-	var module vk.ShaderModule
-	result := vkCreateShaderModule(d.cmds, d.handle, &createInfo, nil, &module)
-	if result != vk.Success {
-		return nil, fmt.Errorf("vulkan: vkCreateShaderModule failed: %d", result)
-	}
+	sm.handle = handle
 
 	sourceType := "SPIR-V"
 	if desc.Source.WGSL != "" {
@@ -1374,20 +1377,121 @@ func (d *Device) CreateShaderModule(desc *hal.ShaderModuleDescriptor) (hal.Shade
 	}
 	hal.Logger().Debug("vulkan: shader module compiled",
 		"source", sourceType,
-		"spirvWords", len(spirv),
+		"spirvWords", len(spirvCode),
 	)
-
-	sm := &ShaderModule{
-		handle: module,
-		device: d,
-	}
-	d.live.shaderModules.add(module)
 	if desc.Label != "" {
-		d.setObjectName(vk.ObjectTypeShaderModule, uint64(module), desc.Label)
+		d.setObjectName(vk.ObjectTypeShaderModule, uint64(handle), desc.Label)
 	} else {
-		d.setObjectName(vk.ObjectTypeShaderModule, uint64(module), "ShaderModule("+sourceType+")")
+		d.setObjectName(vk.ObjectTypeShaderModule, uint64(handle), "ShaderModule("+sourceType+")")
 	}
 	return sm, nil
+}
+
+// parseWGSL parses, lowers and validates WGSL source.
+func parseWGSL(source string) (*ir.Module, error) {
+	ast, err := naga.Parse(source)
+	if err != nil {
+		return nil, err
+	}
+	module, err := naga.LowerWithSource(ast, source)
+	if err != nil {
+		return nil, fmt.Errorf("lowering error: %w", err)
+	}
+	validationErrors, err := ir.ValidateWithCapabilities(module, 0)
+	if err != nil {
+		return nil, fmt.Errorf("validation error: %w", err)
+	}
+	if len(validationErrors) > 0 {
+		return nil, fmt.Errorf("validation failed: %w", &validationErrors[0])
+	}
+	return module, nil
+}
+
+// compileWGSL compiles module to SPIR-V with its overrides as opts says.
+func (d *Device) compileWGSL(module *ir.Module, opts naga.OverrideOptions) ([]uint32, error) {
+	module, err := naga.ProcessOverrides(module, opts)
+	if err != nil {
+		return nil, fmt.Errorf("pipeline constants: %w", err)
+	}
+	code, err := naga.GenerateSPIRV(module, d.shaderOptions)
+	if err != nil {
+		return nil, err
+	}
+	if len(code)%4 != 0 {
+		return nil, fmt.Errorf("naga output size not aligned to 4 bytes")
+	}
+	words := make([]uint32, len(code)/4)
+	for i := range words {
+		words[i] = binary.LittleEndian.Uint32(code[i*4:])
+	}
+	return words, nil
+}
+
+// shaderOptions are what the device compiles WGSL with, as wgpu-hal does:
+// the SPIR-V version of the device's Vulkan, bounds checks that keep an
+// index, a buffer access and an image load in bounds, which WGSL requires
+// and robustBufferAccess does not give for function, private and workgroup
+// arrays or image fetches, loops that cannot hang the GPU, and a point size
+// of 1, which a point list pipeline needs written.
+func shaderOptions(apiVersion uint32) spirv.Options {
+	version := spirv.Version1_3
+	if apiVersion < vkMakeVersion(1, 1, 0) {
+		version = spirv.Version1_0
+	}
+	return spirv.Options{
+		Version: version,
+		BoundsCheckPolicies: spirv.BoundsCheckPolicies{
+			Index:     spirv.BoundsCheckRestrict,
+			Buffer:    spirv.BoundsCheckRestrict,
+			ImageLoad: spirv.BoundsCheckRestrict,
+		},
+		ForcePointSize:    true,
+		ForceLoopBounding: true,
+	}
+}
+
+func (d *Device) createVkShaderModule(code []uint32) (vk.ShaderModule, error) {
+	createInfo := vk.ShaderModuleCreateInfo{
+		SType:    vk.StructureTypeShaderModuleCreateInfo,
+		CodeSize: uintptr(len(code) * 4), // Size in bytes (uint32 = 4 bytes)
+		PCode:    &code[0],
+	}
+	var module vk.ShaderModule
+	if result := vkCreateShaderModule(d.cmds, d.handle, &createInfo, nil, &module); result != vk.Success {
+		return 0, fmt.Errorf("vulkan: vkCreateShaderModule failed: %d", result)
+	}
+	d.live.shaderModules.add(module)
+	return module, nil
+}
+
+// stageModule is the VkShaderModule of a pipeline stage of sm at entry
+// point entry with constants: the module's own when it has one and there
+// are no constants, else one compiled for the stage, which the caller
+// destroys once the pipeline is made (temporary).
+func (d *Device) stageModule(sm *ShaderModule, stage ir.ShaderStage, entry string, constants map[string]float64) (handle vk.ShaderModule, temporary bool, err error) {
+	if sm.handle != 0 && len(constants) == 0 {
+		return sm.handle, false, nil
+	}
+	if sm.module == nil {
+		return 0, false, fmt.Errorf("vulkan: pipeline constants need a WGSL shader module")
+	}
+	code, err := d.compileWGSL(sm.module, naga.OverrideOptions{
+		Constants:  constants,
+		EntryPoint: &naga.EntryPointSelector{Stage: stage, Name: entry},
+	})
+	if err != nil {
+		return 0, false, fmt.Errorf("vulkan: naga WGSL compilation failed: %w", err)
+	}
+	handle, err = d.createVkShaderModule(code)
+	return handle, err == nil, err
+}
+
+// destroyStageModule destroys a module stageModule compiled for a stage.
+func (d *Device) destroyStageModule(handle vk.ShaderModule, temporary bool) {
+	if temporary {
+		d.live.shaderModules.remove(handle)
+		vkDestroyShaderModule(d.cmds, d.handle, handle, nil)
+	}
 }
 
 // DestroyShaderModule destroys a shader module.

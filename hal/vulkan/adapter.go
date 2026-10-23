@@ -200,6 +200,7 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 		maxDrawIndirectCount:       a.properties.Limits.MaxDrawIndirectCount,
 		supportsIncrementalPresent: hasIncrementalPresent,
 		storeOpNone:                storeOpNone,
+		shaderOptions:              shaderOptions(a.properties.ApiVersion),
 	}
 	dev.depth24, dev.depth24Stencil8 = depth24Formats(a.supportsDepthAttachment)
 	dev.stencil8 = stencil8Format(a.supportsDepthAttachment, dev.depth24Stencil8)

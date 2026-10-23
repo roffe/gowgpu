@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"unsafe"
 
+	"github.com/gogpu/naga/ir"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/vulkan/vk"
@@ -50,18 +51,23 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 	if !ok || vertexModule == nil {
 		return nil, fmt.Errorf("vulkan: invalid vertex shader module")
 	}
-	shaderModules = append(shaderModules, vertexModule.handle)
 
 	entryPointVertex := desc.Vertex.EntryPoint
 	if entryPointVertex == "" {
 		entryPointVertex = defaultEntryPoint
 	}
 	vertexEntryBytes := append([]byte(entryPointVertex), 0)
+	vertexHandle, temporary, err := d.stageModule(vertexModule, ir.StageVertex, entryPointVertex, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer d.destroyStageModule(vertexHandle, temporary)
+	shaderModules = append(shaderModules, vertexHandle)
 
 	stages = append(stages, vk.PipelineShaderStageCreateInfo{
 		SType:  vk.StructureTypePipelineShaderStageCreateInfo,
 		Stage:  vk.ShaderStageVertexBit,
-		Module: vertexModule.handle,
+		Module: vertexHandle,
 		PName:  &vertexEntryBytes[0],
 	})
 
@@ -72,18 +78,23 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		if !ok || fragmentModule == nil {
 			return nil, fmt.Errorf("vulkan: invalid fragment shader module")
 		}
-		shaderModules = append(shaderModules, fragmentModule.handle)
 
 		entryPointFragment := desc.Fragment.EntryPoint
 		if entryPointFragment == "" {
 			entryPointFragment = defaultEntryPoint
 		}
 		fragmentEntryBytes = append([]byte(entryPointFragment), 0)
+		fragmentHandle, temporary, err := d.stageModule(fragmentModule, ir.StageFragment, entryPointFragment, nil)
+		if err != nil {
+			return nil, err
+		}
+		defer d.destroyStageModule(fragmentHandle, temporary)
+		shaderModules = append(shaderModules, fragmentHandle)
 
 		stages = append(stages, vk.PipelineShaderStageCreateInfo{
 			SType:  vk.StructureTypePipelineShaderStageCreateInfo,
 			Stage:  vk.ShaderStageFragmentBit,
-			Module: fragmentModule.handle,
+			Module: fragmentHandle,
 			PName:  &fragmentEntryBytes[0],
 		})
 	}
@@ -372,13 +383,9 @@ func (d *Device) DestroyRenderPipeline(pipeline hal.RenderPipeline) {
 	vkPipeline.device = nil
 }
 
-// CreateComputePipeline creates a compute pipeline.
-//
-// TODO(compute-constants): Apply desc.Compute.Constants via naga's
-// pipeline_constants::process_overrides before SPIR-V emission, or map to
-// VkSpecializationInfo on the pipeline stage. Rust wgpu-hal calls
-// naga::back::pipeline_constants::process_overrides() in fill_stage_info
-// (vulkan/device.rs:783) and then writes the processed module to SPIR-V.
+// CreateComputePipeline creates a compute pipeline, with its shader
+// compiled again for its pipeline constants when it has any, as wgpu-hal
+// does with naga's process_overrides.
 //
 // TODO(zero-init-workgroup): Pass desc.Compute.ZeroInitializeWorkgroupMemory
 // to naga SPIR-V options. When the VK_KHR_zero_initialize_workgroup_memory
@@ -413,11 +420,16 @@ func (d *Device) CreateComputePipeline(desc *hal.ComputePipelineDescriptor) (hal
 		entryPoint = defaultEntryPoint
 	}
 	entryPointBytes := append([]byte(entryPoint), 0)
+	computeHandle, temporary, err := d.stageModule(computeModule, ir.StageCompute, entryPoint, desc.Compute.Constants)
+	if err != nil {
+		return nil, err
+	}
+	defer d.destroyStageModule(computeHandle, temporary)
 
 	stage := vk.PipelineShaderStageCreateInfo{
 		SType:  vk.StructureTypePipelineShaderStageCreateInfo,
 		Stage:  vk.ShaderStageComputeBit,
-		Module: computeModule.handle,
+		Module: computeHandle,
 		PName:  &entryPointBytes[0],
 	}
 

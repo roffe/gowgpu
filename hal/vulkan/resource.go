@@ -8,6 +8,7 @@ package vulkan
 import (
 	"slices"
 
+	"github.com/gogpu/naga/ir"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal/vulkan/memory"
 	"github.com/roffe/gowgpu/hal/vulkan/vk"
@@ -144,7 +145,10 @@ func (s *Sampler) NativeHandle() uintptr {
 
 // ShaderModule implements hal.ShaderModule for Vulkan.
 type ShaderModule struct {
+	// handle is the module compiled with every override at its default,
+	// 0 when WGSL has overrides, which each pipeline compiles itself.
 	handle vk.ShaderModule
+	module *ir.Module // the WGSL's, nil for SPIR-V
 	device *Device
 }
 
