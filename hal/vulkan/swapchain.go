@@ -217,15 +217,14 @@ func (d *Device) swapchainView(t *SwapchainTexture, desc *hal.TextureViewDescrip
 	}
 	// An sRGB view of a storage image has the image's usage less storage,
 	// which no sRGB format has (VUID-VkImageViewCreateInfo-usage-02275).
-	var pinner runtime.Pinner
-	defer pinner.Unpin()
+	var pins runtime.Pinner
+	defer pins.Unpin()
 	if storage := vk.ImageUsageFlags(vk.ImageUsageStorageBit); r.Format.IsSrgb() && t.swapchain.usage&storage != 0 {
-		viewUsage := &vk.ImageViewUsageCreateInfo{
+		viewUsage := vk.ImageViewUsageCreateInfo{
 			SType: vk.StructureTypeImageViewUsageCreateInfo,
 			Usage: t.swapchain.usage &^ storage,
 		}
-		pinner.Pin(viewUsage)
-		createInfo.PNext = (*uintptr)(unsafe.Pointer(viewUsage))
+		createInfo.PNext = (*uintptr)(unsafe.Pointer(vk.Pin(&pins, &viewUsage)))
 	}
 	var handle vk.ImageView
 	if result := vkCreateImageViewSwapchain(d, &createInfo, nil, &handle); result != vk.Success {
@@ -733,22 +732,20 @@ func (s *Surface) createSwapchain(device *Device, config *hal.SurfaceConfigurati
 	}
 	// Views in other formats need a mutable format swapchain, whose format
 	// list has its own format too (VUID-VkSwapchainCreateInfoKHR-flags-03168).
-	var pinner runtime.Pinner
-	defer pinner.Unpin()
+	var pins runtime.Pinner
+	defer pins.Unpin()
 	if len(viewFormats) > 0 {
 		vkViewFormats := []vk.Format{vkFormat}
 		for _, f := range viewFormats {
 			vkViewFormats = append(vkViewFormats, device.vkFormat(f))
 		}
-		formatList := &vk.ImageFormatListCreateInfo{
+		formatList := vk.ImageFormatListCreateInfo{
 			SType:           vk.StructureTypeImageFormatListCreateInfo,
 			ViewFormatCount: uint32(len(vkViewFormats)),
-			PViewFormats:    &vkViewFormats[0],
+			PViewFormats:    vk.Pin(&pins, &vkViewFormats[0]),
 		}
-		pinner.Pin(formatList)
-		pinner.Pin(&vkViewFormats[0])
 		createInfo.Flags = vk.SwapchainCreateFlagsKHR(vk.SwapchainCreateMutableFormatBitKhr)
-		createInfo.PNext = (*uintptr)(unsafe.Pointer(formatList))
+		createInfo.PNext = (*uintptr)(unsafe.Pointer(vk.Pin(&pins, &formatList)))
 	}
 
 	var swapchainHandle vk.SwapchainKHR
