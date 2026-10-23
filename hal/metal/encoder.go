@@ -718,9 +718,9 @@ type bindSlotAssignment struct {
 // computeBindSlots calculates per-type sequential Metal slot indices for bind group entries.
 //
 // Metal uses separate index spaces: [[buffer(N)]], [[texture(M)]], [[sampler(K)]].
-// The naga MSL compiler auto-generates these indices sequentially per type,
-// so we must count each resource type independently instead of using the
-// WGSL @binding(N) number (which is unique across all types in a group).
+// The pipeline layout numbers each resource type independently, so the
+// WGSL @binding(N) number (which is unique across all types in a group) is not
+// the slot.
 func computeBindSlots(entries []gputypes.BindGroupEntry) (bufferSlots, textureSlots, samplerSlots []bindSlotAssignment) {
 	var bufferIdx, textureIdx, samplerIdx uintptr
 	for i, entry := range entries {
@@ -745,9 +745,8 @@ func computeBindSlots(entries []gputypes.BindGroupEntry) (bufferSlots, textureSl
 // are set individually via setVertexBuffer/setFragmentBuffer, setVertexTexture/
 // setFragmentTexture, and setVertexSamplerState/setFragmentSamplerState.
 //
-// The Metal binding index uses per-type sequential indices because naga MSL
-// auto-generates [[buffer(N)]], [[texture(M)]], [[sampler(K)]] attributes
-// sequentially per type.
+// The Metal binding index is the per-type sequential index the pipeline
+// layout gives the entry, which its shaders are compiled with.
 func (e *RenderPassEncoder) SetBindGroup(index uint32, group hal.BindGroup, offsets []uint32) {
 	bg, ok := group.(*BindGroup)
 	if !ok || bg == nil {
@@ -772,10 +771,8 @@ func (e *RenderPassEncoder) SetBindGroup(index uint32, group hal.BindGroup, offs
 
 func (e *RenderPassEncoder) applyBindGroup(index uint32, bg *BindGroup, offsets []uint32) {
 	// Metal uses per-type sequential indices: [[buffer(N)]], [[texture(M)]], [[sampler(K)]].
-	// naga MSL generates these indices sequentially across ALL bind groups in the
-	// pipeline layout. Group 0 starts at 0; group 1 starts where group 0 ended, etc.
-	// We use the cumulative offsets from the pipeline layout to compute the correct
-	// starting slot for this group.
+	// The pipeline layout numbers them across all its bind groups: group 0
+	// starts at 0, group 1 where group 0 ended, and so on.
 	//
 	// Reference: Rust wgpu-hal metal/command.rs:182 (resource_indices.buffers + index).
 	var bufferSlot, textureSlot, samplerSlot uintptr

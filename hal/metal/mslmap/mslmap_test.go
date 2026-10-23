@@ -9,7 +9,9 @@ import (
 	"testing"
 
 	"github.com/gogpu/naga"
+	"github.com/gogpu/naga/ir"
 	"github.com/gogpu/naga/msl"
+	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal/metal/mslmap"
 )
 
@@ -32,13 +34,50 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 `
 
-// bufferParamRe finds each MSL parameter name and its buffer slot, for example
+// runtimeArrayLayout is the layout wgslRuntimeArray is written for.
+var runtimeArrayLayout = [][]gputypes.BindGroupLayoutEntry{{
+	{Binding: 0, Visibility: gputypes.ShaderStageCompute, Buffer: &gputypes.BufferBindingLayout{Type: gputypes.BufferBindingTypeStorage}},
+	{Binding: 1, Visibility: gputypes.ShaderStageCompute, Buffer: &gputypes.BufferBindingLayout{Type: gputypes.BufferBindingTypeUniform}},
+}}
+
+// wgslMaterialOnly declares only the second group of a layout whose first
+// group holds a uniform buffer too, and its fragment stage only binding 1 of
+// group 0.
+const wgslMaterialOnly = `
+struct M { color: vec4<f32> }
+@group(1) @binding(0) var<uniform> material: M;
+@group(0) @binding(1) var<uniform> tint: M;
+@group(0) @binding(2) var tex: texture_2d<f32>;
+@group(0) @binding(3) var samp: sampler;
+
+@vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
+	return material.color + vec4<f32>(f32(i));
+}
+@fragment fn fs() -> @location(0) vec4<f32> {
+	return tint.color * textureSample(tex, samp, vec2<f32>(0.5));
+}
+`
+
+// materialLayout has a camera buffer at group 0 binding 0 that neither stage
+// of wgslMaterialOnly declares.
+var materialLayout = [][]gputypes.BindGroupLayoutEntry{
+	{
+		{Binding: 3, Visibility: gputypes.ShaderStageFragment, Sampler: &gputypes.SamplerBindingLayout{Type: gputypes.SamplerBindingTypeFiltering}},
+		{Binding: 0, Visibility: gputypes.ShaderStageVertex, Buffer: &gputypes.BufferBindingLayout{Type: gputypes.BufferBindingTypeUniform}},
+		{Binding: 2, Visibility: gputypes.ShaderStageFragment, Texture: &gputypes.TextureBindingLayout{SampleType: gputypes.TextureSampleTypeFloat, ViewDimension: gputypes.TextureViewDimension2D}},
+		{Binding: 1, Visibility: gputypes.ShaderStageFragment, Buffer: &gputypes.BufferBindingLayout{Type: gputypes.BufferBindingTypeUniform}},
+	},
+	{
+		{Binding: 0, Visibility: gputypes.ShaderStageVertex, Buffer: &gputypes.BufferBindingLayout{Type: gputypes.BufferBindingTypeUniform}},
+	},
+}
+
+// slotRe finds each MSL parameter name and its slot, for example
 // "out [[buffer(0)]]".
-var bufferParamRe = regexp.MustCompile(`(\w+)\s*\[\[buffer\((\d+)\)\]\]`)
+var slotRe = regexp.MustCompile(`(\w+)\s*\[\[(buffer|texture|sampler)\((\d+)\)\]\]`)
 
-func compile(t *testing.T, source string, opts msl.Options) (string, msl.TranslationInfo) {
+func lower(t *testing.T, source string) *ir.Module {
 	t.Helper()
-
 	ast, err := naga.Parse(source)
 	if err != nil {
 		t.Fatalf("naga.Parse: %v", err)
@@ -47,136 +86,158 @@ func compile(t *testing.T, source string, opts msl.Options) (string, msl.Transla
 	if err != nil {
 		t.Fatalf("naga.LowerWithSource: %v", err)
 	}
-	out, info, err := msl.Compile(module, opts)
+	return module
+}
+
+func resources(t *testing.T, groups [][]gputypes.BindGroupLayoutEntry) map[ir.ResourceBinding]msl.BindTarget {
+	t.Helper()
+	res, err := mslmap.Resources(groups)
 	if err != nil {
-		t.Fatalf("msl.Compile: %v", err)
+		t.Fatalf("mslmap.Resources: %v", err)
 	}
-	return out, info
+	return res
 }
 
-func bufferSlots(mslSource string) map[string]string {
-	slots := make(map[string]string)
-	for _, m := range bufferParamRe.FindAllStringSubmatch(mslSource, -1) {
-		slots[m[1]] = m[2]
+// compileEntryPoint writes the MSL of one entry point against the layout.
+func compileEntryPoint(t *testing.T, module *ir.Module, stage ir.ShaderStage, name string, groups [][]gputypes.BindGroupLayoutEntry, sizesSlot int) string {
+	t.Helper()
+	opts, err := mslmap.Options(module, stage, name, resources(t, groups), sizesSlot)
+	if err != nil {
+		t.Fatalf("mslmap.Options(%s): %v", name, err)
 	}
-	return slots
+	out, _, err := msl.CompileWithPipeline(module, opts, msl.PipelineOptions{EntryPoint: &msl.EntryPointSelector{Stage: stage, Name: name}})
+	if err != nil {
+		t.Fatalf("msl.CompileWithPipeline(%s): %v", name, err)
+	}
+	return out
 }
 
-// TestDefaultOptionsLeaveSizesBufferUnbound records the bug that this package
-// fixes. With msl.DefaultOptions, naga reports that the sizes buffer is
-// required, but it writes the argument without a [[buffer(N)]] attribute.
+// slots returns the "kind(N)" slot of each parameter.
+func slots(mslSource string) map[string]string {
+	out := make(map[string]string)
+	for _, m := range slotRe.FindAllStringSubmatch(mslSource, -1) {
+		out[m[1]] = m[2] + "(" + m[3] + ")"
+	}
+	return out
+}
+
+// TestDefaultOptionsLeaveSizesBufferUnbound records why this package exists.
+// With msl.DefaultOptions, naga reports that the sizes buffer is required,
+// but it writes the argument without a [[buffer(N)]] attribute.
 func TestDefaultOptionsLeaveSizesBufferUnbound(t *testing.T) {
 	t.Parallel()
 
-	source, info := compile(t, wgslRuntimeArray, msl.DefaultOptions())
-
+	module := lower(t, wgslRuntimeArray)
+	source, info, err := msl.Compile(module, msl.DefaultOptions())
+	if err != nil {
+		t.Fatalf("msl.Compile: %v", err)
+	}
 	if !info.RequiresSizesBuffer {
 		t.Fatal("RequiresSizesBuffer = false; want true for a runtime-sized array")
 	}
 	if !strings.Contains(source, "_buffer_sizes") {
 		t.Fatal("generated MSL has no _buffer_sizes argument")
 	}
-	if slot, ok := bufferSlots(source)["_buffer_sizes"]; ok {
-		t.Fatalf("_buffer_sizes has [[buffer(%s)]] under DefaultOptions; want no attribute", slot)
+	if slot, ok := slots(source)["_buffer_sizes"]; ok {
+		t.Fatalf("_buffer_sizes has [[%s]] under DefaultOptions; want no attribute", slot)
 	}
 }
 
-// TestOptionsBindSizesBuffer checks that the map from this package puts the
-// sizes argument at the slot that the caller asked for.
+// TestOptionsBindSizesBuffer checks that the sizes argument goes at the slot
+// the caller asks for, and the layout's resources at theirs.
 func TestOptionsBindSizesBuffer(t *testing.T) {
 	t.Parallel()
 
-	ast, err := naga.Parse(wgslRuntimeArray)
-	if err != nil {
-		t.Fatalf("naga.Parse: %v", err)
-	}
-	module, err := naga.LowerWithSource(ast, wgslRuntimeArray)
-	if err != nil {
-		t.Fatalf("naga.LowerWithSource: %v", err)
-	}
-
-	const sizesSlot = 2
-
-	opts, err := mslmap.Options(module, sizesSlot)
-	if err != nil {
-		t.Fatalf("mslmap.Options: %v", err)
-	}
-	source, _, err := msl.Compile(module, opts)
-	if err != nil {
-		t.Fatalf("msl.Compile: %v", err)
+	module := lower(t, wgslRuntimeArray)
+	source := compileEntryPoint(t, module, ir.StageCompute, "main", runtimeArrayLayout, 2)
+	want := map[string]string{"out": "buffer(0)", "params": "buffer(1)", "_buffer_sizes": "buffer(2)"}
+	got := slots(source)
+	for name, slot := range want {
+		if got[name] != slot {
+			t.Errorf("%s at %q, want %s\nMSL:\n%s", name, got[name], slot, source)
+		}
 	}
 
-	got, ok := bufferSlots(source)["_buffer_sizes"]
-	if !ok {
-		t.Fatalf("_buffer_sizes has no [[buffer(N)]] attribute\nMSL:\n%s", source)
-	}
-	if got != "2" {
-		t.Errorf("_buffer_sizes bound to buffer(%s); want buffer(%d)", got, sizesSlot)
-	}
-
-	bindings, err := mslmap.RuntimeArrayBindings(module)
+	bindings, err := mslmap.SizesBindings(module, ir.StageCompute, "main")
 	if err != nil {
-		t.Fatalf("mslmap.RuntimeArrayBindings: %v", err)
+		t.Fatalf("mslmap.SizesBindings: %v", err)
 	}
-	if len(bindings) != 1 {
-		t.Fatalf("RuntimeArrayBindings = %v; want exactly the storage array binding", bindings)
-	}
-	if bindings[0].Group != 0 || bindings[0].Binding != 0 {
-		t.Errorf("RuntimeArrayBindings[0] = (%d,%d); want (0,0)", bindings[0].Group, bindings[0].Binding)
+	if len(bindings) != 1 || bindings[0] != (ir.ResourceBinding{Group: 0, Binding: 0}) {
+		t.Errorf("SizesBindings = %v; want exactly the storage array binding (0,0)", bindings)
 	}
 }
 
-// TestOptionsPreserveOrdinaryBindings is the most important check. naga uses
-// PerEntryPointMap[ep].Resources as is and does not number the resources
-// itself. An incomplete map would move every normal resource to a wrong slot,
-// with no error. The normal bindings must stay the same as with
-// msl.DefaultOptions.
-func TestOptionsPreserveOrdinaryBindings(t *testing.T) {
+// TestOptionsNumberByLayout checks that the slots come from the layout, not
+// from the globals the module declares: a layout entry the shader does not
+// use still takes its slot, and each stage gets the same numbering.
+func TestOptionsNumberByLayout(t *testing.T) {
 	t.Parallel()
 
-	ast, err := naga.Parse(wgslRuntimeArray)
-	if err != nil {
-		t.Fatalf("naga.Parse: %v", err)
+	module := lower(t, wgslMaterialOnly)
+	vs := slots(compileEntryPoint(t, module, ir.StageVertex, "vs", materialLayout, 3))
+	if vs["material"] != "buffer(2)" {
+		t.Errorf("vertex: material at %q, want buffer(2) after group 0's two buffers", vs["material"])
 	}
-	module, err := naga.LowerWithSource(ast, wgslRuntimeArray)
-	if err != nil {
-		t.Fatalf("naga.LowerWithSource: %v", err)
-	}
-
-	auto, _, err := msl.Compile(module, msl.DefaultOptions())
-	if err != nil {
-		t.Fatalf("msl.Compile (auto): %v", err)
-	}
-	opts, err := mslmap.Options(module, 2)
-	if err != nil {
-		t.Fatalf("mslmap.Options: %v", err)
-	}
-	mapped, _, err := msl.Compile(module, opts)
-	if err != nil {
-		t.Fatalf("msl.Compile (mapped): %v", err)
-	}
-
-	autoSlots := bufferSlots(auto)
-	mappedSlots := bufferSlots(mapped)
-	delete(mappedSlots, "_buffer_sizes")
-
-	if len(autoSlots) == 0 {
-		t.Fatalf("no [[buffer(N)]] parameters found in auto-numbered MSL:\n%s", auto)
-	}
-	for name, want := range autoSlots {
-		got, ok := mappedSlots[name]
-		if !ok {
-			t.Errorf("parameter %q lost its [[buffer(N)]] attribute under the explicit map", name)
-			continue
-		}
-		if got != want {
-			t.Errorf("parameter %q bound to buffer(%s); want buffer(%s) as with auto-numbering", name, got, want)
+	fs := slots(compileEntryPoint(t, module, ir.StageFragment, "fs", materialLayout, 3))
+	for name, want := range map[string]string{"tint": "buffer(1)", "tex": "texture(0)", "samp": "sampler(0)"} {
+		if fs[name] != want {
+			t.Errorf("fragment: %s at %q, want %s", name, fs[name], want)
 		}
 	}
-	for name := range mappedSlots {
-		if _, ok := autoSlots[name]; !ok {
-			t.Errorf("parameter %q gained a [[buffer(N)]] attribute under the explicit map", name)
-		}
+	if _, ok := fs["material"]; ok {
+		t.Error("fragment entry point takes material, which only the vertex stage uses")
+	}
+}
+
+// TestOptionsRejectBindingsTheLayoutLacks checks that a used global missing
+// from the layout, or of another kind there, fails instead of falling back to
+// naga's own numbering.
+func TestOptionsRejectBindingsTheLayoutLacks(t *testing.T) {
+	t.Parallel()
+
+	module := lower(t, wgslMaterialOnly)
+	noMaterial := materialLayout[:1]
+	if _, err := mslmap.Options(module, ir.StageVertex, "vs", resources(t, noMaterial), 3); err == nil {
+		t.Error("vertex stage using @group(1) @binding(0) compiled against a layout without group 1")
+	}
+	if _, err := mslmap.Options(module, ir.StageFragment, "fs", resources(t, noMaterial), 3); err != nil {
+		t.Errorf("fragment stage, which does not use group 1: %v", err)
+	}
+
+	swapped := [][]gputypes.BindGroupLayoutEntry{
+		{
+			{Binding: 1, Buffer: &gputypes.BufferBindingLayout{Type: gputypes.BufferBindingTypeUniform}},
+			{Binding: 2, Sampler: &gputypes.SamplerBindingLayout{Type: gputypes.SamplerBindingTypeFiltering}},
+			{Binding: 3, Texture: &gputypes.TextureBindingLayout{SampleType: gputypes.TextureSampleTypeFloat}},
+		},
+	}
+	if _, err := mslmap.Options(module, ir.StageFragment, "fs", resources(t, swapped), 3); err == nil {
+		t.Error("a texture compiled against a layout with a sampler at its binding")
+	}
+	if _, err := mslmap.Options(module, ir.StageFragment, "nope", resources(t, materialLayout), 3); err == nil {
+		t.Error("an entry point the module lacks compiled")
+	}
+}
+
+// TestSizesBindingsOnlyForEntryPointsThatUseThem checks that an entry point
+// with no runtime-sized array gets no sizes, though its module has one.
+func TestSizesBindingsOnlyForEntryPointsThatUseThem(t *testing.T) {
+	t.Parallel()
+
+	module := lower(t, `
+@group(0) @binding(0) var<storage, read_write> out: array<u32>;
+@group(0) @binding(1) var<storage, read_write> fixed: array<u32, 4>;
+fn helper() { out[0] = arrayLength(&out); }
+@compute @workgroup_size(1) fn sized() { helper(); }
+@compute @workgroup_size(1) fn unsized() { fixed[0] = 1u; }
+`)
+	sized, err := mslmap.SizesBindings(module, ir.StageCompute, "sized")
+	if err != nil || len(sized) != 1 {
+		t.Errorf("SizesBindings(sized) = %v, %v; want the runtime array, through the call", sized, err)
+	}
+	unsized, err := mslmap.SizesBindings(module, ir.StageCompute, "unsized")
+	if err != nil || unsized != nil {
+		t.Errorf("SizesBindings(unsized) = %v, %v; want none", unsized, err)
 	}
 }
 
@@ -185,16 +246,8 @@ func TestOptionsPreserveOrdinaryBindings(t *testing.T) {
 func TestOptionsRejectsOutOfRangeSlot(t *testing.T) {
 	t.Parallel()
 
-	ast, err := naga.Parse(wgslRuntimeArray)
-	if err != nil {
-		t.Fatalf("naga.Parse: %v", err)
-	}
-	module, err := naga.LowerWithSource(ast, wgslRuntimeArray)
-	if err != nil {
-		t.Fatalf("naga.LowerWithSource: %v", err)
-	}
-
-	if _, err := mslmap.Options(module, 256); err == nil {
-		t.Error("mslmap.Options(module, 256) = nil error; want an out-of-range error")
+	module := lower(t, wgslRuntimeArray)
+	if _, err := mslmap.Options(module, ir.StageCompute, "main", resources(t, runtimeArrayLayout), 256); err == nil {
+		t.Error("mslmap.Options with sizes slot 256 = nil error; want an out-of-range error")
 	}
 }

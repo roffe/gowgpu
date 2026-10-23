@@ -9,6 +9,7 @@ import (
 	"unsafe"
 
 	"github.com/gogpu/naga/ir"
+	"github.com/gogpu/naga/msl"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 )
@@ -120,8 +121,8 @@ func (s *Sampler) NativeHandle() uintptr { return uintptr(s.raw) }
 // ShaderModule implements hal.ShaderModule for Metal.
 //
 // WGSL is parsed and lowered to naga IR here. MSL is written later, when the
-// pipeline is created, because the buffer slot for naga's `_buffer_sizes`
-// argument comes from the pipeline layout.
+// pipeline is created, because the slots of the resources and of naga's
+// `_buffer_sizes` argument come from the pipeline layout.
 //
 // Reference: Rust wgpu-hal metal/device.rs:138-145 (load_shader takes
 // `layout: &super::PipelineLayout`).
@@ -146,9 +147,6 @@ type BindGroupLayout struct {
 
 	// Per-type resource counts for this layout.
 	// Used by PipelineLayout to compute cumulative slot offsets across groups.
-	// naga MSL generates sequential [[buffer(N)]], [[texture(M)]], [[sampler(K)]]
-	// indices across all bind groups, so each group must know how many resources
-	// of each type it contributes.
 	bufferCount  int
 	textureCount int
 	samplerCount int
@@ -205,6 +203,10 @@ type PipelineLayout struct {
 	// Reference: Rust wgpu-hal metal/device.rs:851-856
 	// (info.sizes_buffer = Some(info.counters.buffers)).
 	totalBuffers int
+
+	// resources is the slot of each binding, numbered as groupOffsets
+	// numbers them, for the MSL of the pipelines made with the layout.
+	resources map[ir.ResourceBinding]msl.BindTarget
 }
 
 // Destroy releases the pipeline layout.
