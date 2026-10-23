@@ -63,6 +63,7 @@ func (a *Adapter) RequestDevice(descriptor js.Value) (*Device, error) {
 	if err == nil && info.Type() == js.TypeObject {
 		device.setLost(info)
 	}
+	ProbeRGBA16FloatCanvas(result)
 	return device, nil
 }
 

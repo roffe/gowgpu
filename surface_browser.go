@@ -182,7 +182,9 @@ func (s *Surface) Configure(device *Device, config *SurfaceConfiguration) error 
 	)
 
 	formatStr := browser.TextureFormatToJS(config.Format)
-	s.browser.Configure(jsConfig, config.Width, config.Height, formatStr)
+	if err := s.browser.Configure(jsConfig, config.Width, config.Height, formatStr); err != nil {
+		return fmt.Errorf("wgpu: Configure: %w", err)
+	}
 	s.device = device
 	s.configFormat = config.Format
 	return nil
@@ -218,7 +220,7 @@ func (s *Surface) GetCurrentTexture() (*SurfaceTexture, bool, error) {
 
 	bt, err := s.browser.GetCurrentTexture()
 	if err != nil {
-		return nil, false, fmt.Errorf("wgpu: %w", err)
+		return nil, false, fmt.Errorf("%w: %w", ErrSurfaceLost, err)
 	}
 
 	return &SurfaceTexture{

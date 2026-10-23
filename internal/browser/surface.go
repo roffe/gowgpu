@@ -82,20 +82,28 @@ func NewSurface(gpu js.Value, canvas js.Value) (*Surface, error) {
 //
 // This sets the canvas dimensions and calls context.configure() with the
 // provided parameters. After Configure, GetCurrentTexture() can be called.
+// When configure throws, for a format the browser does not take as a
+// canvas format for example, Configure puts the canvas size back and
+// returns the exception as an error, and the previous configuration stays.
 //
 // Matches Rust wgpu SurfaceInterface::configure for WebSurface.
-func (s *Surface) Configure(config js.Value, width, height uint32, format string) {
+func (s *Surface) Configure(config js.Value, width, height uint32, format string) error {
 	// Set canvas dimensions (Rust wgpu does this in configure too).
+	oldWidth, oldHeight := s.canvas.Get("width"), s.canvas.Get("height")
 	s.canvas.Set("width", width)
 	s.canvas.Set("height", height)
 
-	// Call context.configure(config).
-	s.fnConfigure.Invoke(config)
+	if err := catchJS(func() { s.fnConfigure.Invoke(config) }); err != nil {
+		s.canvas.Set("width", oldWidth)
+		s.canvas.Set("height", oldHeight)
+		return err
+	}
 
 	s.configured = true
 	s.width = width
 	s.height = height
 	s.format = format
+	return nil
 }
 
 // Unconfigure removes the surface configuration.
@@ -113,7 +121,8 @@ func (s *Surface) Unconfigure() {
 // The returned GPUTexture is automatically presented when control returns to
 // the browser event loop after the command buffer using it is submitted.
 //
-// Returns an error if the surface is not configured.
+// Returns an error if the surface is not configured, or the exception
+// getCurrentTexture throws.
 //
 // Matches Rust wgpu SurfaceInterface::get_current_texture for WebSurface.
 func (s *Surface) GetCurrentTexture() (*Texture, error) {
@@ -121,7 +130,10 @@ func (s *Surface) GetCurrentTexture() (*Texture, error) {
 		return nil, fmt.Errorf("wgpu: surface not configured")
 	}
 
-	jsTexture := s.fnGetCurrentTexture.Invoke()
+	jsTexture, err := invoke(s.fnGetCurrentTexture)
+	if err != nil {
+		return nil, err
+	}
 	if jsTexture.IsNull() || jsTexture.IsUndefined() {
 		return nil, fmt.Errorf("wgpu: getCurrentTexture returned null")
 	}
@@ -170,4 +182,47 @@ func (s *Surface) Destroy() {
 	if s.configured {
 		s.Unconfigure()
 	}
+}
+
+// rgba16floatCanvas caches whether this browser configures an rgba16float
+// canvas: probeUnknown until ProbeRGBA16FloatCanvas has run.
+var rgba16floatCanvas = probeUnknown
+
+const (
+	probeUnknown = iota
+	probeUnsupported
+	probeSupported
+)
+
+// ProbeRGBA16FloatCanvas configures a throwaway 1x1 OffscreenCanvas as
+// rgba16float with device, once, to find out whether the browser takes it.
+// Some browsers list rgba16float as a canvas format and still throw from
+// configure (Firefox). Without OffscreenCanvas the support stays unknown.
+func ProbeRGBA16FloatCanvas(device js.Value) {
+	if rgba16floatCanvas != probeUnknown {
+		return
+	}
+	ctor := js.Global().Get("OffscreenCanvas")
+	if ctor.Type() != js.TypeFunction {
+		return
+	}
+	var context js.Value
+	if err := catchJS(func() { context = ctor.New(1, 1).Call("getContext", "webgpu") }); err != nil || context.Type() != js.TypeObject {
+		return
+	}
+	config := newJSObject()
+	config.Set("device", device)
+	config.Set("format", "rgba16float")
+	if catchJS(func() { context.Call("configure", config) }) != nil {
+		rgba16floatCanvas = probeUnsupported
+		return
+	}
+	context.Call("unconfigure")
+	rgba16floatCanvas = probeSupported
+}
+
+// RGBA16FloatCanvasSupported reports whether a canvas can be configured as
+// rgba16float. It is true until ProbeRGBA16FloatCanvas finds otherwise.
+func RGBA16FloatCanvasSupported() bool {
+	return rgba16floatCanvas != probeUnsupported
 }

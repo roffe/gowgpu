@@ -93,7 +93,8 @@ type SurfaceCapabilities struct {
 // GetSurfaceCapabilities returns the capabilities of a surface for this adapter.
 //
 // On browser, capabilities are statically defined per the WebGPU spec:
-//   - Formats: rgba8unorm, bgra8unorm, rgba16float (preferred format first)
+//   - Formats: rgba8unorm, bgra8unorm, rgba16float (preferred format first),
+//     rgba16float only where a device has shown the browser takes it
 //   - PresentModes: Fifo only (browser controls VSync)
 //   - AlphaModes: Opaque only (browser default)
 //
@@ -107,7 +108,9 @@ func (a *Adapter) GetSurfaceCapabilities(surface *Surface) *SurfaceCapabilities 
 	formats := []gputypes.TextureFormat{
 		TextureFormatRGBA8Unorm,
 		TextureFormatBGRA8Unorm,
-		gputypes.TextureFormatRGBA16Float,
+	}
+	if browser.RGBA16FloatCanvasSupported() {
+		formats = append(formats, gputypes.TextureFormatRGBA16Float)
 	}
 
 	// Put the preferred format first (Rust wgpu does the same swap).
