@@ -24,6 +24,8 @@ type ColorAttachmentKeyEntry struct {
 	StoreOp     vk.AttachmentStoreOp
 	FinalLayout vk.ImageLayout
 	HasResolve  bool // true when this slot has an MSAA resolve target
+	// ResolveLayout is the layout the pass leaves the resolve target in.
+	ResolveLayout vk.ImageLayout
 }
 
 // RenderPassKey uniquely identifies a render pass configuration.
@@ -177,23 +179,12 @@ func (c *RenderPassCache) createRenderPass(key RenderPassKey) (vk.RenderPass, er
 
 		hasMSAAResolve := cat.HasResolve && key.SampleCount > vk.SampleCountFlagBits(1)
 
-		colorFinalLayout := cat.FinalLayout
-		colorStoreOp := cat.StoreOp
-
-		if hasMSAAResolve {
-			// With MSAA resolve, the MSAA color attachment is intermediate:
-			// - FinalLayout = ColorAttachmentOptimal (not presented directly)
-			// - StoreOp = DontCare (resolved content goes to resolve target)
-			colorFinalLayout = vk.ImageLayoutColorAttachmentOptimal
-			colorStoreOp = vk.AttachmentStoreOpDontCare
-		}
-
 		// When LoadOp is Load, InitialLayout must match the actual image layout
 		// so Vulkan preserves existing contents. With Undefined, the driver may
 		// discard the image data even when LoadOpLoad is specified.
 		colorInitialLayout := vk.ImageLayoutUndefined
 		if cat.LoadOp == vk.AttachmentLoadOpLoad {
-			colorInitialLayout = colorFinalLayout
+			colorInitialLayout = cat.FinalLayout
 		}
 
 		colorRefs[i] = vk.AttachmentReference{
@@ -204,11 +195,11 @@ func (c *RenderPassCache) createRenderPass(key RenderPassKey) (vk.RenderPass, er
 			Format:         cat.Format,
 			Samples:        key.SampleCount,
 			LoadOp:         cat.LoadOp,
-			StoreOp:        colorStoreOp,
+			StoreOp:        cat.StoreOp,
 			StencilLoadOp:  vk.AttachmentLoadOpDontCare,
 			StencilStoreOp: vk.AttachmentStoreOpDontCare,
 			InitialLayout:  colorInitialLayout,
-			FinalLayout:    colorFinalLayout,
+			FinalLayout:    cat.FinalLayout,
 		}
 		attachmentCount++
 
@@ -230,7 +221,7 @@ func (c *RenderPassCache) createRenderPass(key RenderPassKey) (vk.RenderPass, er
 				StencilLoadOp:  vk.AttachmentLoadOpDontCare,
 				StencilStoreOp: vk.AttachmentStoreOpDontCare,
 				InitialLayout:  vk.ImageLayoutUndefined,
-				FinalLayout:    cat.FinalLayout, // The resolve target gets the "real" final layout
+				FinalLayout:    cat.ResolveLayout,
 			}
 			attachmentCount++
 			hasAnyResolve = true

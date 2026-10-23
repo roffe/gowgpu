@@ -273,11 +273,12 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 			break
 		}
 		rpKey.Colors[i] = ColorAttachmentKeyEntry{
-			Format:      cf,
-			LoadOp:      vk.AttachmentLoadOpClear,
-			StoreOp:     vk.AttachmentStoreOpStore,
-			FinalLayout: vk.ImageLayoutColorAttachmentOptimal, // ADR-059: pipelines use COLOR_ATTACHMENT_OPTIMAL for compatibility
-			HasResolve:  sampleCount > 1,                      // MSAA pipelines need resolve attachment
+			Format:        cf,
+			LoadOp:        vk.AttachmentLoadOpClear,
+			StoreOp:       vk.AttachmentStoreOpStore,
+			FinalLayout:   vk.ImageLayoutColorAttachmentOptimal, // ADR-059: pipelines use COLOR_ATTACHMENT_OPTIMAL for compatibility
+			HasResolve:    sampleCount > 1,                      // MSAA pipelines need resolve attachment
+			ResolveLayout: vk.ImageLayoutColorAttachmentOptimal,
 		}
 	}
 	if desc.DepthStencil != nil {

@@ -1264,37 +1264,34 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 		}
 		hasMSAAResolve := resolveView != nil && sampleCount > vk.SampleCountFlagBits(1)
 
-		// Determine the final layout for the "output" attachment.
-		// BUG-WGPU-VK-007: offscreen textures with TextureBinding must end in
-		// ImageLayoutGeneral to prevent Intel CCS stale-pixel artifacts.
-		colorFinalLayout := vk.ImageLayoutColorAttachmentOptimal
-		if !view.isSwapchain {
-			colorFinalLayout = offscreenFinalLayout(view)
-		}
+		// The pass leaves the attachment, and its resolve target, in the
+		// layout its usage is tracked in, see attachmentLayout. The one of
+		// the swapchain image, if either is one, is tracked here.
+		colorLayout := attachmentLayout(view)
+		targetLayout := colorLayout
+		var resolveLayout vk.ImageLayout
 		if hasMSAAResolve {
-			if resolveView.isSwapchain {
-				colorFinalLayout = vk.ImageLayoutColorAttachmentOptimal
-			} else {
-				colorFinalLayout = offscreenFinalLayout(resolveView)
-			}
+			resolveLayout = attachmentLayout(resolveView)
+			targetLayout = resolveLayout
 		}
 
 		// ADR-060: Inline present barrier for swapchain targets.
 		// Only the FIRST swapchain attachment drives the barrier; additional
 		// swapchain attachments are unusual and would need separate tracking.
 		if e.swapchainImage == 0 {
-			e.setupInlinePresentBarrier(view, resolveView, hasMSAAResolve, colorFinalLayout, ca.LoadOp)
+			e.setupInlinePresentBarrier(view, resolveView, hasMSAAResolve, targetLayout, ca.LoadOp)
 		}
 
 		// BUG-WGPU-VK-006: Update swapchain image layout tracking.
-		updateSwapchainLayout(view, resolveView, hasMSAAResolve, colorFinalLayout)
+		updateSwapchainLayout(view, resolveView, hasMSAAResolve, targetLayout)
 
 		rpKey.Colors[i] = ColorAttachmentKeyEntry{
-			Format:      colorFormat,
-			LoadOp:      loadOpToVk(ca.LoadOp),
-			StoreOp:     storeOpToVk(ca.StoreOp),
-			FinalLayout: colorFinalLayout,
-			HasResolve:  hasMSAAResolve,
+			Format:        colorFormat,
+			LoadOp:        loadOpToVk(ca.LoadOp),
+			StoreOp:       storeOpToVk(ca.StoreOp),
+			FinalLayout:   colorLayout,
+			HasResolve:    hasMSAAResolve,
+			ResolveLayout: resolveLayout,
 		}
 
 		// Framebuffer: color view
@@ -1954,6 +1951,16 @@ func (e *ComputePassEncoder) insertComputeBarrier() {
 // CopyAccelerationStructure, ReadAccelerationStructureCompactSize) are in raytracing.go.
 
 // --- Helper functions ---
+
+// attachmentLayout is the layout a render pass leaves a colour attachment
+// or resolve target in: a swapchain image COLOR_ATTACHMENT_OPTIMAL, until
+// the present barrier, anything else the layout of its tracked usage.
+func attachmentLayout(view *TextureView) vk.ImageLayout {
+	if view.isSwapchain {
+		return vk.ImageLayoutColorAttachmentOptimal
+	}
+	return offscreenFinalLayout(view)
+}
 
 // offscreenFinalLayout returns the Vulkan image layout that an offscreen
 // (non-swapchain) texture view should be left in at the end of a render pass.
