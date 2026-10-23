@@ -240,6 +240,14 @@ type Context struct {
 	glBlendEquationSeparate unsafe.Pointer
 	glBlendColor            unsafe.Pointer
 
+	// Per draw buffer blending and masks (GL 4.0, ES 3.2,
+	// OES/EXT_draw_buffers_indexed)
+	glEnablei                unsafe.Pointer
+	glDisablei               unsafe.Pointer
+	glBlendFuncSeparatei     unsafe.Pointer
+	glBlendEquationSeparatei unsafe.Pointer
+	glColorMaski             unsafe.Pointer
+
 	// Depth/Stencil
 	glDepthFunc           unsafe.Pointer
 	glDepthMask           unsafe.Pointer
@@ -458,6 +466,11 @@ func (c *Context) Load(getProcAddr ProcAddressFunc, isGLES ...bool) error {
 	c.glBlendEquation = getProcAddr("glBlendEquation")
 	c.glBlendEquationSeparate = getProcAddr("glBlendEquationSeparate")
 	c.glBlendColor = getProcAddr("glBlendColor")
+	c.glEnablei = getIndexedProcAddr(getProcAddr, "glEnablei")
+	c.glDisablei = getIndexedProcAddr(getProcAddr, "glDisablei")
+	c.glBlendFuncSeparatei = getIndexedProcAddr(getProcAddr, "glBlendFuncSeparatei")
+	c.glBlendEquationSeparatei = getIndexedProcAddr(getProcAddr, "glBlendEquationSeparatei")
+	c.glColorMaski = getIndexedProcAddr(getProcAddr, "glColorMaski")
 
 	// Depth/Stencil
 	c.glDepthFunc = getProcAddr("glDepthFunc")
@@ -1196,6 +1209,50 @@ func (c *Context) BlendEquation(mode uint32) {
 // BlendEquationSeparate sets separate blend equations for RGB and alpha.
 func (c *Context) BlendEquationSeparate(modeRGB, modeAlpha uint32) {
 	C.gl_v_ii(C.uintptr_t(uintptr(c.glBlendEquationSeparate)), C.uint32_t(modeRGB), C.uint32_t(modeAlpha))
+}
+
+// getIndexedProcAddr looks up a draw buffer indexed function by its core
+// name, then its OES and EXT names.
+func getIndexedProcAddr(getProcAddr ProcAddressFunc, name string) unsafe.Pointer {
+	for _, suffix := range [...]string{"", "OES", "EXT"} {
+		if p := getProcAddr(name + suffix); p != nil {
+			return p
+		}
+	}
+	return nil
+}
+
+// Enablei enables a capability of one draw buffer, GL_BLEND.
+func (c *Context) Enablei(capability, index uint32) {
+	C.gl_v_ii(C.uintptr_t(uintptr(c.glEnablei)), C.uint32_t(capability), C.uint32_t(index))
+}
+
+// Disablei disables a capability of one draw buffer, GL_BLEND.
+func (c *Context) Disablei(capability, index uint32) {
+	C.gl_v_ii(C.uintptr_t(uintptr(c.glDisablei)), C.uint32_t(capability), C.uint32_t(index))
+}
+
+// BlendFuncSeparatei sets the blend factors of one draw buffer.
+func (c *Context) BlendFuncSeparatei(buf, srcRGB, dstRGB, srcAlpha, dstAlpha uint32) {
+	C.gl_v_iiiii(C.uintptr_t(uintptr(c.glBlendFuncSeparatei)), C.uint32_t(buf), C.uint32_t(srcRGB), C.uint32_t(dstRGB), C.uint32_t(srcAlpha), C.uint32_t(dstAlpha))
+}
+
+// BlendEquationSeparatei sets the blend equations of one draw buffer.
+func (c *Context) BlendEquationSeparatei(buf, modeRGB, modeAlpha uint32) {
+	C.gl_v_iii(C.uintptr_t(uintptr(c.glBlendEquationSeparatei)), C.uint32_t(buf), C.uint32_t(modeRGB), C.uint32_t(modeAlpha))
+}
+
+// ColorMaski sets the colour write mask of one draw buffer.
+func (c *Context) ColorMaski(buf uint32, r, g, b, a bool) {
+	C.gl_v_iiiii(C.uintptr_t(uintptr(c.glColorMaski)), C.uint32_t(buf), C.uint32_t(boolGL(r)), C.uint32_t(boolGL(g)), C.uint32_t(boolGL(b)), C.uint32_t(boolGL(a)))
+}
+
+// boolGL is a GLboolean.
+func boolGL(b bool) uint32 {
+	if b {
+		return TRUE
+	}
+	return FALSE
 }
 
 // BlendColor sets the constant blend color.

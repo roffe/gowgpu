@@ -320,9 +320,11 @@ type RenderPipeline struct {
 
 	// Per-target blend and write mask state for MRT.
 	// Matches Rust wgpu-hal GLES RenderPipeline.color_targets (mod.rs:798).
-	// When len == 1, uniform blend/mask is applied globally.
-	// When len > 1, indexed GL calls are used if available (GLES 3.2 / GL 4.0).
-	colorTargets []ColorTargetDesc
+	// Targets that all blend and mask alike are applied with the global
+	// calls; perTargetBlend is set when they differ, which takes GL's per
+	// draw buffer calls (GL 4.0, ES 3.2, *_draw_buffers_indexed).
+	colorTargets   []ColorTargetDesc
+	perTargetBlend bool
 
 	// Vertex buffer layouts from the pipeline descriptor.
 	// OpenGL requires explicit glVertexAttribPointer calls to configure

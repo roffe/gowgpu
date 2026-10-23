@@ -135,6 +135,14 @@ type Context struct {
 	glBlendEquationSeparate uintptr
 	glBlendColor            uintptr
 
+	// Per draw buffer blending and masks (GL 4.0, ES 3.2,
+	// OES/EXT_draw_buffers_indexed)
+	glEnablei                uintptr
+	glDisablei               uintptr
+	glBlendFuncSeparatei     uintptr
+	glBlendEquationSeparatei uintptr
+	glColorMaski             uintptr
+
 	// Depth/Stencil
 	glDepthFunc           uintptr
 	glDepthMask           uintptr
@@ -329,6 +337,11 @@ func (c *Context) Load(getProcAddr ProcAddressFunc) error {
 	c.glBlendEquation = getProcAddr("glBlendEquation")
 	c.glBlendEquationSeparate = getProcAddr("glBlendEquationSeparate")
 	c.glBlendColor = getProcAddr("glBlendColor")
+	c.glEnablei = getProcAddr("glEnablei")
+	c.glDisablei = getProcAddr("glDisablei")
+	c.glBlendFuncSeparatei = getProcAddr("glBlendFuncSeparatei")
+	c.glBlendEquationSeparatei = getProcAddr("glBlendEquationSeparatei")
+	c.glColorMaski = getProcAddr("glColorMaski")
 
 	// Depth/Stencil
 	c.glDepthFunc = getProcAddr("glDepthFunc")
@@ -1104,6 +1117,39 @@ func (c *Context) BlendEquation(mode uint32) {
 // BlendEquationSeparate sets separate blend equations for RGB and alpha.
 func (c *Context) BlendEquationSeparate(modeRGB, modeAlpha uint32) {
 	syscall.SyscallN(c.glBlendEquationSeparate, uintptr(modeRGB), uintptr(modeAlpha))
+}
+
+// Enablei enables a capability of one draw buffer, GL_BLEND.
+func (c *Context) Enablei(capability, index uint32) {
+	syscall.SyscallN(c.glEnablei, uintptr(capability), uintptr(index))
+}
+
+// Disablei disables a capability of one draw buffer, GL_BLEND.
+func (c *Context) Disablei(capability, index uint32) {
+	syscall.SyscallN(c.glDisablei, uintptr(capability), uintptr(index))
+}
+
+// BlendFuncSeparatei sets the blend factors of one draw buffer.
+func (c *Context) BlendFuncSeparatei(buf, srcRGB, dstRGB, srcAlpha, dstAlpha uint32) {
+	syscall.SyscallN(c.glBlendFuncSeparatei, uintptr(buf), uintptr(srcRGB), uintptr(dstRGB), uintptr(srcAlpha), uintptr(dstAlpha))
+}
+
+// BlendEquationSeparatei sets the blend equations of one draw buffer.
+func (c *Context) BlendEquationSeparatei(buf, modeRGB, modeAlpha uint32) {
+	syscall.SyscallN(c.glBlendEquationSeparatei, uintptr(buf), uintptr(modeRGB), uintptr(modeAlpha))
+}
+
+// ColorMaski sets the colour write mask of one draw buffer.
+func (c *Context) ColorMaski(buf uint32, r, g, b, a bool) {
+	syscall.SyscallN(c.glColorMaski, uintptr(buf), boolGL(r), boolGL(g), boolGL(b), boolGL(a))
+}
+
+// boolGL is a GLboolean.
+func boolGL(b bool) uintptr {
+	if b {
+		return TRUE
+	}
+	return FALSE
 }
 
 // BlendColor sets the constant blend color.

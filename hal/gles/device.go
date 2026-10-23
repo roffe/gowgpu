@@ -27,6 +27,9 @@ type Device struct {
 	maxMSAA         int32         // GL_MAX_SAMPLES (validate MSAA in CreateTexture)
 	formats         formatCaps
 	depthClamp      bool // GL_DEPTH_CLAMP, which unclippedDepth turns on
+	// independentBlend is blending and write masks per draw buffer (GL 4.0,
+	// ES 3.2, OES/EXT_draw_buffers_indexed).
+	independentBlend bool
 
 	// glslVersion is the target GLSL version for shader compilation, detected
 	// from the adapter's GL_SHADING_LANGUAGE_VERSION at Open time.

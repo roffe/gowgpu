@@ -73,6 +73,7 @@ func (a *Adapter) Open(_ gputypes.Features, _ gputypes.Limits) (hal.OpenDevice, 
 		maxMSAA:             a.caps.MaxMSAASamples,
 		formats:             newFormatCaps(&a.caps),
 		depthClamp:          a.caps.Features.Contains(gputypes.FeatureDepthClipControl),
+		independentBlend:    a.caps.DownlevelFlags.Contains(gputypes.DownlevelFlagsIndependentBlend),
 		glslVersion:         glslVer,
 		shaderBindingLayout: glslVer.SupportsExplicitLocations(),
 	}

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gogpu/naga/glsl"
+	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/gles/gl"
 )
@@ -18,6 +19,10 @@ import (
 // must be current.
 func (d *Device) createRenderPipeline(glCtx *gl.Context, desc *RenderPipelineDescriptor) (*RenderPipeline, error) {
 	start := time.Now()
+	perTarget := desc.Fragment != nil && !sameColorTargets(desc.Fragment.Targets)
+	if perTarget && !d.independentBlend {
+		return nil, fmt.Errorf("gles: color targets with different blending or write masks need OpenGL 4.0, ES 3.2 or GL_*_draw_buffers_indexed")
+	}
 	// Handle nil layout (auto-layout for shaders without bindings).
 	var layout *PipelineLayout
 	if desc.Layout != nil {
@@ -142,6 +147,7 @@ func (d *Device) createRenderPipeline(glCtx *gl.Context, desc *RenderPipelineDes
 		unclippedDepth:    desc.Primitive.UnclippedDepth,
 		multisample:       desc.Multisample,
 		colorTargets:      colorTargets,
+		perTargetBlend:    perTarget,
 		vertexBuffers:     desc.Vertex.Buffers,
 	}
 
@@ -266,4 +272,16 @@ func compileFragmentShader(glCtx *gl.Context, version glsl.Version, frag *hal.Fr
 	}
 
 	return fragmentID, translationInfo, nil
+}
+
+// sameColorTargets reports whether every target blends and masks like the
+// first.
+func sameColorTargets(targets []gputypes.ColorTargetState) bool {
+	for _, t := range targets[min(1, len(targets)):] {
+		if t.WriteMask != targets[0].WriteMask || (t.Blend == nil) != (targets[0].Blend == nil) ||
+			t.Blend != nil && *t.Blend != *targets[0].Blend {
+			return false
+		}
+	}
+	return true
 }

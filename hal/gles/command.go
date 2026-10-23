@@ -547,6 +547,7 @@ func (e *RenderPassEncoder) SetPipeline(pipeline hal.RenderPipeline) {
 			depthClamp:     p.depthClamp,
 			unclippedDepth: p.unclippedDepth,
 			colorTargets:   p.colorTargets,
+			perTarget:      p.perTargetBlend,
 			stencilRef:     e.stencilRef,
 		}),
 	)
@@ -1129,6 +1130,7 @@ type SetPipelineStateCommand struct {
 	depthClamp     bool // the context has GL_DEPTH_CLAMP
 	unclippedDepth bool
 	colorTargets   []ColorTargetDesc // per-target blend/write-mask for MRT
+	perTarget      bool              // the targets differ, each set on its own
 	stencilRef     uint32
 }
 
@@ -1172,10 +1174,6 @@ func (c *SetPipelineStateCommand) Execute(ctx *gl.Context) {
 	}
 
 	// Color targets (blend + write mask).
-	// Matches Rust wgpu-hal GLES SetColorTarget (queue.rs:1483-1559):
-	//   - If all targets are identical, use global (non-indexed) calls.
-	//   - If targets differ, use per-draw-buffer indexed calls (GLES 3.2 / GL 4.0).
-	//     Fallback: apply target[0] globally when indexed functions unavailable.
 	c.applyColorTargets(ctx)
 	ctx.Shadow.Pipeline = c
 }
@@ -1203,7 +1201,10 @@ func (c *SetPipelineStateCommand) sameState(o *SetPipelineStateCommand) bool {
 }
 
 // applyColorTargets sets blend and write-mask state per render target.
-// Matches Rust wgpu-hal GLES SetColorTarget command (queue.rs:1483-1559).
+// Matches Rust wgpu-hal GLES SetColorTarget command (queue.rs:1483-1559):
+// targets that all blend and mask alike take the global calls, targets that
+// differ one indexed call each, which pipeline creation made sure the
+// context has.
 func (c *SetPipelineStateCommand) applyColorTargets(ctx *gl.Context) {
 	if len(c.colorTargets) == 0 {
 		// No color targets — disable blending, allow all color writes.
@@ -1212,30 +1213,53 @@ func (c *SetPipelineStateCommand) applyColorTargets(ctx *gl.Context) {
 		return
 	}
 
-	// Single target or all targets identical: use global (non-indexed) calls.
-	// Matches Rust path: draw_buffer_index == None (queue.rs:1527-1558).
-	ct := c.colorTargets[0]
-	ctx.ColorMask(
-		ct.WriteMask&gputypes.ColorWriteMaskRed != 0,
-		ct.WriteMask&gputypes.ColorWriteMaskGreen != 0,
-		ct.WriteMask&gputypes.ColorWriteMaskBlue != 0,
-		ct.WriteMask&gputypes.ColorWriteMaskAlpha != 0,
-	)
-	if ct.Blend != nil {
-		ctx.Enable(gl.BLEND)
-		ctx.BlendFuncSeparate(
+	if !c.perTarget {
+		ct := c.colorTargets[0]
+		ctx.ColorMask(writeMask(ct.WriteMask))
+		if ct.Blend != nil {
+			ctx.Enable(gl.BLEND)
+			ctx.BlendFuncSeparate(
+				blendFactorToGL(ct.Blend.Color.SrcFactor),
+				blendFactorToGL(ct.Blend.Color.DstFactor),
+				blendFactorToGL(ct.Blend.Alpha.SrcFactor),
+				blendFactorToGL(ct.Blend.Alpha.DstFactor),
+			)
+			ctx.BlendEquationSeparate(
+				blendOperationToGL(ct.Blend.Color.Operation),
+				blendOperationToGL(ct.Blend.Alpha.Operation),
+			)
+		} else {
+			ctx.Disable(gl.BLEND)
+		}
+		return
+	}
+
+	for i, ct := range c.colorTargets {
+		buf := uint32(i)
+		r, g, b, a := writeMask(ct.WriteMask)
+		ctx.ColorMaski(buf, r, g, b, a)
+		if ct.Blend == nil {
+			ctx.Disablei(gl.BLEND, buf)
+			continue
+		}
+		ctx.Enablei(gl.BLEND, buf)
+		ctx.BlendFuncSeparatei(buf,
 			blendFactorToGL(ct.Blend.Color.SrcFactor),
 			blendFactorToGL(ct.Blend.Color.DstFactor),
 			blendFactorToGL(ct.Blend.Alpha.SrcFactor),
 			blendFactorToGL(ct.Blend.Alpha.DstFactor),
 		)
-		ctx.BlendEquationSeparate(
+		ctx.BlendEquationSeparatei(buf,
 			blendOperationToGL(ct.Blend.Color.Operation),
 			blendOperationToGL(ct.Blend.Alpha.Operation),
 		)
-	} else {
-		ctx.Disable(gl.BLEND)
 	}
+}
+
+// writeMask splits a colour write mask into glColorMask's arguments.
+func writeMask(m gputypes.ColorWriteMask) (r, g, b, a bool) {
+	return m&gputypes.ColorWriteMaskRed != 0, m&gputypes.ColorWriteMaskGreen != 0,
+		m&gputypes.ColorWriteMaskBlue != 0, m&gputypes.ColorWriteMaskAlpha != 0
 }
 
 // applyDepthStencilState configures GL depth test and stencil test from pipeline state.
