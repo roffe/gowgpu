@@ -2290,13 +2290,13 @@ func hlslToDXILSamplerHeapTargets(t hlsl.SamplerHeapBindTargets) *dxil.SamplerHe
 }
 
 // stageBytecode compiles the entry point of module a pipeline with layout
-// runs. Its resources take the registers the layout's root signature gives
-// them, so a module is compiled again for each layout it is used with, as
-// Rust's wgpu-hal does in load_shader. A vertex stage is compiled with the
-// pipeline's fragment stage, since the fragment inputs can be a subset of
-// the vertex outputs and the two signatures have to match register for
-// register.
-func (d *Device) stageBytecode(module hal.ShaderModule, entryPoint string, layout *PipelineLayout, fragment *hlsl.FragmentEntryPoint) ([]byte, error) {
+// runs, with the pipeline's constants. Its resources take the registers the
+// layout's root signature gives them, so a module is compiled again for each
+// layout it is used with, as Rust's wgpu-hal does in load_shader. A vertex
+// stage is compiled with the pipeline's fragment stage, since the fragment
+// inputs can be a subset of the vertex outputs and the two signatures have
+// to match register for register.
+func (d *Device) stageBytecode(module hal.ShaderModule, entryPoint string, constants map[string]float64, layout *PipelineLayout, fragment *hlsl.FragmentEntryPoint) ([]byte, error) {
 	sm, ok := module.(*ShaderModule)
 	if !ok || sm == nil {
 		return nil, fmt.Errorf("invalid shader module type")
@@ -2315,13 +2315,35 @@ func (d *Device) stageBytecode(module hal.ShaderModule, entryPoint string, layou
 	if layout == nil || layout.nagaOptions == nil {
 		return nil, fmt.Errorf("WGSL compilation requires a PipelineLayout with naga options")
 	}
+	irModule, ep, err := withOverrides(sm.irModule, ep, constants)
+	if err != nil {
+		return nil, fmt.Errorf("pipeline constants: %w", err)
+	}
 	opts := *layout.nagaOptions
 	opts.EntryPoint = entryPoint
 	opts.FragmentEntryPoint = fragment
 	if d.useDXIL {
-		return d.compileDXIL(sm, ep, &opts)
+		return d.compileDXIL(sm.wgslSource, irModule, ep, constants, &opts)
 	}
-	return d.compileHLSL(sm, ep, &opts)
+	return d.compileHLSL(irModule, ep, &opts)
+}
+
+// withOverrides is module with its overrides replaced by the pipeline's
+// constants or their defaults for the entry point ep, and ep in it, as
+// wgpu-hal's load_shader does with naga's process_overrides. A module
+// without overrides that is given no constants stays as it is.
+func withOverrides(module *ir.Module, ep *ir.EntryPoint, constants map[string]float64) (*ir.Module, *ir.EntryPoint, error) {
+	if len(module.Overrides) == 0 && len(constants) == 0 {
+		return module, ep, nil
+	}
+	processed, err := naga.ProcessOverrides(module, naga.OverrideOptions{
+		Constants:  constants,
+		EntryPoint: &naga.EntryPointSelector{Stage: ep.Stage, Name: ep.Name},
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return processed, &processed.EntryPoints[0], nil
 }
 
 // fragmentEntryPoint is the fragment stage a vertex stage is compiled with,
@@ -2345,8 +2367,8 @@ func fragmentEntryPoint(fragment *hal.FragmentState) *hlsl.FragmentEntryPoint {
 // (d3dcompiler_47.dll). The cache key is the HLSL, which holds the
 // registers, with the entry point, stage and target, as Rust's ShaderCache
 // has it.
-func (d *Device) compileHLSL(module *ShaderModule, ep *ir.EntryPoint, opts *hlsl.Options) ([]byte, error) {
-	hlslSource, info, err := hlsl.Compile(module.irModule, opts)
+func (d *Device) compileHLSL(module *ir.Module, ep *ir.EntryPoint, opts *hlsl.Options) ([]byte, error) {
+	hlslSource, info, err := hlsl.Compile(module, opts)
 	if err != nil {
 		return nil, fmt.Errorf("HLSL generation: %w", err)
 	}
@@ -2378,11 +2400,12 @@ func (d *Device) compileHLSL(module *ShaderModule, ep *ir.EntryPoint, opts *hlsl
 	return bytecode, nil
 }
 
-// compileDXIL compiles an entry point to DXIL with naga's DXIL backend,
-// with the registers of the layout's binding map converted from the HLSL
-// options. dxil.Compile compiles the first entry point of a module, so the
-// entry point gets a module of its own that shares everything else.
-func (d *Device) compileDXIL(module *ShaderModule, ep *ir.EntryPoint, nagaOpts *hlsl.Options) ([]byte, error) {
+// compileDXIL compiles an entry point of module, made from wgslSource with
+// constants, to DXIL with naga's DXIL backend, with the registers of the
+// layout's binding map converted from the HLSL options. dxil.Compile
+// compiles the first entry point of a module, so the entry point gets a
+// module of its own that shares everything else.
+func (d *Device) compileDXIL(wgslSource string, module *ir.Module, ep *ir.EntryPoint, constants map[string]float64, nagaOpts *hlsl.Options) ([]byte, error) {
 	opts := dxil.DefaultOptions()
 	opts.BindingMap = hlslToDXILBindingMap(nagaOpts.BindingMap)
 	opts.SamplerBufferBindingMap = hlslToDXILSamplerBufferBindingMap(nagaOpts.SamplerBufferBindingMap)
@@ -2400,13 +2423,12 @@ func (d *Device) compileDXIL(module *ShaderModule, ep *ir.EntryPoint, nagaOpts *
 		opts.FragmentEntryPoint = &dxil.FragmentEntryPoint{Module: f.Module, Function: f.Function}
 	}
 
-	cacheKey := NewShaderCacheKey(dxilCacheSource(module.wgslSource, ep.Name, opts), ep.Name, ep.Stage, "dxil")
+	cacheKey := NewShaderCacheKey(dxilCacheSource(wgslSource, ep.Name, constants, opts), ep.Name, ep.Stage, "dxil")
 	if cached, ok := d.shaderCache.Get(cacheKey); ok {
 		return cached, nil
 	}
 
-	irModule := module.irModule
-	single := *irModule
+	single := *module
 	single.EntryPoints = []ir.EntryPoint{*ep}
 	dxilBytes, err := dxil.Compile(&single, opts)
 	if err != nil {
@@ -2432,14 +2454,17 @@ func (d *Device) compileDXIL(module *ShaderModule, ep *ir.EntryPoint, nagaOpts *
 }
 
 // dxilCacheSource is the source the DXIL shader cache keys an entry point
-// on: the WGSL, the entry point, the register bindings of the layout the
-// DXIL is compiled for and the locations the fragment stage reads, which
-// decide what the bytecode holds.
-func dxilCacheSource(wgslSource, entryPoint string, opts dxil.Options) string {
+// on: the WGSL, the entry point, the pipeline's constants, the register
+// bindings of the layout the DXIL is compiled for and the locations the
+// fragment stage reads, which decide what the bytecode holds.
+func dxilCacheSource(wgslSource, entryPoint string, constants map[string]float64, opts dxil.Options) string {
 	h := sha256.New()
 	h.Write([]byte(wgslSource))
 	h.Write([]byte{0})
 	h.Write([]byte(entryPoint))
+	for _, key := range slices.Sorted(maps.Keys(constants)) {
+		fmt.Fprintf(h, "\x00c%s=%v", key, constants[key])
+	}
 	fmt.Fprintf(h, "\x00sm%d", opts.ShaderModel)
 	locations := make([]dxil.BindingLocation, 0, len(opts.BindingMap))
 	for loc := range opts.BindingMap {
@@ -2551,7 +2576,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 	}
 	var vs, ps []byte
 	if desc.Vertex.Module != nil {
-		bytecode, err := d.stageBytecode(desc.Vertex.Module, desc.Vertex.EntryPoint, pipelineLayout, fragmentEntryPoint(desc.Fragment))
+		bytecode, err := d.stageBytecode(desc.Vertex.Module, desc.Vertex.EntryPoint, nil, pipelineLayout, fragmentEntryPoint(desc.Fragment))
 		if err == nil {
 			vs, err = overrideBytecode(bytecode, "GOGPU_DX12_DXIL_OVERRIDE_VS")
 		}
@@ -2560,7 +2585,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		}
 	}
 	if desc.Fragment != nil && desc.Fragment.Module != nil {
-		bytecode, err := d.stageBytecode(desc.Fragment.Module, desc.Fragment.EntryPoint, pipelineLayout, nil)
+		bytecode, err := d.stageBytecode(desc.Fragment.Module, desc.Fragment.EntryPoint, nil, pipelineLayout, nil)
 		if err == nil {
 			ps, err = overrideBytecode(bytecode, "GOGPU_DX12_DXIL_OVERRIDE_PS")
 		}
@@ -2699,7 +2724,7 @@ func (d *Device) CreateComputePipeline(desc *hal.ComputePipelineDescriptor) (hal
 		rootSig = emptyRS
 	}
 
-	bytecode, err := d.stageBytecode(desc.Compute.Module, desc.Compute.EntryPoint, pipelineLayout, nil)
+	bytecode, err := d.stageBytecode(desc.Compute.Module, desc.Compute.EntryPoint, desc.Compute.Constants, pipelineLayout, nil)
 	if err != nil {
 		return nil, fmt.Errorf("dx12: compute shader: %w", err)
 	}
