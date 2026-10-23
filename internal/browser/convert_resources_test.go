@@ -102,3 +102,17 @@ func TestBuildComputePipelineDescriptorConstants(t *testing.T) {
 		t.Fatalf("compute.constants = %v without constants, want it left out", v)
 	}
 }
+
+func TestUnusedColorSlotsAreNull(t *testing.T) {
+	desc := BuildRenderPassDescriptor("", []*RenderPassColorAttachmentJS{nil, {View: js.Global().Get("Object").New(), LoadOp: "load", StoreOp: "store"}}, nil)
+	attachments := desc.Get("colorAttachments")
+	if attachments.Length() != 2 || !attachments.Index(0).IsNull() || attachments.Index(1).Type() != js.TypeObject {
+		t.Fatalf("colorAttachments = %v, want [null, {...}]", js.Global().Get("JSON").Call("stringify", attachments))
+	}
+
+	fragment := (&FragmentStateJS{Targets: []*ColorTargetStateJS{nil, {Format: "rgba8unorm"}}}).ToJS()
+	targets := fragment.Get("targets")
+	if targets.Length() != 2 || !targets.Index(0).IsNull() || targets.Index(1).Get("format").String() != "rgba8unorm" {
+		t.Fatalf("targets = %v, want [null, {format: rgba8unorm}]", js.Global().Get("JSON").Call("stringify", targets))
+	}
+}

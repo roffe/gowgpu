@@ -187,20 +187,19 @@ func (cb *CommandBuffer) Release() {
 // buildRenderPassDescriptorJS converts a Go RenderPassDescriptor to a JS object
 // via the internal/browser conversion helpers.
 func buildRenderPassDescriptorJS(desc *RenderPassDescriptor) js.Value {
-	colorAttachments := make([]browser.RenderPassColorAttachmentJS, len(desc.ColorAttachments))
+	colorAttachments := make([]*browser.RenderPassColorAttachmentJS, len(desc.ColorAttachments))
 	for i, ca := range desc.ColorAttachments {
-		att := browser.RenderPassColorAttachmentJS{
+		if ca.View == nil || ca.View.browser == nil {
+			continue
+		}
+		att := &browser.RenderPassColorAttachmentJS{
+			View:    ca.View.browser.Ref(),
 			LoadOp:  browser.LoadOpToJS(ca.LoadOp),
 			StoreOp: browser.StoreOpToJS(ca.StoreOp),
 			ClearR:  ca.ClearValue.R,
 			ClearG:  ca.ClearValue.G,
 			ClearB:  ca.ClearValue.B,
 			ClearA:  ca.ClearValue.A,
-		}
-		if ca.View != nil && ca.View.browser != nil {
-			att.View = ca.View.browser.Ref()
-		} else {
-			att.View = js.Undefined()
 		}
 		if ca.ResolveTarget != nil && ca.ResolveTarget.browser != nil {
 			att.ResolveTarget = ca.ResolveTarget.browser.Ref()

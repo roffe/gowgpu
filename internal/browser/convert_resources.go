@@ -629,11 +629,12 @@ func (m *MultisampleStateJS) ToJS() js.Value {
 	return obj
 }
 
-// FragmentStateJS holds fragment shader state for JS.
+// FragmentStateJS holds fragment shader state for JS. A nil target is an
+// unused slot.
 type FragmentStateJS struct {
 	ModuleRef  js.Value // GPUShaderModule
 	EntryPoint string
-	Targets    []ColorTargetStateJS
+	Targets    []*ColorTargetStateJS
 }
 
 // ToJS converts to a JS object.
@@ -646,6 +647,10 @@ func (f *FragmentStateJS) ToJS() js.Value {
 
 	targets := newJSArray()
 	for _, t := range f.Targets {
+		if t == nil {
+			targets.Call("push", js.Null())
+			continue
+		}
 		targets.Call("push", t.ToJS())
 	}
 	obj.Set("targets", targets)
@@ -746,18 +751,23 @@ type RenderPassDepthStencilAttachmentJS struct {
 	Format            gputypes.TextureFormat
 }
 
-// BuildRenderPassDescriptor constructs a JS GPURenderPassDescriptor.
+// BuildRenderPassDescriptor constructs a JS GPURenderPassDescriptor. A nil
+// color attachment is an unused slot.
 //
 // Matches Rust wgpu's begin_render_pass which builds GpuRenderPassDescriptor
 // with color attachments array and optional depth-stencil attachment.
 func BuildRenderPassDescriptor(
 	label string,
-	colorAttachments []RenderPassColorAttachmentJS,
+	colorAttachments []*RenderPassColorAttachmentJS,
 	depthStencil *RenderPassDepthStencilAttachmentJS,
 ) js.Value {
 	// Build color attachments array.
 	arr := newJSArray()
 	for _, ca := range colorAttachments {
+		if ca == nil {
+			arr.Call("push", js.Null())
+			continue
+		}
 		att := newJSObject()
 		att.Set("view", ca.View)
 		att.Set("loadOp", ca.LoadOp)

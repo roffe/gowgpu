@@ -634,9 +634,12 @@ func convertFragmentState(fs *FragmentState) *browser.FragmentStateJS {
 		result.ModuleRef = js.Undefined()
 	}
 
-	result.Targets = make([]browser.ColorTargetStateJS, len(fs.Targets))
+	result.Targets = make([]*browser.ColorTargetStateJS, len(fs.Targets))
 	for i, t := range fs.Targets {
-		ct := browser.ColorTargetStateJS{
+		if t.Format == gputypes.TextureFormatUndefined {
+			continue
+		}
+		ct := &browser.ColorTargetStateJS{
 			Format:    browser.TextureFormatToJS(t.Format),
 			WriteMask: uint32(t.WriteMask),
 		}
