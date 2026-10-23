@@ -24,6 +24,10 @@ import (
 //     resource in the command buffer (start) and the current usage (end), and
 //     returns the transitions needed between consecutive usage scopes.
 //
+// Textures are tracked per subresource, mip level and array layer, in all
+// of them: a texture whose subresources are in different states keeps a
+// state per range of layers of each mip level.
+//
 // At submit time the device tracker emits barriers from its current state to
 // each command buffer's start state, then adopts the command buffer's end
 // state (see TextureTracker.MergeEncoder / BufferTracker.MergeEncoder).
@@ -36,54 +40,68 @@ import (
 //	                          OR barrier(device.end, buffer.start) + update(device.end, buffer.end)
 
 // EncoderTextureTracker tracks texture states across the commands of one
-// command buffer. Whole-texture granularity, matching TextureTracker.
+// command buffer, per subresource like TextureTracker.
 //
 // The zero value is ready to use; Clear keeps the arrays for the next
 // command buffer.
 //
 // Reference: wgpu-core track/texture.rs TextureTracker (start_set + end_set)
 type EncoderTextureTracker struct {
-	start    []TextureUses
-	end      []TextureUses
+	start    stateSet
+	end      stateSet
 	metadata ResourceMetadata
 }
 
 // NewEncoderTextureTracker creates an empty command-buffer texture tracker.
 func NewEncoderTextureTracker() *EncoderTextureTracker {
-	return &EncoderTextureTracker{
-		start:    make([]TextureUses, 0, 32),
-		end:      make([]TextureUses, 0, 32),
-		metadata: NewResourceMetadata(),
-	}
+	return &EncoderTextureTracker{metadata: NewResourceMetadata()}
 }
 
-// SetSingle records that the next command uses the texture with usage.
+// SetSingle records that the next command uses every subresource of the
+// texture at index with usage, and returns the transitions that take them
+// there. See SetSubresourceUsage.
+func (t *EncoderTextureTracker) SetSingle(index TrackerIndex, usage TextureUses) []TexturePendingTransition {
+	return t.SetSubresourceUsage(index, TextureSelector{}, TextureSelector{}, usage, nil)
+}
+
+// SetSubresourceUsage records that the next command uses the subresources
+// sel selects of the texture at index, whose subresources are full, with
+// usage, and appends to dst the transitions that take them there.
 //
-// On the first use in this command buffer the usage becomes both the start
-// and the end state, and no transition is returned: the barrier into the
-// start state is generated at submit time from the device tracker. On later
-// uses a transition from the current end state is returned unless the state
-// is unchanged and hardware-ordered (SkipBarrier). The end state is updated
-// either way. SetSingle never fails; conflicts are a usage-scope concern.
+// On the first use of a subresource in this command buffer the usage
+// becomes both its start and its end state, and no transition is returned:
+// the barrier into the start state is generated at submit time from the
+// device tracker. On later uses a transition from the current end state is
+// returned unless the state is unchanged and hardware-ordered
+// (SkipBarrier). The end state is updated either way. It never fails; conflicts are a usage-scope concern.
 //
 // Reference: wgpu-core track/texture.rs TextureTracker::set_single
-func (t *EncoderTextureTracker) SetSingle(index TrackerIndex, usage TextureUses) (TexturePendingTransition, bool) {
+func (t *EncoderTextureTracker) SetSubresourceUsage(index TrackerIndex, full, sel TextureSelector, usage TextureUses, dst []TexturePendingTransition) []TexturePendingTransition {
+	src, ok := selection(full, sel, usage)
+	if !ok {
+		return dst
+	}
+	return t.apply(index, src, src, 0, true, dst)
+}
+
+// apply takes the texture at index into the state src brings, which is its
+// start state where the command buffer has not used it yet (startUses when
+// that is not 0), appending the transitions to dst when emit is set.
+//
+// Reference: wgpu-core track/texture.rs insert_or_barrier_update
+func (t *EncoderTextureTracker) apply(index TrackerIndex, src, start stateSource, startUses TextureUses, emit bool, dst []TexturePendingTransition) []TexturePendingTransition {
 	t.ensureSize(int(index) + 1)
 	if !t.metadata.IsOwned(index) {
-		t.start[index] = usage
-		t.end[index] = usage
+		t.start.insert(index, start)
+		t.end.insert(index, src)
 		t.metadata.SetOwned(index, true)
-		return TexturePendingTransition{}, false
+		return dst
 	}
-	current := t.end[index]
-	t.end[index] = usage
-	if SkipBarrier(current, usage) {
-		return TexturePendingTransition{}, false
+	if emit {
+		dst = t.end.barrier(index, src, dst)
 	}
-	return TexturePendingTransition{
-		Index: index,
-		Usage: TextureStateTransition{From: current, To: usage},
-	}, true
+	t.end.update(index, src, &t.start, startUses)
+	return dst
 }
 
 // SetFromScope applies every usage of a finished usage scope (for example a
@@ -101,58 +119,60 @@ func (t *EncoderTextureTracker) SetFromScopeInto(scope *TextureUsageScope, dst [
 	if scope == nil {
 		return dst
 	}
-	for i := range scope.states {
+	for i := range scope.set.simple {
 		index, valid := trackerIndexAt(i)
 		if !valid || !scope.metadata.IsOwned(index) {
 			continue
 		}
-		if transition, ok := t.SetSingle(index, scope.states[i].usage); ok {
-			dst = append(dst, transition)
-		}
+		src := sourceOf(&scope.set, index)
+		dst = t.apply(index, src, src, 0, true, dst)
 	}
 	return dst
 }
 
 // RecordTransition records a barrier the caller has already encoded
-// explicitly (CommandEncoder.TransitionTextures). The texture's end state
-// becomes to. If this is the texture's first use in the command buffer, from
-// becomes its start state, so the submit-time barrier brings the texture into
-// the state the explicit barrier expects. A zero from (undefined contents)
-// has no start state to request; to is used instead.
-func (t *EncoderTextureTracker) RecordTransition(index TrackerIndex, from, to TextureUses) {
-	t.ensureSize(int(index) + 1)
-	if !t.metadata.IsOwned(index) {
-		start := from
-		if start.IsEmpty() {
-			start = to
-		}
-		t.start[index] = start
-		t.metadata.SetOwned(index, true)
+// explicitly (CommandEncoder.TransitionTextures) on the subresources sel
+// selects of the texture at index, whose subresources are full. Their end
+// state becomes to. The ones this command buffer has not used yet start in
+// from, so the submit-time barrier brings them into the state the explicit
+// barrier expects. A zero from (undefined contents) has no start state to
+// request; to is used instead.
+func (t *EncoderTextureTracker) RecordTransition(index TrackerIndex, full, sel TextureSelector, from, to TextureUses) {
+	if from.IsEmpty() {
+		from = to
 	}
-	t.end[index] = to
+	src, ok := selection(full, sel, to)
+	if !ok {
+		return
+	}
+	start := src
+	start.uses = from
+	t.apply(index, src, start, from, false, nil)
 }
 
 // StartUsage returns the first usage of the texture in this command buffer,
-// or TextureUsesNone if the texture is not used.
+// every one of its subresources had when they differ, or TextureUsesNone if
+// the texture is not used.
 func (t *EncoderTextureTracker) StartUsage(index TrackerIndex) TextureUses {
 	if !t.IsUsed(index) {
 		return TextureUsesNone
 	}
-	return t.start[index]
+	return t.start.union(index)
 }
 
-// EndUsage returns the usage the command buffer leaves the texture in, or
-// TextureUsesNone if the texture is not used.
+// EndUsage returns the usage the command buffer leaves the texture in,
+// every one its subresources are in when they differ, or TextureUsesNone if
+// the texture is not used.
 func (t *EncoderTextureTracker) EndUsage(index TrackerIndex) TextureUses {
 	if !t.IsUsed(index) {
 		return TextureUsesNone
 	}
-	return t.end[index]
+	return t.end.union(index)
 }
 
 // IsUsed returns true if the texture is used in this command buffer.
 func (t *EncoderTextureTracker) IsUsed(index TrackerIndex) bool {
-	return int(index) < len(t.end) && t.metadata.IsOwned(index)
+	return int(index) < len(t.end.simple) && t.metadata.IsOwned(index)
 }
 
 // IsEmpty returns true if no textures are used in this command buffer.
@@ -163,16 +183,14 @@ func (t *EncoderTextureTracker) IsEmpty() bool {
 // Clear forgets every texture, keeping the arrays for the next command
 // buffer.
 func (t *EncoderTextureTracker) Clear() {
-	t.start = t.start[:0]
-	t.end = t.end[:0]
+	t.start.clear()
+	t.end.clear()
 	t.metadata.Clear()
 }
 
 func (t *EncoderTextureTracker) ensureSize(size int) {
-	for len(t.end) < size {
-		t.start = append(t.start, TextureUsesNone)
-		t.end = append(t.end, TextureUsesNone)
-	}
+	t.start.ensureSize(size)
+	t.end.ensureSize(size)
 }
 
 // EncoderBufferTracker tracks buffer states across the commands of one

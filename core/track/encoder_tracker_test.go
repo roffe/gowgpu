@@ -8,6 +8,16 @@ import (
 	"github.com/roffe/gowgpu/gputypes"
 )
 
+// setWhole is SetSingle on every subresource of the texture at idx, with
+// the one transition that makes for a texture in one state.
+func setWhole(tr *EncoderTextureTracker, idx TrackerIndex, usage TextureUses) (TexturePendingTransition, bool) {
+	ts := tr.SetSingle(idx, usage)
+	if len(ts) == 0 {
+		return TexturePendingTransition{}, false
+	}
+	return ts[0], true
+}
+
 // TestEncoderTextureTracker_NeverConflicts is the core of the WebGPU usage
 // scope rule: consecutive commands may use a texture with "incompatible"
 // usages. The command buffer tracker returns transitions, never errors.
@@ -17,10 +27,10 @@ func TestEncoderTextureTracker_NeverConflicts(t *testing.T) {
 	tr := NewEncoderTextureTracker()
 	const idx TrackerIndex = 3
 
-	if _, needed := tr.SetSingle(idx, TextureUsesColorTarget); needed {
+	if _, needed := setWhole(tr, idx, TextureUsesColorTarget); needed {
 		t.Fatal("first use must not produce a transition (covered at submit)")
 	}
-	transition, needed := tr.SetSingle(idx, TextureUsesCopySrc)
+	transition, needed := setWhole(tr, idx, TextureUsesCopySrc)
 	if !needed {
 		t.Fatal("ColorTarget -> CopySrc must produce a transition")
 	}
@@ -39,12 +49,12 @@ func TestEncoderTextureTracker_SkipsOrderedSameState(t *testing.T) {
 	t.Parallel()
 
 	tr := NewEncoderTextureTracker()
-	tr.SetSingle(0, TextureUsesColorTarget)
-	if _, needed := tr.SetSingle(0, TextureUsesColorTarget); needed {
+	setWhole(tr, 0, TextureUsesColorTarget)
+	if _, needed := setWhole(tr, 0, TextureUsesColorTarget); needed {
 		t.Error("ColorTarget -> ColorTarget is ordered, no transition expected")
 	}
-	tr.SetSingle(1, TextureUsesStorageWrite)
-	if _, needed := tr.SetSingle(1, TextureUsesStorageWrite); !needed {
+	setWhole(tr, 1, TextureUsesStorageWrite)
+	if _, needed := setWhole(tr, 1, TextureUsesStorageWrite); !needed {
 		t.Error("StorageWrite -> StorageWrite is unordered, a transition is required")
 	}
 }
@@ -53,7 +63,7 @@ func TestEncoderTextureTracker_SetFromScope(t *testing.T) {
 	t.Parallel()
 
 	tr := NewEncoderTextureTracker()
-	tr.SetSingle(2, TextureUsesCopyDst) // earlier upload
+	setWhole(tr, 2, TextureUsesCopyDst) // earlier upload
 
 	pass := NewTextureUsageScope()
 	if err := pass.SetUsage(2, TextureUsesColorTarget); err != nil {
@@ -81,15 +91,15 @@ func TestEncoderTextureTracker_RecordTransition(t *testing.T) {
 	t.Parallel()
 
 	tr := NewEncoderTextureTracker()
-	tr.RecordTransition(0, TextureUsesColorTarget, TextureUsesCopySrc)
+	tr.RecordTransition(0, TextureSelector{}, TextureSelector{}, TextureUsesColorTarget, TextureUsesCopySrc)
 	if tr.StartUsage(0) != TextureUsesColorTarget || tr.EndUsage(0) != TextureUsesCopySrc {
 		t.Errorf("first explicit transition: start=%v end=%v, want ColorTarget/CopySrc", tr.StartUsage(0), tr.EndUsage(0))
 	}
-	tr.RecordTransition(0, TextureUsesCopySrc, TextureUsesColorTarget)
+	tr.RecordTransition(0, TextureSelector{}, TextureSelector{}, TextureUsesCopySrc, TextureUsesColorTarget)
 	if tr.StartUsage(0) != TextureUsesColorTarget || tr.EndUsage(0) != TextureUsesColorTarget {
 		t.Errorf("second explicit transition: start=%v end=%v, want ColorTarget/ColorTarget", tr.StartUsage(0), tr.EndUsage(0))
 	}
-	tr.RecordTransition(1, TextureUsesNone, TextureUsesCopyDst)
+	tr.RecordTransition(1, TextureSelector{}, TextureSelector{}, TextureUsesNone, TextureUsesCopyDst)
 	if got := tr.StartUsage(1); got != TextureUsesCopyDst {
 		t.Errorf("undefined old usage: start = %v, want CopyDst", got)
 	}
@@ -102,7 +112,7 @@ func TestEncoderTextureTracker_Queries(t *testing.T) {
 	if !tr.IsEmpty() || tr.IsUsed(0) || tr.StartUsage(7) != TextureUsesNone || tr.EndUsage(7) != TextureUsesNone {
 		t.Fatal("empty tracker reports usage")
 	}
-	tr.SetSingle(4, TextureUsesResource)
+	setWhole(tr, 4, TextureUsesResource)
 	if tr.IsEmpty() || !tr.IsUsed(4) || tr.IsUsed(3) {
 		t.Fatal("tracker usage queries are wrong after SetSingle")
 	}
@@ -119,10 +129,10 @@ func TestTextureTracker_MergeEncoder(t *testing.T) {
 	device.InsertSingle(1, TextureUsesColorTarget) // already in start state
 
 	cmd := NewEncoderTextureTracker()
-	cmd.SetSingle(0, TextureUsesColorTarget) // render ...
-	cmd.SetSingle(0, TextureUsesCopySrc)     // ... then read back
-	cmd.SetSingle(1, TextureUsesColorTarget)
-	cmd.SetSingle(2, TextureUsesCopyDst) // unknown to the device
+	setWhole(cmd, 0, TextureUsesColorTarget) // render ...
+	setWhole(cmd, 0, TextureUsesCopySrc)     // ... then read back
+	setWhole(cmd, 1, TextureUsesColorTarget)
+	setWhole(cmd, 2, TextureUsesCopyDst) // unknown to the device
 
 	transitions := device.MergeEncoder(cmd)
 	if len(transitions) != 1 {

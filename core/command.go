@@ -183,13 +183,14 @@ func (p *passScope) clearScratch() {
 	p.texBarriers, p.bufBarriers = p.texBarriers[:0], p.bufBarriers[:0]
 }
 
-// addTexture merges a usage of the texture into the scope. An incompatible
-// usage of the same texture earlier in the scope is a conflict. A texture
-// the scope does not know yet is listed with its HAL handle; nil means no
-// barrier can be recorded for it.
-func (p *passScope) addTexture(index track.TrackerIndex, texture hal.Texture, usage track.TextureUses, surface bool) error {
+// addTexture merges a usage of the subresources sel selects of a texture,
+// whose subresources are full, into the scope. An incompatible usage of one
+// of them earlier in the scope is a conflict. A texture the scope does not
+// know yet is listed with its HAL handle; nil means no barrier can be
+// recorded for it.
+func (p *passScope) addTexture(index track.TrackerIndex, full, sel track.TextureSelector, texture hal.Texture, usage track.TextureUses, surface bool) error {
 	known := p.textures.IsUsed(index)
-	if err := p.textures.SetUsage(index, usage); err != nil {
+	if err := p.textures.SetSubresourceUsage(index, full, sel, usage); err != nil {
 		return err
 	}
 	if !known {
@@ -220,8 +221,9 @@ func (p *passScope) surfaceFirstUses(tracker *track.EncoderTextureTracker, dst [
 	return dst
 }
 
-// addView is addTexture for an attachment view's parent texture. Views
-// without a parent texture or without a valid tracker index are not tracked.
+// addView is addTexture for the subresources of an attachment view's parent
+// texture. Views without a parent texture or without a valid tracker index
+// are not tracked.
 // The view names the HAL texture it is of when the public layer knows a
 // better handle than the parent's (a surface texture); otherwise the
 // parent's is used.
@@ -237,7 +239,7 @@ func (p *passScope) addView(view *TextureView, usage track.TextureUses, guard Sn
 	if texture == nil {
 		texture = view.Parent.Raw(guard)
 	}
-	return p.addTexture(td.Index(), texture, usage, view.Parent.surface)
+	return p.addTexture(td.Index(), view.Parent.Subresources(), view.Subresources(), texture, usage, view.Parent.surface)
 }
 
 // addBuffer is addTexture for a buffer.
@@ -1500,13 +1502,13 @@ func depthStencilUsage(ds *RenderPassDepthStencilAttachment) track.TextureUses {
 }
 
 // RecordPassTextureUsage records that the usage scope being recorded uses
-// the texture with usage, as a bind group binds it: sampled, or as a storage
-// texture. In a render pass the scope is the pass; in a compute pass it is
-// the next dispatch. Within the scope the usage has to agree with the
-// texture's other uses in it (an attachment that is also sampled is a
-// conflict); what earlier commands of the encoder did with the texture is
-// transitioned instead. halTexture is the handle the barrier is recorded
-// against.
+// the subresources sel selects of the texture with usage, as a bind group
+// binds a view of them: sampled, or as a storage texture. In a render pass
+// the scope is the pass; in a compute pass it is the next dispatch. Within
+// the scope the usage has to agree with the other uses of those
+// subresources in it (an attachment that is also sampled is a conflict);
+// what earlier commands of the encoder did with them is transitioned
+// instead. halTexture is the handle the barrier is recorded against.
 //
 // A render pass cannot take barriers, so its transitions are recorded ahead
 // of it once it ends (see recordPassTransitions). A compute pass can, so
@@ -1518,7 +1520,7 @@ func depthStencilUsage(ds *RenderPassDepthStencilAttachment) track.TextureUses {
 //
 // Reference: wgpu-core command/render.rs merge_bind_group (the pass scope),
 // command/compute.rs State::flush_states (the dispatch scope)
-func (e *CoreCommandEncoder) RecordPassTextureUsage(texture *Texture, halTexture hal.Texture, usage track.TextureUses) error {
+func (e *CoreCommandEncoder) RecordPassTextureUsage(texture *Texture, halTexture hal.Texture, sel track.TextureSelector, usage track.TextureUses) error {
 	if e.mutable == nil || texture == nil {
 		return nil
 	}
@@ -1533,7 +1535,7 @@ func (e *CoreCommandEncoder) RecordPassTextureUsage(texture *Texture, halTexture
 	if m.activePass == nil {
 		return nil
 	}
-	return m.pass.addTexture(td.Index(), halTexture, usage, texture.surface)
+	return m.pass.addTexture(td.Index(), texture.Subresources(), sel, halTexture, usage, texture.surface)
 }
 
 // RecordPassBufferUsage is RecordPassTextureUsage for a buffer a bind group
@@ -1565,17 +1567,17 @@ func (e *CoreCommandEncoder) RecordPassBufferUsage(buffer *Buffer, halBuffer hal
 
 // RecordTextureTransition records a texture barrier the caller has already
 // encoded explicitly on the HAL encoder (public CommandEncoder.
-// TransitionTextures). The command buffer tracker adopts newUsage as the
-// texture's current state, so later commands transition from the state the
-// explicit barrier left the texture in instead of repeating that barrier.
-// If this is the texture's first use in the command buffer, oldUsage is the
-// state the command buffer expects on entry (its start state).
+// TransitionTextures) on the subresources rng takes in. The command buffer
+// tracker adopts newUsage as their current state, so later commands
+// transition from the state the explicit barrier left them in instead of
+// repeating that barrier. For subresources the command buffer has not used
+// before, oldUsage is the state it expects on entry (its start state).
 //
 // Textures without valid tracking data are skipped.
 //
 // Reference: wgpu-core command/transition_resources.rs (explicit transitions
 // go through the command buffer tracker)
-func (e *CoreCommandEncoder) RecordTextureTransition(texture *Texture, oldUsage, newUsage gputypes.TextureUsage) {
+func (e *CoreCommandEncoder) RecordTextureTransition(texture *Texture, rng hal.TextureRange, oldUsage, newUsage gputypes.TextureUsage) {
 	if e.mutable == nil || e.mutable.textureTracker == nil || texture == nil {
 		return
 	}
@@ -1584,7 +1586,8 @@ func (e *CoreCommandEncoder) RecordTextureTransition(texture *Texture, oldUsage,
 		return
 	}
 	depthStencil := texture.Format().IsDepthStencil()
-	e.mutable.textureTracker.RecordTransition(td.Index(),
+	full := texture.Subresources()
+	e.mutable.textureTracker.RecordTransition(td.Index(), full, track.SelectorFromRange(full, rng),
 		track.TextureUsesFromUsage(oldUsage, depthStencil),
 		track.TextureUsesFromUsage(newUsage, depthStencil))
 }

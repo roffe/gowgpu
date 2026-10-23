@@ -569,6 +569,7 @@ func (d *Device) CreateBindGroup(desc *BindGroupDescriptor) (_ *BindGroup, err e
 		boundBufferUses:        boundBufferUses,
 		boundTextures:          boundTextures,
 		boundTextureUses:       boundTextureUses,
+		boundTextureRanges:     boundViewSubresources(desc.Entries),
 	}
 
 	// Safety net: if the bind group is garbage collected without Release(),

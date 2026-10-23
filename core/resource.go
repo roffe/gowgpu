@@ -1077,6 +1077,16 @@ func (t *Texture) TrackingData() *track.TrackingData {
 	return t.trackingData
 }
 
+// Subresources selects every subresource of the texture: each of its mip
+// levels in each of its array layers, of which a 3D texture has one.
+func (t *Texture) Subresources() track.TextureSelector {
+	layers := t.size.DepthOrArrayLayers
+	if t.dimension == gputypes.TextureDimension3D {
+		layers = 1
+	}
+	return track.TextureSubresources(t.mipLevelCount, layers)
+}
+
 // TextureView represents a view into a texture.
 //
 // TextureView wraps a HAL texture view handle and carries a reference to
@@ -1108,6 +1118,9 @@ type TextureView struct {
 	// on.
 	BaseMipLevel uint32
 
+	// BaseArrayLayer is the first array layer of Parent the view is of.
+	BaseArrayLayer uint32
+
 	// Format, Dimension, Aspect, MipLevelCount and ArrayLayerCount are the
 	// view's resolved descriptor, what render pass validation checks an
 	// attachment by. Zero is not known: Parent's format, all aspects, one
@@ -1117,6 +1130,18 @@ type TextureView struct {
 	Aspect          gputypes.TextureAspect
 	MipLevelCount   uint32
 	ArrayLayerCount uint32
+}
+
+// Subresources selects the subresources of Parent the view is of.
+func (v *TextureView) Subresources() track.TextureSelector {
+	sel := track.TextureSelector{
+		Mips:   track.Range{Start: v.BaseMipLevel, End: v.BaseMipLevel + max(v.MipLevelCount, 1)},
+		Layers: track.Range{Start: v.BaseArrayLayer, End: v.BaseArrayLayer + max(v.ArrayLayerCount, 1)},
+	}
+	if v.Parent != nil && v.Parent.dimension == gputypes.TextureDimension3D {
+		sel.Layers = v.Parent.Subresources().Layers
+	}
+	return sel
 }
 
 // ViewFormat returns the format of the view, its parent's unless it says.

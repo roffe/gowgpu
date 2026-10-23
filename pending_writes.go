@@ -89,10 +89,13 @@ type pendingWrites struct {
 	dstOwners   []dstOwner
 
 	// Scratch for writeTextureLocked and writeBufferFor, under pw.mu: what
-	// they hand the HAL by slice, which does not keep it.
-	texBarrier [1]hal.TextureBarrier
-	texCopy    [1]hal.BufferTextureCopy
-	bufBarrier [1]hal.BufferBarrier
+	// they hand the HAL by slice, which does not keep it, and the
+	// transitions of the subresources a write moves.
+	texBarrier     [1]hal.TextureBarrier
+	texBarriers    []hal.TextureBarrier
+	texTransitions []track.TexturePendingTransition
+	texCopy        [1]hal.BufferTextureCopy
+	bufBarrier     [1]hal.BufferBarrier
 
 	// inflight tracks staging buffers and encoders from previous submissions,
 	// keyed by submission index. Cleaned up when PollCompleted advances past them.
@@ -216,9 +219,8 @@ type batchUndo struct {
 }
 
 type trackedTexture struct {
-	owner   *Texture
-	uses    track.TextureUses
-	tracked bool
+	owner *Texture
+	state track.TextureSnapshot
 }
 
 type trackedBuffer struct {
@@ -236,8 +238,7 @@ func (pw *pendingWrites) saveTexture(owner *Texture, idx track.TrackerIndex) {
 	if pw.undo.textures == nil {
 		pw.undo.textures = make(map[track.TrackerIndex]trackedTexture)
 	}
-	uses, tracked := pw.tracker.TextureState(idx)
-	pw.undo.textures[idx] = trackedTexture{owner: owner, uses: uses, tracked: tracked}
+	pw.undo.textures[idx] = trackedTexture{owner: owner, state: pw.tracker.SaveTexture(idx)}
 }
 
 // saveBuffer is saveTexture for a buffer.
@@ -258,7 +259,7 @@ func (pw *pendingWrites) saveBuffer(owner *Buffer, idx track.TrackerIndex) {
 func (pw *pendingWrites) rollback() {
 	for idx, t := range pw.undo.textures {
 		if cur, ok := pw.trackedIndex(t.owner); ok && cur == idx {
-			pw.tracker.RestoreTexture(idx, t.uses, t.tracked)
+			pw.tracker.RestoreTexture(idx, t.state)
 		}
 	}
 	for idx, b := range pw.undo.buffers {
@@ -715,7 +716,7 @@ func (pw *pendingWrites) copyToTextureLocked(
 	if err != nil {
 		return fmt.Errorf("wgpu: pending writes: activate encoder: %w", err)
 	}
-	w := pw.beginTextureWrite(enc, owner, dst)
+	w := pw.beginTextureWrite(enc, owner, dst, owner.copySubresources(dst, size))
 
 	// Record copy command.
 	pw.texCopy[0] = hal.BufferTextureCopy{
@@ -738,88 +739,83 @@ func (pw *pendingWrites) copyToTextureLocked(
 // endTextureWrite needs.
 type textureWrite struct {
 	idx     track.TrackerIndex
+	full    track.TextureSelector
+	sel     track.TextureSelector
 	tracked bool
 }
 
-// beginTextureWrite records the barrier that makes dst a copy destination.
-func (pw *pendingWrites) beginTextureWrite(enc hal.CommandEncoder, owner *Texture, dst *hal.ImageCopyTexture) textureWrite {
-	// Transition texture to COPY_DST from the state the GPU has it in: what
-	// the last submit left (the device tracker), else what the backend tracks
-	// itself (DX12), else undefined, which is right for a new texture and
-	// nothing else: on Vulkan it lets the driver discard the contents. A
-	// texture the tracker only knows as uninitialized (every texture is,
-	// from creation) has no usage to name, and the backend's own state
-	// stands.
-	currentUsage := dst.Texture.CurrentUsage()
-	var currentUses hal.TextureUses
+// beginTextureWrite records the barriers that make the subresources sel
+// selects of dst copy destinations, from the states the device tracker
+// has them in: what the last submit or write left. A texture without a
+// tracker index goes from the state the backend tracks itself (DX12), or
+// undefined, which is right for a new texture and nothing else: on Vulkan
+// it lets the driver discard the contents.
+func (pw *pendingWrites) beginTextureWrite(enc hal.CommandEncoder, owner *Texture, dst *hal.ImageCopyTexture, sel track.TextureSelector) textureWrite {
 	idx, tracked := pw.trackedIndex(owner)
-	if tracked {
-		state := pw.tracker.TextureUsage(idx)
-		currentUses = state.ToHAL()
-		if uses := state.ToTextureUsage(); uses != 0 {
-			currentUsage = uses
+	if !tracked {
+		if currentUsage := dst.Texture.CurrentUsage(); currentUsage != gputypes.TextureUsageCopyDst {
+			pw.texBarrier[0] = hal.TextureBarrier{
+				Texture: dst.Texture,
+				Usage: hal.TextureUsageTransition{
+					OldUsage: currentUsage,
+					NewUsage: gputypes.TextureUsageCopyDst,
+					New:      hal.TextureUsesCopyDst,
+				},
+			}
+			enc.TransitionTextures(pw.texBarrier[:])
+			pw.texBarrier[0] = hal.TextureBarrier{}
 		}
+		return textureWrite{}
 	}
-	// One the tracker knows as a copy destination already was written by an
-	// earlier copy, which this one has to wait for. The barrier takes the
-	// whole texture, every aspect included, as the tracker knows only the
-	// whole texture's state and Vulkan wants both aspects of a depth/stencil
-	// image in one barrier (VUID-VkImageMemoryBarrier-image-03320); the copy
-	// itself stays on its region. wgpu-core makes every texture barrier
-	// with TextureAspect::All the same way.
-	if currentUsage != gputypes.TextureUsageCopyDst || currentUses&hal.TextureUsesCopyDst != 0 {
-		pw.texBarrier[0] = hal.TextureBarrier{
-			Texture: dst.Texture,
-			Usage: hal.TextureUsageTransition{
-				OldUsage: currentUsage,
-				NewUsage: gputypes.TextureUsageCopyDst,
-				Old:      currentUses,
-				New:      hal.TextureUsesCopyDst,
-			},
-		}
-		enc.TransitionTextures(pw.texBarrier[:])
-		pw.texBarrier[0] = hal.TextureBarrier{}
-	}
-	return textureWrite{idx: idx, tracked: tracked}
+	w := textureWrite{idx: idx, full: owner.coreTexture.Subresources(), sel: sel, tracked: true}
+	pw.saveTexture(owner, idx)
+	pw.moveTexture(enc, dst.Texture, w, track.TextureUsesCopyDst)
+	return w
 }
 
-// endTextureWrite records what follows a copy into dst: the barrier taking it
-// to what it is used as, and its new state in the tracker.
+// moveTexture puts the subresources of a write in uses in the device
+// tracker and records the barriers that take them there on enc, against
+// raw. One the tracker knows as a copy destination was written by an
+// earlier copy, which this one has to wait for, so a write into it gets a
+// barrier too.
+func (pw *pendingWrites) moveTexture(enc hal.CommandEncoder, raw hal.Texture, w textureWrite, uses track.TextureUses) {
+	pw.texTransitions = pw.tracker.SetTextureUsage(w.idx, w.full, w.sel, uses, pw.texTransitions[:0])
+	barriers := pw.texBarriers[:0]
+	for _, t := range pw.texTransitions {
+		barriers = append(barriers, t.IntoHAL(raw))
+	}
+	if len(barriers) > 0 {
+		enc.TransitionTextures(barriers)
+	}
+	clear(barriers)
+	pw.texBarriers, pw.texTransitions = barriers[:0], pw.texTransitions[:0]
+}
+
+// endTextureWrite records what follows a copy into dst: the barrier taking
+// the subresources it wrote to what they are used as, and their new state
+// in the tracker.
 func (pw *pendingWrites) endTextureWrite(enc hal.CommandEncoder, owner *Texture, dst *hal.ImageCopyTexture, w textureWrite) {
 	// A texture that is never sampled, a surface texture (presented or
 	// rendered over) or one made without TextureBinding, stays a copy
 	// destination, and the present, the render pass or the next copy takes
 	// it from there: a barrier into TextureBinding names a sampled layout
 	// the image has no usage for (VUID-VkImageMemoryBarrier-oldLayout-01211
-	// on Vulkan).
-	if w.tracked {
-		pw.saveTexture(owner, w.idx)
-	}
-	if owner.textureUsage()&gputypes.TextureUsageTextureBinding == 0 {
+	// on Vulkan). The write leaves one that is sampled ready to sample.
+	if owner.textureUsage()&gputypes.TextureUsageTextureBinding != 0 {
 		if w.tracked {
-			pw.tracker.InsertTexture(w.idx, track.TextureUsesCopyDst)
-		}
-	} else {
-		// Transition texture to SHADER_RESOURCE for rendering.
-		// ADR-060: The centralized TextureTracker now handles render pass -> submit barriers.
-		// These eager barriers remain for the pending_writes -> render path until the tracker
-		// also covers queue write operations (pending_writes integration, future work).
-		pw.texBarrier[0] = hal.TextureBarrier{
-			Texture: dst.Texture,
-			Usage: hal.TextureUsageTransition{
-				OldUsage: gputypes.TextureUsageCopyDst,
-				NewUsage: gputypes.TextureUsageTextureBinding,
-				Old:      hal.TextureUsesCopyDst,
-				New:      hal.TextureUsesResource,
-			},
-		}
-		enc.TransitionTextures(pw.texBarrier[:])
-		pw.texBarrier[0] = hal.TextureBarrier{}
-
-		// The write leaves the texture ready to sample; the barriers of the
-		// submits that follow start from there.
-		if w.tracked {
-			pw.tracker.InsertTexture(w.idx, track.TextureUsesResource)
+			pw.moveTexture(enc, dst.Texture, w, track.TextureUsesResource)
+		} else {
+			pw.texBarrier[0] = hal.TextureBarrier{
+				Texture: dst.Texture,
+				Usage: hal.TextureUsageTransition{
+					OldUsage: gputypes.TextureUsageCopyDst,
+					NewUsage: gputypes.TextureUsageTextureBinding,
+					Old:      hal.TextureUsesCopyDst,
+					New:      hal.TextureUsesResource,
+				},
+			}
+			enc.TransitionTextures(pw.texBarrier[:])
+			pw.texBarrier[0] = hal.TextureBarrier{}
 		}
 	}
 
@@ -859,7 +855,7 @@ func (pw *pendingWrites) copyExternalLocked(src uint64, layout, slice uint32, ow
 			pw.undo.zero = append(pw.undo.zero, owner)
 		}
 		dsts[i] = hal.ImageCopyTexture{Texture: raws[i]}
-		writes[i] = pw.beginTextureWrite(enc, owner, &dsts[i])
+		writes[i] = pw.beginTextureWrite(enc, owner, &dsts[i], track.TextureSelector{})
 	}
 	after := copier.CopyExternalPlanes(src, layout, slice, raws[:len(owners)])
 	for i, owner := range owners {
@@ -891,7 +887,7 @@ func (pw *pendingWrites) copyExternalBufferLocked(src uint64, bytesPerRow uint32
 		pw.undo.zero = append(pw.undo.zero, owner)
 	}
 	dst := hal.ImageCopyTexture{Texture: raw}
-	write := pw.beginTextureWrite(enc, owner, &dst)
+	write := pw.beginTextureWrite(enc, owner, &dst, track.TextureSelector{})
 	copier.CopyExternalBuffer(src, bytesPerRow, raw)
 	pw.endTextureWrite(enc, owner, &dst, write)
 	return nil
@@ -1145,13 +1141,6 @@ func (pw *pendingWrites) zeroTextureLocked(t *Texture) error {
 			pw.zeros = make([]byte, n)
 		}
 		for z := range layers {
-			// The first copy starts from the state the texture was made in;
-			// the copies' barriers take the whole texture, so each later one
-			// starts from what the one before left.
-			if idx, ok := pw.trackedIndex(t); ok && !cpu && mip == 0 && z == 0 {
-				pw.saveTexture(t, idx)
-				pw.tracker.InsertTexture(idx, track.TextureUsesUninitialized)
-			}
 			for r := uint32(0); r < blockRows; r += rows {
 				n, y := min(rows, blockRows-r), r*bh
 				dst := hal.ImageCopyTexture{Texture: raw, MipLevel: mip, Origin: hal.Origin3D{Y: y, Z: z}, Aspect: gputypes.TextureAspectAll}

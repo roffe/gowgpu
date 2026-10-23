@@ -1080,15 +1080,15 @@ func TestRecordPassTextureUsage_RenderPassTransitionsAheadOfPass(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BeginRenderPass: %v", err)
 	}
-	if err := enc.RecordPassTextureUsage(sampled, sampledHAL, track.TextureUsesResource); err != nil {
+	if err := enc.RecordPassTextureUsage(sampled, sampledHAL, track.TextureSelector{}, track.TextureUsesResource); err != nil {
 		t.Fatalf("RecordPassTextureUsage(sampled): %v", err)
 	}
 	// Bound again by another group of the same pass: the same usage merges.
-	if err := enc.RecordPassTextureUsage(sampled, sampledHAL, track.TextureUsesResource); err != nil {
+	if err := enc.RecordPassTextureUsage(sampled, sampledHAL, track.TextureSelector{}, track.TextureUsesResource); err != nil {
 		t.Fatalf("RecordPassTextureUsage(sampled again): %v", err)
 	}
 	var conflict *track.TextureUsageConflictError
-	if err := enc.RecordPassTextureUsage(target, nil, track.TextureUsesResource); !errors.As(err, &conflict) {
+	if err := enc.RecordPassTextureUsage(target, nil, track.TextureSelector{}, track.TextureUsesResource); !errors.As(err, &conflict) {
 		t.Fatalf("sampling the pass's own attachment = %v, want TextureUsageConflictError", err)
 	}
 	if n := len(halEncoder.barriers); n != 0 {
@@ -1150,7 +1150,7 @@ func TestRecordPassTextureUsage_ComputePassTransitionsInline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BeginComputePass: %v", err)
 	}
-	if err := enc.RecordPassTextureUsage(tex, texHAL, track.TextureUsesStorageWrite); err != nil {
+	if err := enc.RecordPassTextureUsage(tex, texHAL, track.TextureSelector{}, track.TextureUsesStorageWrite); err != nil {
 		t.Fatalf("RecordPassTextureUsage: %v", err)
 	}
 	if n := len(halEncoder.barriers); n != 0 {
@@ -1164,7 +1164,7 @@ func TestRecordPassTextureUsage_ComputePassTransitionsInline(t *testing.T) {
 	}
 	// Bound again, by the next dispatch's group: a write after a write still
 	// needs a barrier.
-	if err := enc.RecordPassTextureUsage(tex, texHAL, track.TextureUsesStorageWrite); err != nil {
+	if err := enc.RecordPassTextureUsage(tex, texHAL, track.TextureSelector{}, track.TextureUsesStorageWrite); err != nil {
 		t.Fatalf("RecordPassTextureUsage again: %v", err)
 	}
 	pass.Dispatch(1, 1, 1)

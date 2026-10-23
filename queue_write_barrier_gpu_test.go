@@ -8,12 +8,12 @@ import (
 	"github.com/roffe/gowgpu/gputypes"
 )
 
-// A queue write into one layer of a texture or one aspect of a depth/stencil
-// texture moves the whole texture, the state the tracker keeps for it: the
-// next pass on another layer starts from the layout it is really in, and
-// the stencil write's barriers name both aspects of the image, which the
-// validation layer checks.
-func TestQueueWriteBarriersTakeTheWholeTexture(t *testing.T) {
+// A queue write into one layer of a texture moves that layer alone, the
+// tracker keeping a state per layer: the next pass on another layer starts
+// from the layout it is really in. A write into one aspect of a
+// depth/stencil texture names both aspects of the image in its barriers,
+// which the validation layer checks.
+func TestQueueWriteIntoOneLayerOrAspect(t *testing.T) {
 	device, h := newValidatedDevice(t)
 
 	tex, err := device.CreateTexture(&TextureDescriptor{

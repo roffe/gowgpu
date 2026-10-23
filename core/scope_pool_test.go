@@ -21,7 +21,7 @@ func TestCommandBufferScopesReused(t *testing.T) {
 	scopes := enc.Mutable()
 	scopes.TextureScope().SetSingle(5, track.TextureUsesColorTarget)
 	scopes.BufferScope().SetSingle(3, track.BufferUsesVertex)
-	if err := scopes.pass.addTexture(7, nil, track.TextureUsesResource, false); err != nil {
+	if err := scopes.pass.addTexture(7, track.TextureSelector{}, track.TextureSelector{}, nil, track.TextureUsesResource, false); err != nil {
 		t.Fatal(err)
 	}
 	cb, err := enc.Finish()

@@ -238,10 +238,12 @@ type BindGroup struct {
 	// Used at Submit time to verify that referenced textures are still alive.
 	boundTextures []*Texture
 	// boundTextureUses is how each of boundTextures is used by the group:
-	// sampled, or storage read or write. Recorded in the usage scope of the
-	// render pass or the dispatch that binds the group, so the texture is
-	// transitioned into it.
-	boundTextureUses []track.TextureUses
+	// sampled, or storage read or write, and boundTextureRanges the
+	// subresources of it the group's view takes in. Recorded in the usage
+	// scope of the render pass or the dispatch that binds the group, so
+	// those subresources are transitioned into it.
+	boundTextureUses   []track.TextureUses
+	boundTextureRanges []track.TextureSelector
 	// boundBufferUses is the same for each of boundBuffers: uniform, or
 	// storage read-only or read-write.
 	boundBufferUses []track.BufferUses

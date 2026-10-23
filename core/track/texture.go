@@ -154,71 +154,60 @@ func (u TextureUses) ToTextureUsage() gputypes.TextureUsage {
 	return result
 }
 
-// TextureState holds the tracked state for a single texture.
-type TextureState struct {
-	usage TextureUses
-}
-
-// Usage returns the current usage.
-func (s TextureState) Usage() TextureUses {
-	return s.usage
-}
-
-// TextureTracker tracks texture usage states for a device.
+// TextureTracker tracks texture usage states for a device, per subresource.
 // It is the device-level source of truth: each submitted command buffer's
-// usage scope is merged into this tracker, which produces the barrier list.
+// tracker is merged into it, which produces the barriers into the states
+// the command buffer starts in.
 //
-// This mirrors Rust wgpu-core's DeviceTracker for textures
-// (simplified to whole-texture granularity; per-subresource tracking is
-// deferred to a future phase).
-//
-// Reference: wgpu-core track/texture.rs TextureTracker
+// Reference: wgpu-core track/texture.rs DeviceTextureTracker
 type TextureTracker struct {
-	states   []TextureState   // States indexed by TrackerIndex
-	metadata ResourceMetadata // Tracks which indices are valid
+	set      stateSet
+	metadata ResourceMetadata
 }
 
 // NewTextureTracker creates a new texture tracker.
 func NewTextureTracker() *TextureTracker {
-	return &TextureTracker{
-		states:   make([]TextureState, 0, 64),
-		metadata: NewResourceMetadata(),
-	}
+	return &TextureTracker{metadata: NewResourceMetadata()}
 }
 
-// InsertSingle tracks a new texture with initial usage.
+func (t *TextureTracker) ensureSize(size int) {
+	t.set.ensureSize(size)
+}
+
+// InsertSingle tracks a texture with every subresource in usage.
 func (t *TextureTracker) InsertSingle(index TrackerIndex, usage TextureUses) {
 	t.ensureSize(int(index) + 1)
-	t.states[index] = TextureState{usage: usage}
+	t.set.setSimple(index, usage)
 	t.metadata.SetOwned(index, true)
 }
 
 // Remove stops tracking a texture.
 func (t *TextureTracker) Remove(index TrackerIndex) {
-	if int(index) < len(t.states) {
-		t.states[index] = TextureState{}
+	if int(index) < len(t.set.simple) {
+		t.set.remove(index)
 		t.metadata.SetOwned(index, false)
 	}
 }
 
-// GetUsage returns the current usage of a texture.
+// GetUsage returns the usage of a texture, every usage one of its
+// subresources is in when they differ.
 func (t *TextureTracker) GetUsage(index TrackerIndex) TextureUses {
-	if int(index) < len(t.states) && t.metadata.IsOwned(index) {
-		return t.states[index].usage
+	if !t.IsTracked(index) {
+		return TextureUsesNone
 	}
-	return TextureUsesNone
+	return t.set.union(index)
 }
 
-// SetUsage updates the usage of a tracked texture.
+// SetUsage puts every subresource of a tracked texture in usage.
 func (t *TextureTracker) SetUsage(index TrackerIndex, usage TextureUses) {
-	if int(index) < len(t.states) && t.metadata.IsOwned(index) {
-		t.states[index].usage = usage
+	if t.IsTracked(index) {
+		t.set.setSimple(index, usage)
 	}
 }
 
 // IsTracked returns true if the texture is being tracked.
 func (t *TextureTracker) IsTracked(index TrackerIndex) bool {
-	return int(index) < len(t.states) && t.metadata.IsOwned(index)
+	return int(index) < len(t.set.simple) && t.metadata.IsOwned(index)
 }
 
 // Size returns the number of tracked textures.
@@ -226,68 +215,60 @@ func (t *TextureTracker) Size() int {
 	return t.metadata.Count()
 }
 
-// ensureSize grows the state vector if needed.
-func (t *TextureTracker) ensureSize(size int) {
-	for len(t.states) < size {
-		t.states = append(t.states, TextureState{})
+// SetSubresourceUsage puts the subresources sel selects of the texture at
+// index, whose subresources are full, in usage, and appends the
+// transitions from the states they were in to dst. A texture the tracker
+// does not track yet has not been on the GPU, and takes no transition.
+//
+// Reference: wgpu-core track/texture.rs DeviceTextureTracker::set_single
+func (t *TextureTracker) SetSubresourceUsage(index TrackerIndex, full, sel TextureSelector, usage TextureUses, dst []TexturePendingTransition) []TexturePendingTransition {
+	src, ok := selection(full, sel, usage)
+	if !ok {
+		return dst
 	}
+	return t.apply(index, src, src, dst)
+}
+
+// apply brings the texture at index from its state to start, appending the
+// transitions to dst, and leaves it in end. An untracked texture is
+// inserted in end without transitions.
+func (t *TextureTracker) apply(index TrackerIndex, start, end stateSource, dst []TexturePendingTransition) []TexturePendingTransition {
+	t.ensureSize(int(index) + 1)
+	if !t.metadata.IsOwned(index) {
+		t.set.insert(index, end)
+		t.metadata.SetOwned(index, true)
+		return dst
+	}
+	dst = t.set.barrier(index, start, dst)
+	t.set.update(index, end, nil, 0)
+	return dst
 }
 
 // Merge merges usage from scope into tracker, returning needed transitions.
-// Called during queue submit to synchronize command buffer state with device
-// state. Each returned TexturePendingTransition should be converted to a
-// hal.TextureBarrier and emitted before the corresponding command buffer.
+// Each returned TexturePendingTransition should be converted to a
+// hal.TextureBarrier and emitted before the commands of the scope.
 //
-// Reference: wgpu-core track/texture.rs TextureTracker::set_from_usage_scope
+// Reference: wgpu-core track/texture.rs set_from_usage_scope_and_drain_transitions
 func (t *TextureTracker) Merge(scope *TextureUsageScope) []TexturePendingTransition {
 	return t.MergeInto(scope, nil)
 }
 
-// MergeInto is Merge appending the transitions to dst, so a caller that
-// merges every submit can keep the list.
+// MergeInto is Merge appending the transitions to dst.
 func (t *TextureTracker) MergeInto(scope *TextureUsageScope, dst []TexturePendingTransition) []TexturePendingTransition {
-	transitions := dst
-
-	for i := range scope.states {
-		if i < 0 || uint64(i) > uint64(^TrackerIndex(0)-1) {
+	for i := range scope.set.simple {
+		index, valid := trackerIndexAt(i)
+		if !valid || !scope.metadata.IsOwned(index) {
 			continue
 		}
-		index := TrackerIndex(i)
-		if !scope.metadata.IsOwned(index) {
-			continue
-		}
-
-		newUsage := scope.states[i].usage
-		oldUsage := t.GetUsage(index)
-
-		// If texture not tracked in device, add it
-		if !t.IsTracked(index) {
-			t.InsertSingle(index, newUsage)
-			continue
-		}
-
-		// Check if transition is needed using the skip_barrier rule
-		if SkipBarrier(oldUsage, newUsage) {
-			continue
-		}
-
-		// State changed or not all ordered — emit a barrier
-		transitions = append(transitions, TexturePendingTransition{
-			Index: index,
-			Usage: TextureStateTransition{
-				From: oldUsage,
-				To:   newUsage,
-			},
-		})
-		t.states[index].usage = newUsage
+		src := sourceOf(&scope.set, index)
+		dst = t.apply(index, src, src, dst)
 	}
-
-	return transitions
+	return dst
 }
 
 // MergeEncoder merges a submitted command buffer's tracker into the device
-// tracker. For every texture the command buffer uses, a transition from the
-// device's current state to the command buffer's start state is returned
+// tracker. For every subresource the command buffer uses, a transition from
+// the device's state to the command buffer's start state is returned
 // (unless SkipBarrier allows omitting it), and the device state becomes the
 // command buffer's end state. Textures the device does not track yet are
 // inserted with the end state and need no barrier.
@@ -303,95 +284,106 @@ func (t *TextureTracker) MergeEncoderInto(enc *EncoderTextureTracker, dst []Text
 	if enc == nil {
 		return dst
 	}
-	for i := range enc.end {
+	for i := range enc.end.simple {
 		index, valid := trackerIndexAt(i)
 		if !valid || !enc.metadata.IsOwned(index) {
 			continue
 		}
-		start, end := enc.start[i], enc.end[i]
-		if !t.IsTracked(index) {
-			t.InsertSingle(index, end)
-			continue
-		}
-		current := t.states[index].usage
-		if !SkipBarrier(current, start) {
-			dst = append(dst, TexturePendingTransition{
-				Index: index,
-				Usage: TextureStateTransition{From: current, To: start},
-			})
-		}
-		t.states[index].usage = end
+		dst = t.apply(index, sourceOf(&enc.start, index), sourceOf(&enc.end, index), dst)
 	}
 	return dst
 }
 
+// TextureSnapshot is the state a tracker had for one texture, from Save.
+type TextureSnapshot struct {
+	state   snapshot
+	tracked bool
+}
+
+// Save returns the state the tracker has for the texture at index.
+func (t *TextureTracker) Save(index TrackerIndex) TextureSnapshot {
+	if !t.IsTracked(index) {
+		return TextureSnapshot{}
+	}
+	return TextureSnapshot{state: t.set.snapshot(index), tracked: true}
+}
+
+// Restore puts the texture at index back in the state Save returned.
+func (t *TextureTracker) Restore(index TrackerIndex, snap TextureSnapshot) {
+	if !snap.tracked {
+		t.Remove(index)
+		return
+	}
+	t.ensureSize(int(index) + 1)
+	t.set.restore(index, snap.state)
+	t.metadata.SetOwned(index, true)
+}
+
 // TextureUsageScope tracks texture usage within ONE WebGPU usage scope: a
-// render pass, a compute pass, or a single copy command. Adding a usage that
-// is incompatible with an earlier usage in the same scope is a validation
-// error. Usages across different scopes are not merged here; the command
-// buffer's EncoderTextureTracker transitions between them.
+// render pass, a compute dispatch, or a single copy command. Adding a usage
+// that is incompatible with an earlier usage of the same subresource in the
+// scope is a validation error; different subresources of one texture may
+// be used differently. Usages across different scopes are not merged here;
+// the command buffer's EncoderTextureTracker transitions between them.
 //
 // Reference: wgpu-core track/texture.rs TextureUsageScope
 type TextureUsageScope struct {
-	states   []TextureState
+	set      stateSet
 	metadata ResourceMetadata
 }
 
 // NewTextureUsageScope creates a new usage scope.
 func NewTextureUsageScope() *TextureUsageScope {
-	return &TextureUsageScope{
-		states:   make([]TextureState, 0, 32),
-		metadata: NewResourceMetadata(),
-	}
+	return &TextureUsageScope{metadata: NewResourceMetadata()}
 }
 
-// SetUsage sets the usage for a texture in this scope.
-// Returns error if the texture already has an incompatible usage.
+// SetUsage adds a usage of every subresource of a texture to the scope.
+// Returns an error if a subresource already has an incompatible usage.
+func (s *TextureUsageScope) SetUsage(index TrackerIndex, usage TextureUses) error {
+	return s.SetSubresourceUsage(index, TextureSelector{}, TextureSelector{}, usage)
+}
+
+// SetSubresourceUsage adds a usage of the subresources sel selects of the
+// texture at index, whose subresources are full, to the scope. Returns an
+// error if one of them already has an incompatible usage.
 //
 // Reference: wgpu-core track/texture.rs TextureUsageScope::merge_single
-func (s *TextureUsageScope) SetUsage(index TrackerIndex, usage TextureUses) error {
-	s.ensureSize(int(index) + 1)
-
-	if s.metadata.IsOwned(index) {
-		existing := s.states[index].usage
-		combined := existing | usage
-		if !combined.IsCompatible(combined) {
-			return &TextureUsageConflictError{
-				Index:    index,
-				Existing: existing,
-				New:      usage,
-			}
-		}
-		// Merge usages if compatible
-		s.states[index].usage = combined
-	} else {
-		s.states[index] = TextureState{usage: usage}
-		s.metadata.SetOwned(index, true)
+func (s *TextureUsageScope) SetSubresourceUsage(index TrackerIndex, full, sel TextureSelector, usage TextureUses) error {
+	src, ok := selection(full, sel, usage)
+	if !ok {
+		return nil
 	}
-
-	return nil
+	s.set.ensureSize(int(index) + 1)
+	if !s.metadata.IsOwned(index) {
+		s.set.insert(index, src)
+		s.metadata.SetOwned(index, true)
+		return nil
+	}
+	return s.set.merge(index, src)
 }
 
-// ReplaceUsage unconditionally replaces the usage recorded for a texture. It
-// is intended only after preflight validation, or after an explicit transition
-// where the scope must describe the state after the encoded barrier.
+// ReplaceUsage unconditionally replaces the usage recorded for a texture,
+// for every subresource. It is intended only after preflight validation,
+// or after an explicit transition where the scope must describe the state
+// after the encoded barrier.
 func (s *TextureUsageScope) ReplaceUsage(index TrackerIndex, usage TextureUses) {
-	s.ensureSize(int(index) + 1)
-	s.states[index] = TextureState{usage: usage}
+	s.set.ensureSize(int(index) + 1)
+	s.set.setSimple(index, usage)
 	s.metadata.SetOwned(index, true)
 }
 
-// GetUsage returns the current usage in this scope.
+// GetUsage returns the usages of a texture in this scope, of all its
+// subresources the scope uses.
 func (s *TextureUsageScope) GetUsage(index TrackerIndex) TextureUses {
-	if int(index) < len(s.states) && s.metadata.IsOwned(index) {
-		return s.states[index].usage
+	if !s.IsUsed(index) {
+		return TextureUsesNone
 	}
-	return TextureUsesNone
+	return s.set.union(index)
 }
 
 // IsUsed returns true if the texture is used in this scope.
 func (s *TextureUsageScope) IsUsed(index TrackerIndex) bool {
-	return int(index) < len(s.states) && s.metadata.IsOwned(index)
+	return int(index) < len(s.set.simple) && s.metadata.IsOwned(index)
 }
 
 // IsEmpty returns true if no textures are tracked in this scope.
@@ -401,26 +393,19 @@ func (s *TextureUsageScope) IsEmpty() bool {
 
 // Clear resets the scope for reuse.
 func (s *TextureUsageScope) Clear() {
-	s.states = s.states[:0]
+	s.set.clear()
 	s.metadata.Clear()
 }
 
-// ensureSize grows the state vector if needed.
-func (s *TextureUsageScope) ensureSize(size int) {
-	for len(s.states) < size {
-		s.states = append(s.states, TextureState{})
-	}
-}
-
 // TexturePendingTransition represents a texture state transition that needs
-// a barrier. Produced by TextureTracker.Merge() when a command buffer's
-// usage scope requires a different state than the device tracker's current
-// state.
+// a barrier: the subresources Selector selects of the texture at Index, all
+// of them for the zero selector.
 //
 // Reference: wgpu-core track/mod.rs PendingTransition<TextureUses>
 type TexturePendingTransition struct {
-	Index TrackerIndex
-	Usage TextureStateTransition
+	Index    TrackerIndex
+	Selector TextureSelector
+	Usage    TextureStateTransition
 }
 
 // TextureStateTransition represents a from-to state change for a texture.
@@ -434,12 +419,13 @@ func (t TextureStateTransition) NeedsBarrier() bool {
 	return !SkipBarrier(t.From, t.To)
 }
 
-// IntoHAL converts a pending transition to a HAL texture barrier, with
-// the coarse usages and the fine states behind them. The caller provides
-// the hal.Texture handle.
+// IntoHAL converts a pending transition to a HAL texture barrier on its
+// subresources, with the coarse usages and the fine states behind them.
+// The caller provides the hal.Texture handle.
 func (p TexturePendingTransition) IntoHAL(texture hal.Texture) hal.TextureBarrier {
 	return hal.TextureBarrier{
 		Texture: texture,
+		Range:   p.Selector.HALRange(),
 		Usage: hal.TextureUsageTransition{
 			OldUsage: p.Usage.From.ToTextureUsage(),
 			NewUsage: p.Usage.To.ToTextureUsage(),
@@ -450,15 +436,16 @@ func (p TexturePendingTransition) IntoHAL(texture hal.Texture) hal.TextureBarrie
 }
 
 // TextureUsageConflictError is returned when incompatible texture usages
-// are detected within the same scope.
+// of the same subresources are detected within the same scope.
 type TextureUsageConflictError struct {
 	Index    TrackerIndex
+	Selector TextureSelector
 	Existing TextureUses
 	New      TextureUses
 }
 
 // Error implements the error interface.
 func (e *TextureUsageConflictError) Error() string {
-	return fmt.Sprintf("track: texture %d usage conflict: existing %d incompatible with %d",
-		e.Index, e.Existing, e.New)
+	return fmt.Sprintf("track: texture %d usage conflict on %v: existing %d incompatible with %d",
+		e.Index, e.Selector, e.Existing, e.New)
 }

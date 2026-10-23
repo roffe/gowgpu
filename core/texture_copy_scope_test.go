@@ -7,6 +7,7 @@ import (
 
 	"github.com/roffe/gowgpu/core/track"
 	"github.com/roffe/gowgpu/gputypes"
+	"github.com/roffe/gowgpu/hal"
 )
 
 // TestCoreCommandEncoderRecordTextureTransition verifies that an explicit
@@ -37,7 +38,7 @@ func TestCoreCommandEncoderRecordTextureTransition(t *testing.T) {
 	}
 	tracker := encoder.Mutable().TextureScope()
 
-	encoder.RecordTextureTransition(color, gputypes.TextureUsageRenderAttachment, gputypes.TextureUsageCopySrc)
+	encoder.RecordTextureTransition(color, hal.TextureRange{}, gputypes.TextureUsageRenderAttachment, gputypes.TextureUsageCopySrc)
 	colorIdx := color.TrackingData().Index()
 	if got := tracker.StartUsage(colorIdx); got != track.TextureUsesColorTarget {
 		t.Errorf("color start = %v, want ColorTarget", got)
@@ -45,7 +46,7 @@ func TestCoreCommandEncoderRecordTextureTransition(t *testing.T) {
 	if got := tracker.EndUsage(colorIdx); got != track.TextureUsesCopySrc {
 		t.Errorf("color end = %v, want CopySrc", got)
 	}
-	encoder.RecordTextureTransition(color, gputypes.TextureUsageCopySrc, gputypes.TextureUsageRenderAttachment)
+	encoder.RecordTextureTransition(color, hal.TextureRange{}, gputypes.TextureUsageCopySrc, gputypes.TextureUsageRenderAttachment)
 	if got := tracker.StartUsage(colorIdx); got != track.TextureUsesColorTarget {
 		t.Errorf("color start after second barrier = %v, want unchanged ColorTarget", got)
 	}
@@ -54,7 +55,7 @@ func TestCoreCommandEncoderRecordTextureTransition(t *testing.T) {
 	}
 
 	// RenderAttachment on a depth format is a depth/stencil target.
-	encoder.RecordTextureTransition(depth, 0, gputypes.TextureUsageRenderAttachment)
+	encoder.RecordTextureTransition(depth, hal.TextureRange{}, 0, gputypes.TextureUsageRenderAttachment)
 	depthIdx := depth.TrackingData().Index()
 	if got := tracker.StartUsage(depthIdx); got != track.TextureUsesDepthStencilWrite {
 		t.Errorf("depth start = %v, want DepthStencilWrite (undefined old usage falls back to new)", got)
@@ -72,13 +73,13 @@ func TestCoreCommandEncoderRecordTextureTransitionGuards(t *testing.T) {
 		{mutable: &CommandBufferMutable{textureTracker: track.NewEncoderTextureTracker()}},
 	}
 	for _, encoder := range encoders {
-		encoder.RecordTextureTransition(nil, gputypes.TextureUsageCopySrc, gputypes.TextureUsageCopyDst)
+		encoder.RecordTextureTransition(nil, hal.TextureRange{}, gputypes.TextureUsageCopySrc, gputypes.TextureUsageCopyDst)
 	}
 
 	encoder := &CoreCommandEncoder{
 		mutable: &CommandBufferMutable{textureTracker: track.NewEncoderTextureTracker()},
 	}
-	encoder.RecordTextureTransition(&Texture{}, gputypes.TextureUsageCopySrc, gputypes.TextureUsageCopyDst)
+	encoder.RecordTextureTransition(&Texture{}, hal.TextureRange{}, gputypes.TextureUsageCopySrc, gputypes.TextureUsageCopyDst)
 
 	invalidTrackingData := NewTexture(
 		nil, nil,
@@ -89,7 +90,7 @@ func TestCoreCommandEncoderRecordTextureTransitionGuards(t *testing.T) {
 		1, 1, "invalid-tracking",
 	)
 	t.Cleanup(invalidTrackingData.Destroy)
-	encoder.RecordTextureTransition(invalidTrackingData, gputypes.TextureUsageCopySrc, gputypes.TextureUsageCopyDst)
+	encoder.RecordTextureTransition(invalidTrackingData, hal.TextureRange{}, gputypes.TextureUsageCopySrc, gputypes.TextureUsageCopyDst)
 
 	if !encoder.mutable.textureTracker.IsEmpty() {
 		t.Fatal("guarded texture transition unexpectedly mutated the tracker")

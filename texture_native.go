@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 
 	"github.com/roffe/gowgpu/core"
+	"github.com/roffe/gowgpu/core/track"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 )
@@ -214,6 +215,50 @@ func (v *TextureView) resolveHAL() hal.TextureView {
 		return nil
 	}
 	return v.hal
+}
+
+// subresources selects the subresources of its texture the view takes in,
+// every one of a texture core does not know.
+func (v *TextureView) subresources() track.TextureSelector {
+	if v.texture == nil || v.texture.coreTexture == nil {
+		return track.TextureSelector{}
+	}
+	cv := core.TextureView{
+		Parent:          v.texture.coreTexture,
+		BaseMipLevel:    v.desc.BaseMipLevel,
+		MipLevelCount:   v.desc.MipLevelCount,
+		BaseArrayLayer:  v.desc.BaseArrayLayer,
+		ArrayLayerCount: v.desc.ArrayLayerCount,
+	}
+	return cv.Subresources()
+}
+
+// copySubresources selects the subresources of t a copy of size at base
+// reads or writes: one mip level, and its layers, but for a 3D texture,
+// whose depth slices are not subresources.
+func (t *Texture) copySubresources(base *hal.ImageCopyTexture, size *hal.Extent3D) track.TextureSelector {
+	if t == nil || t.coreTexture == nil {
+		return track.TextureSelector{}
+	}
+	sel := track.TextureSelector{Mips: track.Range{Start: base.MipLevel, End: base.MipLevel + 1}}
+	if t.coreTexture.Dimension() == gputypes.TextureDimension3D {
+		sel.Layers = t.coreTexture.Subresources().Layers
+	} else {
+		sel.Layers = track.Range{Start: base.Origin.Z, End: base.Origin.Z + max(size.DepthOrArrayLayers, 1)}
+	}
+	return sel
+}
+
+// boundViewSubresources is the subresources the texture views of entries
+// take in, in the order collectBindGroupResources lists their textures.
+func boundViewSubresources(entries []BindGroupEntry) []track.TextureSelector {
+	var sels []track.TextureSelector
+	for i := range entries {
+		if v := entries[i].TextureView; v != nil && v.texture != nil {
+			sels = append(sels, v.subresources())
+		}
+	}
+	return sels
 }
 
 // Texture returns the parent Texture that this view was created from.

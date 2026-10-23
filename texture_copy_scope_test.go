@@ -279,7 +279,7 @@ func TestCopyAfterEarlierCommandUsageIsNotAConflict(t *testing.T) {
 				seedTextureUsage(enc, src, track.TextureUsesCopyDst)
 			},
 			record: func(enc *CommandEncoder, src, _ *Texture, buffer *Buffer) {
-				enc.CopyTextureToBuffer(src, buffer, nil)
+				enc.CopyTextureToBuffer(src, buffer, texelToBuffer(src))
 			},
 			wantSrc: track.TextureUsesCopySrc, wantBuffer: track.BufferUsesCopyDst,
 		},
@@ -289,7 +289,7 @@ func TestCopyAfterEarlierCommandUsageIsNotAConflict(t *testing.T) {
 				seedBufferUsage(enc, buffer, track.BufferUsesCopySrc)
 			},
 			record: func(enc *CommandEncoder, src, _ *Texture, buffer *Buffer) {
-				enc.CopyTextureToBuffer(src, buffer, nil)
+				enc.CopyTextureToBuffer(src, buffer, texelToBuffer(src))
 			},
 			wantSrc: track.TextureUsesCopySrc, wantBuffer: track.BufferUsesCopyDst,
 		},
@@ -299,7 +299,7 @@ func TestCopyAfterEarlierCommandUsageIsNotAConflict(t *testing.T) {
 				seedTextureUsage(enc, dst, track.TextureUsesCopySrc)
 			},
 			record: func(enc *CommandEncoder, _, dst *Texture, buffer *Buffer) {
-				enc.CopyBufferToTexture(buffer, dst, nil)
+				enc.CopyBufferToTexture(buffer, dst, texelToBuffer(dst))
 			},
 			wantDst: track.TextureUsesCopyDst, wantBuffer: track.BufferUsesCopySrc,
 		},
@@ -309,7 +309,7 @@ func TestCopyAfterEarlierCommandUsageIsNotAConflict(t *testing.T) {
 				seedBufferUsage(enc, buffer, track.BufferUsesCopyDst)
 			},
 			record: func(enc *CommandEncoder, _, dst *Texture, buffer *Buffer) {
-				enc.CopyBufferToTexture(buffer, dst, nil)
+				enc.CopyBufferToTexture(buffer, dst, texelToBuffer(dst))
 			},
 			wantDst: track.TextureUsesCopyDst, wantBuffer: track.BufferUsesCopySrc,
 		},
@@ -319,7 +319,7 @@ func TestCopyAfterEarlierCommandUsageIsNotAConflict(t *testing.T) {
 				seedTextureUsage(enc, src, track.TextureUsesColorTarget)
 			},
 			record: func(enc *CommandEncoder, src, dst *Texture, _ *Buffer) {
-				enc.CopyTextureToTexture(src, dst, nil)
+				enc.CopyTextureToTexture(src, dst, texelToTexel(src, dst))
 			},
 			wantSrc: track.TextureUsesCopySrc, wantDst: track.TextureUsesCopyDst,
 		},
@@ -329,7 +329,7 @@ func TestCopyAfterEarlierCommandUsageIsNotAConflict(t *testing.T) {
 				seedTextureUsage(enc, dst, track.TextureUsesResource)
 			},
 			record: func(enc *CommandEncoder, src, dst *Texture, _ *Buffer) {
-				enc.CopyTextureToTexture(src, dst, nil)
+				enc.CopyTextureToTexture(src, dst, texelToTexel(src, dst))
 			},
 			wantSrc: track.TextureUsesCopySrc, wantDst: track.TextureUsesCopyDst,
 		},
@@ -388,8 +388,10 @@ func TestCopyOntoItselfIsRejectedAtomically(t *testing.T) {
 		record func(*CommandEncoder, *Texture, *Buffer)
 	}{
 		{
-			name:   "texture to same texture",
-			record: func(enc *CommandEncoder, tex *Texture, _ *Buffer) { enc.CopyTextureToTexture(tex, tex, nil) },
+			name: "texture to same texture",
+			record: func(enc *CommandEncoder, tex *Texture, _ *Buffer) {
+				enc.CopyTextureToTexture(tex, tex, texelToTexel(tex, tex))
+			},
 		},
 		{
 			name:   "buffer to same buffer",
@@ -472,6 +474,26 @@ func createCopyScopeBuffer(t *testing.T, device *Device, label string) *Buffer {
 		t.Fatalf("CreateBuffer: %v", err)
 	}
 	return buffer
+}
+
+// texelToBuffer is a copy of the one texel of a createCopyScopeTexture to or
+// from a createCopyScopeBuffer.
+func texelToBuffer(tex *Texture) []BufferTextureCopy {
+	return []BufferTextureCopy{{
+		TextureBase:  ImageCopyTexture{Texture: tex},
+		BufferLayout: ImageDataLayout{BytesPerRow: 256, RowsPerImage: 1},
+		Size:         Extent3D{Width: 1, Height: 1, DepthOrArrayLayers: 1},
+	}}
+}
+
+// texelToTexel is a copy of the one texel of a createCopyScopeTexture into
+// another's.
+func texelToTexel(src, dst *Texture) []TextureCopy {
+	return []TextureCopy{{
+		Source:      ImageCopyTexture{Texture: src},
+		Destination: ImageCopyTexture{Texture: dst},
+		Size:        Extent3D{Width: 1, Height: 1, DepthOrArrayLayers: 1},
+	}}
 }
 
 // seedTextureUsage simulates an earlier command of the encoder that left the

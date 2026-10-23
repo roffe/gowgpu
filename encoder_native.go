@@ -69,12 +69,15 @@ type CommandEncoder struct {
 	// pass's groups go in per dispatch instead.
 	passSerial uint64
 
-	// copyTex, copyBuf and the barrier lists are the scratch of one copy
-	// command's usage scope: a copy has two endpoints at most.
-	copyTex     [2]preparedCopyTextureUsage
-	copyBuf     [2]preparedCopyBufferUsage
-	texBarriers [2]hal.TextureBarrier
-	bufBarriers [2]hal.BufferBarrier
+	// copyReq, copyTex, copyBuf, the transitions and the barrier lists are
+	// the scratch of one copy command's usage scope: the subresources each
+	// region of the copy reads or writes, and its buffers.
+	copyReq        []copyTextureUsage
+	copyTex        []preparedCopyTextureUsage
+	copyBuf        [2]preparedCopyBufferUsage
+	texTransitions []track.TexturePendingTransition
+	texBarriers    []hal.TextureBarrier
+	bufBarriers    [2]hal.BufferBarrier
 
 	// usedBindGroups tracks bind groups referenced during encoding for
 	// submit-time validation (VAL-B5). At Submit, each bind group is checked
@@ -360,7 +363,11 @@ func (e *CommandEncoder) recordBindGroupUsages(bg *BindGroup, op string) {
 	}
 	for i, tex := range bg.boundTextures {
 		if i < len(bg.boundTextureUses) {
-			e.recordBoundTextureUsage(tex, bg.boundTextureUses[i], op)
+			var sel track.TextureSelector
+			if i < len(bg.boundTextureRanges) {
+				sel = bg.boundTextureRanges[i]
+			}
+			e.recordBoundTextureUsage(tex, sel, bg.boundTextureUses[i], op)
 		}
 	}
 	for i, buf := range bg.boundBuffers {
@@ -370,13 +377,13 @@ func (e *CommandEncoder) recordBindGroupUsages(bg *BindGroup, op string) {
 	}
 }
 
-// recordBoundTextureUsage puts a bound texture's usage in the usage scope
-// being recorded.
-func (e *CommandEncoder) recordBoundTextureUsage(tex *Texture, usage track.TextureUses, op string) {
+// recordBoundTextureUsage puts the usage of the subresources sel selects of
+// a bound texture in the usage scope being recorded.
+func (e *CommandEncoder) recordBoundTextureUsage(tex *Texture, sel track.TextureSelector, usage track.TextureUses, op string) {
 	if tex == nil || tex.coreTexture == nil {
 		return
 	}
-	if err := e.core.RecordPassTextureUsage(tex.coreTexture, tex.resolveHAL(), usage); err != nil {
+	if err := e.core.RecordPassTextureUsage(tex.coreTexture, tex.resolveHAL(), sel, usage); err != nil {
 		e.setError(fmt.Errorf("wgpu: %s: texture usage conflict: %w", op, err))
 	}
 }
@@ -392,15 +399,19 @@ func (e *CommandEncoder) recordBoundBufferUsage(buf *Buffer, usage track.BufferU
 	}
 }
 
-// copyTextureUsage describes one texture endpoint of a copy command.
+// copyTextureUsage describes the subresources of a texture one region of a
+// copy command reads or writes.
 type copyTextureUsage struct {
 	texture *Texture
+	sel     track.TextureSelector
 	usage   track.TextureUses
 }
 
 type preparedCopyTextureUsage struct {
 	texture *Texture
 	index   track.TrackerIndex
+	full    track.TextureSelector
+	sel     track.TextureSelector
 	usage   track.TextureUses
 }
 
@@ -435,7 +446,9 @@ func (e *CommandEncoder) recordCopyUsages(raw hal.CommandEncoder, textures []cop
 	if e.core == nil {
 		return true
 	}
+	defer e.clearCopyScratch()
 	preparedTextures, err := prepareCopyTextureUsagesInto(e.copyTex[:0], textures)
+	e.copyTex = preparedTextures
 	if err != nil {
 		e.setError(fmt.Errorf("wgpu: texture usage conflict: %w", err))
 		return false
@@ -447,9 +460,22 @@ func (e *CommandEncoder) recordCopyUsages(raw hal.CommandEncoder, textures []cop
 	}
 	e.transitionCopyTextures(raw, preparedTextures)
 	e.transitionCopyBuffers(raw, preparedBuffers)
-	clear(e.copyTex[:])
-	clear(e.copyBuf[:])
 	return true
+}
+
+// clearCopyScratch empties the scratch of a copy command, so it pins no
+// texture or buffer until the next one.
+func (e *CommandEncoder) clearCopyScratch() {
+	clear(e.copyReq)
+	clear(e.copyTex)
+	clear(e.copyBuf[:])
+	e.copyReq, e.copyTex = e.copyReq[:0], e.copyTex[:0]
+}
+
+// copyRegionUsage adds to the copy scratch the use of the subresources of t
+// a copy region at base of size reads or writes.
+func (e *CommandEncoder) copyRegionUsage(t *Texture, base hal.ImageCopyTexture, size hal.Extent3D, usage track.TextureUses) {
+	e.copyReq = append(e.copyReq, copyTextureUsage{texture: t, sel: t.copySubresources(&base, &size), usage: usage})
 }
 
 // transitionCopyTextures applies a copy command's texture usages to the
@@ -459,20 +485,21 @@ func (e *CommandEncoder) transitionCopyTextures(raw hal.CommandEncoder, requests
 	if tracker == nil {
 		return
 	}
-	barriers := e.texBarriers[:0]
+	transitions, barriers := e.texTransitions[:0], e.texBarriers[:0]
 	for _, request := range requests {
-		transition, needed := tracker.SetSingle(request.index, request.usage)
-		if !needed {
-			continue
-		}
+		n := len(transitions)
+		transitions = tracker.SetSubresourceUsage(request.index, request.full, request.sel, request.usage, transitions)
 		if halTexture := request.texture.resolveHAL(); halTexture != nil {
-			barriers = append(barriers, transition.IntoHAL(halTexture))
+			for _, transition := range transitions[n:] {
+				barriers = append(barriers, transition.IntoHAL(halTexture))
+			}
 		}
 	}
 	if len(barriers) > 0 && raw != nil {
 		raw.TransitionTextures(barriers)
 	}
-	clear(e.texBarriers[:])
+	clear(barriers)
+	e.texTransitions, e.texBarriers = transitions[:0], barriers[:0]
 }
 
 // transitionCopyBuffers applies a copy command's buffer usages to the command
@@ -541,11 +568,11 @@ func prepareCopyBufferUsagesInto(prepared []preparedCopyBufferUsage, requests []
 }
 
 // prepareCopyTextureUsages builds the texture part of one copy command's
-// usage scope: multiple roles of the same texture are merged, and
-// incompatible roles (a texture as both copy source and destination) are
-// rejected. Whole-texture granularity: a copy between disjoint subresources
-// of one texture, which WebGPU allows, is rejected as well until the
-// trackers become subresource-aware.
+// usage scope, the subresources each of its regions reads or writes. Roles
+// of the same subresources are merged; a subresource used in incompatible
+// roles (as both copy source and destination, a copy within one
+// subresource) is rejected, a copy between two subresources of one
+// texture is not.
 //
 // Reference: wgpu-core command/transfer.rs validate_copy_within_same_texture
 func prepareCopyTextureUsages(requests []copyTextureUsage) ([]preparedCopyTextureUsage, error) {
@@ -563,27 +590,27 @@ func prepareCopyTextureUsagesInto(prepared []preparedCopyTextureUsage, requests 
 			continue
 		}
 		index := td.Index()
-		position := -1
-		for i := range prepared {
-			if prepared[i].index == index {
-				position = i
-				break
+		merged := false
+		for i, p := range prepared {
+			if p.index != index || !p.sel.Overlaps(request.sel) {
+				continue
+			}
+			combined := p.usage | request.usage
+			if !combined.IsCompatible(combined) {
+				return prepared, &track.TextureUsageConflictError{
+					Index: index, Selector: request.sel, Existing: p.usage, New: request.usage,
+				}
+			}
+			if p.sel == request.sel {
+				prepared[i].usage, merged = combined, true
 			}
 		}
-		if position < 0 {
+		if !merged {
 			prepared = append(prepared, preparedCopyTextureUsage{
-				texture: request.texture, index: index, usage: request.usage,
+				texture: request.texture, index: index, full: request.texture.coreTexture.Subresources(),
+				sel: request.sel, usage: request.usage,
 			})
-			continue
 		}
-		existing := prepared[position].usage
-		combined := existing | request.usage
-		if !combined.IsCompatible(combined) {
-			return nil, &track.TextureUsageConflictError{
-				Index: index, Existing: existing, New: request.usage,
-			}
-		}
-		prepared[position].usage = combined
 	}
 	return prepared, nil
 }
@@ -916,8 +943,10 @@ func (e *CommandEncoder) CopyTextureToBuffer(src *Texture, dst *Buffer, regions 
 	if raw == nil {
 		return
 	}
-	if !e.recordCopyUsages(raw,
-		[]copyTextureUsage{{texture: src, usage: track.TextureUsesCopySrc}},
+	for _, r := range halRegions {
+		e.copyRegionUsage(src, r.TextureBase, r.Size, track.TextureUsesCopySrc)
+	}
+	if !e.recordCopyUsages(raw, e.copyReq,
 		[]copyBufferUsage{{buffer: dst, usage: track.BufferUsesCopyDst}},
 	) {
 		return
@@ -996,10 +1025,11 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst *Texture, regions []Textu
 	if raw == nil {
 		return
 	}
-	if !e.recordCopyUsages(raw, []copyTextureUsage{
-		{texture: src, usage: track.TextureUsesCopySrc},
-		{texture: dst, usage: track.TextureUsesCopyDst},
-	}, nil) {
+	for _, r := range halRegions {
+		e.copyRegionUsage(src, r.SrcBase, r.Size, track.TextureUsesCopySrc)
+		e.copyRegionUsage(dst, r.DstBase, r.Size, track.TextureUsesCopyDst)
+	}
+	if !e.recordCopyUsages(raw, e.copyReq, nil) {
 		return
 	}
 	for _, region := range regions {
@@ -1047,7 +1077,7 @@ func (e *CommandEncoder) TransitionTextures(barriers []TextureBarrier) {
 	raw.TransitionTextures(halBarriers)
 	for _, b := range barriers {
 		if b.Texture != nil {
-			e.core.RecordTextureTransition(b.Texture.coreTexture, b.Usage.OldUsage, b.Usage.NewUsage)
+			e.core.RecordTextureTransition(b.Texture.coreTexture, hal.TextureRange(b.Range), b.Usage.OldUsage, b.Usage.NewUsage)
 		}
 	}
 }
@@ -1167,8 +1197,10 @@ func (e *CommandEncoder) CopyBufferToTexture(src *Buffer, dst *Texture, regions 
 	if raw == nil {
 		return
 	}
-	if !e.recordCopyUsages(raw,
-		[]copyTextureUsage{{texture: dst, usage: track.TextureUsesCopyDst}},
+	for _, r := range halRegions {
+		e.copyRegionUsage(dst, r.TextureBase, r.Size, track.TextureUsesCopyDst)
+	}
+	if !e.recordCopyUsages(raw, e.copyReq,
 		[]copyBufferUsage{{buffer: src, usage: track.BufferUsesCopySrc}},
 	) {
 		return
@@ -1590,6 +1622,7 @@ func coreTextureViewFrom(v *TextureView) core.TextureView {
 	cv := core.TextureView{
 		HAL:             v.resolveHAL(),
 		BaseMipLevel:    v.desc.BaseMipLevel,
+		BaseArrayLayer:  v.desc.BaseArrayLayer,
 		Format:          v.desc.Format,
 		Dimension:       v.desc.Dimension,
 		Aspect:          v.desc.Aspect,

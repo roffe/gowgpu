@@ -173,23 +173,40 @@ func (dt *DeviceTracker) RemoveTexture(index track.TrackerIndex) {
 	dt.textures.Remove(index)
 }
 
-// TextureState returns the usage the device tracker holds for a texture and
-// whether it tracks it, for RestoreTexture.
+// SetTextureUsage moves the subresources sel selects of a texture, whose
+// subresources are full, to usage outside any command buffer, as a queue
+// write does, and appends to dst the barriers from the states the GPU last
+// used them in. A texture the device does not track yet has not been on
+// the GPU, so it is inserted without them.
+//
+// Reference: wgpu-core device/queue.rs write_texture, trackers.textures.set_single
+func (dt *DeviceTracker) SetTextureUsage(index track.TrackerIndex, full, sel track.TextureSelector, usage track.TextureUses, dst []track.TexturePendingTransition) []track.TexturePendingTransition {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	return dt.textures.SetSubresourceUsage(index, full, sel, usage, dst)
+}
+
+// TextureState returns the usage the device tracker holds for a texture,
+// every usage one of its subresources is in, and whether it tracks it.
 func (dt *DeviceTracker) TextureState(index track.TrackerIndex) (track.TextureUses, bool) {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 	return dt.textures.GetUsage(index), dt.textures.IsTracked(index)
 }
 
-// RestoreTexture puts a texture's state back to what TextureState returned.
-func (dt *DeviceTracker) RestoreTexture(index track.TrackerIndex, usage track.TextureUses, tracked bool) {
+// SaveTexture returns the state the device tracker holds for a texture,
+// for RestoreTexture.
+func (dt *DeviceTracker) SaveTexture(index track.TrackerIndex) track.TextureSnapshot {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
-	if tracked {
-		dt.textures.InsertSingle(index, usage)
-	} else {
-		dt.textures.Remove(index)
-	}
+	return dt.textures.Save(index)
+}
+
+// RestoreTexture puts a texture's state back to what SaveTexture returned.
+func (dt *DeviceTracker) RestoreTexture(index track.TrackerIndex, snap track.TextureSnapshot) {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	dt.textures.Restore(index, snap)
 }
 
 // BufferState returns the usage the device tracker holds for a buffer and

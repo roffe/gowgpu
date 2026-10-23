@@ -7,6 +7,7 @@ import (
 	"unsafe"
 
 	"github.com/roffe/gowgpu/core"
+	"github.com/roffe/gowgpu/core/track"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/noop"
@@ -398,12 +399,15 @@ func captureTextureWriteBarriersFor(t *testing.T, dimension gputypes.TextureDime
 	})
 
 	halTexture := &noop.Texture{}
+	coreDevice := core.NewDevice(dev, &core.Adapter{}, 0, gputypes.DefaultLimits(), "device")
 	coreTexture := core.NewTexture(
-		halTexture, nil, gputypes.TextureFormatRGBA8Unorm,
+		halTexture, coreDevice, gputypes.TextureFormatRGBA8Unorm,
 		dimension, usage,
 		gputypes.Extent3D{Width: 16, Height: 16, DepthOrArrayLayers: 2},
 		1, 1, "texture",
 	)
+	pw.tracker = coreDevice.Tracker()
+	pw.tracker.InsertTexture(coreTexture.TrackingData().Index(), track.TextureUsesUninitialized)
 	texture := &Texture{hal: halTexture, coreTexture: coreTexture, surface: surface}
 	dst := &hal.ImageCopyTexture{
 		Texture: halTexture,
@@ -426,9 +430,10 @@ func TestPendingWrites_WriteTextureTransitionsArrayLayers(t *testing.T) {
 	if len(barriers) != 2 {
 		t.Fatalf("texture barriers = %d, want 2", len(barriers))
 	}
+	want := hal.TextureRange{MipLevelCount: 1, BaseArrayLayer: 1, ArrayLayerCount: 1}
 	for i, barrier := range barriers {
-		if barrier.Range != (hal.TextureRange{}) {
-			t.Errorf("barrier %d range = %+v, want the whole texture", i, barrier.Range)
+		if barrier.Range != want {
+			t.Errorf("barrier %d range = %+v, want the written layer %+v", i, barrier.Range, want)
 		}
 	}
 }
