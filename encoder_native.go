@@ -1384,10 +1384,7 @@ func (e *CommandEncoder) DiscardEncoding() {
 	}
 	e.trackedRefs = nil
 	e.dropUsedLists()
-	raw := e.core.RawEncoder()
-	if raw != nil {
-		raw.DiscardEncoding()
-	}
+	e.core.Discard()
 	// Return pooled encoder immediately — no GPU work was submitted.
 	e.returnEncoderToPool()
 	e.recycle()
