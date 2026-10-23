@@ -3,7 +3,9 @@
 package browser
 
 import (
+	"fmt"
 	"math"
+	"strings"
 	"syscall/js"
 
 	"github.com/roffe/gowgpu/gputypes"
@@ -44,7 +46,8 @@ func BuildRequestAdapterOptions(
 	return opts
 }
 
-// BuildDeviceDescriptor constructs a JS GPUDeviceDescriptor object.
+// BuildDeviceDescriptor constructs a JS GPUDeviceDescriptor object. It
+// returns an error for required features WebGPU has no name for.
 //
 // Matches Rust wgpu WebAdapter::request_device which builds the JS descriptor
 // with requiredFeatures array and requiredLimits object.
@@ -52,7 +55,7 @@ func BuildDeviceDescriptor(
 	label string,
 	requiredFeatures gputypes.Features,
 	requiredLimits gputypes.Limits,
-) js.Value {
+) (js.Value, error) {
 	desc := js.Global().Get("Object").New()
 
 	if label != "" {
@@ -60,7 +63,10 @@ func BuildDeviceDescriptor(
 	}
 
 	// Build requiredFeatures array.
-	features := featuresToJSArray(requiredFeatures)
+	features, err := featuresToJSArray(requiredFeatures)
+	if err != nil {
+		return js.Value{}, err
+	}
 	if features.Length() > 0 {
 		desc.Set("requiredFeatures", features)
 	}
@@ -70,7 +76,7 @@ func BuildDeviceDescriptor(
 	limits := limitsToJSObject(requiredLimits)
 	desc.Set("requiredLimits", limits)
 
-	return desc
+	return desc, nil
 }
 
 // ExtractFeatures reads a GPUSupportedFeatures set and returns gputypes.Features.
@@ -108,6 +114,7 @@ func ExtractLimits(jsLimits js.Value) gputypes.Limits {
 		MaxTextureDimension3D:                     getUint32(jsLimits, "maxTextureDimension3D"),
 		MaxTextureArrayLayers:                     getUint32(jsLimits, "maxTextureArrayLayers"),
 		MaxBindGroups:                             getUint32(jsLimits, "maxBindGroups"),
+		MaxBindGroupsPlusVertexBuffers:            getUint32(jsLimits, "maxBindGroupsPlusVertexBuffers"),
 		MaxBindingsPerBindGroup:                   getUint32(jsLimits, "maxBindingsPerBindGroup"),
 		MaxDynamicUniformBuffersPerPipelineLayout: getUint32(jsLimits, "maxDynamicUniformBuffersPerPipelineLayout"),
 		MaxDynamicStorageBuffersPerPipelineLayout: getUint32(jsLimits, "maxDynamicStorageBuffersPerPipelineLayout"),
@@ -124,6 +131,7 @@ func ExtractLimits(jsLimits js.Value) gputypes.Limits {
 		MaxBufferSize:                             getUint64(jsLimits, "maxBufferSize"),
 		MaxVertexAttributes:                       getUint32(jsLimits, "maxVertexAttributes"),
 		MaxVertexBufferArrayStride:                getUint32(jsLimits, "maxVertexBufferArrayStride"),
+		MaxInterStageShaderVariables:              getUint32(jsLimits, "maxInterStageShaderVariables"),
 		MaxColorAttachments:                       getUint32(jsLimits, "maxColorAttachments"),
 		MaxColorAttachmentBytesPerSample:          getUint32(jsLimits, "maxColorAttachmentBytesPerSample"),
 		MaxComputeWorkgroupStorageSize:            getUint32(jsLimits, "maxComputeWorkgroupStorageSize"),
@@ -155,17 +163,30 @@ var featuresMappingTable = []featureMapping{
 	{gputypes.FeatureRG11B10UfloatRenderable, "rg11b10ufloat-renderable"},
 	{gputypes.FeatureBGRA8UnormStorage, "bgra8unorm-storage"},
 	{gputypes.FeatureFloat32Filterable, "float32-filterable"},
+	{gputypes.FeatureSubgroupOperations, "subgroups"},
 }
 
 // featuresToJSArray builds a JS Array of feature name strings from Go flags.
-func featuresToJSArray(features gputypes.Features) js.Value {
+// It returns an error naming the features WebGPU has no name for, as Rust
+// wgpu refuses them instead of creating a device without them.
+func featuresToJSArray(features gputypes.Features) (js.Value, error) {
 	array := js.Global().Get("Array").New()
 	for _, mapping := range featuresMappingTable {
 		if features.Contains(mapping.feature) {
 			array.Call("push", mapping.jsName)
+			features.Remove(mapping.feature)
 		}
 	}
-	return array
+	if features.IsEmpty() {
+		return array, nil
+	}
+	var names []string
+	for f := gputypes.Feature(1); f != 0; f <<= 1 {
+		if features.Contains(f) {
+			names = append(names, f.String())
+		}
+	}
+	return js.Value{}, fmt.Errorf("wgpu: requested features the browser has no WebGPU name for: %s", strings.Join(names, ", "))
 }
 
 // limitsToJSObject converts gputypes.Limits to a JS object for GPUDeviceDescriptor.
@@ -190,6 +211,7 @@ func limitsToJSObject(limits gputypes.Limits) js.Value {
 	setNonZeroU32("maxTextureDimension3D", limits.MaxTextureDimension3D)
 	setNonZeroU32("maxTextureArrayLayers", limits.MaxTextureArrayLayers)
 	setNonZeroU32("maxBindGroups", limits.MaxBindGroups)
+	setNonZeroU32("maxBindGroupsPlusVertexBuffers", limits.MaxBindGroupsPlusVertexBuffers)
 	setNonZeroU32("maxBindingsPerBindGroup", limits.MaxBindingsPerBindGroup)
 	setNonZeroU32("maxDynamicUniformBuffersPerPipelineLayout", limits.MaxDynamicUniformBuffersPerPipelineLayout)
 	setNonZeroU32("maxDynamicStorageBuffersPerPipelineLayout", limits.MaxDynamicStorageBuffersPerPipelineLayout)
@@ -206,6 +228,7 @@ func limitsToJSObject(limits gputypes.Limits) js.Value {
 	setNonZeroU64("maxBufferSize", limits.MaxBufferSize)
 	setNonZeroU32("maxVertexAttributes", limits.MaxVertexAttributes)
 	setNonZeroU32("maxVertexBufferArrayStride", limits.MaxVertexBufferArrayStride)
+	setNonZeroU32("maxInterStageShaderVariables", limits.MaxInterStageShaderVariables)
 	setNonZeroU32("maxColorAttachments", limits.MaxColorAttachments)
 	setNonZeroU32("maxColorAttachmentBytesPerSample", limits.MaxColorAttachmentBytesPerSample)
 	setNonZeroU32("maxComputeWorkgroupStorageSize", limits.MaxComputeWorkgroupStorageSize)

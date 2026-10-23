@@ -52,7 +52,11 @@ func (a *Adapter) RequestDevice(desc *DeviceDescriptor) (*Device, error) {
 	// Build JS descriptor from Go types.
 	var jsDesc js.Value
 	if desc != nil {
-		jsDesc = browser.BuildDeviceDescriptor(desc.Label, desc.RequiredFeatures, desc.RequiredLimits)
+		var err error
+		jsDesc, err = browser.BuildDeviceDescriptor(desc.Label, desc.RequiredFeatures, desc.RequiredLimits)
+		if err != nil {
+			return nil, fmt.Errorf("wgpu: RequestDevice: %w", err)
+		}
 	} else {
 		jsDesc = js.Undefined()
 	}
