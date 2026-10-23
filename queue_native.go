@@ -449,10 +449,17 @@ func (q *Queue) WriteTexture(dst *ImageCopyTexture, data []byte, layout *ImageDa
 	if size == nil {
 		return fmt.Errorf("wgpu: WriteTexture: size is nil")
 	}
+	copySize := gputypes.Extent3D(*size)
+	if dst.Texture.coreTexture != nil {
+		var err error
+		if copySize, err = core.ValidateTextureBufferCopy(texelCopy(dst.Texture, dst), copySize, layout.toHAL(), uint64(len(data)), true, false); err != nil {
+			return fmt.Errorf("wgpu: WriteTexture: %w", err)
+		}
+	}
 
 	// Into the queue's scratch: the HAL takes these by pointer and keeps
 	// none of them.
-	q.wtDst, q.wtLayout, q.wtSize = dst.halValue(), layout.toHAL(), size.toHAL()
+	q.wtDst, q.wtLayout, q.wtSize = dst.halValue(), layout.toHAL(), hal.Extent3D(copySize)
 	defer func() { q.wtDst = hal.ImageCopyTexture{} }()
 
 	if q.pending != nil {

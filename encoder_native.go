@@ -736,11 +736,16 @@ func (e *CommandEncoder) CopyTextureToBuffer(src *Texture, dst *Buffer, regions 
 		e.setError(err)
 		return
 	}
+	if dst.Usage()&BufferUsageCopyDst == 0 {
+		e.setError(fmt.Errorf("wgpu: CommandEncoder.CopyTextureToBuffer: destination buffer missing CopyDst usage"))
+		return
+	}
 	if err := checkCopyRowPitch("CopyTextureToBuffer", regions); err != nil {
 		e.setError(err)
 		return
 	}
-	if err := checkCopyBufferSize("CopyTextureToBuffer", src.Format(), dst, regions); err != nil {
+	halRegions, err := bufferTextureCopies("CopyTextureToBuffer", src, halSrc, dst, regions, false)
+	if err != nil {
 		e.setError(err)
 		return
 	}
@@ -759,10 +764,6 @@ func (e *CommandEncoder) CopyTextureToBuffer(src *Texture, dst *Buffer, regions 
 	}
 	e.trackTexture(src)
 	e.trackBuffer(dst)
-	halRegions := make([]hal.BufferTextureCopy, len(regions))
-	for i, r := range regions {
-		halRegions[i] = r.toHAL(halSrc)
-	}
 	raw.CopyTextureToBuffer(halSrc, halDst, halRegions)
 }
 
@@ -801,6 +802,20 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst *Texture, regions []Textu
 		e.setError(err)
 		return
 	}
+	halRegions := make([]hal.TextureCopy, len(regions))
+	for i := range regions {
+		r := &regions[i]
+		halRegions[i] = r.toHAL(halSrc, halDst)
+		if src.coreTexture == nil || dst.coreTexture == nil {
+			continue
+		}
+		size, err := core.ValidateTextureToTextureCopy(texelCopy(src, &r.Source), texelCopy(dst, &r.Destination), gputypes.Extent3D(r.Size))
+		if err != nil {
+			e.setError(fmt.Errorf("wgpu: CommandEncoder.CopyTextureToTexture: region %d: %w", i, err))
+			return
+		}
+		halRegions[i].Size = hal.Extent3D(size)
+	}
 	raw := e.core.RecordingEncoder()
 	if raw == nil {
 		return
@@ -817,10 +832,6 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst *Texture, regions []Textu
 	}
 	e.trackTexture(src)
 	e.trackTexture(dst)
-	halRegions := make([]hal.TextureCopy, len(regions))
-	for i, r := range regions {
-		halRegions[i] = r.toHAL(halSrc, halDst)
-	}
 	raw.CopyTextureToTexture(halSrc, halDst, halRegions)
 }
 
@@ -897,49 +908,30 @@ func checkCopyRowPitch(op string, regions []BufferTextureCopy) error {
 	return nil
 }
 
-// checkCopyBufferSize rejects a copy between a buffer and a texture whose
-// buffer side runs past the end of the buffer: offset plus the bytes the
-// layout addresses for the copy's extent, bytesPerRow for every row but the
-// last and rowsPerImage rows for every layer but the last. Before this a
-// short buffer was recorded as is and the GPU read or wrote past it. Formats
-// whose copy size is not fixed (combined depth/stencil) and compressed
-// formats, whose rows are rows of blocks, are not checked.
-//
-// Reference: WebGPU "validating linear texture data"; wgpu-core
-// command/transfer.rs validate_linear_texture_data
-func checkCopyBufferSize(op string, format gputypes.TextureFormat, buffer *Buffer, regions []BufferTextureCopy) error {
-	blockSize := uint64(format.BlockCopySize())
-	if blockSize == 0 || format >= gputypes.TextureFormatBC1RGBAUnorm || buffer == nil {
-		return nil
-	}
-	bufferSize := buffer.Size()
-	for _, r := range regions {
-		width, height, depth := uint64(r.Size.Width), uint64(r.Size.Height), uint64(r.Size.DepthOrArrayLayers)
-		if width == 0 || height == 0 || depth == 0 {
+// bufferTextureCopies checks each region of a copy between t and buf and
+// returns the regions for the backend, on halTex, sized to the texels the
+// texture has. A texture without core state (a test stub) is not checked.
+func bufferTextureCopies(op string, t *Texture, halTex hal.Texture, buf *Buffer, regions []BufferTextureCopy, toTexture bool) ([]hal.BufferTextureCopy, error) {
+	halRegions := make([]hal.BufferTextureCopy, len(regions))
+	for i := range regions {
+		r := &regions[i]
+		halRegions[i] = r.toHAL(halTex)
+		if t.coreTexture == nil {
 			continue
 		}
-		bytesPerRow := uint64(r.BufferLayout.BytesPerRow)
-		rowsPerImage := uint64(r.BufferLayout.RowsPerImage)
-		bytesInLastRow := width * blockSize
-		if height > 1 && bytesPerRow == 0 {
-			return fmt.Errorf("wgpu: CommandEncoder.%s: bytesPerRow is required for a copy of %d rows", op, height)
+		size, err := core.ValidateTextureBufferCopy(texelCopy(t, &r.TextureBase), gputypes.Extent3D(r.Size), r.BufferLayout.toHAL(), buf.Size(), toTexture, true)
+		if err != nil {
+			return nil, fmt.Errorf("wgpu: CommandEncoder.%s: region %d: %w", op, i, err)
 		}
-		if bytesPerRow != 0 && bytesPerRow < bytesInLastRow {
-			return fmt.Errorf("wgpu: CommandEncoder.%s: bytesPerRow %d is less than the %d bytes of a row", op, bytesPerRow, bytesInLastRow)
-		}
-		if depth > 1 && rowsPerImage == 0 {
-			return fmt.Errorf("wgpu: CommandEncoder.%s: rowsPerImage is required for a copy of %d layers", op, depth)
-		}
-		if rowsPerImage != 0 && rowsPerImage < height {
-			return fmt.Errorf("wgpu: CommandEncoder.%s: rowsPerImage %d is less than the copy's %d rows", op, rowsPerImage, height)
-		}
-		required := bytesPerRow*rowsPerImage*(depth-1) + bytesPerRow*(height-1) + bytesInLastRow
-		if end := r.BufferLayout.Offset + required; end > bufferSize {
-			return fmt.Errorf("wgpu: CommandEncoder.%s: the copy addresses %d bytes from offset %d, past the buffer's %d bytes",
-				op, required, r.BufferLayout.Offset, bufferSize)
-		}
+		halRegions[i].Size = hal.Extent3D(size)
 	}
-	return nil
+	return halRegions, nil
+}
+
+// texelCopy is the core side of a copy of base on t, whatever base.Texture
+// holds.
+func texelCopy(t *Texture, base *ImageCopyTexture) *core.TexelCopyTexture {
+	return &core.TexelCopyTexture{Texture: t.coreTexture, MipLevel: base.MipLevel, Origin: gputypes.Origin3D(base.Origin), Aspect: base.Aspect}
 }
 
 func (e *CommandEncoder) CopyBufferToTexture(src *Buffer, dst *Texture, regions []BufferTextureCopy) {
@@ -968,11 +960,16 @@ func (e *CommandEncoder) CopyBufferToTexture(src *Buffer, dst *Texture, regions 
 		e.setError(err)
 		return
 	}
+	if src.Usage()&BufferUsageCopySrc == 0 {
+		e.setError(fmt.Errorf("wgpu: CommandEncoder.CopyBufferToTexture: source buffer missing CopySrc usage"))
+		return
+	}
 	if err := checkCopyRowPitch("CopyBufferToTexture", regions); err != nil {
 		e.setError(err)
 		return
 	}
-	if err := checkCopyBufferSize("CopyBufferToTexture", dst.Format(), src, regions); err != nil {
+	halRegions, err := bufferTextureCopies("CopyBufferToTexture", dst, halDst, src, regions, true)
+	if err != nil {
 		e.setError(err)
 		return
 	}
@@ -988,10 +985,6 @@ func (e *CommandEncoder) CopyBufferToTexture(src *Buffer, dst *Texture, regions 
 	}
 	e.trackTexture(dst)
 	e.trackBuffer(src)
-	halRegions := make([]hal.BufferTextureCopy, len(regions))
-	for i, r := range regions {
-		halRegions[i] = r.toHAL(halDst)
-	}
 	raw.CopyBufferToTexture(halSrc, halDst, halRegions)
 }
 

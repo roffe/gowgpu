@@ -325,7 +325,8 @@ func TestNewCompressedTextureIsZeroed(t *testing.T) {
 			subs := make([]subresource, 0, mips)
 			for mip := range uint32(mips) {
 				w := max(uint32(side)>>mip, 1)
-				subs = append(subs, subresource{mip: mip, width: w, height: w, rowBytes: (w + 3) / 4 * blockSize, rows: (w + 3) / 4})
+				blocks := (w + 3) / 4 // a copy takes whole blocks, the edge of one included
+				subs = append(subs, subresource{mip: mip, width: blocks * 4, height: blocks * 4, rowBytes: blocks * blockSize, rows: blocks})
 			}
 			for i, got := range readSubresources(t, device, tex, gputypes.TextureAspectAll, subs) {
 				s := subs[i]
