@@ -61,7 +61,7 @@ func TestContextAttribs(t *testing.T) {
 			ContextOpenGLProfileMask, ContextOpenGLCoreProfileBit, ContextOpenGLDebug, EGLInt(True), None}},
 	}
 	for _, test := range tests {
-		got, err := contextAttribs(test.cfg, test.egl15, test.khr)
+		got, err := contextAttribs(test.cfg, test.egl15, test.khr, robustNone)
 		if test.want == nil {
 			if err == nil {
 				t.Errorf("%s: %v, want it refused", test.name, got)
@@ -70,6 +70,41 @@ func TestContextAttribs(t *testing.T) {
 		}
 		if err != nil || !slices.Equal(got, test.want) {
 			t.Errorf("%s: %v, %v, want %v", test.name, got, err, test.want)
+		}
+	}
+}
+
+// Robust access is asked for with EGL 1.5's attribute, else with
+// EGL_EXT_create_context_robustness's, and last not at all.
+func TestRobustContextRequests(t *testing.T) {
+	es := ContextConfig{GLVersionMajor: 3, GLES: true}
+	tests := []struct {
+		egl15, ext bool
+		want       []robustness
+		attrib     EGLInt // the first request's robust access attribute
+	}{
+		{true, true, []robustness{robustCore, robustExt, robustNone}, ContextOpenGLRobustAccess},
+		{true, false, []robustness{robustCore, robustNone}, ContextOpenGLRobustAccess},
+		{false, true, []robustness{robustExt, robustNone}, ContextOpenGLRobustAccessExt},
+		{false, false, []robustness{robustNone}, None},
+	}
+	for _, test := range tests {
+		reqs := contextRequests(es, test.egl15, test.ext)
+		var got []robustness
+		for _, r := range reqs {
+			got = append(got, r.robust)
+		}
+		if !slices.Equal(got, test.want) {
+			t.Errorf("EGL 1.5 %v, EXT %v: %v, want %v", test.egl15, test.ext, got, test.want)
+		}
+		attribs, err := contextAttribs(reqs[0].cfg, test.egl15, false, reqs[0].robust)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, a := range []EGLInt{ContextOpenGLRobustAccess, ContextOpenGLRobustAccessExt} {
+			if slices.Contains(attribs, a) != (a == test.attrib) {
+				t.Errorf("EGL 1.5 %v, EXT %v: attributes %#x, want robust access %#x", test.egl15, test.ext, attribs, test.attrib)
+			}
 		}
 	}
 }

@@ -22,6 +22,7 @@ type Context struct {
 	major, minor EGLInt        // the display's EGL version
 	extensions   string        // the display's extensions
 	cfg          ContextConfig // what made the context, for NewShared
+	robust       robustness    // how it asked for robust access, for NewShared
 	shared       bool          // made by NewShared: borrows the display
 	displayOwner *DisplayOwner // owns native display connection (X11); closed after eglTerminate
 	// swapWithDamage is the display's eglSwapBuffersWithDamage, nil when
@@ -112,7 +113,9 @@ func NewContext(config ContextConfig) (*Context, error) {
 		return fail(fmt.Errorf("failed to choose EGL config: %w", err))
 	}
 
-	eglContext, err := createEGLContext(display, eglConfig, config, NoContext, major, minor, displayExts)
+	egl15, khr := is15(major, minor), hasExtension(displayExts, "EGL_KHR_create_context")
+	reqs := contextRequests(config, egl15, hasExtension(displayExts, "EGL_EXT_create_context_robustness"))
+	eglContext, req, err := createEGLContext(display, eglConfig, NoContext, reqs, egl15, khr)
 	if err != nil {
 		return fail(err)
 	}
@@ -121,8 +124,7 @@ func NewContext(config ContextConfig) (*Context, error) {
 	// MakeCurrent with EGL_NO_SURFACE. Skip pbuffer creation in that case.
 	// Fallback to 1×1 pbuffer for older drivers.
 	// Matches Rust wgpu-hal egl.rs:735-758.
-	hasSurfaceless := (major > 1 || (major == 1 && minor >= 5)) ||
-		strings.Contains(displayExts, "EGL_KHR_surfaceless_context")
+	hasSurfaceless := egl15 || strings.Contains(displayExts, "EGL_KHR_surfaceless_context")
 
 	var pbuffer EGLSurface
 	if hasSurfaceless {
@@ -140,7 +142,8 @@ func NewContext(config ContextConfig) (*Context, error) {
 		display:      display,
 		config:       eglConfig,
 		context:      eglContext,
-		cfg:          config,
+		cfg:          req.cfg,
+		robust:       req.robust,
 		pbuffer:      pbuffer,
 		windowKind:   windowKind,
 		major:        major,
@@ -217,8 +220,11 @@ func (c *Context) SwapBuffersWithDamage(surface EGLSurface, rects *int32, nRects
 // SupportsGLColorspace reports whether surfaces on the display can be made
 // sRGB, with EGL_GL_COLORSPACE (EGL 1.5 or EGL_KHR_gl_colorspace).
 func (c *Context) SupportsGLColorspace() bool {
-	return c.major > 1 || c.major == 1 && c.minor >= 5 || c.HasExtension("EGL_KHR_gl_colorspace")
+	return is15(c.major, c.minor) || c.HasExtension("EGL_KHR_gl_colorspace")
 }
+
+// is15 reports whether EGL version major.minor is 1.5 or newer.
+func is15(major, minor EGLInt) bool { return major > 1 || major == 1 && minor >= 5 }
 
 func selectWindowKind(requested *WindowKind, detect func() WindowKind) WindowKind {
 	if requested != nil {
@@ -293,25 +299,65 @@ func chooseEGLConfig(display EGLDisplay, config ContextConfig, windowKind Window
 	return 0, fmt.Errorf("no suitable EGL configs found (tried window+pbuffer and pbuffer-only)")
 }
 
-// createEGLContext creates an EGL rendering context on a display of EGL
-// version major.minor with the extensions exts.
-func createEGLContext(display EGLDisplay, config EGLConfig, cfg ContextConfig, share EGLContext, major, minor EGLInt, exts string) (EGLContext, error) {
-	attribs, err := contextAttribs(cfg, major > 1 || major == 1 && minor >= 5, hasExtension(exts, "EGL_KHR_create_context"))
-	if err != nil {
-		return NoContext, err
+// robustness is how a context asks for robust buffer access: with EGL
+// 1.5's attribute, with EGL_EXT_create_context_robustness's, or not.
+type robustness int
+
+const (
+	robustNone robustness = iota
+	robustExt
+	robustCore
+)
+
+// contextRequest is a config and robustness to make a context with.
+type contextRequest struct {
+	cfg    ContextConfig
+	robust robustness
+}
+
+// contextRequests are the requests to make a context for cfg with, in
+// turn, on a display of EGL 1.5 (egl15), with
+// EGL_EXT_create_context_robustness (extRobust), or neither: robust with
+// 1.5's attribute, then with EXT's, then not robust, as wgpu-hal asks.
+func contextRequests(cfg ContextConfig, egl15, extRobust bool) []contextRequest {
+	reqs := make([]contextRequest, 0, 3)
+	if egl15 {
+		reqs = append(reqs, contextRequest{cfg, robustCore})
 	}
-	ctx := CreateContext(display, config, share, &attribs[0])
-	if ctx == NoContext {
-		return NoContext, LastError("eglCreateContext")
+	if extRobust {
+		reqs = append(reqs, contextRequest{cfg, robustExt})
 	}
-	return ctx, nil
+	return append(reqs, contextRequest{cfg, robustNone})
+}
+
+// createEGLContext makes the context of the first of reqs that EGL makes,
+// on a display of EGL 1.5 (egl15) or with EGL_KHR_create_context (khr). As
+// in wgpu-hal, it tries the next request after EGL_BAD_ATTRIBUTE,
+// EGL_BAD_MATCH or EGL_BAD_CONFIG, and gives up after other errors.
+func createEGLContext(display EGLDisplay, config EGLConfig, share EGLContext, reqs []contextRequest, egl15, khr bool) (EGLContext, contextRequest, error) {
+	var err error
+	for _, req := range reqs {
+		attribs, aerr := contextAttribs(req.cfg, egl15, khr, req.robust)
+		if aerr != nil {
+			return NoContext, req, aerr
+		}
+		if ctx := CreateContext(display, config, share, &attribs[0]); ctx != NoContext {
+			return ctx, req, nil
+		}
+		e := LastError("eglCreateContext")
+		err = e
+		if e.Code != BadAttribute && e.Code != BadMatch && e.Code != BadConfig {
+			break
+		}
+	}
+	return NoContext, contextRequest{}, err
 }
 
 // contextAttribs are the eglCreateContext attributes for cfg. EGL 1.4
 // takes EGL_CONTEXT_CLIENT_VERSION alone, the OpenGL ES major version: the
 // minor version, the profile, the debug flag and any desktop OpenGL context
 // need EGL 1.5 (egl15) or EGL_KHR_create_context (khr).
-func contextAttribs(cfg ContextConfig, egl15, khr bool) ([]EGLInt, error) {
+func contextAttribs(cfg ContextConfig, egl15, khr bool, robust robustness) ([]EGLInt, error) {
 	if !cfg.GLES && !egl15 && !khr {
 		return nil, fmt.Errorf("an OpenGL %d.%d context needs EGL 1.5 or EGL_KHR_create_context", cfg.GLVersionMajor, cfg.GLVersionMinor)
 	}
@@ -330,6 +376,12 @@ func contextAttribs(cfg ContextConfig, egl15, khr bool) ([]EGLInt, error) {
 		case khr:
 			attribs = append(attribs, ContextFlagsKHR, ContextOpenGLDebugBitKHR)
 		}
+	}
+	switch robust {
+	case robustCore:
+		attribs = append(attribs, ContextOpenGLRobustAccess, EGLInt(True))
+	case robustExt:
+		attribs = append(attribs, ContextOpenGLRobustAccessExt, EGLInt(True))
 	}
 	return append(attribs, None), nil
 }
@@ -412,9 +464,10 @@ func (c *Context) Destroy() {
 
 // NewShared makes a context sharing c's objects (buffers, textures,
 // programs and sync objects; not VAOs or framebuffers) for a thread that
-// cannot have c, with its own pbuffer when c has one. It borrows c's
-// display: its Destroy releases the context and pbuffer only, and c must
-// outlive it.
+// cannot have c, with its own pbuffer when c has one, and with c's version
+// and robustness, which a context sharing objects must match. It borrows
+// c's display: its Destroy releases the context and pbuffer only, and c
+// must outlive it.
 func (c *Context) NewShared() (*Context, error) {
 	// The bound API is per thread, and this is another thread's context.
 	api := OpenGLAPI
@@ -424,7 +477,8 @@ func (c *Context) NewShared() (*Context, error) {
 	if BindAPI(api) == False {
 		return nil, fmt.Errorf("eglBindAPI (shared) failed: error 0x%x", GetError())
 	}
-	ctx, err := createEGLContext(c.display, c.config, c.cfg, c.context, c.major, c.minor, c.extensions)
+	req := []contextRequest{{c.cfg, c.robust}}
+	ctx, _, err := createEGLContext(c.display, c.config, c.context, req, is15(c.major, c.minor), c.HasExtension("EGL_KHR_create_context"))
 	if err != nil {
 		return nil, fmt.Errorf("shared context: %w", err)
 	}
@@ -436,7 +490,7 @@ func (c *Context) NewShared() (*Context, error) {
 		}
 	}
 	return &Context{display: c.display, config: c.config, context: ctx, pbuffer: pbuffer, windowKind: c.windowKind,
-		major: c.major, minor: c.minor, extensions: c.extensions, cfg: c.cfg, shared: true, swapWithDamage: c.swapWithDamage}, nil
+		major: c.major, minor: c.minor, extensions: c.extensions, cfg: c.cfg, robust: c.robust, shared: true, swapWithDamage: c.swapWithDamage}, nil
 }
 
 // EGLContext returns the EGL context handle.
