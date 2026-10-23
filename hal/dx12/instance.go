@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"runtime"
 	"slices"
+	"strings"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -228,7 +229,7 @@ func (i *Instance) EnumerateAdapters(surfaceHint hal.Surface) []hal.ExposedAdapt
 			continue
 		}
 
-		if withdrawnAdapter(&desc) {
+		if skippedAdapter(&desc) {
 			raw.Release()
 			continue
 		}
@@ -295,7 +296,7 @@ func (i *Instance) enumerateAdaptersLegacy(surfaceHint hal.Surface) []hal.Expose
 			continue
 		}
 
-		if withdrawnAdapter(&desc) {
+		if skippedAdapter(&desc) {
 			raw.Release()
 			continue
 		}
@@ -364,8 +365,14 @@ var haswellDeviceIDs = []uint32{
 	0x0D02, 0x0D06, 0x0D0A, 0x0D0B, 0x0D0E,
 }
 
-// withdrawnAdapter reports an adapter D3D12 is not to be used on.
-func withdrawnAdapter(desc *dxgi.DXGI_ADAPTER_DESC1) bool {
+// skippedAdapter reports an adapter D3D12 is not to be used on, or the
+// second WARP adapter a headless Windows lists, which passes itself off
+// as an integrated GPU.
+func skippedAdapter(desc *dxgi.DXGI_ADAPTER_DESC1) bool {
+	if desc.VendorID == 0x1414 && desc.Flags&dxgi.DXGI_ADAPTER_FLAG_SOFTWARE == 0 &&
+		strings.Contains(desc.DescriptionString(), "Microsoft Basic Render Driver") {
+		return true
+	}
 	return desc.VendorID == 0x8086 && slices.Contains(haswellDeviceIDs, desc.DeviceID)
 }
 

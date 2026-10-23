@@ -6,6 +6,7 @@ import (
 	"math"
 	"slices"
 	"testing"
+	"unicode/utf16"
 
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
@@ -22,12 +23,21 @@ func TestFeaturesLeaveOutShaderF16(t *testing.T) {
 
 func TestAdaptersThisBackendCanNotUse(t *testing.T) {
 	haswell := dxgi.DXGI_ADAPTER_DESC1{VendorID: 0x8086, DeviceID: 0x0416}
-	if !withdrawnAdapter(&haswell) {
+	if !skippedAdapter(&haswell) {
 		t.Error("an Intel Haswell GPU is kept")
 	}
 	nvidia := dxgi.DXGI_ADAPTER_DESC1{VendorID: 0x10DE, DeviceID: 0x0416}
-	if withdrawnAdapter(&nvidia) {
+	if skippedAdapter(&nvidia) {
 		t.Error("another vendor's device of a Haswell id is left out")
+	}
+	basic := dxgi.DXGI_ADAPTER_DESC1{VendorID: 0x1414, DeviceID: 0x8C}
+	copy(basic.Description[:], utf16.Encode([]rune("Microsoft Basic Render Driver")))
+	if !skippedAdapter(&basic) {
+		t.Error("the Microsoft Basic Render Driver without the software flag is kept")
+	}
+	basic.Flags = dxgi.DXGI_ADAPTER_FLAG_SOFTWARE
+	if skippedAdapter(&basic) {
+		t.Error("WARP with the software flag is left out")
 	}
 	if bindingTierSupported(&nvidia, 1) {
 		t.Error("a resource binding tier 1 adapter is kept")
