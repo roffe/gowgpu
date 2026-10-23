@@ -104,3 +104,38 @@ func TestBrowserReleasingAPendingMapLeavesNoGoroutine(t *testing.T) {
 		t.Fatalf("state %v, want mapped", b.MapState())
 	}
 }
+
+func TestBrowserPollWaitSettlesTheMapsMadeBeforeIt(t *testing.T) {
+	b, ref := fakeMapBuffer(t)
+	queue := jsEval(`{}`)
+	queue.Set("onSubmittedWorkDone", js.Global().Get("Function").New("buf", `return () => {
+		if (buf.pending) buf.resolvePending()
+		return Promise.resolve()
+	}`).Invoke(ref))
+	dev := jsEval(`{}`)
+	dev.Set("queue", queue)
+	bd := browser.NewDevice(dev)
+	d := &Device{browser: bd, queue: &Queue{browser: bd.Queue()}}
+	d.queue.device = d
+	b.device = d
+
+	p, err := b.MapAsync(MapModeRead, 0, 16)
+	if err != nil {
+		t.Fatalf("MapAsync: %v", err)
+	}
+	if d.Poll(PollPoll) {
+		t.Fatal("Poll(PollPoll) reported a settled map before the browser settled it")
+	}
+	if !d.Poll(PollWait) {
+		t.Fatal("Poll(PollWait) reported no settled map")
+	}
+	if ready, err := p.Status(); !ready || err != nil {
+		t.Fatalf("Status after Poll(PollWait) = %v, %v, want ready", ready, err)
+	}
+	if d.Poll(PollWait) {
+		t.Fatal("a second Poll(PollWait) reported the same map again")
+	}
+	if err := d.WaitIdle(); err != nil {
+		t.Fatalf("WaitIdle: %v", err)
+	}
+}

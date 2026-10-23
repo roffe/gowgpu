@@ -206,6 +206,14 @@ func (s *Surface) Unconfigure() {
 // false on browser). The texture is automatically presented when the command
 // buffer using it is submitted and control returns to the browser event loop.
 //
+// When the canvas still holds the texture last presented and the program
+// has not given control back to the browser since Present, GetCurrentTexture
+// waits for the browser's next animation frame, the way a native FIFO
+// swapchain waits for an image, so a render loop that never returns to the
+// event loop gets its frames shown. It does not wait in a JavaScript
+// callback, such as a requestAnimationFrame one, which the browser waits
+// for.
+//
 // Matches Rust wgpu SurfaceInterface::get_current_texture for WebSurface.
 func (s *Surface) GetCurrentTexture() (*SurfaceTexture, bool, error) {
 	if s.released {
@@ -233,11 +241,18 @@ func (s *Surface) GetCurrentTexture() (*SurfaceTexture, bool, error) {
 
 // Present presents a surface texture to the screen.
 //
-// On browser, this is a NO-OP. The swapchain is presented automatically when
-// control returns to the browser event loop. This matches Rust wgpu where
-// WebSurfaceOutputDetail::present() is an empty function.
-func (s *Surface) Present(_ *SurfaceTexture) error {
-	// No-op on browser. Presentation is automatic.
+// On browser, the canvas is presented automatically when control returns to
+// the browser event loop, as with Rust wgpu where
+// WebSurfaceOutputDetail::present() is an empty function. Present marks the
+// texture as presented, so that the next GetCurrentTexture waits for the
+// browser to show it.
+func (s *Surface) Present(st *SurfaceTexture) error {
+	if s.released {
+		return ErrReleased
+	}
+	if st != nil && st.texture != nil && st.texture.browser != nil {
+		s.browser.Present(st.texture.browser)
+	}
 	return nil
 }
 

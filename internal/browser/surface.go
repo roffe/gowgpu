@@ -5,6 +5,7 @@ package browser
 import (
 	"errors"
 	"fmt"
+	"runtime"
 	"syscall/js"
 )
 
@@ -23,7 +24,8 @@ var ErrCanvasContextFailed = errors.New("wgpu: canvas.getContext(\"webgpu\") ret
 //
 // Presentation happens automatically when the JS event loop runs -- there is no
 // explicit present() call. This matches Rust wgpu WebSurface / WebSurfaceOutputDetail
-// where present() and texture_discard() are both no-ops.
+// where present() and texture_discard() are both no-ops. Present only records
+// the texture, so that GetCurrentTexture can wait for the browser to show it.
 type Surface struct {
 	// canvas is the HTMLCanvasElement (or OffscreenCanvas).
 	canvas js.Value
@@ -43,6 +45,11 @@ type Surface struct {
 	width      uint32
 	height     uint32
 	format     string
+
+	// presented is the GPUTexture last passed to Present, and presentTurn
+	// gets a turned property once the event loop has run after that Present.
+	presented   js.Value
+	presentTurn js.Value
 }
 
 // NewSurface creates a Surface from a canvas element by obtaining its GPUCanvasContext.
@@ -103,6 +110,7 @@ func (s *Surface) Configure(config js.Value, width, height uint32, format string
 	s.width = width
 	s.height = height
 	s.format = format
+	s.presented, s.presentTurn = js.Value{}, js.Value{}
 	return nil
 }
 
@@ -114,12 +122,20 @@ func (s *Surface) Unconfigure() {
 		s.context.Call("unconfigure")
 	}
 	s.configured = false
+	s.presented, s.presentTurn = js.Value{}, js.Value{}
 }
 
 // GetCurrentTexture returns the current frame texture from the GPUCanvasContext.
 //
 // The returned GPUTexture is automatically presented when control returns to
 // the browser event loop after the command buffer using it is submitted.
+// When the canvas still hands out the texture last passed to Present and the
+// event loop has not run since, the browser has had no chance to show it:
+// GetCurrentTexture then waits for the next animation frame and asks again,
+// which returns control to the event loop for a render loop that would
+// otherwise never give it back. It waits once only, since a canvas that is
+// not displayed keeps its texture, and never in a JavaScript callback, which
+// holds up the event loop until it returns.
 //
 // Returns an error if the surface is not configured, or the exception
 // getCurrentTexture throws.
@@ -131,14 +147,75 @@ func (s *Surface) GetCurrentTexture() (*Texture, error) {
 	}
 
 	jsTexture, err := invoke(s.fnGetCurrentTexture)
+	if err == nil && s.unshown(jsTexture) && !inJSCallback() {
+		if _, err = AwaitPromise(nextAnimationFrame()); err == nil {
+			jsTexture, err = invoke(s.fnGetCurrentTexture)
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
+	s.presented, s.presentTurn = js.Value{}, js.Value{}
 	if jsTexture.IsNull() || jsTexture.IsUndefined() {
 		return nil, fmt.Errorf("wgpu: getCurrentTexture returned null")
 	}
 
 	return NewTexture(jsTexture), nil
+}
+
+// Present records texture, which GetCurrentTexture returned, as presented.
+// A zero timeout, which only runs once the event loop does, marks
+// presentTurn turned through Reflect.set, so no Go callback is involved.
+func (s *Surface) Present(texture *Texture) {
+	s.presented = texture.Ref()
+	s.presentTurn = newJSObject()
+	markTurned := js.Global().Get("Reflect").Get("set").Call("bind", nil, s.presentTurn, "turned", true, s.presentTurn)
+	js.Global().Call("setTimeout", markTurned, 0)
+}
+
+// unshown reports whether texture is the one last presented and the event
+// loop has not run since, so the browser has had no chance to show it.
+func (s *Surface) unshown(texture js.Value) bool {
+	return s.presentTurn.Type() == js.TypeObject && texture.Equal(s.presented) && !s.presentTurn.Get("turned").Truthy()
+}
+
+// inJSCallback reports whether the calling goroutine runs a js.FuncOf
+// callback, which syscall/js calls from its handleEvent. Blocking there
+// deadlocks the program, since the event loop waits for the callback.
+func inJSCallback() bool {
+	pcs := make([]uintptr, 64)
+	for {
+		n := runtime.Callers(1, pcs)
+		if n == len(pcs) {
+			pcs = make([]uintptr, 2*len(pcs))
+			continue
+		}
+		frames := runtime.CallersFrames(pcs[:n])
+		for {
+			frame, more := frames.Next()
+			if frame.Function == "syscall/js.handleEvent" {
+				return true
+			}
+			if !more {
+				return false
+			}
+		}
+	}
+}
+
+// nextAnimationFrame returns a promise that resolves at the browser's next
+// animation frame, or after a zero timeout where there are none.
+func nextAnimationFrame() js.Value {
+	schedule := js.Global().Get("requestAnimationFrame")
+	if schedule.Type() != js.TypeFunction {
+		schedule = js.Global().Get("setTimeout")
+	}
+	executor := js.FuncOf(func(_ js.Value, args []js.Value) any {
+		schedule.Invoke(args[0])
+		return nil
+	})
+	defer executor.Release()
+	return js.Global().Get("Promise").New(executor)
 }
 
 // GetPreferredCanvasFormat returns the preferred texture format for the display.

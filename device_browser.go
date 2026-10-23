@@ -23,6 +23,10 @@ type Device struct {
 	// errorScopes holds the filters of the pushed error scopes, innermost
 	// last.
 	errorScopes []ErrorFilter
+
+	// mapsSettled counts the buffer maps that have settled, mapsPolled what
+	// it was at the previous Poll.
+	mapsSettled, mapsPolled uint64
 }
 
 // usable returns ErrReleased for a released device and ErrDeviceLost for a
@@ -421,16 +425,37 @@ func (d *Device) PopErrorScope() *GPUError {
 }
 
 // WaitIdle waits for all GPU work to complete.
-// On browser, the GPU is polled automatically. This is a no-op.
+//
+// On browser it waits for queue.onSubmittedWorkDone(), which also settles
+// every map made before it, so it must be called from main or another
+// goroutine, never from a JavaScript callback.
 func (d *Device) WaitIdle() error {
+	if err := d.usable(); err != nil {
+		return err
+	}
+	if err := d.queue.browser.OnSubmittedWorkDone(); err != nil {
+		return fmt.Errorf("wgpu: WaitIdle: %w", err)
+	}
 	return nil
 }
 
-// Poll drives the per-device pending-map triage loop.
-// On browser, the GPU is polled automatically by the browser event loop.
-// Returns true (devices are always considered polled in browser).
+// Poll reports whether buffer maps have settled since the previous Poll.
+//
+// On browser, maps settle in the browser's promise callbacks whenever its
+// event loop runs. PollPoll returns at once; PollWait first waits for
+// queue.onSubmittedWorkDone(), which settles every map made before it, so
+// PollWait must be called from main or another goroutine, never from a
+// JavaScript callback.
 func (d *Device) Poll(pollType PollType) bool {
-	return true
+	if d == nil || d.browser == nil || d.released {
+		return false
+	}
+	if pollType == PollWait {
+		_ = d.queue.browser.OnSubmittedWorkDone()
+	}
+	settled := d.mapsSettled != d.mapsPolled
+	d.mapsPolled = d.mapsSettled
+	return settled
 }
 
 // FreeCommandBuffer is a no-op on browser — JS GC handles GPU resource cleanup.

@@ -44,6 +44,14 @@ func (q *Queue) Submit(commandBuffers []js.Value) {
 	q.fnSubmit.Invoke(arr)
 }
 
+// OnSubmittedWorkDone blocks until queue.onSubmittedWorkDone() settles,
+// that is until the GPU has finished the work submitted so far and every
+// buffer map made before the call has settled.
+func (q *Queue) OnSubmittedWorkDone() error {
+	_, err := AwaitPromise(q.ref_.Call("onSubmittedWorkDone"))
+	return err
+}
+
 // WriteBuffer writes Go byte data to a GPU buffer.
 //
 // Rust wgpu creates a Uint8Array from the data, then passes its .buffer() (ArrayBuffer)

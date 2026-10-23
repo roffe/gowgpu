@@ -165,6 +165,9 @@ func (b *Buffer) mapSettled(serial uint64, err error) error {
 	if serial != b.mapSerial || b.mapState != MapStatePending {
 		return ErrMapCanceled
 	}
+	if b.device != nil {
+		b.device.mapsSettled++
+	}
 	if err == nil {
 		b.mapState = MapStateMapped
 		return nil
