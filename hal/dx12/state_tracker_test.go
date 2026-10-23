@@ -1013,7 +1013,7 @@ func TestTerminalOwnedObjectReleaseRequiresProofOfCompletion(t *testing.T) {
 }
 
 func TestTextureViewDestroyRecyclesOnlyAllocatedDSVVariantsOnce(t *testing.T) {
-	device := &Device{dsvHeap: &DescriptorHeap{}}
+	device := &Device{dsvHeap: &cpuDescriptorPool{heaps: []*DescriptorHeap{{}}}}
 	view := &TextureView{
 		texture:        &Texture{},
 		device:         device,
@@ -1023,8 +1023,8 @@ func TestTextureViewDestroyRecyclesOnlyAllocatedDSVVariantsOnce(t *testing.T) {
 	}
 	view.Destroy()
 	view.Destroy()
-	if want := []uint32{20, 21}; !equalUint32s(device.dsvHeap.freeList, want) {
-		t.Fatalf("freed partial DSV variants = %v, want %v", device.dsvHeap.freeList, want)
+	if want := []uint32{20, 21}; !equalUint32s(device.dsvHeap.heaps[0].freeList, want) {
+		t.Fatalf("freed partial DSV variants = %v, want %v", device.dsvHeap.heaps[0].freeList, want)
 	}
 }
 

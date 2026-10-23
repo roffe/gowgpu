@@ -234,16 +234,12 @@ func (s *Surface) createBackBufferRTVs() error {
 
 		resource := (*d3d12.ID3D12Resource)(resourcePtr)
 
-		// Allocate RTV from device heap (supports recycling via free list)
-		rtvHandle, err := s.device.rtvHeap.Allocate(1)
+		rtvHandle, rtvIndex, err := s.device.rtvHeap.allocate()
 		if err != nil {
 			resource.Release()
 			s.releaseBackBuffers()
 			return fmt.Errorf("dx12: failed to allocate RTV for buffer %d: %w", i, err)
 		}
-
-		// Track heap index for recycling on release
-		rtvIndex := s.device.rtvHeap.HandleToIndex(rtvHandle)
 
 		rtvDesc := d3d12.D3D12_RENDER_TARGET_VIEW_DESC{Format: textureFormatToD3D12(s.halFormat)}
 		rtvDesc.SetTexture2D(0, 0)
@@ -289,7 +285,7 @@ func (s *Surface) releaseBackBuffers() {
 		s.backBuffers[i].resource = nil
 		// Recycle RTV descriptor slot for reuse (prevents heap exhaustion on resize)
 		if s.device != nil && s.device.rtvHeap != nil {
-			s.device.rtvHeap.Free(s.backBuffers[i].rtvIndex, 1)
+			s.device.rtvHeap.free(s.backBuffers[i].rtvIndex)
 		}
 	}
 	s.backBuffers = nil

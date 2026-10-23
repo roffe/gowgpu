@@ -391,18 +391,18 @@ type TextureView struct {
 func (v *TextureView) Destroy() {
 	if v.device != nil && (v.texture == nil || !v.texture.isExternal) {
 		if v.hasSRV && v.device.stagingViewHeap != nil {
-			v.device.stagingViewHeap.Free(v.srvHeapIndex, 1)
+			v.device.stagingViewHeap.free(v.srvHeapIndex)
 		}
 		if v.hasUAV && v.device.stagingViewHeap != nil {
-			v.device.stagingViewHeap.Free(v.uavHeapIndex, 1)
+			v.device.stagingViewHeap.free(v.uavHeapIndex)
 		}
 		if v.hasRTV && v.device.rtvHeap != nil {
-			v.device.rtvHeap.Free(v.rtvHeapIndex, 1)
+			v.device.rtvHeap.free(v.rtvHeapIndex)
 		}
 		if v.hasDSV && v.device.dsvHeap != nil {
 			for i := range v.dsvHeapIndex {
 				if v.hasDSVVariants[i] {
-					v.device.dsvHeap.Free(v.dsvHeapIndex[i], 1)
+					v.device.dsvHeap.free(v.dsvHeapIndex[i])
 				}
 			}
 		}
@@ -467,22 +467,22 @@ func (v *TextureView) HasSRV() bool {
 // Sampler Implementation
 // -----------------------------------------------------------------------------
 
-// Sampler implements hal.Sampler for DirectX 12.
-// Each sampler occupies a slot in both the staging heap (for CopyDescriptors source)
-// and the shader-visible sampler heap (global sampler pool, referenced by index
-// from sampler index buffers in bind groups).
+// Sampler implements hal.Sampler for DirectX 12. It is a slot of the
+// shader-visible sampler heap (the global sampler pool, referenced by index
+// from the sampler index buffers of bind groups), which the samplers of the
+// same description share.
 type Sampler struct {
-	handle          d3d12.D3D12_CPU_DESCRIPTOR_HANDLE // staging heap handle
-	heapIndex       uint32                            // staging heap index
-	samplerPoolSlot uint32                            // index in shader-visible sampler heap (global pool)
+	handle          d3d12.D3D12_CPU_DESCRIPTOR_HANDLE // CPU handle of the slot
+	desc            d3d12.D3D12_SAMPLER_DESC
+	samplerPoolSlot uint32 // index in shader-visible sampler heap (global pool)
 	device          *Device
 }
 
-// Destroy releases the sampler resources and recycles descriptor heap slots.
+// Destroy releases the sampler's share of its slot.
 func (s *Sampler) Destroy() {
 	if s.device != nil {
-		s.device.stagingSamplerHeap.Free(s.heapIndex, 1)
-		s.device.samplerHeap.Free(s.samplerPoolSlot, 1)
+		s.device.releaseSampler(s.desc)
+		s.device = nil
 	}
 }
 

@@ -61,17 +61,23 @@ type Device struct {
 	queueState  *queueState // shared noncyclic lifetime/preamble owner
 
 	// Descriptor heaps (shared for all resources).
-	viewHeap    *DescriptorHeap // CBV/SRV/UAV (shader-visible, for bind groups)
-	samplerHeap *DescriptorHeap // Samplers (shader-visible, for bind groups)
-	rtvHeap     *DescriptorHeap // Render Target Views (non-shader-visible)
-	dsvHeap     *DescriptorHeap // Depth Stencil Views (non-shader-visible)
+	viewHeap    *DescriptorHeap    // CBV/SRV/UAV (shader-visible, for bind groups)
+	samplerHeap *DescriptorHeap    // Samplers (shader-visible, for bind groups)
+	rtvHeap     *cpuDescriptorPool // Render Target Views (non-shader-visible)
+	dsvHeap     *cpuDescriptorPool // Depth Stencil Views (non-shader-visible)
 
-	// Staging heaps (non-shader-visible, CPU-only) for creating SRVs and samplers.
-	// DX12 requires CopyDescriptorsSimple source to be in a non-shader-visible heap
-	// because shader-visible heaps use WRITE_COMBINE or GPU-local memory which is
-	// prohibitively slow to read from (Microsoft docs: ID3D12Device::CopyDescriptorsSimple).
-	stagingViewHeap    *DescriptorHeap // CBV/SRV/UAV staging
-	stagingSamplerHeap *DescriptorHeap // Sampler staging
+	// stagingViewHeap holds the SRVs and UAVs of texture views, which bind
+	// groups copy to viewHeap. DX12 requires CopyDescriptorsSimple source to
+	// be in a non-shader-visible heap because shader-visible heaps use
+	// WRITE_COMBINE or GPU-local memory which is prohibitively slow to read
+	// from (Microsoft docs: ID3D12Device::CopyDescriptorsSimple).
+	stagingViewHeap *cpuDescriptorPool
+
+	// samplers are the samplers in samplerHeap by their description, each
+	// made once and shared by the samplers that describe it alike, as in
+	// Rust's wgpu-hal: the heap holds 2048 of them.
+	samplers   map[d3d12.D3D12_SAMPLER_DESC]*samplerSlot
+	samplersMu sync.Mutex
 
 	// GPU synchronization.
 	fence      *d3d12.ID3D12Fence
@@ -384,18 +390,6 @@ func (d *Device) createDescriptorHeaps() error {
 		return fmt.Errorf("dx12: failed to create CBV/SRV/UAV heap: %w", err)
 	}
 
-	// CBV/SRV/UAV staging heap (non-shader-visible — for creating SRVs)
-	// CopyDescriptorsSimple requires source in non-shader-visible heap because
-	// shader-visible heaps use WRITE_COMBINE memory that is slow/unreliable to read.
-	d.stagingViewHeap, err = d.createHeap(
-		d3d12.D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-		65536, // 64K staging descriptors
-		false, // non-shader-visible
-	)
-	if err != nil {
-		return fmt.Errorf("dx12: failed to create staging CBV/SRV/UAV heap: %w", err)
-	}
-
 	// Sampler heap (shader visible — for bind groups, referenced by GPU)
 	d.samplerHeap, err = d.createHeap(
 		d3d12.D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
@@ -405,36 +399,11 @@ func (d *Device) createDescriptorHeaps() error {
 	if err != nil {
 		return fmt.Errorf("dx12: failed to create sampler heap: %w", err)
 	}
+	d.samplers = make(map[d3d12.D3D12_SAMPLER_DESC]*samplerSlot)
 
-	// Sampler staging heap (non-shader-visible — for creating samplers)
-	d.stagingSamplerHeap, err = d.createHeap(
-		d3d12.D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
-		2048,
-		false,
-	)
-	if err != nil {
-		return fmt.Errorf("dx12: failed to create staging sampler heap: %w", err)
-	}
-
-	// RTV heap (not shader visible)
-	d.rtvHeap, err = d.createHeap(
-		d3d12.D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
-		256,
-		false,
-	)
-	if err != nil {
-		return fmt.Errorf("dx12: failed to create RTV heap: %w", err)
-	}
-
-	// DSV heap (not shader visible)
-	d.dsvHeap, err = d.createHeap(
-		d3d12.D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
-		64,
-		false,
-	)
-	if err != nil {
-		return fmt.Errorf("dx12: failed to create DSV heap: %w", err)
-	}
+	d.stagingViewHeap = &cpuDescriptorPool{device: d, heapType: d3d12.D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV}
+	d.rtvHeap = &cpuDescriptorPool{device: d, heapType: d3d12.D3D12_DESCRIPTOR_HEAP_TYPE_RTV}
+	d.dsvHeap = &cpuDescriptorPool{device: d, heapType: d3d12.D3D12_DESCRIPTOR_HEAP_TYPE_DSV}
 
 	hal.Logger().Info("dx12: descriptor heaps created",
 		"viewHeapSize", d.viewHeap.capacity,
@@ -1019,26 +988,16 @@ func (d *Device) cleanup() {
 		d.viewHeap.raw.Release()
 		d.viewHeap = nil
 	}
-	if d.stagingViewHeap != nil && d.stagingViewHeap.raw != nil {
-		d.stagingViewHeap.raw.Release()
-		d.stagingViewHeap = nil
-	}
 	if d.samplerHeap != nil && d.samplerHeap.raw != nil {
 		d.samplerHeap.raw.Release()
 		d.samplerHeap = nil
 	}
-	if d.stagingSamplerHeap != nil && d.stagingSamplerHeap.raw != nil {
-		d.stagingSamplerHeap.raw.Release()
-		d.stagingSamplerHeap = nil
+	for _, pool := range []*cpuDescriptorPool{d.stagingViewHeap, d.rtvHeap, d.dsvHeap} {
+		if pool != nil {
+			pool.release()
+		}
 	}
-	if d.rtvHeap != nil && d.rtvHeap.raw != nil {
-		d.rtvHeap.raw.Release()
-		d.rtvHeap = nil
-	}
-	if d.dsvHeap != nil && d.dsvHeap.raw != nil {
-		d.dsvHeap.raw.Release()
-		d.dsvHeap = nil
-	}
+	d.stagingViewHeap, d.rtvHeap, d.dsvHeap = nil, nil, nil
 
 	if d.directQueue != nil {
 		d.directQueue.Release()
@@ -1055,63 +1014,97 @@ func (d *Device) cleanup() {
 // Descriptor Allocation Helpers
 // -----------------------------------------------------------------------------
 
-// allocateDescriptor allocates a descriptor from the given staging heap.
-// Recycles freed slots before bumping the watermark.
-func allocateDescriptor(heap *DescriptorHeap, heapName string) (d3d12.D3D12_CPU_DESCRIPTOR_HANDLE, uint32, error) {
-	if heap == nil {
-		return d3d12.D3D12_CPU_DESCRIPTOR_HANDLE{}, 0, fmt.Errorf("dx12: %s heap not initialized", heapName)
+// cpuHeapSize is the number of descriptors in each heap of a
+// cpuDescriptorPool.
+const cpuHeapSize = 256
+
+// cpuDescriptorPool hands out descriptors of one type from heaps shaders
+// never see, adding a heap when the ones it has are full, as Rust's
+// wgpu-hal CpuPool and Dawn's StagingDescriptorAllocator do. The index of a
+// descriptor names its heap and its slot in that heap.
+type cpuDescriptorPool struct {
+	device   *Device
+	heapType d3d12.D3D12_DESCRIPTOR_HEAP_TYPE
+	mu       sync.Mutex
+	heaps    []*DescriptorHeap
+}
+
+func (p *cpuDescriptorPool) allocate() (d3d12.D3D12_CPU_DESCRIPTOR_HANDLE, uint32, error) {
+	if p == nil {
+		return d3d12.D3D12_CPU_DESCRIPTOR_HANDLE{}, 0, fmt.Errorf("dx12: descriptor pool not initialized")
 	}
-
-	heap.mu.Lock()
-	defer heap.mu.Unlock()
-
-	// Prefer recycled slots.
-	if len(heap.freeList) > 0 {
-		idx := heap.freeList[len(heap.freeList)-1]
-		heap.freeList = heap.freeList[:len(heap.freeList)-1]
-		handle := heap.cpuStart.Offset(int(idx), heap.incrementSize)
-		return handle, idx, nil
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for i, heap := range p.heaps {
+		if handle, slot, ok := heap.allocateSlot(); ok {
+			return handle, uint32(i)*cpuHeapSize + slot, nil
+		}
 	}
-
-	if heap.nextFree >= heap.capacity {
-		hal.Logger().Error("dx12: descriptor heap exhausted",
-			"heapType", heapName,
-			"capacity", heap.capacity,
-			"used", heap.nextFree,
-			"freeList", len(heap.freeList),
-		)
-		return d3d12.D3D12_CPU_DESCRIPTOR_HANDLE{}, 0, fmt.Errorf("dx12: %s heap exhausted", heapName)
+	heap, err := p.device.createHeap(p.heapType, cpuHeapSize, false)
+	if err != nil {
+		return d3d12.D3D12_CPU_DESCRIPTOR_HANDLE{}, 0, fmt.Errorf("dx12: create descriptor heap: %w", err)
 	}
-
-	index := heap.nextFree
-	handle := heap.cpuStart.Offset(int(index), heap.incrementSize)
-	heap.nextFree++
-	return handle, index, nil
+	p.heaps = append(p.heaps, heap)
+	handle, slot, _ := heap.allocateSlot()
+	return handle, uint32(len(p.heaps)-1)*cpuHeapSize + slot, nil
 }
 
-// allocateRTVDescriptor allocates a render target view descriptor.
-func (d *Device) allocateRTVDescriptor() (d3d12.D3D12_CPU_DESCRIPTOR_HANDLE, uint32, error) {
-	return allocateDescriptor(d.rtvHeap, "RTV")
+// free returns the descriptor at index to the pool. Nothing in flight on
+// the GPU may still use it.
+func (p *cpuDescriptorPool) free(index uint32) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if heap := int(index / cpuHeapSize); heap < len(p.heaps) {
+		p.heaps[heap].Free(index%cpuHeapSize, 1)
+	}
 }
 
-// allocateDSVDescriptor allocates a depth stencil view descriptor.
-func (d *Device) allocateDSVDescriptor() (d3d12.D3D12_CPU_DESCRIPTOR_HANDLE, uint32, error) {
-	return allocateDescriptor(d.dsvHeap, "DSV")
+func (p *cpuDescriptorPool) release() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, heap := range p.heaps {
+		if heap.raw != nil {
+			heap.raw.Release()
+		}
+	}
+	p.heaps = nil
 }
 
-// allocateSRVDescriptor allocates a shader resource view descriptor in the
-// non-shader-visible staging heap. SRVs are created here and later copied to
-// the shader-visible heap via CopyDescriptorsSimple in CreateBindGroup.
-// DX12 requires CopyDescriptorsSimple source to be non-shader-visible.
-func (d *Device) allocateSRVDescriptor() (d3d12.D3D12_CPU_DESCRIPTOR_HANDLE, uint32, error) {
-	return allocateDescriptor(d.stagingViewHeap, "staging CBV/SRV/UAV")
+// allocateSlot takes one descriptor of the heap, a recycled one first.
+func (h *DescriptorHeap) allocateSlot() (d3d12.D3D12_CPU_DESCRIPTOR_HANDLE, uint32, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if idx, ok := h.reuse(1); ok {
+		return h.cpuStart.Offset(int(idx), h.incrementSize), idx, true
+	}
+	if h.nextFree >= h.capacity {
+		return d3d12.D3D12_CPU_DESCRIPTOR_HANDLE{}, 0, false
+	}
+	idx := h.nextFree
+	h.nextFree++
+	return h.cpuStart.Offset(int(idx), h.incrementSize), idx, true
 }
 
-// allocateSamplerDescriptor allocates a sampler descriptor in the
-// non-shader-visible staging heap. Samplers are created here and later copied
-// to the shader-visible heap via CopyDescriptorsSimple in CreateBindGroup.
-func (d *Device) allocateSamplerDescriptor() (d3d12.D3D12_CPU_DESCRIPTOR_HANDLE, uint32, error) {
-	return allocateDescriptor(d.stagingSamplerHeap, "staging sampler")
+// samplerSlot is a sampler of the shader-visible sampler heap and the
+// number of Samplers that share it.
+type samplerSlot struct {
+	index uint32
+	refs  int
+}
+
+// releaseSampler drops a Sampler's share of its slot of the sampler heap,
+// freeing the slot with the last one.
+func (d *Device) releaseSampler(desc d3d12.D3D12_SAMPLER_DESC) {
+	d.samplersMu.Lock()
+	defer d.samplersMu.Unlock()
+	slot, ok := d.samplers[desc]
+	if !ok {
+		return
+	}
+	if slot.refs--; slot.refs == 0 {
+		d.samplerHeap.Free(slot.index, 1)
+		delete(d.samplers, desc)
+	}
 }
 
 // -----------------------------------------------------------------------------
@@ -1583,8 +1576,7 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 
 	// Create RTV if texture supports render attachment and is not depth
 	if tex.usage&gputypes.TextureUsageRenderAttachment != 0 && !isDepthFormat(viewFormat) {
-		// Allocate RTV descriptor
-		rtvHandle, rtvIndex, err := d.allocateRTVDescriptor()
+		rtvHandle, rtvIndex, err := d.rtvHeap.allocate()
 		if err != nil {
 			return failTextureViewCreation(view, fmt.Errorf("dx12: failed to allocate RTV descriptor: %w", err))
 		}
@@ -1598,8 +1590,7 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 
 	// Create DSV if texture supports render attachment and is depth
 	if tex.usage&gputypes.TextureUsageRenderAttachment != 0 && isDepthFormat(viewFormat) {
-		// Allocate DSV descriptor
-		dsvHandle, dsvIndex, err := d.allocateDSVDescriptor()
+		dsvHandle, dsvIndex, err := d.dsvHeap.allocate()
 		if err != nil {
 			return failTextureViewCreation(view, fmt.Errorf("dx12: failed to allocate DSV descriptor: %w", err))
 		}
@@ -1617,7 +1608,7 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 		// while WebGPU's Depth24Plus and Stencil8 use packed D24S8 resources and
 		// need both physical-plane flags to protect their hidden companion.
 		for _, mask := range dsvReadOnlyVariantMasks(viewFormat) {
-			variantHandle, variantIndex, variantErr := d.allocateDSVDescriptor()
+			variantHandle, variantIndex, variantErr := d.dsvHeap.allocate()
 			if variantErr != nil {
 				return failTextureViewCreation(view, fmt.Errorf("dx12: failed to allocate read-only DSV descriptor: %w", variantErr))
 			}
@@ -1632,15 +1623,14 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 
 	// Create SRV if texture supports texture binding
 	if tex.usage&gputypes.TextureUsageTextureBinding != 0 {
-		// Allocate SRV descriptor
-		srvHandle, srvIndex, err := d.allocateSRVDescriptor()
+		srvHandle, srvIndex, err := d.stagingViewHeap.allocate()
 		if err != nil {
 			return failTextureViewCreation(view, fmt.Errorf("dx12: failed to allocate SRV descriptor: %w", err))
 		}
 
 		srvFormat, srvPlane := textureFormatToSRV(viewFormat, view.aspect)
 		if srvFormat == d3d12.DXGI_FORMAT_UNKNOWN {
-			d.stagingViewHeap.Free(srvIndex, 1)
+			d.stagingViewHeap.free(srvIndex)
 			return failTextureViewCreation(view, fmt.Errorf("dx12: texture format %d aspect %d cannot create an SRV", viewFormat, view.aspect))
 		}
 
@@ -1656,7 +1646,7 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 	// the root signature, see bindingTypeToD3D12DescriptorRangeType). Depth
 	// formats have no UAV, and WebGPU has no storage depth textures.
 	if tex.usage&gputypes.TextureUsageStorageBinding != 0 && !isDepthFormat(viewFormat) {
-		uavHandle, uavIndex, err := d.allocateSRVDescriptor()
+		uavHandle, uavIndex, err := d.stagingViewHeap.allocate()
 		if err != nil {
 			return failTextureViewCreation(view, fmt.Errorf("dx12: failed to allocate UAV descriptor: %w", err))
 		}
@@ -1706,12 +1696,6 @@ func (d *Device) CreateSampler(desc *hal.SamplerDescriptor) (hal.Sampler, error)
 		return nil, fmt.Errorf("BUG: sampler descriptor is nil in DX12.CreateSampler — core validation gap")
 	}
 
-	// Allocate sampler descriptor
-	handle, heapIndex, err := d.allocateSamplerDescriptor()
-	if err != nil {
-		return nil, fmt.Errorf("dx12: failed to allocate sampler descriptor: %w", err)
-	}
-
 	// Build D3D12 sampler desc
 	samplerDesc := d3d12.D3D12_SAMPLER_DESC{
 		Filter:         filterModeToD3D12(desc.MinFilter, desc.MagFilter, desc.MipmapFilter, desc.Compare, desc.Anisotropy > 1),
@@ -1734,30 +1718,27 @@ func (d *Device) CreateSampler(desc *hal.SamplerDescriptor) (hal.Sampler, error)
 		samplerDesc.MaxAnisotropy = 16
 	}
 
-	d.raw.CreateSampler(&samplerDesc, handle)
-
-	// Allocate a slot in the shader-visible sampler heap (global sampler pool).
-	// This is the index that gets written into sampler index buffers in bind groups,
-	// matching Rust wgpu-hal's SamplerIndex architecture.
-	poolCPU, poolGPU, err := d.samplerHeap.AllocateGPU(1)
-	if err != nil {
-		d.stagingSamplerHeap.Free(heapIndex, 1)
-		return nil, fmt.Errorf("dx12: failed to allocate sampler pool slot: %w", err)
+	// The sampler goes straight in the shader-visible heap, at the index
+	// the sampler index buffers of bind groups hold, once per description.
+	d.samplersMu.Lock()
+	defer d.samplersMu.Unlock()
+	slot, ok := d.samplers[samplerDesc]
+	if ok {
+		slot.refs++
+	} else {
+		handle, _, err := d.samplerHeap.AllocateGPU(1)
+		if err != nil {
+			return nil, fmt.Errorf("dx12: the sampler heap holds no more distinct samplers: %w", err)
+		}
+		d.raw.CreateSampler(&samplerDesc, handle)
+		slot = &samplerSlot{index: d.samplerHeap.HandleToIndex(handle), refs: 1}
+		d.samplers[samplerDesc] = slot
 	}
-	_ = poolGPU // GPU handle not needed directly; the shader uses the heap index
-	poolSlot := d.samplerHeap.HandleToIndex(poolCPU)
-
-	// Copy the sampler from staging to shader-visible heap.
-	d.raw.CopyDescriptors(
-		1, &poolCPU, nil,
-		1, &handle, nil,
-		d3d12.D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
-	)
 
 	return &Sampler{
-		handle:          handle,
-		heapIndex:       heapIndex,
-		samplerPoolSlot: poolSlot,
+		handle:          d.samplerHeap.cpuStart.Offset(int(slot.index), d.samplerHeap.incrementSize),
+		desc:            samplerDesc,
+		samplerPoolSlot: slot.index,
 		device:          d,
 	}, nil
 }

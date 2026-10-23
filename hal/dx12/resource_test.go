@@ -115,9 +115,9 @@ func TestTexture_DecPendingRef_NoDeferWithoutDestroy(t *testing.T) {
 
 func TestFailTextureViewCreationRecyclesAllocatedDescriptors(t *testing.T) {
 	device := &Device{
-		rtvHeap:         &DescriptorHeap{},
-		dsvHeap:         &DescriptorHeap{},
-		stagingViewHeap: &DescriptorHeap{},
+		rtvHeap:         &cpuDescriptorPool{heaps: []*DescriptorHeap{{}}},
+		dsvHeap:         &cpuDescriptorPool{heaps: []*DescriptorHeap{{}}},
+		stagingViewHeap: &cpuDescriptorPool{heaps: []*DescriptorHeap{{}}},
 	}
 	view := &TextureView{
 		texture:        &Texture{},
@@ -138,13 +138,13 @@ func TestFailTextureViewCreationRecyclesAllocatedDescriptors(t *testing.T) {
 	if err == nil || err.Error() != "view creation failed" {
 		t.Fatalf("error = %v, want original view creation error", err)
 	}
-	if len(device.rtvHeap.freeList) != 1 || device.rtvHeap.freeList[0] != 2 {
-		t.Fatalf("RTV free list = %v, want [2]", device.rtvHeap.freeList)
+	if free := device.rtvHeap.heaps[0].freeList; len(free) != 1 || free[0] != 2 {
+		t.Fatalf("RTV free list = %v, want [2]", free)
 	}
-	if len(device.dsvHeap.freeList) != 1 || device.dsvHeap.freeList[0] != 3 {
-		t.Fatalf("DSV free list = %v, want [3]", device.dsvHeap.freeList)
+	if free := device.dsvHeap.heaps[0].freeList; len(free) != 1 || free[0] != 3 {
+		t.Fatalf("DSV free list = %v, want [3]", free)
 	}
-	if len(device.stagingViewHeap.freeList) != 1 || device.stagingViewHeap.freeList[0] != 4 {
-		t.Fatalf("SRV free list = %v, want [4]", device.stagingViewHeap.freeList)
+	if free := device.stagingViewHeap.heaps[0].freeList; len(free) != 1 || free[0] != 4 {
+		t.Fatalf("SRV free list = %v, want [4]", free)
 	}
 }
