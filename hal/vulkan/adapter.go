@@ -202,6 +202,7 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 		storeOpNone:                storeOpNone,
 	}
 	dev.depth24, dev.depth24Stencil8 = depth24Formats(a.supportsDepthAttachment)
+	dev.stencil8 = stencil8Format(a.supportsDepthAttachment, dev.depth24Stencil8)
 
 	// Initialize synchronization fence (VK-IMPL-001 / VK-IMPL-003).
 	// Prefer timeline semaphore (Vulkan 1.2+); fall back to fencePool of binary
@@ -334,13 +335,17 @@ func (a *Adapter) supportsDepthAttachment(format vk.Format) bool {
 	return props.OptimalTilingFeatures&vk.FormatFeatureFlags(vk.FormatFeatureDepthStencilAttachmentBit) != 0
 }
 
-// vkFormat is the Vulkan format of format on this device, see depth24Formats.
+// vkFormat is the Vulkan format of format on this device, see
+// depth24Formats and stencil8Format.
 func (a *Adapter) vkFormat(format gputypes.TextureFormat) vk.Format {
 	switch format {
-	case gputypes.TextureFormatDepth24Plus, gputypes.TextureFormatDepth24PlusStencil8:
+	case gputypes.TextureFormatDepth24Plus, gputypes.TextureFormatDepth24PlusStencil8, gputypes.TextureFormatStencil8:
 		depth, depthStencil := depth24Formats(a.supportsDepthAttachment)
-		if format == gputypes.TextureFormatDepth24Plus {
+		switch format {
+		case gputypes.TextureFormatDepth24Plus:
 			return depth
+		case gputypes.TextureFormatStencil8:
+			return stencil8Format(a.supportsDepthAttachment, depthStencil)
 		}
 		return depthStencil
 	}

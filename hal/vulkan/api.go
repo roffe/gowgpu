@@ -288,7 +288,7 @@ func (i *Instance) EnumerateAdapters(surfaceHint hal.Surface) []hal.ExposedAdapt
 					vkVersionPatch(props.ApiVersion)),
 				Backend: gputypes.BackendVulkan,
 			},
-			Features: featuresFromPhysicalDevice(&features, features12.DrawIndirectCount != 0),
+			Features: featuresFromPhysicalDevice(&features, features12.DrawIndirectCount != 0, adapter.supportsDepthAttachment(vk.FormatD32SfloatS8Uint)),
 			Capabilities: hal.Capabilities{
 				Limits: limitsFromProps(&props),
 				AlignmentsMask: hal.Alignments{
@@ -560,9 +560,11 @@ func vendorIDToName(id uint32) string {
 	}
 }
 
-// featuresFromPhysicalDevice maps Vulkan physical device features to WebGPU features.
+// featuresFromPhysicalDevice maps Vulkan physical device features to WebGPU
+// features, with depth32Stencil8 whether the device renders depth and
+// stencil to D32_SFLOAT_S8_UINT, which Vulkan does not require.
 // Reference: wgpu-hal/src/vulkan/adapter.rs:584-829
-func featuresFromPhysicalDevice(features *vk.PhysicalDeviceFeatures, drawIndirectCount bool) gputypes.Features {
+func featuresFromPhysicalDevice(features *vk.PhysicalDeviceFeatures, drawIndirectCount, depth32Stencil8 bool) gputypes.Features {
 	var result gputypes.Features
 
 	// Texture compression features
@@ -604,8 +606,9 @@ func featuresFromPhysicalDevice(features *vk.PhysicalDeviceFeatures, drawIndirec
 		result |= gputypes.Features(gputypes.FeaturePipelineStatisticsQuery)
 	}
 
-	// Depth32FloatStencil8 is always available in Vulkan 1.0+
-	result |= gputypes.Features(gputypes.FeatureDepth32FloatStencil8)
+	if depth32Stencil8 {
+		result |= gputypes.Features(gputypes.FeatureDepth32FloatStencil8)
+	}
 
 	return result
 }

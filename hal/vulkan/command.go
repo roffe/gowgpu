@@ -715,16 +715,20 @@ func (e *CommandEncoder) TransitionBuffers(barriers []hal.BufferBarrier) {
 	)
 }
 
-// barrierAspects are the aspects a barrier on an image of format covers:
-// every aspect of a depth/stencil image, whose aspects share their layout
-// and are tracked together (without separateDepthStencilLayouts a barrier
-// has to name both, VUID-VkImageMemoryBarrier-image-03320), and the given
-// one of anything else.
-func barrierAspects(aspect gputypes.TextureAspect, format gputypes.TextureFormat) vk.ImageAspectFlags {
-	if isDepthStencilFormat(format) {
-		aspect = gputypes.TextureAspectAll
+// barrierAspects are the aspects a barrier on tex covers: every aspect of
+// a depth/stencil image, whose aspects share their layout and are tracked
+// together (without separateDepthStencilLayouts a barrier has to name both,
+// VUID-VkImageMemoryBarrier-image-03320), the depth WebGPU does not see of
+// a Stencil8 made D24_UNORM_S8_UINT included, and the given one of
+// anything else.
+func barrierAspects(aspect gputypes.TextureAspect, tex *Texture) vk.ImageAspectFlags {
+	if !isDepthStencilFormat(tex.format) {
+		return textureAspectToVk(aspect, tex.format)
 	}
-	return textureAspectToVk(aspect, format)
+	if tex.device != nil {
+		return vkFormatAspects(tex.device.vkFormat(tex.format))
+	}
+	return textureAspectToVk(gputypes.TextureAspectAll, tex.format)
 }
 
 // barrierDstStages is the destination stage mask of a barrier whose new
@@ -777,7 +781,7 @@ func (e *CommandEncoder) TransitionTextures(barriers []hal.TextureBarrier) {
 			DstQueueFamilyIndex: vk.QueueFamilyIgnored,
 			Image:               tex.handle,
 			SubresourceRange: vk.ImageSubresourceRange{
-				AspectMask:     barrierAspects(b.Range.Aspect, tex.format),
+				AspectMask:     barrierAspects(b.Range.Aspect, tex),
 				BaseMipLevel:   b.Range.BaseMipLevel,
 				LevelCount:     mipLevelCountOrRemaining(b.Range.MipLevelCount),
 				BaseArrayLayer: b.Range.BaseArrayLayer,

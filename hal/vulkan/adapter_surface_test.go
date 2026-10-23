@@ -143,3 +143,15 @@ func TestUsesTimelineSemaphore(t *testing.T) {
 		t.Error("VeriSilicon uses timeline semaphores")
 	}
 }
+
+// Depth32FloatStencil8 is a feature only where the device renders to
+// D32_SFLOAT_S8_UINT: Vulkan requires one of it and D24_UNORM_S8_UINT.
+func TestDepth32FloatStencil8Feature(t *testing.T) {
+	var features vk.PhysicalDeviceFeatures
+	if featuresFromPhysicalDevice(&features, false, false).Contains(gputypes.FeatureDepth32FloatStencil8) {
+		t.Error("Depth32FloatStencil8 without D32_SFLOAT_S8_UINT")
+	}
+	if !featuresFromPhysicalDevice(&features, false, true).Contains(gputypes.FeatureDepth32FloatStencil8) {
+		t.Error("no Depth32FloatStencil8 with D32_SFLOAT_S8_UINT")
+	}
+}

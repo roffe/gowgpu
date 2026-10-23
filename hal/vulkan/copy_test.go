@@ -106,17 +106,22 @@ func TestConvertBufferImageCopyRegionsDepthStencilAspects(t *testing.T) {
 }
 
 // A barrier on a combined depth/stencil image covers both aspects whatever
-// aspect the barrier's range names: they share their layout.
+// aspect the barrier's range names: they share their layout. So does one on
+// a Stencil8 texture the device made a combined format.
 func TestBarrierAspects(t *testing.T) {
 	both := vk.ImageAspectFlags(vk.ImageAspectDepthBit | vk.ImageAspectStencilBit)
-	if got := barrierAspects(gputypes.TextureAspectStencilOnly, gputypes.TextureFormatDepth24PlusStencil8); got != both {
+	d := &Device{}
+	if got := barrierAspects(gputypes.TextureAspectStencilOnly, &Texture{format: gputypes.TextureFormatDepth24PlusStencil8, device: d}); got != both {
 		t.Errorf("stencil barrier of Depth24PlusStencil8 = %#x, want %#x", got, both)
 	}
-	if got := barrierAspects(gputypes.TextureAspectDepthOnly, gputypes.TextureFormatDepth32Float); got != vk.ImageAspectFlags(vk.ImageAspectDepthBit) {
+	if got := barrierAspects(gputypes.TextureAspectDepthOnly, &Texture{format: gputypes.TextureFormatDepth32Float, device: d}); got != vk.ImageAspectFlags(vk.ImageAspectDepthBit) {
 		t.Errorf("depth barrier of Depth32Float = %#x", got)
 	}
-	if got := barrierAspects(gputypes.TextureAspectAll, gputypes.TextureFormatRGBA8Unorm); got != vk.ImageAspectFlags(vk.ImageAspectColorBit) {
+	if got := barrierAspects(gputypes.TextureAspectAll, &Texture{format: gputypes.TextureFormatRGBA8Unorm, device: d}); got != vk.ImageAspectFlags(vk.ImageAspectColorBit) {
 		t.Errorf("colour barrier = %#x", got)
+	}
+	if got := barrierAspects(gputypes.TextureAspectAll, &Texture{format: gputypes.TextureFormatStencil8, device: &Device{stencil8: vk.FormatD24UnormS8Uint}}); got != both {
+		t.Errorf("barrier of a Stencil8 made D24_UNORM_S8_UINT = %#x, want %#x", got, both)
 	}
 }
 

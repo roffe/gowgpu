@@ -103,6 +103,28 @@ func depth24Formats(supports func(vk.Format) bool) (depth, depthStencil vk.Forma
 	return depth, depthStencil
 }
 
+// stencil8Format is the Vulkan format of Stencil8 on a device: S8_UINT
+// where supports says the device can render to it, which Vulkan does not
+// require, else depthStencil, the format of Depth24PlusStencil8, whose
+// depth WebGPU does not see (wgpu-hal does the same).
+func stencil8Format(supports func(vk.Format) bool, depthStencil vk.Format) vk.Format {
+	if supports(vk.FormatS8Uint) {
+		return vk.FormatS8Uint
+	}
+	return depthStencil
+}
+
+// vkFormatAspects are the aspects of a Vulkan depth/stencil format.
+func vkFormatAspects(format vk.Format) vk.ImageAspectFlags {
+	switch format {
+	case vk.FormatS8Uint:
+		return vk.ImageAspectFlags(vk.ImageAspectStencilBit)
+	case vk.FormatD16UnormS8Uint, vk.FormatD24UnormS8Uint, vk.FormatD32SfloatS8Uint:
+		return vk.ImageAspectFlags(vk.ImageAspectDepthBit | vk.ImageAspectStencilBit)
+	}
+	return vk.ImageAspectFlags(vk.ImageAspectDepthBit)
+}
+
 // textureFormatMap maps WebGPU texture formats to Vulkan formats.
 var textureFormatMap = map[gputypes.TextureFormat]vk.Format{
 	// 8-bit formats

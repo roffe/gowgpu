@@ -233,6 +233,23 @@ func TestTextureFormatToVk(t *testing.T) {
 	}
 }
 
+// TestStencil8Format: S8_UINT where the device renders stencil to it,
+// which Vulkan does not require, else the format of Depth24PlusStencil8.
+func TestStencil8Format(t *testing.T) {
+	none := func(vk.Format) bool { return false }
+	all := func(vk.Format) bool { return true }
+	if got := stencil8Format(all, vk.FormatD24UnormS8Uint); got != vk.FormatS8Uint {
+		t.Errorf("with S8_UINT = %v, want S8_UINT", got)
+	}
+	if got := stencil8Format(none, vk.FormatD32SfloatS8Uint); got != vk.FormatD32SfloatS8Uint {
+		t.Errorf("without S8_UINT = %v, want D32_SFLOAT_S8_UINT", got)
+	}
+	d := &Device{stencil8: vk.FormatD24UnormS8Uint}
+	if got := d.vkFormat(gputypes.TextureFormatStencil8); got != vk.FormatD24UnormS8Uint {
+		t.Errorf("vkFormat(Stencil8) = %v, want D24_UNORM_S8_UINT", got)
+	}
+}
+
 // TestDepth24Formats: the 24-bit depth formats where the device renders to
 // them, 32-bit float ones where it does not, chosen for each on its own, and
 // Device.vkFormat hands out what was chosen.
