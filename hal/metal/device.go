@@ -646,7 +646,8 @@ func (c *compiledLibrary) release() {
 }
 
 // compileLibrary writes the MSL of the entry point name of stage in module,
-// its resources at the slots layout gives them, and builds it. A vertex
+// its resources at the slots layout gives them and its overrides the values
+// constants gives them, and builds it. A vertex
 // stage of a point-list pipeline writes [[point_size]] 1: Metal leaves the
 // size of a point it doesn't write undefined. A vertex stage with vertex
 // buffers reads its attributes from them itself, bounds checked, as naga's
@@ -654,34 +655,39 @@ func (c *compiledLibrary) release() {
 // takes attribute offsets that aren't a multiple of 4.
 //
 // Reference: Rust wgpu-hal metal/device.rs load_shader.
-func (d *Device) compileLibrary(module *ShaderModule, layout *PipelineLayout, stage ir.ShaderStage, name string, points bool, vertexBuffers []msl.VertexBufferMapping) (*compiledLibrary, error) {
+func (d *Device) compileLibrary(module *ShaderModule, layout *PipelineLayout, stage ir.ShaderStage, name string, constants map[string]float64,
+	points bool, vertexBuffers []msl.VertexBufferMapping) (*compiledLibrary, error) {
 	if module == nil || module.irModule == nil {
 		return nil, fmt.Errorf("metal: shader module has no WGSL source")
 	}
 
 	start := time.Now()
 
+	irModule, err := withOverrides(module.irModule, stage, name, constants)
+	if err != nil {
+		return nil, fmt.Errorf("metal: pipeline constants for entry point %q: %w", name, err)
+	}
 	var resources map[ir.ResourceBinding]msl.BindTarget
 	var sizesSlot int
 	if layout != nil {
 		resources, sizesSlot = layout.resources, layout.totalBuffers
 	}
-	options, err := mslmap.Options(module.irModule, stage, name, resources, sizesSlot)
+	options, err := mslmap.Options(irModule, stage, name, resources, sizesSlot)
 	if err != nil {
 		return nil, fmt.Errorf("metal: %w", err)
 	}
 	options.AllowAndForcePointSize = points
-	sizesBindings, err := mslmap.SizesBindings(module.irModule, stage, name)
+	sizesBindings, err := mslmap.SizesBindings(irModule, stage, name)
 	if err == nil && len(vertexBuffers) > 0 {
 		options.VertexPullingTransform = true
 		options.VertexBufferMappings = vertexBuffers
-		sizesBindings, err = mslmap.RuntimeArrayBindings(module.irModule)
+		sizesBindings, err = mslmap.RuntimeArrayBindings(irModule)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("metal: %w", err)
 	}
 
-	mslSource, info, err := msl.CompileWithPipeline(module.irModule, options,
+	mslSource, info, err := msl.CompileWithPipeline(irModule, options,
 		msl.PipelineOptions{EntryPoint: &msl.EntryPointSelector{Stage: stage, Name: name}})
 	if err != nil {
 		return nil, fmt.Errorf("metal: failed to compile to MSL: %w", err)
@@ -726,6 +732,20 @@ func (d *Device) compileLibrary(module *ShaderModule, layout *PipelineLayout, st
 
 	return &compiledLibrary{library: library, function: function, sizesBindings: sizesBindings, sizesSlot: sizesSlot,
 		clampsFragDepth: options.ClampFragDepth != nil}, nil
+}
+
+// withOverrides is module with its overrides replaced by constants, a
+// compute pipeline's, or their defaults, for the entry point name of stage,
+// as wgpu-hal's create_shader does with naga's process_overrides. A module
+// without overrides that is given no constants stays as it is.
+func withOverrides(module *ir.Module, stage ir.ShaderStage, name string, constants map[string]float64) (*ir.Module, error) {
+	if len(module.Overrides) == 0 && len(constants) == 0 {
+		return module, nil
+	}
+	return naga.ProcessOverrides(module, naga.OverrideOptions{
+		Constants:  constants,
+		EntryPoint: &naga.EntryPointSelector{Stage: stage, Name: name},
+	})
 }
 
 // newCompileOptions returns +1 MTLCompileOptions with Metal's defaults, but
@@ -793,7 +813,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 	if err != nil {
 		return nil, fmt.Errorf("metal: %w", err)
 	}
-	vertex, err := d.compileLibrary(vertexModule, pipeLayout, ir.StageVertex, desc.Vertex.EntryPoint, points, vertexBuffers)
+	vertex, err := d.compileLibrary(vertexModule, pipeLayout, ir.StageVertex, desc.Vertex.EntryPoint, nil, points, vertexBuffers)
 	if err != nil {
 		return nil, err
 	}
@@ -805,7 +825,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		if !ok || fragmentModule == nil {
 			return nil, fmt.Errorf("metal: invalid fragment shader module")
 		}
-		fragment, err = d.compileLibrary(fragmentModule, pipeLayout, ir.StageFragment, desc.Fragment.EntryPoint, false, nil)
+		fragment, err = d.compileLibrary(fragmentModule, pipeLayout, ir.StageFragment, desc.Fragment.EntryPoint, nil, false, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -1023,13 +1043,6 @@ func (d *Device) DestroyRenderPipeline(pipeline hal.RenderPipeline) {
 
 // CreateComputePipeline creates a compute pipeline.
 //
-// TODO(compute-constants): Apply desc.Compute.Constants via naga's
-// pipeline_constants::process_overrides before MSL emission, or use Metal's
-// MTLFunctionConstantValues API for runtime specialization. Rust wgpu-hal
-// Metal calls naga::back::pipeline_constants::process_overrides() in
-// create_shader (metal/device.rs:134) and passes the processed module to
-// the MSL writer.
-//
 // TODO(zero-init-workgroup): Pass desc.Compute.ZeroInitializeWorkgroupMemory
 // to naga MSL options. Rust wgpu-hal sets pipeline_options.zero_initialize_workgroup_memory
 // per-stage (metal/device.rs:179).
@@ -1048,7 +1061,7 @@ func (d *Device) CreateComputePipeline(desc *hal.ComputePipelineDescriptor) (hal
 		return nil, fmt.Errorf("metal: invalid compute shader module")
 	}
 
-	lib, err := d.compileLibrary(computeModule, pipeLayout, ir.StageCompute, desc.Compute.EntryPoint, false, nil)
+	lib, err := d.compileLibrary(computeModule, pipeLayout, ir.StageCompute, desc.Compute.EntryPoint, desc.Compute.Constants, false, nil)
 	if err != nil {
 		return nil, err
 	}
