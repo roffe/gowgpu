@@ -440,7 +440,7 @@ func ValidateRenderPipelineDescriptor(desc *hal.RenderPipelineDescriptor, limits
 
 	// RP3-RP6: Fragment stage validation (if present).
 	if desc.Fragment != nil {
-		if err := validateFragmentStage(desc.Fragment, label, limits); err != nil {
+		if err := validateFragmentStage(desc.Fragment, desc.DepthStencil != nil, label, limits); err != nil {
 			return err
 		}
 	}
@@ -643,7 +643,8 @@ func validateVertexBuffers(buffers []gputypes.VertexBufferLayout, label string, 
 }
 
 // validateFragmentStage checks RP3-RP6 fragment stage constraints.
-func validateFragmentStage(frag *hal.FragmentState, label string, limits gputypes.Limits) error {
+// depthStencil says whether the pipeline has a depth/stencil state.
+func validateFragmentStage(frag *hal.FragmentState, depthStencil bool, label string, limits gputypes.Limits) error {
 	// RP3: Fragment module must not be nil.
 	if frag.Module == nil {
 		return &CreateRenderPipelineError{
@@ -658,8 +659,11 @@ func validateFragmentStage(frag *hal.FragmentState, label string, limits gputype
 			Label: label,
 		}
 	}
-	// RP5: Must have at least 1 target.
-	if len(frag.Targets) == 0 {
+	// RP5: A fragment stage draws into a color target or depth/stencil, a
+	// depth-only pipeline into the latter (frag_depth, discard).
+	// Reference: wgpu-core device/resource.rs create_render_pipeline
+	// (NoTargetSpecified)
+	if !depthStencil && len(frag.Targets) == 0 {
 		return &CreateRenderPipelineError{
 			Kind:  CreateRenderPipelineErrorNoFragmentTargets,
 			Label: label,

@@ -539,7 +539,8 @@ const (
 	CreateRenderPipelineErrorMissingFragmentModule
 	// CreateRenderPipelineErrorMissingFragmentEntryPoint indicates the fragment entry point was empty.
 	CreateRenderPipelineErrorMissingFragmentEntryPoint
-	// CreateRenderPipelineErrorNoFragmentTargets indicates the fragment stage had no color targets.
+	// CreateRenderPipelineErrorNoFragmentTargets indicates the fragment stage had no color targets
+	// and the pipeline no depth/stencil state.
 	CreateRenderPipelineErrorNoFragmentTargets
 	// CreateRenderPipelineErrorTooManyColorTargets indicates too many color targets.
 	CreateRenderPipelineErrorTooManyColorTargets
@@ -654,7 +655,7 @@ func (e *CreateRenderPipelineError) Error() string {
 	case CreateRenderPipelineErrorMissingFragmentEntryPoint:
 		return fmt.Sprintf("render pipeline %q: fragment entry point must not be empty", label)
 	case CreateRenderPipelineErrorNoFragmentTargets:
-		return fmt.Sprintf("render pipeline %q: fragment stage must have at least one color target", label)
+		return fmt.Sprintf("render pipeline %q: fragment stage must have at least one color target, or the pipeline a depth/stencil state", label)
 	case CreateRenderPipelineErrorTooManyColorTargets:
 		return fmt.Sprintf("render pipeline %q: color target count %d exceeds maximum %d",
 			label, e.TargetCount, e.MaxTargets)
