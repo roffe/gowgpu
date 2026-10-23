@@ -119,12 +119,12 @@ func passOn(t *testing.T, enc *CommandEncoder, desc *RenderPassDescriptor) {
 }
 
 // TestNewDepthTextureIsZeroed: a new depth texture reads 0 at every mip
-// level and layer, which the zeroing clears with a pass each. The textures
-// left behind are cleared to 0.75.
+// level and layer, which the zeroing clears with a pass each, and GL
+// through a framebuffer. The textures left behind are cleared to 0.75.
 func TestNewDepthTextureIsZeroed(t *testing.T) {
 	device, h := newValidatedDevice(t)
-	if h.backend == gputypes.BackendGL {
-		t.Skip("GL doesn't zero depth textures (README known issues)")
+	if h.backend == gputypes.BackendGL && !device.core.DownlevelCapabilitiesRef().Flags.Contains(gputypes.DownlevelFlagsDepthTextureAndBufferCopies) {
+		t.Skip("GL ES reads no depth back")
 	}
 	const side, mips, layers = 64, 3, 2
 	desc := &TextureDescriptor{

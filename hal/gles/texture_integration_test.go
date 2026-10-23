@@ -552,3 +552,188 @@ func TestStencilWriteKeepsDepth(t *testing.T) {
 		}
 	})
 }
+
+// sampleLevel draws mip level mip of tex, a 2D texture, into an RGBA8 target
+// of its size with a texelFetch per texel and returns the pixels.
+func sampleLevel(t *testing.T, glCtx *gl.Context, tex *Texture, mip uint32) []byte {
+	t.Helper()
+	program := glCtx.CreateProgram()
+	defer glCtx.DeleteProgram(program)
+	for stage, source := range map[uint32]string{
+		gl.VERTEX_SHADER: "#version 330 core\nvoid main() {\n" +
+			"gl_Position = vec4(float((gl_VertexID & 1) * 4 - 1), float((gl_VertexID >> 1) * 4 - 1), 0.0, 1.0);\n}\n",
+		gl.FRAGMENT_SHADER: "#version 330 core\nuniform sampler2D tex;\nuniform int lod;\nout vec4 color;\n" +
+			"void main() {\ncolor = texelFetch(tex, ivec2(gl_FragCoord.xy), lod);\n}\n",
+	} {
+		shader, err := compileGLSL(glCtx, stage, "test", source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		glCtx.AttachShader(program, shader)
+		defer glCtx.DeleteShader(shader)
+	}
+	glCtx.LinkProgram(program)
+	vao := glCtx.GenVertexArrays(1)
+	defer glCtx.DeleteVertexArrays(vao)
+	width, height := tex.mipSize(mip)
+	target := glCtx.GenTextures(1)
+	defer glCtx.DeleteTextures(target)
+	glCtx.BindTexture(gl.TEXTURE_2D, target)
+	glCtx.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, int32(width), int32(height), 0, gl.RGBA, gl.UNSIGNED_BYTE, 0)
+	pixels := make([]byte, width*height*4)
+	withFramebuffer(glCtx, gl.FRAMEBUFFER, func() {
+		glCtx.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, target, 0)
+		glCtx.Viewport(0, 0, int32(width), int32(height))
+		glCtx.Disable(gl.SCISSOR_TEST)
+		glCtx.BindVertexArray(vao)
+		glCtx.UseProgram(program)
+		glCtx.ActiveTexture(gl.TEXTURE0)
+		glCtx.BindTexture(gl.TEXTURE_2D, tex.id)
+		glCtx.BindSampler(0, 0)
+		glCtx.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST_MIPMAP_NEAREST)
+		glCtx.Uniform1i(glCtx.GetUniformLocation(program, "tex"), 0)
+		glCtx.Uniform1i(glCtx.GetUniformLocation(program, "lod"), int32(mip))
+		glCtx.DrawArrays(gl.TRIANGLES, 0, 3)
+		glCtx.ReadPixels(0, 0, int32(width), int32(height), gl.RGBA, gl.UNSIGNED_BYTE, unsafe.Pointer(&pixels[0]))
+	})
+	glCtx.BindTexture(gl.TEXTURE_2D, 0)
+	glCtx.BindVertexArray(0)
+	glCtx.UseProgram(0)
+	return pixels
+}
+
+// zero sets every texel of a texture the queue doesn't zero to zero,
+// whatever its memory held: each texture here is filled with something
+// else first, through a framebuffer or an upload, then zeroed again.
+func TestTextureZero(t *testing.T) {
+	ctx := newTestAdapterContext(t)
+	t.Cleanup(ctx.Destroy)
+	dev := openTestDevice(t, ctx)
+	create := func(desc *hal.TextureDescriptor) *Texture {
+		t.Helper()
+		desc.Dimension, desc.SampleCount = gputypes.TextureDimension2D, max(desc.SampleCount, 1)
+		tex, err := dev.CreateTexture(desc)
+		if err != nil {
+			t.Fatalf("CreateTexture(%s): %v", desc.Format, err)
+		}
+		t.Cleanup(func() { dev.DestroyTexture(tex) })
+		return tex.(*Texture)
+	}
+	zeroAgain := func(tex *Texture) {
+		glCtx := ctx.Lock()
+		defer ctx.Unlock()
+		if tex.target != gl.RENDERBUFFER {
+			glCtx.BindTexture(tex.target, tex.id)
+			defer glCtx.BindTexture(tex.target, 0)
+		}
+		tex.zero(glCtx)
+		if glErr := glCtx.GetError(); glErr != 0 {
+			t.Fatalf("GL error %#x zeroing %s", glErr, tex.format)
+		}
+	}
+
+	t.Run("depth", func(t *testing.T) {
+		tex := create(&hal.TextureDescriptor{
+			Size: hal.Extent3D{Width: 16, Height: 16, DepthOrArrayLayers: 2}, MipLevelCount: 2,
+			Format: gputypes.TextureFormatDepth32Float, Usage: gputypes.TextureUsageRenderAttachment,
+		})
+		glCtx := ctx.Lock()
+		withFramebuffer(glCtx, gl.FRAMEBUFFER, func() {
+			glCtx.DepthMask(true)
+			glCtx.ClearDepth(0.75)
+			for mip := range uint32(2) {
+				for layer := range uint32(2) {
+					attach(glCtx, gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, fbAttachment{tex: tex, mip: mip, layer: layer})
+					glCtx.Clear(gl.DEPTH_BUFFER_BIT)
+				}
+			}
+		})
+		ctx.Unlock()
+		zeroAgain(tex)
+		glCtx = ctx.Lock()
+		defer ctx.Unlock()
+		for mip := range uint32(2) {
+			for layer := range uint32(2) {
+				side := int32(16 >> mip)
+				depth := make([]float32, side*side)
+				withFramebuffer(glCtx, gl.READ_FRAMEBUFFER, func() {
+					attach(glCtx, gl.READ_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, fbAttachment{tex: tex, mip: mip, layer: layer})
+					glCtx.ReadPixels(0, 0, side, side, gl.DEPTH_COMPONENT, gl.FLOAT, unsafe.Pointer(&depth[0]))
+				})
+				for i, d := range depth {
+					if d != 0 {
+						t.Fatalf("mip %d layer %d: depth %d is %v, want 0", mip, layer, i, d)
+					}
+				}
+			}
+		}
+	})
+
+	t.Run("multisampled", func(t *testing.T) {
+		tex := create(&hal.TextureDescriptor{
+			Size: hal.Extent3D{Width: 16, Height: 16, DepthOrArrayLayers: 1}, MipLevelCount: 1, SampleCount: 4,
+			Format: gputypes.TextureFormatRGBA8Uint, Usage: gputypes.TextureUsageRenderAttachment,
+		})
+		resolved := create(&hal.TextureDescriptor{
+			Size: hal.Extent3D{Width: 16, Height: 16, DepthOrArrayLayers: 1}, MipLevelCount: 1,
+			Format: gputypes.TextureFormatRGBA8Uint, Usage: gputypes.TextureUsageRenderAttachment,
+		})
+		glCtx := ctx.Lock()
+		withFramebuffer(glCtx, gl.FRAMEBUFFER, func() {
+			attach(glCtx, gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, fbAttachment{tex: tex})
+			ab := [4]uint32{0xab, 0xab, 0xab, 0xab}
+			glCtx.ClearBufferuiv(gl.COLOR, 0, &ab)
+		})
+		ctx.Unlock()
+		zeroAgain(tex)
+		glCtx = ctx.Lock()
+		defer ctx.Unlock()
+		pixels := make([]byte, 16*16*4)
+		withFramebuffer(glCtx, gl.READ_FRAMEBUFFER, func() {
+			attach(glCtx, gl.READ_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, fbAttachment{tex: tex})
+			withFramebuffer(glCtx, gl.DRAW_FRAMEBUFFER, func() {
+				attach(glCtx, gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, fbAttachment{tex: resolved})
+				glCtx.BlitFramebuffer(0, 0, 16, 16, 0, 0, 16, 16, gl.COLOR_BUFFER_BIT, gl.NEAREST)
+			})
+			attach(glCtx, gl.READ_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, fbAttachment{tex: resolved})
+			glCtx.ReadPixels(0, 0, 16, 16, gl.RGBA_INTEGER, gl.UNSIGNED_BYTE, unsafe.Pointer(&pixels[0]))
+		})
+		if !bytes.Equal(pixels, make([]byte, len(pixels))) {
+			t.Errorf("resolved pixels % x..., want zeros", pixels[:8])
+		}
+	})
+
+	t.Run("BC1", func(t *testing.T) {
+		glCtx := ctx.Lock()
+		s3tc := queryAdapterCapabilities(glCtx).Extensions["GL_EXT_texture_compression_s3tc"]
+		ctx.Unlock()
+		if !s3tc || !dev.formats.texStorage {
+			t.Skip("no S3TC textures")
+		}
+		const side, mips = 64, 7
+		tex := create(&hal.TextureDescriptor{
+			Size: hal.Extent3D{Width: side, Height: side, DepthOrArrayLayers: 1}, MipLevelCount: mips,
+			Format: gputypes.TextureFormatBC1RGBAUnorm, Usage: gputypes.TextureUsageTextureBinding | gputypes.TextureUsageCopyDst,
+		})
+		q := &Queue{ctx: ctx}
+		for mip := range uint32(5) {
+			w := uint32(side) >> mip
+			blocks := bytes.Repeat([]byte{0xab}, int(w/4*8*(w/4)))
+			if err := q.WriteTexture(&hal.ImageCopyTexture{Texture: tex, MipLevel: mip}, blocks,
+				&hal.ImageDataLayout{BytesPerRow: w / 4 * 8}, &hal.Extent3D{Width: w, Height: w, DepthOrArrayLayers: 1}); err != nil {
+				t.Fatalf("WriteTexture: %v", err)
+			}
+		}
+		zeroAgain(tex)
+		glCtx = ctx.Lock()
+		defer ctx.Unlock()
+		for mip := range uint32(mips) {
+			pixels := sampleLevel(t, glCtx, tex, mip)
+			for i := 0; i < len(pixels); i += 4 {
+				if string(pixels[i:i+4]) != "\x00\x00\x00\xff" {
+					t.Fatalf("mip %d texel %d samples % x, want opaque black", mip, i/4, pixels[i:i+4])
+				}
+			}
+		}
+	})
+}

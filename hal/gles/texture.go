@@ -174,16 +174,7 @@ func createTexture(glCtx *gl.Context, formats formatCaps, maxMSAA int32, desc *T
 		glCtx.TexParameteri(target, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
 	}
 
-	glCtx.BindTexture(target, 0)
-
-	hal.Logger().Debug("gles: texture created",
-		"label", desc.Label,
-		"format", desc.Format,
-		"width", desc.Size.Width,
-		"height", desc.Size.Height,
-	)
-
-	return &Texture{
+	t := &Texture{
 		id:          id,
 		target:      target,
 		format:      desc.Format,
@@ -194,7 +185,98 @@ func createTexture(glCtx *gl.Context, formats formatCaps, maxMSAA int32, desc *T
 		sampleCount: sampleCount,
 		glCtx:       glCtx,
 		maxLevel:    int32(desc.MipLevelCount) - 1,
-	}, nil
+	}
+	t.zero(glCtx)
+	glCtx.BindTexture(target, 0)
+
+	hal.Logger().Debug("gles: texture created",
+		"label", desc.Label,
+		"format", desc.Format,
+		"width", desc.Size.Width,
+		"height", desc.Size.Height,
+	)
+	return t, nil
+}
+
+// zero sets every texel of t, a new texture bound to its target, to zero
+// when it is one the queue's zeroing leaves to the GL backend: a depth,
+// stencil or multisampled texture is cleared through a framebuffer, as
+// the other backends clear them with a render pass, and a compressed one
+// filled with blocks of zeros. GL hands out a texture with whatever its
+// memory held.
+func (t *Texture) zero(ctx *gl.Context) {
+	switch {
+	case t.glf.compressed():
+		t.zeroBlocks(ctx)
+	case t.format.IsDepthStencil() || t.sampleCount > 1:
+		t.clearZero(ctx)
+	}
+}
+
+// clearZero clears every mip level and layer of t to zero through a
+// framebuffer: color 0, depth 0, stencil 0.
+func (t *Texture) clearZero(ctx *gl.Context) {
+	point := attachmentPoint(t.format, 0)
+	withFramebuffer(ctx, gl.DRAW_FRAMEBUFFER, func() {
+		clearColor := ClearColorBufferCommand{}
+		var mask uint32
+		if t.format.IsDepthStencil() {
+			ctx.DrawBuffers(noDrawBuffers)
+			ctx.Disable(gl.SCISSOR_TEST)
+			if t.format.HasDepth() {
+				ctx.DepthMask(true)
+				ctx.ClearDepth(0)
+				mask |= gl.DEPTH_BUFFER_BIT
+			}
+			if t.format.HasStencil() {
+				ctx.StencilMaskSeparate(gl.FRONT_AND_BACK, 0xFF)
+				ctx.ClearStencil(0)
+				mask |= gl.STENCIL_BUFFER_BIT
+			}
+		} else {
+			clearColor.integer, clearColor.signed = t.glf.integer()
+		}
+		for mip := range t.mipLevels {
+			for layer := range t.mipLayers(mip) {
+				attach(ctx, gl.DRAW_FRAMEBUFFER, point, fbAttachment{tex: t, mip: mip, layer: layer})
+				if mask != 0 {
+					ctx.Clear(mask)
+				} else {
+					clearColor.Execute(ctx)
+				}
+			}
+		}
+	})
+}
+
+// zeroBlocks fills every mip level and layer of t, a compressed texture
+// bound to its target, with blocks of zeros, some rows of blocks at a time.
+func (t *Texture) zeroBlocks(ctx *gl.Context) {
+	zeros := glZeros[:]
+	for mip := range t.mipLevels {
+		width, height := t.mipSize(mip)
+		blockRows, rowBytes := compressedRows(t.format, width, height)
+		if int(rowBytes) > len(zeros) {
+			zeros = make([]byte, rowBytes)
+		}
+		_, bh := t.format.BlockDimensions()
+		band := uint32(len(zeros)) / rowBytes // rows of blocks an upload takes
+		for layer := range t.mipLayers(mip) {
+			for row := uint32(0); row < blockRows; row += band {
+				at := hal.ImageCopyTexture{MipLevel: mip, Origin: hal.Origin3D{Y: row * bh, Z: layer}}
+				_ = writeBlocks(ctx, t, &at, zeros, hal.ImageDataLayout{}, width, min(band*bh, height-row*bh), 1)
+			}
+		}
+	}
+}
+
+// mipLayers is how many layers, cube faces or 3D slices mip level mip of t
+// has.
+func (t *Texture) mipLayers(mip uint32) uint32 {
+	if t.dimension == gputypes.TextureDimension3D {
+		return max(1, t.size.DepthOrArrayLayers>>mip)
+	}
+	return t.layers()
 }
 
 // createRenderbuffer makes a multisampled texture that is only rendered to
@@ -210,7 +292,7 @@ func createRenderbuffer(glCtx *gl.Context, glf glFormat, samples uint32, desc *T
 		return nil, fmt.Errorf("gles: RenderbufferStorageMultisample failed: GL error 0x%x (format=0x%x, samples=%d, %dx%d)",
 			glErr, glf.internal, samples, desc.Size.Width, desc.Size.Height)
 	}
-	return &Texture{
+	t := &Texture{
 		id:          id,
 		target:      gl.RENDERBUFFER,
 		format:      desc.Format,
@@ -220,7 +302,9 @@ func createRenderbuffer(glCtx *gl.Context, glf glFormat, samples uint32, desc *T
 		mipLevels:   1,
 		sampleCount: samples,
 		glCtx:       glCtx,
-	}, nil
+	}
+	t.zero(glCtx)
+	return t, nil
 }
 
 // writeTexture uploads data into tex at dst: the layers or slices from
