@@ -11,9 +11,9 @@ import (
 	"strings"
 	"testing"
 
-	naga "github.com/gogpu/naga"
-	"github.com/gogpu/naga/ir"
 	"github.com/roffe/gowgpu/gputypes"
+	naga "github.com/roffe/naga"
+	"github.com/roffe/naga/ir"
 )
 
 // expectEntries fails the test when got are not the layout entries want.

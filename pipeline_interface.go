@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/gogpu/naga/ir"
 	"github.com/roffe/gowgpu/gputypes"
+	"github.com/roffe/naga/ir"
 )
 
 // A pipeline's shaders have to fit its layout, its vertex buffers and its

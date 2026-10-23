@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/gogpu/naga/ir"
 	"github.com/roffe/gowgpu/gputypes"
+	"github.com/roffe/naga/ir"
 )
 
 // A pipeline created without a Layout gets WebGPU's default pipeline layout:

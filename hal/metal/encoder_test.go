@@ -12,9 +12,9 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/gogpu/naga/ir"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/naga/ir"
 )
 
 func TestCommandEncoderRecordingErrorKeepsFirstFailure(t *testing.T) {

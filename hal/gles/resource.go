@@ -14,10 +14,10 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/gogpu/naga/glsl"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/gles/gl"
+	"github.com/roffe/naga/glsl"
 )
 
 // Surface and SurfaceTexture are defined in platform-specific files (resource_windows.go, resource_linux.go)

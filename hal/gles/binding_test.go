@@ -8,9 +8,9 @@ package gles
 import (
 	"testing"
 
-	"github.com/gogpu/naga/glsl"
-	"github.com/gogpu/naga/ir"
 	"github.com/roffe/gowgpu/gputypes"
+	"github.com/roffe/naga/glsl"
+	"github.com/roffe/naga/ir"
 )
 
 // =============================================================================

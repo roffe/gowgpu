@@ -8,8 +8,8 @@ package metal
 import (
 	"testing"
 
-	"github.com/gogpu/naga/ir"
 	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/naga/ir"
 )
 
 // TestMetalComputePipelineCreation tests MTLComputePipelineState creation.

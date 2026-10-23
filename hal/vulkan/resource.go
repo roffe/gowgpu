@@ -8,10 +8,10 @@ package vulkan
 import (
 	"slices"
 
-	"github.com/gogpu/naga/ir"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal/vulkan/memory"
 	"github.com/roffe/gowgpu/hal/vulkan/vk"
+	"github.com/roffe/naga/ir"
 )
 
 // Buffer implements hal.Buffer for Vulkan.

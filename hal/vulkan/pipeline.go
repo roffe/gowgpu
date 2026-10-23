@@ -10,10 +10,10 @@ import (
 	"runtime"
 	"unsafe"
 
-	"github.com/gogpu/naga/ir"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/vulkan/vk"
+	"github.com/roffe/naga/ir"
 )
 
 const defaultEntryPoint = "main"

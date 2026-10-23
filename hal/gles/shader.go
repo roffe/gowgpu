@@ -10,11 +10,11 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/gogpu/naga"
-	"github.com/gogpu/naga/glsl"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/gles/gl"
+	"github.com/roffe/naga"
+	"github.com/roffe/naga/glsl"
 )
 
 // boundsChecks has image loads read zero out of bounds, where texelFetch is

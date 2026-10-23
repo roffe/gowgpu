@@ -25,9 +25,9 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/gogpu/naga/ir"
-	"github.com/gogpu/naga/msl"
 	"github.com/roffe/gowgpu/gputypes"
+	"github.com/roffe/naga/ir"
+	"github.com/roffe/naga/msl"
 )
 
 // maxBufferSlot is the largest buffer slot naga can encode, because

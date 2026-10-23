@@ -15,12 +15,12 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/gogpu/naga"
-	"github.com/gogpu/naga/ir"
-	"github.com/gogpu/naga/msl"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/metal/mslmap"
+	"github.com/roffe/naga"
+	"github.com/roffe/naga/ir"
+	"github.com/roffe/naga/msl"
 )
 
 // maxVertexBuffers is how many buffer slots a Metal function has. Vertex buffer

@@ -17,10 +17,10 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/gogpu/naga/glsl"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/gles/gl"
+	"github.com/roffe/naga/glsl"
 )
 
 // AdapterCapabilities holds parsed adapter information queried from GL at

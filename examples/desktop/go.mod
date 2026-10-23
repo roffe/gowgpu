@@ -8,7 +8,7 @@ require (
 )
 
 require (
-	github.com/gogpu/naga v0.20.3 // indirect
+	github.com/roffe/naga v0.0.0-20261023154236-1c7aa3a6b264 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 )
 

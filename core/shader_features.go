@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gogpu/naga"
-	nagair "github.com/gogpu/naga/ir"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/naga"
+	nagair "github.com/roffe/naga/ir"
 )
 
 func validateShaderModuleFeatures(desc *hal.ShaderModuleDescriptor, features gputypes.Features) error {
