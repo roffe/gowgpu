@@ -155,47 +155,6 @@ func TestNeedsExplicitBarrier(t *testing.T) {
 	}
 }
 
-// TestComputeDispatchUpdatesBufferState verifies that Dispatch() marks bound
-// storage buffers as UNORDERED_ACCESS.
-func TestComputeDispatchUpdatesBufferState(t *testing.T) {
-	buf1 := &Buffer{
-		usage:        gputypes.BufferUsageStorage,
-		currentState: d3d12.D3D12_RESOURCE_STATE_COMMON,
-	}
-	buf2 := &Buffer{
-		usage:        gputypes.BufferUsageStorage,
-		currentState: d3d12.D3D12_RESOURCE_STATE_COPY_DEST,
-	}
-
-	// Simulate ComputePassEncoder with bound storage buffers.
-	// We can't call Dispatch() directly (needs recording cmdList), but we
-	// can test the state update logic that Dispatch() performs.
-	encoder := &ComputePassEncoder{
-		encoder:             &CommandEncoder{isRecording: false}, // prevent actual D3D12 call
-		boundStorageBuffers: []*Buffer{buf1, buf2},
-	}
-
-	// Simulate what Dispatch does after the D3D12 dispatch call:
-	// mark all bound storage buffers as UNORDERED_ACCESS and clear the slice.
-	for _, buf := range encoder.boundStorageBuffers {
-		buf.currentState = d3d12.D3D12_RESOURCE_STATE_UNORDERED_ACCESS
-	}
-	encoder.boundStorageBuffers = encoder.boundStorageBuffers[:0]
-
-	if buf1.currentState != d3d12.D3D12_RESOURCE_STATE_UNORDERED_ACCESS {
-		t.Errorf("buf1.currentState = %d, want UNORDERED_ACCESS (%d)",
-			buf1.currentState, d3d12.D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
-	}
-	if buf2.currentState != d3d12.D3D12_RESOURCE_STATE_UNORDERED_ACCESS {
-		t.Errorf("buf2.currentState = %d, want UNORDERED_ACCESS (%d)",
-			buf2.currentState, d3d12.D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
-	}
-	if len(encoder.boundStorageBuffers) != 0 {
-		t.Errorf("boundStorageBuffers should be empty after dispatch, got %d",
-			len(encoder.boundStorageBuffers))
-	}
-}
-
 // TestBindGroupStorageBufferCollection verifies that CreateBindGroup
 // correctly collects storage buffer references.
 func TestBindGroupStorageBufferCollection(t *testing.T) {
@@ -324,70 +283,6 @@ func TestImplicitPromotionNoBarrier(t *testing.T) {
 	needs := needsExplicitBarrier(buf.currentState, d3d12.D3D12_RESOURCE_STATE_COPY_DEST)
 	if needs {
 		t.Error("COMMON -> COPY_DEST should be implicit promotion (no barrier)")
-	}
-}
-
-// TestComputePassSetBindGroupTracksBuffers verifies that SetBindGroup
-// accumulates storage buffers from bind groups.
-func TestComputePassSetBindGroupTracksBuffers(t *testing.T) {
-	buf1 := &Buffer{usage: gputypes.BufferUsageStorage, currentState: d3d12.D3D12_RESOURCE_STATE_COMMON}
-	buf2 := &Buffer{usage: gputypes.BufferUsageStorage, currentState: d3d12.D3D12_RESOURCE_STATE_COMMON}
-
-	bg1 := &BindGroup{
-		layout:         &BindGroupLayout{entries: []BindGroupLayoutEntry{{Binding: 0, Type: BindingTypeStorageBuffer}}},
-		storageBuffers: []*Buffer{buf1},
-	}
-	bg2 := &BindGroup{
-		layout:         &BindGroupLayout{entries: []BindGroupLayoutEntry{{Binding: 0, Type: BindingTypeStorageBuffer}}},
-		storageBuffers: []*Buffer{buf2},
-	}
-
-	encoder := &ComputePassEncoder{
-		encoder: &CommandEncoder{isRecording: false}, // prevent actual D3D12 call
-	}
-
-	// Manually simulate what SetBindGroup does (can't call it directly without
-	// recording command list).
-	encoder.boundStorageBuffers = append(encoder.boundStorageBuffers, bg1.storageBuffers...)
-	encoder.boundStorageBuffers = append(encoder.boundStorageBuffers, bg2.storageBuffers...)
-
-	if len(encoder.boundStorageBuffers) != 2 {
-		t.Fatalf("boundStorageBuffers = %d, want 2", len(encoder.boundStorageBuffers))
-	}
-	if encoder.boundStorageBuffers[0] != buf1 {
-		t.Error("first buffer should be buf1")
-	}
-	if encoder.boundStorageBuffers[1] != buf2 {
-		t.Error("second buffer should be buf2")
-	}
-}
-
-// TestDispatchClearsBoundBuffers verifies that after dispatch, the bound storage
-// buffers slice is cleared for the next dispatch (per-dispatch usage scope).
-func TestDispatchClearsBoundBuffers(t *testing.T) {
-	buf := &Buffer{
-		usage:        gputypes.BufferUsageStorage,
-		currentState: d3d12.D3D12_RESOURCE_STATE_COMMON,
-	}
-
-	encoder := &ComputePassEncoder{
-		encoder:             &CommandEncoder{isRecording: false},
-		boundStorageBuffers: []*Buffer{buf},
-	}
-
-	// Simulate dispatch state update.
-	for _, b := range encoder.boundStorageBuffers {
-		b.currentState = d3d12.D3D12_RESOURCE_STATE_UNORDERED_ACCESS
-	}
-	encoder.boundStorageBuffers = encoder.boundStorageBuffers[:0]
-
-	if len(encoder.boundStorageBuffers) != 0 {
-		t.Errorf("boundStorageBuffers should be empty after dispatch, got %d",
-			len(encoder.boundStorageBuffers))
-	}
-	// Capacity should be preserved for reuse (no allocation on next SetBindGroup).
-	if cap(encoder.boundStorageBuffers) == 0 {
-		t.Error("capacity should be preserved after clear")
 	}
 }
 

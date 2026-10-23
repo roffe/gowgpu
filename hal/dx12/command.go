@@ -1077,15 +1077,6 @@ type ComputePassEncoder struct {
 	descriptorHeapsSet bool // Tracks whether descriptor heaps have been bound
 	groups             boundGroups
 
-	// boundStorageBuffers tracks storage buffers from SetBindGroup calls.
-	// Dispatch records them as UNORDERED_ACCESS in the command-local tracker so
-	// a later copy in the same command list can transition from the UAV state.
-	//
-	// Matches Rust wgpu-core pattern: compute pass tracks buffer usage per
-	// dispatch via BufferUsageScope, then drains barriers on state transitions
-	// (wgpu-core/src/command/compute.rs:326-377).
-	boundStorageBuffers []*Buffer
-
 	// endOfPassTimerQuery stores the query heap and index for the end-of-pass
 	// timestamp write. Set during BeginComputePass, consumed in End().
 	endOfPassTimerHeap  *d3d12.ID3D12QueryHeap
@@ -1160,13 +1151,22 @@ func (e *ComputePassEncoder) SetBindGroup(index uint32, group hal.BindGroup, off
 		e.encoder.bindGroupToRoot(index, bg, offsets, true, e.pipeline.groupMappings)
 	}
 	e.encoder.trackBindGroupState(bg)
+}
 
-	// Track storage buffers from this bind group for state tracking.
-	// After Dispatch(), these buffers will be marked as UNORDERED_ACCESS
-	// so that subsequent copy commands can insert correct transition barriers.
-	// storageBuffers is populated at CreateBindGroup time by matching layout
-	// entry types (BindingTypeStorageBuffer) with buffer binding handles.
-	e.boundStorageBuffers = append(e.boundStorageBuffers, bg.storageBuffers...)
+// dispatchStatePlans appends to plans the barriers that put the resources
+// of the bind groups the pipeline uses in their states for a dispatch: the
+// groups set last, as Rust's wgpu-core takes the active ones, not groups a
+// later SetBindGroup replaced.
+func (e *ComputePassEncoder) dispatchStatePlans(plans []stateBarrierPlan) []stateBarrierPlan {
+	if e.pipeline == nil {
+		return plans
+	}
+	for i := 0; i < len(e.pipeline.groupMappings) && i < len(e.groups); i++ {
+		if g := e.groups[i].group; g != nil {
+			plans = e.encoder.bindGroupStatePlans(g, plans)
+		}
+	}
+	return plans
 }
 
 // Dispatch dispatches compute work.
@@ -1175,13 +1175,7 @@ func (e *ComputePassEncoder) Dispatch(x, y, z uint32) {
 		return
 	}
 
-	plans := make([]stateBarrierPlan, 0, len(e.boundStorageBuffers))
-	for _, buf := range e.boundStorageBuffers {
-		if before, needsBarrier := e.encoder.stateTracker.transitionBuffer(buf, d3d12.D3D12_RESOURCE_STATE_UNORDERED_ACCESS); needsBarrier {
-			plans = append(plans, stateBarrierPlan{resource: buf, subresource: d3d12.D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, before: before, after: d3d12.D3D12_RESOURCE_STATE_UNORDERED_ACCESS})
-		}
-	}
-	e.encoder.emitStateBarrierPlans(plans)
+	e.encoder.emitStateBarrierPlans(e.dispatchStatePlans(nil))
 	if p := e.pipeline; p != nil && p.specialConstants != nil && (!e.specialSet || e.special != [3]uint32{x, y, z}) {
 		for i, value := range [3]uint32{x, y, z} {
 			e.encoder.cmdList.SetComputeRoot32BitConstant(uint32(p.specialConstants.specialConstantsIndex), value, uint32(i))
@@ -1190,15 +1184,6 @@ func (e *ComputePassEncoder) Dispatch(x, y, z uint32) {
 	}
 	e.encoder.cmdList.Dispatch(x, y, z)
 	e.insertUAVBarrier()
-
-	// Mark all bound storage buffers as UNORDERED_ACCESS. After a compute
-	// dispatch, storage buffers are left in UAV state. This enables correct
-	// transition barriers when subsequent commands (e.g., CopyBufferToBuffer)
-	// need these buffers in a different state (e.g., COPY_SOURCE).
-	// Matches Rust wgpu-core pattern: flush_bindings sets BufferUses::STORAGE_READ_WRITE
-	// on bound storage buffers, then drain_barriers emits transitions.
-	// Clear for next dispatch (same pattern as Rust per-dispatch usage scope).
-	e.boundStorageBuffers = e.boundStorageBuffers[:0]
 }
 
 // DispatchIndirect dispatches compute work with GPU-generated parameters.
@@ -1209,7 +1194,7 @@ func (e *ComputePassEncoder) DispatchIndirect(buffer hal.Buffer, offset uint64) 
 	if !ok || !e.encoder.isRecording {
 		return
 	}
-	plans := make([]stateBarrierPlan, 0, 1+len(e.boundStorageBuffers))
+	plans := make([]stateBarrierPlan, 0, 1)
 	signature, args, argsOffset := e.encoder.device.cmdSignatures.dispatch, buf, offset
 	if p := e.pipeline; p != nil && p.specialConstants != nil {
 		signatures, err := p.specialConstants.indirectSignatures()
@@ -1225,20 +1210,10 @@ func (e *ComputePassEncoder) DispatchIndirect(buffer hal.Buffer, offset uint64) 
 	} else if before, target, needsBarrier := e.encoder.stateTracker.transitionBufferRead(buf, d3d12.D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT); needsBarrier {
 		plans = append(plans, stateBarrierPlan{resource: buf, subresource: d3d12.D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, before: before, after: target})
 	}
-	for _, storage := range e.boundStorageBuffers {
-		if before, needsBarrier := e.encoder.stateTracker.transitionBuffer(storage, d3d12.D3D12_RESOURCE_STATE_UNORDERED_ACCESS); needsBarrier {
-			plans = append(plans, stateBarrierPlan{resource: storage, subresource: d3d12.D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, before: before, after: d3d12.D3D12_RESOURCE_STATE_UNORDERED_ACCESS})
-		}
-	}
-	e.encoder.emitStateBarrierPlans(plans)
+	e.encoder.emitStateBarrierPlans(e.dispatchStatePlans(plans))
 
 	e.encoder.cmdList.ExecuteIndirect(signature, 1, args.raw, argsOffset, nil, 0)
 	e.insertUAVBarrier()
-
-	// Mark bound storage buffers as UNORDERED_ACCESS, matching Dispatch() pattern.
-	// After an indirect dispatch, storage buffers are left in UAV state for correct
-	// transition barriers on subsequent commands.
-	e.boundStorageBuffers = e.boundStorageBuffers[:0]
 }
 
 // insertUAVBarrier inserts a global UAV barrier after a dispatch.
@@ -1400,7 +1375,12 @@ func (e *CommandEncoder) trackBindGroupState(bg *BindGroup) {
 	if bg == nil {
 		return
 	}
-	plans := make([]stateBarrierPlan, 0)
+	e.emitStateBarrierPlans(e.bindGroupStatePlans(bg, nil))
+}
+
+// bindGroupStatePlans appends to plans the barriers that put the resources
+// of a bind group in the states its bindings use them in.
+func (e *CommandEncoder) bindGroupStatePlans(bg *BindGroup, plans []stateBarrierPlan) []stateBarrierPlan {
 	for _, buffer := range bg.uniformBuffers {
 		if before, target, needsBarrier := e.stateTracker.transitionBufferRead(buffer, d3d12.D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER); needsBarrier {
 			plans = append(plans, stateBarrierPlan{resource: buffer, subresource: d3d12.D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, before: before, after: target})
@@ -1430,7 +1410,7 @@ func (e *CommandEncoder) trackBindGroupState(bg *BindGroup) {
 			}
 		}
 	}
-	e.emitStateBarrierPlans(plans)
+	return plans
 }
 
 // mipExtent is the size of the view's first mip level, at least one texel
