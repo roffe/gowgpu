@@ -167,10 +167,14 @@ type TextureView struct {
 	released     bool
 	surface      *core.Surface
 	surfaceLease uint64
-	destroy      viewDestroy // filled by Release
-	// shared is set on a view of the texture's default HAL view, which the
-	// texture owns: Release leaves it alone.
-	shared bool
+	destroy      viewDestroy // filled when the last reference is dropped
+	// ref counts the application's reference and those of the bind groups
+	// and command buffers that use the view; the HAL view is destroyed once
+	// all are dropped. nil on a view of the texture's default HAL view,
+	// which the texture owns.
+	ref *core.ResourceRef
+	// mark is the last command encoder that took a reference.
+	mark encoderMark
 }
 
 // resolveHAL is the single boundary from a public texture-view wrapper to HAL.
@@ -198,32 +202,42 @@ func (v *TextureView) Texture() *Texture {
 	return v.texture
 }
 
-// Release marks the texture view for destruction. The underlying HAL TextureView
-// (and its descriptor heap slots) is not freed immediately — it is deferred via
-// DestroyQueue until the GPU completes any submission that may reference it.
-// This prevents descriptor use-after-free on DX12 with maxFramesInFlight=2
-// (BUG-DX12-007).
+// Release drops the application's reference to the texture view. The HAL
+// view stays while a bind group or an unsubmitted command buffer uses it, and
+// after the last of them it is destroyed once the GPU completes the
+// submissions that may reference it.
 func (v *TextureView) Release() {
 	if v.released {
 		return
 	}
 	v.released = true
+	if v.ref != nil {
+		v.ref.Drop()
+	}
+}
 
-	if v.device == nil || v.shared {
+// withRef gives a view that owns its HAL view the reference count that
+// destroys it.
+func (v *TextureView) withRef(label string) *TextureView {
+	v.ref = core.NewResourceRef("TextureView:"+label, v.destroyHAL)
+	return v
+}
+
+// destroyHAL destroys the HAL view after the GPU completes the last
+// submission.
+func (v *TextureView) destroyHAL() {
+	if v.device == nil {
 		return
 	}
-
 	halDevice := v.device.halDevice()
 	if halDevice == nil {
 		return
 	}
-
 	dq := v.device.destroyQueue()
 	if dq == nil {
 		halDevice.DestroyTextureView(v.hal)
 		return
 	}
-
 	v.destroy = viewDestroy{dev: halDevice, view: v.hal}
 	dq.DeferRelease(v.device.lastSubmissionIndex(), "TextureView", &v.destroy)
 }

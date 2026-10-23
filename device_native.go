@@ -197,7 +197,7 @@ func (d *Device) CreateTextureView(texture *Texture, desc *TextureViewDescriptor
 	// theirs).
 	if desc == nil && texture.surface == nil {
 		if hv := texture.sharedDefaultView(halDevice, halTexture); hv != nil {
-			return &TextureView{hal: hv, device: d, texture: texture, shared: true}, nil
+			return &TextureView{hal: hv, device: d, texture: texture}, nil
 		}
 	}
 
@@ -218,14 +218,15 @@ func (d *Device) CreateTextureView(texture *Texture, desc *TextureViewDescriptor
 		return nil, fmt.Errorf("wgpu: failed to create texture view: %w", err)
 	}
 
-	return &TextureView{
+	view := &TextureView{
 		hal:          halView,
 		device:       d,
 		texture:      texture,
 		baseMipLevel: halDesc.BaseMipLevel,
 		surface:      texture.surface,
 		surfaceLease: texture.surfaceLease,
-	}, nil
+	}
+	return view.withRef(halDesc.Label), nil
 }
 
 // CreateSampler creates a texture sampler.
@@ -263,13 +264,14 @@ func (d *Device) CreateSampler(desc *SamplerDescriptor) (*Sampler, error) {
 		return nil, fmt.Errorf("wgpu: failed to create sampler: %w", err)
 	}
 
-	return &Sampler{
+	sampler := &Sampler{
 		hal:          halSampler,
 		device:       d,
 		magFilter:    halDesc.MagFilter,
 		minFilter:    halDesc.MinFilter,
 		mipmapFilter: halDesc.MipmapFilter,
-	}, nil
+	}
+	return sampler.withRef(halDesc.Label), nil
 }
 
 // CreateShaderModule creates a shader module.
@@ -400,12 +402,14 @@ func (d *Device) CreatePipelineLayout(desc *PipelineLayoutDescriptor) (*Pipeline
 	bgLayouts := make([]*BindGroupLayout, len(desc.BindGroupLayouts))
 	copy(bgLayouts, desc.BindGroupLayouts)
 
-	return &PipelineLayout{
+	layout := &PipelineLayout{
 		hal:              halLayout,
 		device:           d,
 		bindGroupCount:   uint32(len(desc.BindGroupLayouts)), //nolint:gosec // layout count fits uint32
 		bindGroupLayouts: bgLayouts,
-	}, nil
+	}
+	layout.ref = core.NewResourceRef("PipelineLayout:"+desc.Label, layout.destroyHAL)
+	return layout, nil
 }
 
 // CreateBindGroup creates a bind group.
@@ -432,6 +436,9 @@ func (d *Device) CreateBindGroup(desc *BindGroupDescriptor) (*BindGroup, error) 
 	halEntries := make([]gputypes.BindGroupEntry, len(desc.Entries))
 	for i, entry := range desc.Entries {
 		if entry.TextureView != nil && entry.TextureView.resolveHAL() == nil {
+			return nil, ErrReleased
+		}
+		if entry.Sampler != nil && entry.Sampler.released {
 			return nil, ErrReleased
 		}
 		halEntries[i] = entry.toHAL()
@@ -463,6 +470,7 @@ func (d *Device) CreateBindGroup(desc *BindGroupDescriptor) (*BindGroup, error) 
 
 	// Collect buffer and texture references for submit-time validation (VAL-A6).
 	boundBuffers, boundBufferUses, boundTextures, boundTextureUses := collectBindGroupResources(desc.Layout.entries, desc.Entries)
+	viewAndSamplerRefs := cloneViewAndSamplerRefs(desc.Entries)
 
 	// Initialize ResourceRef with onZero callback for refcount-driven destruction.
 	// When the last reference drops (either from explicit Release or Phase 2
@@ -478,6 +486,9 @@ func (d *Device) CreateBindGroup(desc *BindGroupDescriptor) (*BindGroup, error) 
 			})
 		} else {
 			halDevice.DestroyBindGroup(halBG)
+		}
+		for _, ref := range viewAndSamplerRefs {
+			ref.Drop()
 		}
 	}
 
@@ -587,6 +598,27 @@ func collectBindGroupResources(layout []gputypes.BindGroupLayoutEntry, entries [
 	return buffers, bufferUses, textures, uses
 }
 
+// cloneViewAndSamplerRefs takes a reference on every texture view and
+// sampler the entries bind, which the bind group drops when it is destroyed:
+// the HAL group keeps their HAL handles.
+//
+// Reference: wgpu-core binding_model.rs BindGroup.used (Arc<TextureView>,
+// Arc<Sampler>)
+func cloneViewAndSamplerRefs(entries []BindGroupEntry) []*core.ResourceRef {
+	var refs []*core.ResourceRef
+	for i := range entries {
+		if v := entries[i].TextureView; v != nil && v.ref != nil {
+			v.ref.Clone()
+			refs = append(refs, v.ref)
+		}
+		if s := entries[i].Sampler; s != nil && s.ref != nil {
+			s.ref.Clone()
+			refs = append(refs, s.ref)
+		}
+	}
+	return refs
+}
+
 // bindingBufferUse is how the layout entry at binding uses its buffer:
 // uniform, or storage read-only or read-write.
 //
@@ -643,6 +675,10 @@ func (d *Device) CreateRenderPipeline(desc *RenderPipelineDescriptor) (*RenderPi
 
 	halDevice := d.halDevice()
 	if halDevice == nil {
+		return nil, ErrReleased
+	}
+
+	if desc.Layout != nil && desc.Layout.released {
 		return nil, ErrReleased
 	}
 
@@ -706,6 +742,7 @@ func (d *Device) CreateRenderPipeline(desc *RenderPipelineDescriptor) (*RenderPi
 	// Triage after GPU completion), onZero fires and defers HAL destruction via
 	// DestroyQueue. ADR-056: unified resource lifecycle.
 	halRP := halPipeline
+	layout.ref.Clone()
 	rpOnZero := func() {
 		dq := d.destroyQueue()
 		if dq != nil {
@@ -716,6 +753,7 @@ func (d *Device) CreateRenderPipeline(desc *RenderPipelineDescriptor) (*RenderPi
 		} else {
 			halDevice.DestroyRenderPipeline(halRP)
 		}
+		layout.ref.Drop()
 		autoLayout.releaseAuto()
 	}
 
@@ -786,6 +824,10 @@ func (d *Device) CreateComputePipeline(desc *ComputePipelineDescriptor) (*Comput
 		return nil, ErrReleased
 	}
 
+	if desc.Layout != nil && desc.Layout.released {
+		return nil, ErrReleased
+	}
+
 	halDesc := desc.toHAL()
 
 	if err := core.ValidateComputePipelineDescriptor(halDesc); err != nil {
@@ -831,6 +873,7 @@ func (d *Device) CreateComputePipeline(desc *ComputePipelineDescriptor) (*Comput
 	// Initialize ResourceRef with onZero callback for refcount-driven destruction.
 	// ADR-056: unified resource lifecycle.
 	halCP := halPipeline
+	layout.ref.Clone()
 	cpOnZero := func() {
 		dq := d.destroyQueue()
 		if dq != nil {
@@ -841,6 +884,7 @@ func (d *Device) CreateComputePipeline(desc *ComputePipelineDescriptor) (*Comput
 		} else {
 			halDevice.DestroyComputePipeline(halCP)
 		}
+		layout.ref.Drop()
 		autoLayout.releaseAuto()
 	}
 

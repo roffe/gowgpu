@@ -143,30 +143,39 @@ type PipelineLayout struct {
 	// bindGroupLayouts stores the layouts used to create this pipeline layout.
 	// Used by the binder for draw-time compatibility validation.
 	bindGroupLayouts []*BindGroupLayout
+	// ref counts the application's reference and those of the pipelines
+	// made with the layout; the HAL layout is destroyed once all are dropped.
+	ref *core.ResourceRef
 }
 
-// Release destroys the pipeline layout. Destruction is deferred until the
-// GPU completes any submission that may reference this layout.
+// Release drops the application's reference to the pipeline layout. The HAL
+// layout stays while a pipeline made with it exists, and after the last of
+// them it is destroyed once the GPU completes the submissions that may
+// reference it.
 func (l *PipelineLayout) Release() {
 	if l.released {
 		return
 	}
 	l.released = true
+	if l.ref != nil {
+		l.ref.Drop()
+	}
+}
 
+// destroyHAL destroys the HAL layout after the GPU completes the last
+// submission.
+func (l *PipelineLayout) destroyHAL() {
 	halDevice := l.device.halDevice()
 	if halDevice == nil {
 		return
 	}
-
 	dq := l.device.destroyQueue()
 	if dq == nil {
 		halDevice.DestroyPipelineLayout(l.hal)
 		return
 	}
-
-	subIdx := l.device.lastSubmissionIndex()
 	halLayout := l.hal
-	dq.Defer(subIdx, "PipelineLayout", func() {
+	dq.Defer(l.device.lastSubmissionIndex(), "PipelineLayout", func() {
 		halDevice.DestroyPipelineLayout(halLayout)
 	})
 }

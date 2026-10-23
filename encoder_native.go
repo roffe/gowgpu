@@ -80,8 +80,9 @@ type CommandEncoder struct {
 	// (device/queue.rs:1815-1817).
 	usedBindGroups []*BindGroup
 
-	// usedQuerySets tracks the query sets ResolveQuerySet reads for
-	// submit-time validation: a released one fails the submit.
+	// usedQuerySets tracks the query sets ResolveQuerySet reads and render
+	// passes write timestamps into, for submit-time validation: a released
+	// one fails the submit.
 	usedQuerySets []*QuerySet
 }
 
@@ -232,6 +233,18 @@ func (e *CommandEncoder) trackQuerySet(qs *QuerySet) {
 		return
 	}
 	e.usedQuerySets = append(e.usedQuerySets, qs)
+}
+
+// trackView keeps a texture view alive until the GPU is done with this
+// encoder's commands and records its texture for submit-time validation.
+func (e *CommandEncoder) trackView(v *TextureView) {
+	if v == nil {
+		return
+	}
+	if v.ref != nil && v.mark.claim(e.id()) {
+		e.keepAlive(v.ref)
+	}
+	e.trackTexture(v.texture)
 }
 
 // trackTexture records a texture reference for submit-time validation (VAL-A6).
@@ -1000,15 +1013,14 @@ func trackRenderPassTextureViews(e *CommandEncoder, desc *RenderPassDescriptor) 
 		return
 	}
 	for _, attachment := range desc.ColorAttachments {
-		if attachment.View != nil {
-			e.trackTexture(attachment.View.texture)
-		}
-		if attachment.ResolveTarget != nil {
-			e.trackTexture(attachment.ResolveTarget.texture)
-		}
+		e.trackView(attachment.View)
+		e.trackView(attachment.ResolveTarget)
 	}
-	if attachment := desc.DepthStencilAttachment; attachment != nil && attachment.View != nil {
-		e.trackTexture(attachment.View.texture)
+	if attachment := desc.DepthStencilAttachment; attachment != nil {
+		e.trackView(attachment.View)
+	}
+	if writes := desc.TimestampWrites; writes != nil {
+		e.trackQuerySet(writes.QuerySet)
 	}
 }
 
@@ -1357,8 +1369,9 @@ type CommandBuffer struct {
 	// (device/queue.rs:1815-1817).
 	usedBindGroups []*BindGroup
 
-	// usedQuerySets tracks the query sets ResolveQuerySet reads, validated
-	// at Submit time: a released one causes an error.
+	// usedQuerySets tracks the query sets ResolveQuerySet reads and render
+	// passes write timestamps into, validated at Submit time: a released one
+	// causes an error.
 	usedQuerySets []*QuerySet
 
 	// submitted is set to true after this command buffer has been submitted

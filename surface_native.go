@@ -671,7 +671,9 @@ func (st *SurfaceTexture) CreateView(desc *TextureViewDescriptor) (*TextureView,
 	}
 
 	var halDesc *hal.TextureViewDescriptor
+	label := ""
 	if desc != nil {
+		label = desc.Label
 		halDesc = &hal.TextureViewDescriptor{
 			Label:           desc.Label,
 			Format:          desc.Format,
@@ -690,5 +692,6 @@ func (st *SurfaceTexture) CreateView(desc *TextureViewDescriptor) (*TextureView,
 	}
 
 	texture := &Texture{hal: st.hal, device: st.device, surface: st.surface.core, surfaceLease: st.lease, coreTexture: st.coreTexture}
-	return &TextureView{hal: halView, device: st.device, texture: texture, surface: st.surface.core, surfaceLease: st.lease}, nil
+	view := &TextureView{hal: halView, device: st.device, texture: texture, surface: st.surface.core, surfaceLease: st.lease}
+	return view.withRef(label), nil
 }

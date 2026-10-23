@@ -83,12 +83,14 @@ func NewTextureFromHAL(halTexture hal.Texture, device *Device, format gputypes.T
 
 // NewTextureViewFromHAL creates a TextureView wrapping an existing HAL texture view.
 func NewTextureViewFromHAL(halView hal.TextureView, device *Device) *TextureView {
-	return &TextureView{hal: halView, device: device}
+	view := &TextureView{hal: halView, device: device}
+	return view.withRef("")
 }
 
 // NewSamplerFromHAL creates a Sampler wrapping an existing HAL sampler.
 func NewSamplerFromHAL(halSampler hal.Sampler, device *Device) *Sampler {
-	return &Sampler{hal: halSampler, device: device}
+	sampler := &Sampler{hal: halSampler, device: device}
+	return sampler.withRef("")
 }
 
 // HalDevice returns the underlying HAL device for advanced use cases.
