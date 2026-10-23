@@ -1,4 +1,4 @@
-github.com/roffe/naga v0.0.0-20261023172624-47367d9cca6f h1:WrPE2GlielrQIdNaIKGy5R0F7Wa8dCqWCc1GPIUzHGY=
-github.com/roffe/naga v0.0.0-20261023172624-47367d9cca6f/go.mod h1:xVSreQeq7W169Wr9X6TuyO/I959MnEGw4xxAGOsGQns=
+github.com/roffe/naga v0.0.0-20261023205143-c63e1d866ee9 h1:xaDx4w1WtphAlwKLzLtdYyknGCM6sOtQYvhFA4lKdsE=
+github.com/roffe/naga v0.0.0-20261023205143-c63e1d866ee9/go.mod h1:xVSreQeq7W169Wr9X6TuyO/I959MnEGw4xxAGOsGQns=
 golang.org/x/sys v0.47.0 h1:o7XGOvZQCADBQQ4Y7VNq2dRWQR7JmOUW8Kxx4ZsNgWs=
 golang.org/x/sys v0.47.0/go.mod h1:4GL1E5IUh+htKOUEOaiffhrAeqysfVGipDYzABqnCmw=
