@@ -23,8 +23,8 @@ const greyShader = `
 // format, which the framebuffer's sRGB view and the pipeline did not match.
 func TestRenderThroughSrgbView(t *testing.T) {
 	device, h := newValidatedDevice(t)
-	if h.backend == gputypes.BackendGL {
-		t.Skip("GL ignores the views of a texture, see the README's known issues")
+	if !device.core.DownlevelCapabilitiesRef().Flags.Contains(gputypes.DownlevelFlagsViewFormats) {
+		t.Skip("no views that change the format on this adapter")
 	}
 	tex, err := device.CreateTexture(&TextureDescriptor{
 		Label:         "unorm",

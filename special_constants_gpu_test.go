@@ -35,8 +35,8 @@ struct VOut { @builtin(position) pos: vec4<f32>, @location(0) c: vec4<f32> }
 // instance_index count from them, as WebGPU has it.
 func TestDrawsSeeFirstVertexAndInstance(t *testing.T) {
 	device, h := newValidatedDevice(t)
-	if h.backend == gputypes.BackendGL {
-		t.Skip("the GL backend leaves the first instance and base vertex out of the builtins and records no indirect draws")
+	if !device.core.DownlevelCapabilitiesRef().Flags.Contains(gputypes.DownlevelFlagsBaseVertex) {
+		t.Skip("the adapter has no base vertex draws")
 	}
 	module, err := device.CreateShaderModule(&ShaderModuleDescriptor{Label: "vertex-index", WGSL: vertexIndexShader})
 	if err != nil {

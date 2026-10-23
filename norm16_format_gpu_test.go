@@ -16,9 +16,6 @@ import (
 // validation layer crashed on and NVIDIA gave no memory.
 func TestNorm16Textures(t *testing.T) {
 	device, h := newValidatedDevice(t)
-	if h.backend == gputypes.BackendGL {
-		t.Skip("GL makes the formats it does not know RGBA8, see the README's known issues")
-	}
 	for _, tc := range []struct {
 		format gputypes.TextureFormat
 		texel  int

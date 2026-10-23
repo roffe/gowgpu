@@ -16,11 +16,8 @@ import (
 // encoder's first pass and a later one alike.
 func TestIndirectDrawWithAFirstInstanceIsANoOp(t *testing.T) {
 	device, h := newValidatedDevice(t)
-	switch {
-	case device.Features().Contains(gputypes.FeatureIndirectFirstInstance):
+	if device.Features().Contains(gputypes.FeatureIndirectFirstInstance) {
 		t.Skip("the device has FeatureIndirectFirstInstance")
-	case h.backend == gputypes.BackendGL:
-		t.Skip("the GL backend draws nothing indirect")
 	}
 	skipRootConstantIndirectOnWine(t, h)
 	shader, err := device.CreateShaderModule(&ShaderModuleDescriptor{WGSL: solidShader})

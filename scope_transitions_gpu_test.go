@@ -344,9 +344,6 @@ func TestUploadThenLoadPassPreservesPixels(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			device, h := newValidatedDevice(t)
-			if h.backend == gputypes.BackendGL {
-				t.Skip("CopyBufferToTexture ignores the row pitch on GL (README known issues)")
-			}
 
 			tex, view := pixTexture(t, device, "upload-load", tc.usage)
 			defer releaseTextureView(tex, view)
@@ -726,9 +723,6 @@ const bindFirstShader = `
 // bound group 1 at the slots of group 0, which only the layout knows.
 func TestBindGroupBeforePipeline(t *testing.T) {
 	device, h := newValidatedDevice(t)
-	if h.backend == gputypes.BackendGL {
-		t.Skip("GL binds a group against the pipeline set at the time, see the README's known issues")
-	}
 	module, err := device.CreateShaderModule(&ShaderModuleDescriptor{Label: "bind-first", WGSL: bindFirstShader})
 	if err != nil {
 		t.Fatalf("CreateShaderModule: %v", err)

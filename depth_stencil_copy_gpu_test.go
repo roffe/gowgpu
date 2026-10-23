@@ -75,8 +75,8 @@ func depthStencilTexture(t *testing.T, device *Device, format gputypes.TextureFo
 // format has. Vulkan copied the colour aspect, and NVIDIA read zeros.
 func TestDepthCopyWithoutAspect(t *testing.T) {
 	device, h := newValidatedDevice(t)
-	if h.backend == gputypes.BackendGL {
-		t.Skip("GL reads no depth back")
+	if !device.core.DownlevelCapabilitiesRef().Flags.Contains(gputypes.DownlevelFlagsDepthTextureAndBufferCopies) {
+		t.Skip("no depth texture copies on this adapter")
 	}
 	tex, view := depthStencilTexture(t, device, gputypes.TextureFormatDepth32Float, TextureUsageRenderAttachment|TextureUsageCopySrc)
 	enc, err := device.CreateCommandEncoder(nil)
@@ -164,8 +164,8 @@ func TestStencilAspectUploads(t *testing.T) {
 // and reads it back. Vulkan copied it as the colour aspect.
 func TestDepth16Upload(t *testing.T) {
 	device, h := newValidatedDevice(t)
-	if h.backend == gputypes.BackendGL {
-		t.Skip("GL reads no depth back")
+	if !device.core.DownlevelCapabilitiesRef().Flags.Contains(gputypes.DownlevelFlagsDepthTextureAndBufferCopies) {
+		t.Skip("no depth texture copies on this adapter")
 	}
 	tex, _ := depthStencilTexture(t, device, gputypes.TextureFormatDepth16Unorm, TextureUsageRenderAttachment|TextureUsageCopySrc|TextureUsageCopyDst)
 	data := make([]byte, pixSide*pixSide*2)

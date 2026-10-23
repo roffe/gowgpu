@@ -14,9 +14,6 @@ import (
 // red the discarding pass cleared it to.
 func TestDiscardedTextureReadsZeros(t *testing.T) {
 	device, h := newValidatedDevice(t)
-	if h.backend == gputypes.BackendGL {
-		t.Skip("GL keeps what a store op discards")
-	}
 	red := gputypes.Color{R: 1, A: 1}
 	target := func() (*Texture, *TextureView) {
 		tex, view := pixTexture(t, device, "discarded", TextureUsageRenderAttachment|TextureUsageCopySrc)

@@ -27,9 +27,6 @@ const msaaLoadShader = `
 // keeps it in GENERAL.
 func TestMultisampledAttachmentWithResolveIsStored(t *testing.T) {
 	device, h := newValidatedDevice(t)
-	if h.backend == gputypes.BackendGL {
-		t.Skip("GL loses the first resolve into a new texture, see the README's known issues")
-	}
 	ms, err := device.CreateTexture(&TextureDescriptor{
 		Label:         "msaa",
 		Size:          Extent3D{Width: pixSide, Height: pixSide, DepthOrArrayLayers: 1},

@@ -29,7 +29,7 @@ struct Out {
 func TestFragDepthClampsToViewport(t *testing.T) {
 	device, h := newValidatedDevice(t)
 	if h.backend == gputypes.BackendGL {
-		t.Skip("GL reads no depth back")
+		t.Skip("the GL backend doesn't clamp frag_depth to the viewport's depth range")
 	}
 	module, err := device.CreateShaderModule(&ShaderModuleDescriptor{Label: "frag-depth", WGSL: fragDepthClampShader})
 	if err != nil {

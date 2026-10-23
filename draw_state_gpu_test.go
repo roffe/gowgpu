@@ -205,9 +205,6 @@ const strideShader = `
 // came before the pipeline, the old pipeline's when the pipeline changed.
 func TestVertexStrideFollowsPipeline(t *testing.T) {
 	device, h := newValidatedDevice(t)
-	if h.backend == gputypes.BackendGL {
-		t.Skip("GL binds vertex buffers against the pipeline set at the time, see the README's known issues")
-	}
 	module, err := device.CreateShaderModule(&ShaderModuleDescriptor{Label: "stride", WGSL: strideShader})
 	if err != nil {
 		t.Fatalf("CreateShaderModule: %v", err)
@@ -372,9 +369,6 @@ const layoutChangeShader = `
 // match below it.
 func TestBindGroupsAcrossLayouts(t *testing.T) {
 	device, h := newValidatedDevice(t)
-	if h.backend == gputypes.BackendGL {
-		t.Skip("GL binds a group against the pipeline set at the time, see the README's known issues")
-	}
 	module, err := device.CreateShaderModule(&ShaderModuleDescriptor{Label: "layout-change", WGSL: layoutChangeShader})
 	if err != nil {
 		t.Fatalf("CreateShaderModule: %v", err)

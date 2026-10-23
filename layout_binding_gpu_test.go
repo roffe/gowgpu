@@ -218,8 +218,8 @@ func TestShaderSkipsLayoutEntries(t *testing.T) {
 // argument into render stages but never bound it.
 func TestArrayLengthInRenderStages(t *testing.T) {
 	device, h := newValidatedDevice(t)
-	if h.backend == gputypes.BackendGL {
-		t.Skip("desktop GL declares storage buffers as uniform blocks (README known issues)")
+	if !device.core.DownlevelCapabilitiesRef().Flags.Contains(gputypes.DownlevelFlagsVertexStorage) {
+		t.Skip("no storage buffers in vertex shaders on this adapter")
 	}
 	r := layoutRig{t, device}
 	bgl := r.bgl(gputypes.BindGroupLayoutEntry{Binding: 0, Visibility: ShaderStageVertex | ShaderStageFragment,

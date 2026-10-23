@@ -78,11 +78,8 @@ func TestCopyTextureToTextureArrayLayer(t *testing.T) {
 // array into the depth slices of a 3D texture and slices of that back into
 // layers, each layer paired with a slice.
 func TestCopyTextureToTextureBetween2DArrayAnd3D(t *testing.T) {
-	_, adapter, device := newTestDevice(t)
+	_, _, device := newTestDevice(t)
 	defer device.Release()
-	if adapter.Info().Backend == gputypes.BackendGL {
-		t.Skip("array textures are not done on GL")
-	}
 
 	const side, layers = 8, 4
 	const rowBytes = side * 4

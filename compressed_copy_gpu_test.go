@@ -18,7 +18,7 @@ import (
 func TestCompressedCopies(t *testing.T) {
 	device, h := newValidatedDeviceWith(t, gputypes.Features(gputypes.FeatureTextureCompressionBC))
 	if h.backend == gputypes.BackendGL {
-		t.Skip("GL makes compressed textures RGBA8, see the README's known issues")
+		t.Skip("GL reads no compressed texture back")
 	}
 	tex, err := device.CreateTexture(&TextureDescriptor{
 		Label:         "bc1",

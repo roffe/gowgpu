@@ -294,9 +294,6 @@ const stencilLoadShader = `
 // the rest (0, 0, 1), as WebGPU has it.
 func TestStencilViewReadsStencilInRed(t *testing.T) {
 	device, h := newValidatedDevice(t)
-	if h.backend == gputypes.BackendGL {
-		t.Skip("the GL backend gives a texture view no aspect of its own")
-	}
 	stencil, err := device.CreateTexture(&TextureDescriptor{
 		Label:         "stencil-view",
 		Size:          Extent3D{Width: pixSide, Height: pixSide, DepthOrArrayLayers: 1},
@@ -400,9 +397,6 @@ const locationOneShader = `
 // at attachment 0, the default viewport and scissor included.
 func TestSparseColorAttachment(t *testing.T) {
 	device, h := newValidatedDevice(t)
-	if h.backend == gputypes.BackendGL {
-		t.Skip("the GL backend moves the attachments after a hole down a slot")
-	}
 	module, err := device.CreateShaderModule(&ShaderModuleDescriptor{Label: "location-one", WGSL: locationOneShader})
 	if err != nil {
 		t.Fatalf("CreateShaderModule: %v", err)

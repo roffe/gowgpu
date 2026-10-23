@@ -124,7 +124,7 @@ func passOn(t *testing.T, enc *CommandEncoder, desc *RenderPassDescriptor) {
 func TestNewDepthTextureIsZeroed(t *testing.T) {
 	device, h := newValidatedDevice(t)
 	if h.backend == gputypes.BackendGL {
-		t.Skip("GL doesn't zero depth textures (README known issues), and reads no depth back")
+		t.Skip("GL doesn't zero depth textures (README known issues)")
 	}
 	const side, mips, layers = 64, 3, 2
 	desc := &TextureDescriptor{
@@ -190,9 +190,6 @@ func TestNewRenderTargetIsZeroed(t *testing.T) {
 	for _, samples := range []uint32{1, 4} {
 		t.Run(fmt.Sprintf("samples=%d", samples), func(t *testing.T) {
 			device, h := newValidatedDevice(t)
-			if samples > 1 && h.backend == gputypes.BackendGL {
-				t.Skip("GL doesn't zero multisampled textures (README known issues)")
-			}
 			desc := &TextureDescriptor{
 				Size:          Extent3D{Width: side, Height: side, DepthOrArrayLayers: 1},
 				MipLevelCount: 1,
@@ -278,7 +275,7 @@ func TestNewCompressedTextureIsZeroed(t *testing.T) {
 		t.Run(format.String(), func(t *testing.T) {
 			device, h := newValidatedDeviceWith(t, gputypes.Features(gputypes.FeatureTextureCompressionBC))
 			if h.backend == gputypes.BackendGL {
-				t.Skip("GL doesn't zero compressed textures (README known issues)")
+				t.Skip("GL reads no compressed texture back")
 			}
 			const side, mips = 64, 7 // down to 1x1
 			blockSize := format.BlockCopySize()
