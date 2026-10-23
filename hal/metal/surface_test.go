@@ -249,3 +249,38 @@ func TestSurfaceDisplaySyncFollowsPresentMode(t *testing.T) {
 		}
 	}
 }
+
+// TestSurfaceReconfigureAppliesUsageAndAlpha reconfigures a surface at the
+// same size with another usage and alpha mode: framebufferOnly and the
+// layer's opacity follow each configuration.
+func TestSurfaceReconfigureAppliesUsageAndAlpha(t *testing.T) {
+	surface, open := newSurfaceTest(t)
+	for _, test := range []struct {
+		usage           gputypes.TextureUsage
+		alpha           gputypes.CompositeAlphaMode
+		framebufferOnly bool
+		opaque          bool
+	}{
+		{gputypes.TextureUsageRenderAttachment, hal.CompositeAlphaModeOpaque, true, true},
+		{gputypes.TextureUsageRenderAttachment | gputypes.TextureUsageCopySrc, hal.CompositeAlphaModeOpaque, false, true},
+		{gputypes.TextureUsageRenderAttachment, hal.CompositeAlphaModePremultiplied, true, false},
+		{gputypes.TextureUsageRenderAttachment | gputypes.TextureUsageTextureBinding, hal.CompositeAlphaModeOpaque, false, true},
+	} {
+		if err := surface.Configure(open.Device, &hal.SurfaceConfiguration{
+			Format:      gputypes.TextureFormatBGRA8Unorm,
+			Width:       16,
+			Height:      16,
+			PresentMode: hal.PresentModeFifo,
+			Usage:       test.usage,
+			AlphaMode:   test.alpha,
+		}); err != nil {
+			t.Fatalf("Configure failed: %v", err)
+		}
+		if got := MsgSendBool(surface.layer, Sel("framebufferOnly")); got != test.framebufferOnly {
+			t.Errorf("usage %v: framebufferOnly %v, want %v", test.usage, got, test.framebufferOnly)
+		}
+		if got := MsgSendBool(surface.layer, Sel("isOpaque")); got != test.opaque {
+			t.Errorf("alpha mode %v: opaque %v, want %v", test.alpha, got, test.opaque)
+		}
+	}
+}

@@ -47,12 +47,12 @@ func (s *Surface) Configure(device hal.Device, config *hal.SurfaceConfiguration)
 		return fmt.Errorf("metal: invalid device type")
 	}
 
-	// Skip no-op reconfigure (present mode / vsync updates still run below).
+	// A reconfigure that keeps the size, format and device only changes
+	// the modes.
 	sizeChanged := s.configured && (s.width != config.Width || s.height != config.Height)
 	if s.configured && !sizeChanged &&
 		s.format == config.Format && s.device == mtlDevice {
-		s.presentMode = config.PresentMode
-		setDisplaySync(s.layer, displaySync(config.PresentMode))
+		s.applyModes(config)
 		return nil
 	}
 
@@ -88,10 +88,7 @@ func (s *Surface) Configure(device hal.Device, config *hal.SurfaceConfiguration)
 	size := CGSize{Width: CGFloat(config.Width), Height: CGFloat(config.Height)}
 	msgSendCGSize(s.layer, Sel("setDrawableSize:"), size)
 
-	// A drawable that is only ever an attachment is framebufferOnly: any
-	// other usage reads, copies or samples it.
-	framebufferOnly := config.Usage == gputypes.TextureUsageRenderAttachment
-	msgSendVoid(s.layer, Sel("setFramebufferOnly:"), argBool(framebufferOnly))
+	s.applyModes(config)
 
 	// Set maximum drawable count for frame latency control.
 	// Rust wgpu: set_maximum_drawable_count(maximum_frame_latency + 1).
@@ -107,11 +104,6 @@ func (s *Surface) Configure(device hal.Device, config *hal.SurfaceConfiguration)
 	// as natural backpressure that paces the render loop to what Core
 	// Animation can actually release.
 	msgSendVoid(s.layer, Sel("setAllowsNextDrawableTimeout:"), argBool(false))
-
-	// Set present mode
-	s.presentMode = config.PresentMode
-	vsync := displaySync(config.PresentMode)
-	setDisplaySync(s.layer, vsync)
 
 	// presentsWithTransaction default is false: normal rendering presents via
 	// [commandBuffer presentDrawable:] from the render goroutine, and enabling
@@ -152,11 +144,24 @@ func (s *Surface) Configure(device hal.Device, config *hal.SurfaceConfiguration)
 		"height", config.Height,
 		"format", config.Format,
 		"presentMode", config.PresentMode,
-		"vsync", vsync,
+		"vsync", displaySync(config.PresentMode),
 	)
 
 	s.configured = true
 	return nil
+}
+
+// applyModes sets what a configuration changes without new drawables: the
+// display sync of its present mode, framebufferOnly for a surface that is
+// only ever an attachment, and the layer's opacity for its alpha mode.
+func (s *Surface) applyModes(config *hal.SurfaceConfiguration) {
+	s.presentMode = config.PresentMode
+	setDisplaySync(s.layer, displaySync(config.PresentMode))
+	// Any usage but the attachment reads, copies or samples the drawable.
+	msgSendVoid(s.layer, Sel("setFramebufferOnly:"), argBool(config.Usage == gputypes.TextureUsageRenderAttachment))
+	// Only a premultiplied surface composites with what is behind it, as in
+	// Dawn and wgpu-hal: CALayer is not opaque by default.
+	msgSendVoid(s.layer, Sel("setOpaque:"), argBool(config.AlphaMode != hal.CompositeAlphaModePremultiplied))
 }
 
 // displaySync is CAMetalLayer.displaySyncEnabled for a present mode. Metal
