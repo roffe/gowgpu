@@ -1207,8 +1207,10 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 
 	// Clear values array: one per VkAttachment (color + resolve + depth).
 	// Using a fixed-size array avoids heap allocation on this per-frame path.
+	// The pass takes the ones up to the last attachment it clears.
 	var clearValuesArr [hal.MaxTotalAttachments]vk.ClearValue
 	clearValues := clearValuesArr[:0]
+	clearCount := 0
 
 	for i, ca := range desc.ColorAttachments {
 		if i >= hal.MaxColorAttachments {
@@ -1280,19 +1282,24 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 			float32(ca.ClearValue.B),
 			float32(ca.ClearValue.A),
 		))
+		if rpKey.Colors[i].LoadOp == vk.AttachmentLoadOpClear {
+			clearCount = len(clearValues)
+		}
 
 		if hasMSAAResolve {
 			// Framebuffer: resolve view (immediately after color)
 			fbKey.Views[fbKey.ViewCount] = resolveView.handle
 			fbKey.ViewCount++
 
-			// Clear value for resolve attachment.
+			// Clear value for resolve attachment, which the render pass
+			// always clears.
 			clearValues = append(clearValues, vk.ClearValueColor(
 				float32(ca.ClearValue.R),
 				float32(ca.ClearValue.G),
 				float32(ca.ClearValue.B),
 				float32(ca.ClearValue.A),
 			))
+			clearCount = len(clearValues)
 		}
 	}
 
@@ -1320,6 +1327,9 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 			fbKey.ViewCount++
 		}
 		clearValues = append(clearValues, vk.ClearValueDepthStencil(dsa.DepthClearValue, dsa.StencilClearValue))
+		if rpKey.DepthLoadOp == vk.AttachmentLoadOpClear || rpKey.StencilLoadOp == vk.AttachmentLoadOpClear {
+			clearCount = len(clearValues)
+		}
 	}
 
 	// Get or create render pass from cache
@@ -1348,9 +1358,9 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 			Offset: vk.Offset2D{X: 0, Y: 0},
 			Extent: vk.Extent2D{Width: renderWidth, Height: renderHeight},
 		},
-		ClearValueCount: uint32(len(clearValues)),
+		ClearValueCount: uint32(clearCount),
 	}
-	if len(clearValues) > 0 {
+	if clearCount > 0 {
 		renderPassBegin.PClearValues = &clearValues[0]
 	}
 
