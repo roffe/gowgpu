@@ -156,9 +156,9 @@ func (b *Buffer) Map(ctx context.Context, mode MapMode, offset, size uint64) err
 // Validation errors surface synchronously — alignment, usage mismatch,
 // range overflow, already-mapped state, etc. A returned MapPending is
 // always valid; its Status() may resolve as failed later if the buffer
-// is destroyed or the map is canceled.
+// is destroyed, the map is canceled or the device is released.
 func (b *Buffer) MapAsync(mode MapMode, offset, size uint64) (*MapPending, error) {
-	if b == nil || b.core == nil {
+	if b == nil || b.core == nil || (b.device != nil && b.device.released.Load()) {
 		return nil, ErrReleased
 	}
 	// A queue write to the buffer that no submit has carried yet would land

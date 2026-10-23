@@ -1517,9 +1517,10 @@ func (d *Device) destroyQueue() *core.DestroyQueue {
 //
 // The return value reports whether Poll observed any in-flight maps —
 // tests use it to assert that Submit-driven auto-polling drained
-// everything without needing an explicit Poll call.
+// everything without needing an explicit Poll call. After Release, Poll
+// does nothing and returns false.
 func (d *Device) Poll(pollType PollType) bool {
-	if d == nil || d.core == nil {
+	if d == nil || d.core == nil || d.released.Load() {
 		return false
 	}
 	switch pollType {

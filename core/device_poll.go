@@ -109,24 +109,7 @@ func (d *Device) PollMaps(completedIdx uint64) (didWork bool) {
 	defer guard.Release()
 	hd := d.raw.Get(guard)
 	if hd == nil {
-		// Device destroyed — drain everything and signal DeviceLost.
-		t.mu.Lock()
-		for idx, entries := range t.buckets {
-			if idx > completedIdx {
-				continue
-			}
-			for _, e := range entries {
-				if e.buf != nil {
-					e.buf.failMap(e.request, &BufferMapError{Kind: BufferMapErrKindDeviceLost})
-				}
-			}
-			clear(entries)
-			t.free = append(t.free, entries[:0])
-			delete(t.buckets, idx)
-			didWork = true
-		}
-		t.mu.Unlock()
-		return didWork
+		return d.failAllMaps(&BufferMapError{Kind: BufferMapErrKindDeviceLost})
 	}
 	halDevice := *hd
 
@@ -160,6 +143,31 @@ func (d *Device) PollMaps(completedIdx uint64) (didWork bool) {
 		t.mu.Unlock()
 		didWork = true
 	}
+}
+
+// failAllMaps fails every pending map with err, whatever submission it
+// waits for, and reports whether there was one.
+func (d *Device) failAllMaps(err *BufferMapError) bool {
+	t := d.maps
+	if t == nil {
+		return false
+	}
+	t.mu.Lock()
+	buckets := t.buckets
+	if len(buckets) == 0 {
+		t.mu.Unlock()
+		return false
+	}
+	t.buckets = make(map[uint64][]pendingMap, len(buckets))
+	t.mu.Unlock()
+	for _, entries := range buckets {
+		for _, e := range entries {
+			if e.buf != nil {
+				e.buf.failMap(e.request, err)
+			}
+		}
+	}
+	return true
 }
 
 // HasPendingMaps reports whether the device has any outstanding map

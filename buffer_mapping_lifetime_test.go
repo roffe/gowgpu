@@ -280,3 +280,40 @@ func submitWaitsForWork(t *testing.T, device *Device) bool {
 	device.Poll(PollWait)
 	return submitTook > time.Since(start)/2
 }
+
+// Release fails a map still pending, and afterwards Poll and Map report
+// the device gone instead of reaching the destroyed HAL device.
+func TestDeviceReleaseFailsPendingMaps(t *testing.T) {
+	inst, adapter, device := newTestDevice(t)
+	defer inst.Release()
+	defer adapter.Release()
+
+	buf, err := device.CreateBuffer(&BufferDescriptor{Label: "released-map", Size: 4, Usage: BufferUsageMapRead | BufferUsageCopyDst})
+	if err != nil {
+		t.Fatalf("CreateBuffer: %v", err)
+	}
+	defer buf.Release()
+	if err := device.Queue().WriteBuffer(buf, 0, make([]byte, 4)); err != nil {
+		t.Fatalf("WriteBuffer: %v", err)
+	}
+	if _, err := device.Queue().Submit(); err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	pending, err := buf.MapAsync(MapModeRead, 0, 4)
+	if err != nil {
+		t.Fatalf("MapAsync: %v", err)
+	}
+	defer pending.Release()
+
+	device.Release()
+
+	if done, err := pending.Status(); !done || !errors.Is(err, ErrMapDeviceLost) {
+		t.Errorf("map pending at Release = %v, %v, want done with ErrMapDeviceLost", done, err)
+	}
+	if device.Poll(PollPoll) || device.Poll(PollWait) {
+		t.Error("Poll after Release found maps to resolve")
+	}
+	if err := buf.Map(context.Background(), MapModeRead, 0, 4); !errors.Is(err, ErrReleased) {
+		t.Errorf("Map after Release = %v, want ErrReleased", err)
+	}
+}

@@ -290,6 +290,8 @@ func (d *Device) Destroy() {
 
 	untrackResource(uintptr(unsafe.Pointer(d))) //nolint:gosec // debug tracking uses pointer as unique ID
 
+	d.failAllMaps(&BufferMapError{Kind: BufferMapErrKindDeviceLost})
+
 	// Flush all deferred resource destructions before destroying the device.
 	// At this point the GPU should be idle (caller should have called WaitIdle
 	// or equivalent), so all deferred destroys are safe to execute.

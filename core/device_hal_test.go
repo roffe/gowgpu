@@ -362,3 +362,19 @@ func TestBuffer_Destroy_RacingDeviceDestroy(t *testing.T) {
 		}
 	}
 }
+
+// Destroy fails the maps still pending, whatever submission they wait for.
+func TestDeviceDestroyFailsPendingMaps(t *testing.T) {
+	device := NewDevice(&mockHALDevice{}, &Adapter{}, gputypes.Features(0), gputypes.DefaultLimits(), "Destroy")
+	buf := NewBuffer(mockBuffer{}, device, gputypes.BufferUsageMapRead, 256, "buf")
+	if err := buf.BeginMap(MapModeInternalRead, 0, 256); err != nil {
+		t.Fatalf("BeginMap: %v", err)
+	}
+	device.RegisterPendingMap(7, buf)
+
+	device.Destroy()
+
+	if done, err := buf.Waiter().Status(); !done || err == nil || err.Kind != BufferMapErrKindDeviceLost {
+		t.Errorf("pending map = %v, %v, want done with device lost", done, err)
+	}
+}
