@@ -774,13 +774,11 @@ func (e *RenderPassEncoder) applyBindGroup(index uint32, bg *BindGroup, offsets 
 	// starts at 0, group 1 where group 0 ended, and so on.
 	//
 	// Reference: Rust wgpu-hal metal/command.rs:182 (resource_indices.buffers + index).
-	var bufferSlot, textureSlot, samplerSlot uintptr
-	if e.currentLayout != nil && int(index) < len(e.currentLayout.groupOffsets) {
-		off := e.currentLayout.groupOffsets[index]
-		bufferSlot = uintptr(off.Buffers)
-		textureSlot = uintptr(off.Textures)
-		samplerSlot = uintptr(off.Samplers)
+	off, ok := e.currentLayout.groupSlots(index, bg)
+	if !ok {
+		return
 	}
+	bufferSlot, textureSlot, samplerSlot := uintptr(off.Buffers), uintptr(off.Textures), uintptr(off.Samplers)
 
 	var dynamicIdx int
 	for _, entry := range bg.entries {
@@ -1141,13 +1139,11 @@ func (e *ComputePassEncoder) SetBindGroup(index uint32, group hal.BindGroup, off
 func (e *ComputePassEncoder) applyBindGroup(index uint32, bg *BindGroup, offsets []uint32) {
 	// Metal uses per-type sequential indices across all bind groups.
 	// See RenderPassEncoder.SetBindGroup for detailed explanation.
-	var bufferSlot, textureSlot, samplerSlot uintptr
-	if e.currentLayout != nil && int(index) < len(e.currentLayout.groupOffsets) {
-		off := e.currentLayout.groupOffsets[index]
-		bufferSlot = uintptr(off.Buffers)
-		textureSlot = uintptr(off.Textures)
-		samplerSlot = uintptr(off.Samplers)
+	off, ok := e.currentLayout.groupSlots(index, bg)
+	if !ok {
+		return
 	}
+	bufferSlot, textureSlot, samplerSlot := uintptr(off.Buffers), uintptr(off.Textures), uintptr(off.Samplers)
 
 	var dynamicIdx int
 	for _, entry := range bg.entries {

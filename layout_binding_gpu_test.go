@@ -261,3 +261,65 @@ struct VOut { @builtin(position) pos: vec4<f32>, @location(0) @interpolate(flat)
 	expectPixels(t, "arrayLength in the vertex and fragment stage", pix, 4, 4, 255, 255)
 	assertNoValidation(t, h)
 }
+
+// TestGroupsOutsideTheNewLayout switches from a pipeline with two bind
+// groups to one with only group 0, both groups still set: group 1 stays
+// unused, and group 0 is what the second pipeline reads. Metal bound group
+// 1 again at slot 0, on top of group 0.
+func TestGroupsOutsideTheNewLayout(t *testing.T) {
+	t.Run("render", func(t *testing.T) {
+		device, h := newValidatedDevice(t)
+		r := layoutRig{t, device}
+		bgl0, bgl1 := r.bgl(uniformEntry(0, ShaderStageFragment)), r.bgl(uniformEntry(0, ShaderStageFragment))
+		a := r.renderPipeline(r.layout(bgl0, bgl1), `
+@group(0) @binding(0) var<uniform> camera: vec4<f32>;
+@group(1) @binding(0) var<uniform> object: vec4<f32>;
+@fragment fn fs_main() -> @location(0) vec4<f32> { return object + camera * 0.0; }
+`)
+		b := r.renderPipeline(r.layout(bgl0), `
+@group(0) @binding(0) var<uniform> camera: vec4<f32>;
+@fragment fn fs_main() -> @location(0) vec4<f32> { return camera; }
+`)
+		camera := r.group(bgl0, BindGroupEntry{Binding: 0, Buffer: r.buffer(BufferUsageUniform, [4]float32{0, 1, 0, 1}), Size: 16})
+		object := r.group(bgl1, BindGroupEntry{Binding: 0, Buffer: r.buffer(BufferUsageUniform, [4]float32{1, 0, 0, 1}), Size: 16})
+		pix := r.draw(func(p *RenderPassEncoder) {
+			p.SetPipeline(a)
+			p.SetBindGroup(0, camera, nil)
+			p.SetBindGroup(1, object, nil)
+			p.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1})
+			p.SetPipeline(b)
+			p.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1})
+		})
+		expectPixels(t, "group 0 after the switch", pix, 0, 255, 0, 255)
+		assertNoValidation(t, h)
+	})
+	t.Run("compute", func(t *testing.T) {
+		device, h := newValidatedDevice(t)
+		r := layoutRig{t, device}
+		bgl0, bgl1 := r.bgl(storageEntry(0)), r.bgl(storageEntry(0))
+		a := r.computePipeline(r.layout(bgl0, bgl1), `
+@group(0) @binding(0) var<storage, read_write> first: vec4<f32>;
+@group(1) @binding(0) var<storage, read_write> second: vec4<f32>;
+@compute @workgroup_size(1) fn cs_main() { second = first + vec4<f32>(1.0, 2.0, 3.0, 4.0); }
+`)
+		b := r.computePipeline(r.layout(bgl0), `
+@group(0) @binding(0) var<storage, read_write> first: vec4<f32>;
+@compute @workgroup_size(1) fn cs_main() { first = vec4<f32>(5.0, 6.0, 7.0, 8.0); }
+`)
+		first := r.buffer(BufferUsageStorage|BufferUsageCopySrc, [4]float32{})
+		second := r.buffer(BufferUsageStorage|BufferUsageCopySrc, [4]float32{})
+		g0 := r.group(bgl0, BindGroupEntry{Binding: 0, Buffer: first, Size: 16})
+		g1 := r.group(bgl1, BindGroupEntry{Binding: 0, Buffer: second, Size: 16})
+		got := r.dispatch(func(p *ComputePassEncoder) {
+			p.SetPipeline(a)
+			p.SetBindGroup(0, g0, nil)
+			p.SetBindGroup(1, g1, nil)
+			p.Dispatch(1, 1, 1)
+			p.SetPipeline(b)
+			p.Dispatch(1, 1, 1)
+		}, first, second)
+		expectFloats4(t, "group 0 buffer", got[0], [4]float32{5, 6, 7, 8})
+		expectFloats4(t, "group 1 buffer", got[1], [4]float32{1, 2, 3, 4})
+		assertNoValidation(t, h)
+	})
+}

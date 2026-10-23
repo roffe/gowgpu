@@ -223,6 +223,24 @@ type PipelineLayout struct {
 	resources map[ir.ResourceBinding]msl.BindTarget
 }
 
+// groupSlots returns where the slots of bind group index start, and false
+// when the layout has no group index with room for bg's resources: a group
+// a pipeline's layout doesn't have stays bound for a later pipeline, and
+// must not land on the slots of another.
+func (l *PipelineLayout) groupSlots(index uint32, bg *BindGroup) (GroupSlotOffsets, bool) {
+	if l == nil || int(index) >= len(l.groupOffsets) || bg.layout == nil {
+		return GroupSlotOffsets{}, false
+	}
+	var buffers, textures, samplers int
+	if bgl, ok := l.layouts[index].(*BindGroupLayout); ok && bgl != nil {
+		buffers, textures, samplers = bgl.bufferCount, bgl.textureCount, bgl.samplerCount
+	}
+	if buffers != bg.layout.bufferCount || textures != bg.layout.textureCount || samplers != bg.layout.samplerCount {
+		return GroupSlotOffsets{}, false
+	}
+	return l.groupOffsets[index], true
+}
+
 // Destroy releases the pipeline layout.
 func (l *PipelineLayout) Destroy() {
 	if l.device != nil {
