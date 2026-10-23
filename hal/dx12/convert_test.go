@@ -950,3 +950,18 @@ func TestStencilViewSwizzlesGreenToRed(t *testing.T) {
 		t.Fatalf("depth view component mapping = %#x, want the default", got)
 	}
 }
+
+// TestMultisampleEnableFollowsTheSampleCount checks MSAA pipelines turn
+// MultisampleEnable on, which picks the quadrilateral line algorithm.
+func TestMultisampleEnableFollowsTheSampleCount(t *testing.T) {
+	for _, count := range []uint32{1, 4} {
+		desc := &hal.RenderPipelineDescriptor{Layout: &PipelineLayout{}, Multisample: gputypes.MultisampleState{Count: count, Mask: 0xFFFFFFFF}}
+		pso, err := (&Device{}).buildGraphicsPipelineStateDesc(desc, nil, nil, nil, nil)
+		if err != nil {
+			t.Fatalf("buildGraphicsPipelineStateDesc: %v", err)
+		}
+		if got, want := pso.RasterizerState.MultisampleEnable, boolToInt32(count > 1); got != want {
+			t.Errorf("sample count %d: MultisampleEnable = %d, want %d", count, got, want)
+		}
+	}
+}

@@ -777,7 +777,7 @@ func (d *Device) buildGraphicsPipelineStateDesc(
 		DepthBiasClamp:        0,
 		SlopeScaledDepthBias:  0,
 		DepthClipEnable:       1, // TRUE - enable depth clipping by default
-		MultisampleEnable:     0,
+		MultisampleEnable:     boolToInt32(desc.Multisample.Count > 1),
 		AntialiasedLineEnable: 0,
 		ForcedSampleCount:     0,
 		ConservativeRaster:    d3d12.D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF,
