@@ -503,8 +503,8 @@ func writeBlocks(glCtx *gl.Context, tex *Texture, dst *hal.ImageCopyTexture, dat
 	if l.BytesPerRow != 0 {
 		pitch = l.BytesPerRow
 	}
-	if _, bh := tex.format.BlockDimensions(); l.RowsPerImage != 0 {
-		imageRows = l.RowsPerImage / bh
+	if l.RowsPerImage != 0 {
+		imageRows = l.RowsPerImage
 	}
 	if err := checkData(data, rowBytes, blocks, depth, pitch, imageRows); err != nil {
 		return err
@@ -513,6 +513,7 @@ func writeBlocks(glCtx *gl.Context, tex *Texture, dst *hal.ImageCopyTexture, dat
 	if pitch != rowBytes || imageRows != blocks {
 		data = packRows(data, rowBytes, blocks, depth, pitch, imageRows)
 	}
+	width, height = tex.inMip(dst.MipLevel, dst.Origin, width, height)
 	x, y, z, mip := int32(dst.Origin.X), int32(dst.Origin.Y), dst.Origin.Z, int32(dst.MipLevel)
 	switch {
 	case tex.layered():
@@ -527,6 +528,16 @@ func writeBlocks(glCtx *gl.Context, tex *Texture, dst *hal.ImageCopyTexture, dat
 		glCtx.CompressedTexSubImage2D(tex.target, mip, x, y, int32(width), int32(height), tex.glf.internal, int32(imageSize), unsafe.Pointer(&data[0]))
 	}
 	return nil
+}
+
+// inMip returns the part of a width by height region at origin of mip
+// level mip of t inside the level. A copy of a compressed format takes
+// whole blocks, which stick out past the edge of a level that isn't a whole
+// number of them wide or high, and GL takes only the texels in the level,
+// as wgpu-hal clamps a copy to the level's size.
+func (t *Texture) inMip(mip uint32, origin hal.Origin3D, width, height uint32) (uint32, uint32) {
+	w, h := t.mipSize(mip)
+	return min(width, w-min(origin.X, w)), min(height, h-min(origin.Y, h))
 }
 
 // compressedRows returns how many rows of blocks a width by height region

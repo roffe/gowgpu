@@ -2136,29 +2136,30 @@ func (c *CopyBufferToTextureCommand) uploadBlocks(ctx *gl.Context) {
 	}
 	imageRows := blocks
 	if r.BufferLayout.RowsPerImage != 0 {
-		imageRows = r.BufferLayout.RowsPerImage / bh
+		imageRows = r.BufferLayout.RowsPerImage
 	}
+	w, h := tex.inMip(r.TextureBase.MipLevel, r.TextureBase.Origin, r.Size.Width, r.Size.Height)
 	x, mip := int32(r.TextureBase.Origin.X), int32(r.TextureBase.MipLevel)
 	upload := func(layer, y, height, size uint32, offset uint64) {
 		z := r.TextureBase.Origin.Z + layer
 		switch {
 		case tex.layered():
-			ctx.CompressedTexSubImage3DOffset(tex.target, mip, x, int32(y), int32(z), int32(r.Size.Width), int32(height), 1, internal, int32(size), uintptr(offset))
+			ctx.CompressedTexSubImage3DOffset(tex.target, mip, x, int32(y), int32(z), int32(w), int32(height), 1, internal, int32(size), uintptr(offset))
 		case tex.target == gl.TEXTURE_CUBE_MAP:
-			ctx.CompressedTexSubImage2DOffset(gl.TEXTURE_CUBE_MAP_POSITIVE_X+z, mip, x, int32(y), int32(r.Size.Width), int32(height), internal, int32(size), uintptr(offset))
+			ctx.CompressedTexSubImage2DOffset(gl.TEXTURE_CUBE_MAP_POSITIVE_X+z, mip, x, int32(y), int32(w), int32(height), internal, int32(size), uintptr(offset))
 		default:
-			ctx.CompressedTexSubImage2DOffset(tex.target, mip, x, int32(y), int32(r.Size.Width), int32(height), internal, int32(size), uintptr(offset))
+			ctx.CompressedTexSubImage2DOffset(tex.target, mip, x, int32(y), int32(w), int32(height), internal, int32(size), uintptr(offset))
 		}
 	}
 	y := r.TextureBase.Origin.Y
 	for layer := range max(1, r.Size.DepthOrArrayLayers) {
 		image := r.BufferLayout.Offset + uint64(layer)*uint64(imageRows)*uint64(pitch)
 		if pitch == rowBytes {
-			upload(layer, y, r.Size.Height, rowBytes*blocks, image)
+			upload(layer, y, h, rowBytes*blocks, image)
 			continue
 		}
 		for row := range blocks {
-			upload(layer, y+row*bh, min(bh, r.Size.Height-row*bh), rowBytes, image+uint64(row)*uint64(pitch))
+			upload(layer, y+row*bh, min(bh, h-row*bh), rowBytes, image+uint64(row)*uint64(pitch))
 		}
 	}
 }

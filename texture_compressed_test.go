@@ -63,7 +63,7 @@ func TestCompressedTextureUploads(t *testing.T) {
 			}
 			defer tex.Release()
 			data := bc1Quadrants(tc.pitch)
-			layout := ImageDataLayout{BytesPerRow: uint32(tc.pitch), RowsPerImage: 8}
+			layout := ImageDataLayout{BytesPerRow: uint32(tc.pitch), RowsPerImage: 2}
 			size := Extent3D{Width: 8, Height: 8, DepthOrArrayLayers: 1}
 			if tc.copy {
 				buf, err := device.CreateBuffer(&BufferDescriptor{Size: uint64(alignUp(uint32(len(data)), 4)), Usage: BufferUsageCopySrc | BufferUsageCopyDst})
