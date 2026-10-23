@@ -147,58 +147,107 @@ func copyExtentBlocks(info textureBlockInfo, origin hal.Origin3D, extent hal.Ext
 	return endBlockX - startBlockX, endBlockY - startBlockY, true
 }
 
+// placedSlice is one native copy of a placed slice: a footprint at a
+// 512-aligned bufferOffset holding the copy's data from bufferOrigin on,
+// and the copyWidth texels of the copy's rows from textureOffsetX on that
+// it covers.
 type placedSlice struct {
 	bufferOffset    uint64
 	bufferOriginX   uint32
 	bufferOriginY   uint32
 	footprintWidth  uint32
 	footprintHeight uint32
+	textureOffsetX  uint32
+	copyWidth       uint32
 }
 
-func planPlacedBufferSlice(logicalOffset uint64, rowPitch, blockWidth, blockHeight, blockBytes, copyWidth, copyHeight uint32) (placedSlice, bool) {
-	if rowPitch == 0 || blockWidth == 0 || blockHeight == 0 || blockBytes == 0 {
-		return placedSlice{}, false
+// planPlacedBufferSlice places the copyWidth by copyHeight texels whose data
+// starts at logicalOffset in footprints at 512-aligned offsets. The data
+// starts inside a footprint; when its rows run past the row pitch from there,
+// the copy is split in two at the pitch, as Dawn's TextureCopySplitter does:
+// the first copy takes the part of each row up to the pitch, the second the
+// rest, from a footprint of its own.
+func planPlacedBufferSlice(logicalOffset uint64, rowPitch, blockWidth, blockHeight, blockBytes, copyWidth, copyHeight uint32) ([]placedSlice, bool) {
+	if rowPitch == 0 || blockWidth == 0 || blockHeight == 0 || blockBytes == 0 || rowPitch%blockBytes != 0 {
+		return nil, false
 	}
-	bufferOffset := logicalOffset &^ (d3d12TexturePlacementAlignment - 1)
+	blocksPerRow := rowPitch / blockBytes
+	widthBlocks := copyWidth / blockWidth
 	if logicalOffset%d3d12TexturePlacementAlignment != 0 && logicalOffset >= uint64(rowPitch) {
 		previousRow := logicalOffset - uint64(rowPitch)
-		if previousRow%d3d12TexturePlacementAlignment == 0 {
-			bufferOffset = previousRow
+		if previousRow%d3d12TexturePlacementAlignment == 0 && widthBlocks <= blocksPerRow {
+			slice, ok := placeSlice(previousRow, 0, 1, widthBlocks, blockWidth, blockHeight, copyHeight)
+			if !ok {
+				return nil, false
+			}
+			slice.copyWidth = copyWidth
+			return []placedSlice{slice}, true
 		}
 	}
-	delta := logicalOffset - bufferOffset
-	rowBytes := uint64(rowPitch)
-	yRows := delta / rowBytes
-	xBytes := delta % rowBytes
-	if xBytes%uint64(blockBytes) != 0 {
-		return placedSlice{}, false
-	}
-	xBlocks := xBytes / uint64(blockBytes)
-	if xBlocks > uint64(math.MaxUint32/blockWidth) || yRows > uint64(math.MaxUint32/blockHeight) {
-		return placedSlice{}, false
-	}
-	originX := uint32(xBlocks) * blockWidth
-	originY := uint32(yRows) * blockHeight
-	if originX > math.MaxUint32-copyWidth || originY > math.MaxUint32-copyHeight {
-		return placedSlice{}, false
-	}
-	fpWidth, ok := alignUint32(originX+copyWidth, blockWidth)
+	x, y, ok := placedOrigin(logicalOffset, blockBytes, blocksPerRow)
 	if !ok {
-		return placedSlice{}, false
+		return nil, false
 	}
-	fpHeight, ok := alignUint32(originY+copyHeight, blockHeight)
+	bufferOffset := logicalOffset &^ (d3d12TexturePlacementAlignment - 1)
+	if x+widthBlocks <= blocksPerRow {
+		slice, ok := placeSlice(bufferOffset, x, y, widthBlocks, blockWidth, blockHeight, copyHeight)
+		if !ok {
+			return nil, false
+		}
+		slice.copyWidth = copyWidth
+		return []placedSlice{slice}, true
+	}
+
+	firstBlocks := blocksPerRow - x
+	first, ok := placeSlice(bufferOffset, x, y, firstBlocks, blockWidth, blockHeight, copyHeight)
 	if !ok {
+		return nil, false
+	}
+	first.copyWidth = firstBlocks * blockWidth
+
+	secondOffset := logicalOffset + uint64(firstBlocks)*uint64(blockBytes)
+	secondBlocks := widthBlocks - firstBlocks
+	x, y, ok = placedOrigin(secondOffset, blockBytes, blocksPerRow)
+	if !ok || x+secondBlocks > blocksPerRow {
+		return nil, false
+	}
+	second, ok := placeSlice(secondOffset&^(d3d12TexturePlacementAlignment-1), x, y, secondBlocks, blockWidth, blockHeight, copyHeight)
+	if !ok {
+		return nil, false
+	}
+	second.textureOffsetX = first.copyWidth
+	second.copyWidth = secondBlocks * blockWidth
+	return []placedSlice{first, second}, true
+}
+
+// placedOrigin is the block a copy whose data starts at offset starts at in
+// a footprint at offset aligned down to 512 with rows blocksPerRow blocks
+// long.
+func placedOrigin(offset uint64, blockBytes, blocksPerRow uint32) (x, y uint32, ok bool) {
+	delta := offset % d3d12TexturePlacementAlignment
+	if delta%uint64(blockBytes) != 0 {
+		return 0, 0, false
+	}
+	blocks := uint32(delta) / blockBytes
+	return blocks % blocksPerRow, blocks / blocksPerRow, true
+}
+
+// placeSlice is the footprint at bufferOffset holding widthBlocks blocks of
+// copyHeight texel rows from block (x, y) on.
+func placeSlice(bufferOffset uint64, x, y, widthBlocks, blockWidth, blockHeight, copyHeight uint32) (placedSlice, bool) {
+	fpWidth := (uint64(x) + uint64(widthBlocks)) * uint64(blockWidth)
+	originY := uint64(y) * uint64(blockHeight)
+	fpHeight := originY + uint64(copyHeight)
+	if fpWidth > math.MaxUint32 || fpHeight > math.MaxUint32-uint64(blockHeight) {
 		return placedSlice{}, false
 	}
-	if uint64(fpWidth/blockWidth)*uint64(blockBytes) > rowBytes {
-		return placedSlice{}, false
-	}
+	alignedHeight, _ := alignUint32(uint32(fpHeight), blockHeight)
 	return placedSlice{
 		bufferOffset:    bufferOffset,
-		bufferOriginX:   originX,
-		bufferOriginY:   originY,
-		footprintWidth:  fpWidth,
-		footprintHeight: fpHeight,
+		bufferOriginX:   x * blockWidth,
+		bufferOriginY:   uint32(originY),
+		footprintWidth:  uint32(fpWidth),
+		footprintHeight: alignedHeight,
 	}, true
 }
 
@@ -299,7 +348,8 @@ func writeTextureNativeLayout(texture *Texture, aspect gputypes.TextureAspect, l
 }
 
 // planBufferTextureCopies converts a WebGPU buffer/texture copy into one plan
-// per D3D12 subresource or 3D depth slice. It returns nil when the layout
+// per D3D12 subresource or 3D depth slice, or two where the rows straddle
+// the row pitch (see planPlacedBufferSlice). It returns nil when the layout
 // cannot be represented without changing logical byte addresses.
 func planBufferTextureCopies(texture *Texture, region hal.ImageCopyTexture, layout hal.ImageDataLayout, size hal.Extent3D) []bufferTextureCopyPlan {
 	plane, ok := copyPlane(texture, region.Aspect)
@@ -346,22 +396,24 @@ func planBufferTextureCopies(texture *Texture, region hal.ImageCopyTexture, layo
 			subresource = texture.subresourceIndexForPlane(region.MipLevel, region.Origin.Z+slice, plane)
 			textureOriginZ = 0
 		}
-		plans = append(plans, bufferTextureCopyPlan{
-			subresource:     subresource,
-			plane:           plane,
-			bufferOffset:    placed.bufferOffset,
-			bufferOriginX:   placed.bufferOriginX,
-			bufferOriginY:   placed.bufferOriginY,
-			footprintWidth:  placed.footprintWidth,
-			footprintHeight: placed.footprintHeight,
-			footprintDepth:  1,
-			textureOriginX:  region.Origin.X,
-			textureOriginY:  region.Origin.Y,
-			textureOriginZ:  textureOriginZ,
-			rowPitch:        rowPitch,
-			copyWidth:       widthBlocks * info.width,
-			copyHeight:      heightBlocks * info.height,
-		})
+		for _, p := range placed {
+			plans = append(plans, bufferTextureCopyPlan{
+				subresource:     subresource,
+				plane:           plane,
+				bufferOffset:    p.bufferOffset,
+				bufferOriginX:   p.bufferOriginX,
+				bufferOriginY:   p.bufferOriginY,
+				footprintWidth:  p.footprintWidth,
+				footprintHeight: p.footprintHeight,
+				footprintDepth:  1,
+				textureOriginX:  region.Origin.X + p.textureOffsetX,
+				textureOriginY:  region.Origin.Y,
+				textureOriginZ:  textureOriginZ,
+				rowPitch:        rowPitch,
+				copyWidth:       p.copyWidth,
+				copyHeight:      heightBlocks * info.height,
+			})
+		}
 	}
 	return plans
 }

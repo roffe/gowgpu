@@ -232,3 +232,63 @@ func TestPlanBufferTextureCopiesDepthStencilPlanes(t *testing.T) {
 		t.Fatal("24-bit depth has no buffer copy")
 	}
 }
+
+// TestPlanBufferTextureCopiesSplitsRowsPastThePitch checks, for every
+// block-aligned offset into a 512-byte window, that the plans of a copy
+// place each texel at the byte the WebGPU layout puts it at, cover each
+// texel once and keep their footprints at 512-aligned offsets inside the
+// row pitch. Rows that run past the pitch from the aligned offset are split
+// in two copies.
+func TestPlanBufferTextureCopiesSplitsRowsPastThePitch(t *testing.T) {
+	for _, tc := range []struct {
+		format  gputypes.TextureFormat
+		pitch   uint32
+		w, h    uint32
+		originX uint32
+	}{
+		{gputypes.TextureFormatRGBA8Unorm, 512, 128, 16, 0},
+		{gputypes.TextureFormatRGBA8Unorm, 256, 64, 4, 0},
+		{gputypes.TextureFormatRGBA8Unorm, 768, 192, 3, 0},
+		{gputypes.TextureFormatRGBA8Unorm, 768, 150, 3, 7},
+		{gputypes.TextureFormatR8Unorm, 256, 256, 5, 0},
+		{gputypes.TextureFormatRGBA32Float, 1280, 80, 2, 3},
+		{gputypes.TextureFormatBC1RGBAUnorm, 256, 128, 8, 4},
+	} {
+		texture := testTexture(tc.format, gputypes.TextureDimension2D, 512, 64, 1, 1)
+		info, _ := textureBlockInfoForPlane(tc.format, 0)
+		for base := uint64(3072); base < 3072+512; base += uint64(info.bytes) {
+			region := hal.ImageCopyTexture{Origin: hal.Origin3D{X: tc.originX}, Aspect: gputypes.TextureAspectAll}
+			layout := hal.ImageDataLayout{Offset: base, BytesPerRow: tc.pitch, RowsPerImage: tc.h}
+			plans := planBufferTextureCopies(texture, region, layout, hal.Extent3D{Width: tc.w, Height: tc.h, DepthOrArrayLayers: 1})
+			if plans == nil {
+				t.Fatalf("%v pitch %d offset %d: no plan", tc.format, tc.pitch, base)
+			}
+			if len(plans) > 2 {
+				t.Fatalf("%v pitch %d offset %d: %d plans", tc.format, tc.pitch, base, len(plans))
+			}
+			covered := make(map[[2]uint32]bool)
+			for _, p := range plans {
+				if p.bufferOffset%512 != 0 || uint64(p.footprintWidth/info.width)*uint64(info.bytes) > uint64(tc.pitch) {
+					t.Fatalf("%v pitch %d offset %d: footprint at %d is %d texels wide", tc.format, tc.pitch, base, p.bufferOffset, p.footprintWidth)
+				}
+				for y := uint32(0); y < p.copyHeight; y += info.height {
+					for x := uint32(0); x < p.copyWidth; x += info.width {
+						texel := [2]uint32{p.textureOriginX + x - tc.originX, y}
+						if covered[texel] {
+							t.Fatalf("%v pitch %d offset %d: texel %v copied twice", tc.format, tc.pitch, base, texel)
+						}
+						covered[texel] = true
+						placed := p.bufferOffset + uint64((p.bufferOriginY+y)/info.height)*uint64(tc.pitch) + uint64((p.bufferOriginX+x)/info.width)*uint64(info.bytes)
+						logical := base + uint64(y/info.height)*uint64(tc.pitch) + uint64(texel[0]/info.width)*uint64(info.bytes)
+						if placed != logical {
+							t.Fatalf("%v pitch %d offset %d: texel %v read from byte %d, want %d", tc.format, tc.pitch, base, texel, placed, logical)
+						}
+					}
+				}
+			}
+			if want := int(tc.w/info.width) * int(tc.h/info.height); len(covered) != want {
+				t.Fatalf("%v pitch %d offset %d: %d blocks copied, want %d", tc.format, tc.pitch, base, len(covered), want)
+			}
+		}
+	}
+}
