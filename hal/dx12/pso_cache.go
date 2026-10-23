@@ -6,12 +6,14 @@
 package dx12
 
 import (
+	"encoding/binary"
 	"errors"
 	"path/filepath"
 	"runtime"
 	"unsafe"
 
 	"github.com/roffe/gowgpu/hal/dx12/d3d12"
+	"github.com/roffe/gowgpu/hal/dx12/dxgi"
 	"github.com/roffe/gowgpu/internal/pipelinecache"
 )
 
@@ -90,15 +92,34 @@ func (d *Device) createComputePSO(
 	return pso, nil
 }
 
+// isInvalidCachedPSOError reports a PSO creation refusing its cached blob:
+// one of another adapter or driver version, or a damaged one. Dawn retries
+// without the blob on a driver version mismatch too.
 func isInvalidCachedPSOError(err error) bool {
 	if err == nil {
 		return false
 	}
 	var hr d3d12.HRESULTError
 	if errors.As(err, &hr) {
-		return hr == d3d12.E_INVALIDARG
+		switch hr {
+		case d3d12.E_INVALIDARG, d3d12.D3D12_ERROR_DRIVER_VERSION_MISMATCH, d3d12.D3D12_ERROR_ADAPTER_NOT_FOUND:
+			return true
+		}
 	}
 	return false
+}
+
+// psoCacheKey names the disk cache directory of an adapter: its PCI ids
+// and the version of its user-mode driver, whose blobs another driver
+// version refuses. The LUID is left out, it holds only until a reboot.
+func psoCacheKey(desc *dxgi.DXGI_ADAPTER_DESC1, driverVersion int64) string {
+	var buf [24]byte
+	binary.LittleEndian.PutUint32(buf[0:], desc.VendorID)
+	binary.LittleEndian.PutUint32(buf[4:], desc.DeviceID)
+	binary.LittleEndian.PutUint32(buf[8:], desc.SubSysID)
+	binary.LittleEndian.PutUint32(buf[12:], desc.Revision)
+	binary.LittleEndian.PutUint64(buf[16:], uint64(driverVersion))
+	return pipelinecache.HexKey(buf[:])
 }
 
 // NewPSOBlobStore creates a store at UserCacheDir()/gogpu/dx12/<adapterKey>/.

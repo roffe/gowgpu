@@ -329,7 +329,8 @@ func (a *Adapter) Open(features gputypes.Features, limits gputypes.Limits) (hal.
 	}
 
 	// Create device using the adapter
-	device, err := newDevice(a.instance, unsafe.Pointer(a.raw), &a.desc, a.capabilities.FeatureLevel)
+	driverVersion, _ := a.raw.CheckInterfaceSupport(&dxgi.IID_IDXGIDevice)
+	device, err := newDevice(a.instance, unsafe.Pointer(a.raw), &a.desc, driverVersion, a.capabilities.FeatureLevel)
 	if err != nil {
 		return hal.OpenDevice{}, err
 	}
@@ -642,7 +643,8 @@ func (a *AdapterLegacy) Open(features gputypes.Features, limits gputypes.Limits)
 	}
 
 	// Create device using the legacy adapter
-	device, err := newDevice(a.instance, unsafe.Pointer(a.raw), &a.desc, a.capabilities.FeatureLevel)
+	driverVersion, _ := a.raw.CheckInterfaceSupport(&dxgi.IID_IDXGIDevice)
+	device, err := newDevice(a.instance, unsafe.Pointer(a.raw), &a.desc, driverVersion, a.capabilities.FeatureLevel)
 	if err != nil {
 		return hal.OpenDevice{}, err
 	}

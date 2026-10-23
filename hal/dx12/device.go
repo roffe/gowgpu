@@ -29,7 +29,6 @@ import (
 	"github.com/roffe/gowgpu/hal/dx12/d3d12"
 	"github.com/roffe/gowgpu/hal/dx12/d3dcompile"
 	"github.com/roffe/gowgpu/hal/dx12/dxgi"
-	"github.com/roffe/gowgpu/internal/pipelinecache"
 	"golang.org/x/sys/windows"
 )
 
@@ -279,7 +278,8 @@ func (h *DescriptorHeap) HandleToIndex(handle d3d12.D3D12_CPU_DESCRIPTOR_HANDLE)
 
 // newDevice creates a new DX12 device from a DXGI adapter.
 // adapterPtr is the IUnknown pointer to the DXGI adapter.
-func newDevice(instance *Instance, adapterPtr unsafe.Pointer, adapterDesc *dxgi.DXGI_ADAPTER_DESC1, featureLevel d3d12.D3D_FEATURE_LEVEL) (*Device, error) {
+// driverVersion is the version of the adapter's user-mode driver.
+func newDevice(instance *Instance, adapterPtr unsafe.Pointer, adapterDesc *dxgi.DXGI_ADAPTER_DESC1, driverVersion int64, featureLevel d3d12.D3D_FEATURE_LEVEL) (*Device, error) {
 	// Create D3D12 device
 	rawDevice, err := instance.d3d12Lib.CreateDevice(adapterPtr, featureLevel)
 	if err != nil {
@@ -334,14 +334,7 @@ func newDevice(instance *Instance, adapterPtr unsafe.Pointer, adapterDesc *dxgi.
 		return nil, err
 	}
 
-	adapterKey := pipelinecache.DX12AdapterKey(
-		adapterDesc.AdapterLuid.LowPart,
-		adapterDesc.AdapterLuid.HighPart,
-		adapterDesc.VendorID,
-		adapterDesc.DeviceID,
-		adapterDesc.Revision,
-	)
-	if psoCache, err := NewPSOBlobStore(adapterKey); err != nil {
+	if psoCache, err := NewPSOBlobStore(psoCacheKey(adapterDesc, driverVersion)); err != nil {
 		hal.Logger().Warn("dx12: failed to init PSO disk cache", "error", err)
 	} else {
 		dev.psoCache = psoCache
