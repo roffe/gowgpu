@@ -15,6 +15,7 @@ import (
 	"github.com/roffe/gowgpu/hal/gles/gl"
 	"github.com/roffe/naga"
 	"github.com/roffe/naga/glsl"
+	"github.com/roffe/naga/ir"
 )
 
 // boundsChecks clamps an index that may be out of bounds, which GL leaves
@@ -32,8 +33,10 @@ func boundsChecks(v glsl.Version) glsl.BoundsCheckPolicies {
 	return p
 }
 
-// compileWGSLToGLSL compiles a WGSL shader source to GLSL for the given entry point.
-// OpenGL does not understand WGSL, so we use naga to parse WGSL and emit GLSL.
+// compileWGSLToGLSL compiles a WGSL shader source to GLSL for the entry point
+// of stage. OpenGL does not understand WGSL, so we use naga to parse WGSL and
+// emit GLSL. The module's overrides take their values from constants, the
+// pipeline's, or their defaults.
 //
 // The version parameter specifies the target GLSL version. On GL 4.3+ this is typically
 // Version430; on older drivers (e.g., GL 4.1 / GLSL 410) it must match the driver's
@@ -47,7 +50,8 @@ func boundsChecks(v glsl.Version) glsl.BoundsCheckPolicies {
 //
 // Returns the GLSL source and TranslationInfo containing TextureMappings for
 // SamplerBindMap construction (which sampler goes with which texture unit).
-func compileWGSLToGLSL(version glsl.Version, source hal.ShaderSource, entryPoint string, bindingMap map[glsl.BindingMapKey]uint8) (string, glsl.TranslationInfo, error) {
+func compileWGSLToGLSL(version glsl.Version, source hal.ShaderSource, stage ir.ShaderStage, entryPoint string,
+	constants map[string]float64, bindingMap map[glsl.BindingMapKey]uint8) (string, glsl.TranslationInfo, error) {
 	if source.WGSL == "" {
 		return "", glsl.TranslationInfo{}, fmt.Errorf("gles: shader source has no WGSL code")
 	}
@@ -62,6 +66,13 @@ func compileWGSLToGLSL(version glsl.Version, source hal.ShaderSource, entryPoint
 	module, err := naga.Lower(ast)
 	if err != nil {
 		return "", glsl.TranslationInfo{}, fmt.Errorf("gles: WGSL lower error: %w", err)
+	}
+	module, err = naga.ProcessOverrides(module, naga.OverrideOptions{
+		Constants:  constants,
+		EntryPoint: &naga.EntryPointSelector{Stage: stage, Name: entryPoint},
+	})
+	if err != nil {
+		return "", glsl.TranslationInfo{}, fmt.Errorf("gles: pipeline constants for entry point %q: %w", entryPoint, err)
 	}
 
 	// Compile IR to the target GLSL version.

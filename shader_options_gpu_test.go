@@ -135,12 +135,9 @@ override required: u32;
 // TestComputePipelineConstants sets one override with a default and one
 // without through the pipeline's constants. Vulkan compiled every module
 // with the defaults, so the first stayed 1 and the module failed for the
-// second.
+// second, and GL compiled it without them, which naga refuses.
 func TestComputePipelineConstants(t *testing.T) {
 	device, h := newValidatedDevice(t)
-	if h.backend == gputypes.BackendGL {
-		t.Skip("the GL backend compiles a module without its pipeline's constants, which naga refuses for overrides")
-	}
 	got := runU32Compute(t, device, overrideShader, map[string]float64{"answer": 42, "required": 7}, []uint32{0, 0})
 	if got[0] != 42 || got[1] != 7 {
 		t.Errorf("overrides read %v, want [42 7]", got)

@@ -13,6 +13,7 @@ import (
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/gles/gl"
 	"github.com/roffe/naga/glsl"
+	"github.com/roffe/naga/ir"
 )
 
 // createRenderPipeline compiles and links a render pipeline. The context
@@ -41,7 +42,7 @@ func (d *Device) createRenderPipeline(glCtx *gl.Context, desc *RenderPipelineDes
 	}
 
 	// Compile WGSL → GLSL for vertex stage.
-	vertexGLSL, vertexTranslationInfo, err := compileWGSLToGLSL(d.glslVersion, vertexModule.source, desc.Vertex.EntryPoint, layout.bindingMap)
+	vertexGLSL, vertexTranslationInfo, err := compileWGSLToGLSL(d.glslVersion, vertexModule.source, ir.StageVertex, desc.Vertex.EntryPoint, nil, layout.bindingMap)
 	if err != nil {
 		return nil, fmt.Errorf("gles: vertex shader: %w", err)
 	}
@@ -149,11 +150,6 @@ func (d *Device) createRenderPipeline(glCtx *gl.Context, desc *RenderPipelineDes
 // createComputePipeline compiles and links a compute pipeline. The context
 // must be current.
 //
-// TODO(compute-constants): Apply desc.Compute.Constants via naga's
-// pipeline_constants::process_overrides before GLSL emission. Rust wgpu-hal
-// GLES calls naga::back::pipeline_constants::process_overrides() in
-// create_shader (gles/device.rs:226).
-//
 // TODO(zero-init-workgroup): Pass desc.Compute.ZeroInitializeWorkgroupMemory
 // to naga GLSL options. Rust wgpu-hal sets naga_options.zero_initialize_workgroup_memory
 // per-stage (gles/device.rs:268).
@@ -170,7 +166,8 @@ func (d *Device) createComputePipeline(glCtx *gl.Context, desc *ComputePipelineD
 	}
 
 	// Compile WGSL → GLSL for compute stage.
-	computeGLSL, computeTranslationInfo, err := compileWGSLToGLSL(d.glslVersion, computeModule.source, desc.Compute.EntryPoint, layout.bindingMap)
+	computeGLSL, computeTranslationInfo, err := compileWGSLToGLSL(d.glslVersion, computeModule.source, ir.StageCompute, desc.Compute.EntryPoint,
+		desc.Compute.Constants, layout.bindingMap)
 	if err != nil {
 		return nil, fmt.Errorf("gles: compute shader: %w", err)
 	}
@@ -263,7 +260,7 @@ func compileFragmentShader(glCtx *gl.Context, version glsl.Version, frag *hal.Fr
 		return 0, glsl.TranslationInfo{}, fmt.Errorf("gles: invalid fragment shader module type")
 	}
 
-	fragmentGLSL, translationInfo, err := compileWGSLToGLSL(version, fragmentModule.source, frag.EntryPoint, bindingMap)
+	fragmentGLSL, translationInfo, err := compileWGSLToGLSL(version, fragmentModule.source, ir.StageFragment, frag.EntryPoint, nil, bindingMap)
 	if err != nil {
 		return 0, glsl.TranslationInfo{}, fmt.Errorf("gles: fragment shader: %w", err)
 	}
