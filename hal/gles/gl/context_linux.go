@@ -292,6 +292,8 @@ type Context struct {
 	glDispatchCompute         unsafe.Pointer
 	glBindImageTexture        unsafe.Pointer
 	glDispatchComputeIndirect unsafe.Pointer
+	glDrawArraysIndirect      unsafe.Pointer
+	glDrawElementsIndirect    unsafe.Pointer
 	glMemoryBarrier           unsafe.Pointer
 
 	// MSAA (GL 3.2+ / ES 3.1+)
@@ -529,6 +531,8 @@ func (c *Context) Load(getProcAddr ProcAddressFunc, isGLES ...bool) error {
 	c.glDispatchCompute = getProcAddr("glDispatchCompute")
 	c.glBindImageTexture = getProcAddr("glBindImageTexture")
 	c.glDispatchComputeIndirect = getProcAddr("glDispatchComputeIndirect")
+	c.glDrawArraysIndirect = getProcAddr("glDrawArraysIndirect")
+	c.glDrawElementsIndirect = getProcAddr("glDrawElementsIndirect")
 	c.glMemoryBarrier = getProcAddr("glMemoryBarrier")
 
 	// MSAA (optional - may be nil on older GL versions)
@@ -1382,6 +1386,17 @@ func (c *Context) DrawArraysInstanced(mode uint32, first, count, instanceCount i
 
 func (c *Context) DrawElementsInstanced(mode uint32, count int32, typ uint32, indices uintptr, instanceCount int32) {
 	C.gl_v_iiiui(C.uintptr_t(uintptr(c.glDrawElementsInstanced)), C.uint32_t(mode), C.uint32_t(count), C.uint32_t(typ), C.uintptr_t(indices), C.uint32_t(instanceCount))
+}
+
+// DrawArraysIndirect draws with the arguments at offset indirect of the
+// bound GL_DRAW_INDIRECT_BUFFER (GL 4.0, ARB_draw_indirect, ES 3.1).
+func (c *Context) DrawArraysIndirect(mode uint32, indirect uintptr) {
+	C.gl_v_iu(C.uintptr_t(uintptr(c.glDrawArraysIndirect)), C.uint32_t(mode), C.uintptr_t(indirect))
+}
+
+// DrawElementsIndirect is DrawArraysIndirect for an indexed draw.
+func (c *Context) DrawElementsIndirect(mode, typ uint32, indirect uintptr) {
+	C.gl_v_iiu(C.uintptr_t(uintptr(c.glDrawElementsIndirect)), C.uint32_t(mode), C.uint32_t(typ), C.uintptr_t(indirect))
 }
 
 // PrimitiveRestartIndex sets the index GL_PRIMITIVE_RESTART restarts at

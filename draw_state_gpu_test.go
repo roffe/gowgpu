@@ -604,3 +604,86 @@ func TestStripRestartsAtTheLargestIndex(t *testing.T) {
 	expectPixels(t, "the middle, between the triangles", append(at(1, 2), at(2, 2)...), 255, 0, 0, 255)
 	assertNoValidation(t, h)
 }
+
+const indirectShader = `
+@vertex fn vs_main(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
+	var pos = array<vec2<f32>, 9>(
+		vec2<f32>(-1.0, -1.0), vec2<f32>(-1.0, 1.0), vec2<f32>(-0.5, -1.0),
+		vec2<f32>(0.5, -1.0), vec2<f32>(1.0, 1.0), vec2<f32>(1.0, -1.0),
+		vec2<f32>(-0.5, -1.0), vec2<f32>(0.0, 1.0), vec2<f32>(0.5, -1.0));
+	var p = vec2<f32>(0.0, 1.0);
+	if vi < 9u {
+		p = pos[vi];
+	}
+	return vec4<f32>(p, 0.0, 1.0);
+}
+@fragment fn fs_main() -> @location(0) vec4<f32> { return vec4<f32>(0.0, 1.0, 0.0, 1.0); }
+`
+
+// TestIndirectDraws draws a triangle at each end and one in the middle of
+// the bottom row from indirect records: DrawIndirect from the fourth
+// vertex, DrawIndexedIndirect through an index buffer bound at its start
+// and through one bound past it. GL recorded no indirect draw at all.
+func TestIndirectDraws(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	module, err := device.CreateShaderModule(&ShaderModuleDescriptor{Label: "indirect", WGSL: indirectShader})
+	if err != nil {
+		t.Fatalf("CreateShaderModule: %v", err)
+	}
+	defer module.Release()
+	pipe, err := device.CreateRenderPipeline(&RenderPipelineDescriptor{
+		Label:     "indirect",
+		Vertex:    VertexState{Module: module, EntryPoint: "vs_main"},
+		Primitive: gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList},
+		Fragment: &FragmentState{Module: module, EntryPoint: "fs_main",
+			Targets: []gputypes.ColorTargetState{{Format: gputypes.TextureFormatRGBA8Unorm, WriteMask: gputypes.ColorWriteMaskAll}}},
+	})
+	if err != nil {
+		t.Fatalf("CreateRenderPipeline: %v", err)
+	}
+	defer pipe.Release()
+	newBuffer := func(label string, usage gputypes.BufferUsage, data []uint32) *Buffer {
+		buf, err := device.CreateBuffer(&BufferDescriptor{Label: label, Size: uint64(4 * len(data)), Usage: usage | BufferUsageCopyDst})
+		if err != nil {
+			t.Fatalf("CreateBuffer: %v", err)
+		}
+		if err := device.Queue().WriteBuffer(buf, 0, unsafe.Slice((*byte)(unsafe.Pointer(&data[0])), 4*len(data))); err != nil {
+			t.Fatalf("WriteBuffer: %v", err)
+		}
+		return buf
+	}
+	args := newBuffer("indirect-args", BufferUsageIndirect, []uint32{
+		3, 1, 3, 0, // the right triangle
+		3, 1, 0, 0, 0, // indices 0-2 of the index buffer bound
+	})
+	defer args.Release()
+	middle := newBuffer("indirect-middle", BufferUsageIndex, []uint32{6 | 7<<16, 8})
+	defer middle.Release()
+	left := newBuffer("indirect-left", BufferUsageIndex, []uint32{5 | 5<<16, 0 | 1<<16, 2})
+	defer left.Release()
+
+	tex, view := pixTexture(t, device, "indirect", TextureUsageRenderAttachment|TextureUsageCopySrc)
+	defer releaseTextureView(tex, view)
+	st := readbackBuffer(t, device, "indirect-st")
+	enc, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	clearPass(t, enc, view, gputypes.LoadOpClear, red, func(p *RenderPassEncoder) {
+		p.SetPipeline(pipe)
+		p.DrawIndirect(args, 0)
+		p.SetIndexBuffer(middle, gputypes.IndexFormatUint16, 0)
+		p.DrawIndexedIndirect(args, 16)
+		p.SetIndexBuffer(left, gputypes.IndexFormatUint16, 4)
+		p.DrawIndexedIndirect(args, 16)
+	})
+	copyOut(enc, tex, st)
+	finishAndSubmit(t, device, enc)
+	pix := readback(t, st)
+	at := func(x, y int) []byte { return pix[(y*pixSide+x)*4 : (y*pixSide+x)*4+4] }
+	expectPixels(t, "the left triangle, indices bound past their buffer's start", at(0, 3), 0, 255, 0, 255)
+	expectPixels(t, "the middle triangle, indexed", append(at(1, 3), at(2, 3)...), 0, 255, 0, 255)
+	expectPixels(t, "the right triangle", at(3, 3), 0, 255, 0, 255)
+	expectPixels(t, "the top row", at(1, 0), 255, 0, 0, 255)
+	assertNoValidation(t, h)
+}

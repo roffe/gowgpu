@@ -34,6 +34,8 @@ type Device struct {
 	// GL 4.3, ARB_ES3_compatibility); without it strips restart through
 	// glPrimitiveRestartIndex.
 	fixedIndexRestart bool
+	// drawIndirect is glDraw*Indirect (GL 4.0, ARB_draw_indirect, ES 3.1).
+	drawIndirect bool
 
 	// glslVersion is the target GLSL version for shader compilation, detected
 	// from the adapter's GL_SHADING_LANGUAGE_VERSION at Open time.
@@ -446,6 +448,7 @@ func (d *Device) CreateCommandEncoder(_ *CommandEncoderDescriptor) (hal.CommandE
 		fbs:               d.fbs,
 		maxTextureUnits:   d.maxTextureUnits,
 		fixedIndexRestart: d.fixedIndexRestart,
+		drawIndirect:      d.drawIndirect,
 	}, nil
 }
 

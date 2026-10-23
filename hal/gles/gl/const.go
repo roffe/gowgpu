@@ -408,6 +408,7 @@ const (
 
 	// Indirect dispatch buffer (OpenGL ES 3.1+ / OpenGL 4.3+)
 	DISPATCH_INDIRECT_BUFFER = 0x90EE
+	DRAW_INDIRECT_BUFFER     = 0x8F3F
 
 	// Shader storage buffer (OpenGL ES 3.1+ / OpenGL 4.3+)
 	SHADER_STORAGE_BUFFER = 0x90D2

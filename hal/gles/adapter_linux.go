@@ -83,6 +83,8 @@ func (a *Adapter) Open(_ gputypes.Features, _ gputypes.Limits) (hal.OpenDevice, 
 		independentBlend: a.caps.DownlevelFlags.Contains(gputypes.DownlevelFlagsIndependentBlend),
 		fixedIndexRestart: glVersionAtLeast(a.caps.GLMajor, a.caps.GLMinor, a.caps.IsES, [2]int{3, 0}, [2]int{4, 3}) ||
 			hasExtension(a.caps.Extensions, "GL_ARB_ES3_compatibility"),
+		drawIndirect: glVersionAtLeast(a.caps.GLMajor, a.caps.GLMinor, a.caps.IsES, [2]int{3, 1}, [2]int{4, 0}) ||
+			hasExtension(a.caps.Extensions, "GL_ARB_draw_indirect"),
 		glslVersion:         glslVer,
 		shaderBindingLayout: glslVer.SupportsExplicitLocations(),
 	}

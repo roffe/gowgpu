@@ -43,6 +43,7 @@ type CommandEncoder struct {
 	maxTextureUnits int32 // Hardware limit passed from Device
 
 	fixedIndexRestart bool // as the Device's
+	drawIndirect      bool // as the Device's
 
 	// arena holds the current recording's pooled commands. spareArena and
 	// spareCommands are what ResetAll took back from command buffers that
@@ -668,12 +669,16 @@ func (e *RenderPassEncoder) SetStencilReference(ref uint32) {
 	})
 }
 
+// topology is the bound pipeline's primitive topology.
+func (e *RenderPassEncoder) topology() gputypes.PrimitiveTopology {
+	if e.pipeline != nil {
+		return e.pipeline.primitiveTopology
+	}
+	return gputypes.PrimitiveTopologyTriangleList
+}
+
 // Draw draws primitives.
 func (e *RenderPassEncoder) Draw(args gputypes.DrawArgs) {
-	topology := gputypes.PrimitiveTopologyTriangleList // default
-	if e.pipeline != nil {
-		topology = e.pipeline.primitiveTopology
-	}
 	baseInstance := e.startInstanceBuffers(args.FirstInstance)
 	e.encoder.commands = append(e.encoder.commands, e.encoder.store().draws.put(DrawCommand{
 		vertexCount:   args.VertexCount,
@@ -682,17 +687,13 @@ func (e *RenderPassEncoder) Draw(args gputypes.DrawArgs) {
 		firstInstance: args.FirstInstance,
 		baseInstance:  baseInstance,
 		pipeline:      e.pipeline,
-		topology:      topology,
+		topology:      e.topology(),
 	}))
 	e.endInstanceBuffers(args.FirstInstance, baseInstance)
 }
 
 // DrawIndexed draws indexed primitives.
 func (e *RenderPassEncoder) DrawIndexed(args gputypes.DrawIndexedArgs) {
-	topology := gputypes.PrimitiveTopologyTriangleList // default
-	if e.pipeline != nil {
-		topology = e.pipeline.primitiveTopology
-	}
 	baseInstance := e.startInstanceBuffers(args.FirstInstance)
 	e.encoder.commands = append(e.encoder.commands, e.encoder.store().drawsIndexed.put(DrawIndexedCommand{
 		indexCount:    args.IndexCount,
@@ -704,7 +705,7 @@ func (e *RenderPassEncoder) DrawIndexed(args gputypes.DrawIndexedArgs) {
 		pipeline:      e.pipeline,
 		indexOffset:   e.indexOffset,
 		indexFormat:   e.indexFormat,
-		topology:      topology,
+		topology:      e.topology(),
 		fixedRestart:  e.encoder.fixedIndexRestart,
 	}))
 	e.endInstanceBuffers(args.FirstInstance, baseInstance)
@@ -753,20 +754,37 @@ func (e *RenderPassEncoder) bindInstanceBuffers(first uint64) {
 	}
 }
 
-// DrawIndirect is not implemented by the GLES backend.
+// DrawIndirect draws drawCount times, with the arguments of the 16-byte
+// records in buffer from offset on.
 func (e *RenderPassEncoder) DrawIndirect(buffer hal.Buffer, offset uint64, drawCount uint32) {
-	_ = buffer
-	_ = offset
-	_ = drawCount
+	buf, ok := buffer.(*Buffer)
+	if !ok {
+		return
+	}
+	draw := DrawCommand{pipeline: e.pipeline, topology: e.topology()}
+	for i := range uint64(drawCount) {
+		e.encoder.commands = append(e.encoder.commands, &DrawIndirectCommand{
+			buffer: buf, offset: offset + 16*i, native: e.encoder.drawIndirect, draw: draw,
+		})
+	}
 }
 
-// DrawIndexedIndirect is not implemented by the GLES backend.
-// OpenGL cannot apply a WebGPU index-buffer base offset to an indirect record
-// without translating that record or the bound index buffer.
+// DrawIndexedIndirect draws drawCount times, with the arguments of the
+// 20-byte records in buffer from offset on.
 func (e *RenderPassEncoder) DrawIndexedIndirect(buffer hal.Buffer, offset uint64, drawCount uint32) {
-	_ = buffer
-	_ = offset
-	_ = drawCount
+	buf, ok := buffer.(*Buffer)
+	if !ok {
+		return
+	}
+	draw := &DrawIndexedCommand{
+		pipeline: e.pipeline, indexOffset: e.indexOffset, indexFormat: e.indexFormat,
+		topology: e.topology(), fixedRestart: e.encoder.fixedIndexRestart,
+	}
+	for i := range uint64(drawCount) {
+		e.encoder.commands = append(e.encoder.commands, &DrawIndirectCommand{
+			buffer: buf, offset: offset + 20*i, native: e.encoder.drawIndirect, indexed: draw,
+		})
+	}
 }
 
 // DrawIndirectCount is not supported by the GLES backend.
@@ -1646,13 +1664,7 @@ type DrawIndexedCommand struct {
 }
 
 func (c *DrawIndexedCommand) Execute(ctx *gl.Context) {
-	indexType := uint32(gl.UNSIGNED_SHORT)
-	indexSize := uintptr(2)
-	if c.indexFormat == gputypes.IndexFormatUint32 {
-		indexType = gl.UNSIGNED_INT
-		indexSize = 4
-	}
-
+	indexType, indexSize := c.indexType()
 	offset := uintptr(c.indexOffset) + uintptr(c.firstIndex)*indexSize
 	mode := primitiveTopologyToGL(c.topology)
 	c.setRestart(ctx)
@@ -1670,6 +1682,69 @@ func (c *DrawIndexedCommand) Execute(ctx *gl.Context) {
 	default:
 		ctx.DrawElementsInstanced(mode, int32(c.indexCount), indexType, offset, int32(c.instanceCount))
 	}
+}
+
+// indexType is the GL type of the draw's indices and their size.
+func (c *DrawIndexedCommand) indexType() (uint32, uintptr) {
+	if c.indexFormat == gputypes.IndexFormatUint32 {
+		return gl.UNSIGNED_INT, 4
+	}
+	return gl.UNSIGNED_SHORT, 2
+}
+
+// DrawIndirectCommand draws with the arguments of an indirect record, by
+// glDraw*Indirect where the context has it. Otherwise, and for an indexed
+// draw whose index buffer is bound past its start, which an indirect record
+// can't express, the record is read back, waiting for the GPU, and drawn
+// directly.
+type DrawIndirectCommand struct {
+	buffer  *Buffer
+	offset  uint64
+	native  bool
+	draw    DrawCommand         // the pipeline and topology of a draw
+	indexed *DrawIndexedCommand // those and the index buffer of an indexed draw, nil for a draw
+}
+
+func (c *DrawIndirectCommand) Execute(ctx *gl.Context) {
+	if c.native && (c.indexed == nil || c.indexed.indexOffset == 0) {
+		ctx.BindBuffer(gl.DRAW_INDIRECT_BUFFER, c.buffer.id)
+		if d := c.indexed; d != nil {
+			d.setRestart(ctx)
+			d.pipeline.setFirstInstance(ctx, 0)
+			indexType, _ := d.indexType()
+			ctx.DrawElementsIndirect(primitiveTopologyToGL(d.topology), indexType, uintptr(c.offset))
+		} else {
+			c.draw.pipeline.setFirstInstance(ctx, 0)
+			ctx.DrawArraysIndirect(primitiveTopologyToGL(c.draw.topology), uintptr(c.offset))
+		}
+		ctx.BindBuffer(gl.DRAW_INDIRECT_BUFFER, 0)
+		return
+	}
+
+	var args [5]uint32
+	n := 4
+	if c.indexed != nil {
+		n = 5
+	}
+	ctx.BindBuffer(gl.COPY_READ_BUFFER, c.buffer.id)
+	p := ctx.MapBufferRange(gl.COPY_READ_BUFFER, int(c.offset), 4*n, gl.MAP_READ_BIT)
+	if p != 0 {
+		copy(args[:n], unsafe.Slice(*(**uint32)(unsafe.Pointer(&p)), n))
+		ctx.UnmapBuffer(gl.COPY_READ_BUFFER)
+	}
+	ctx.BindBuffer(gl.COPY_READ_BUFFER, 0)
+	if p == 0 || args[n-1] != 0 {
+		return // a first instance other than 0 needs indirect-first-instance, without which the draw is a no-op
+	}
+	if c.indexed != nil {
+		d := *c.indexed
+		d.indexCount, d.instanceCount, d.firstIndex, d.baseVertex = args[0], args[1], args[2], int32(args[3])
+		d.Execute(ctx)
+		return
+	}
+	d := c.draw
+	d.vertexCount, d.instanceCount, d.firstVertex = args[0], args[1], args[2]
+	d.Execute(ctx)
 }
 
 // setRestart turns primitive restart on for a strip and off for a list, as
