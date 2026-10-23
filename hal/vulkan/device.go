@@ -95,6 +95,11 @@ type Device struct {
 	// the aspect is stored, a write that the barriers after the pass wait for.
 	storeOpNone bool
 
+	// alignedFills is whether a fill of 4096 bytes or more has to start
+	// 16-byte aligned: some NVIDIA drivers fill such a range from the wrong
+	// offset otherwise.
+	alignedFills bool
+
 	// Timeline semaphore fence (VK-IMPL-001).
 	// When available (Vulkan 1.2+), replaces both frame fences and transfer fence
 	// with a single timeline semaphore. Falls back to binary fences on older drivers.

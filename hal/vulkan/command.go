@@ -817,8 +817,12 @@ func (e *CommandEncoder) ClearBuffer(buffer hal.Buffer, offset, size uint64) {
 		return
 	}
 
-	// vkCmdFillBuffer fills with a 32-bit value (0 for zero fill)
-	vkCmdFillBuffer(e.device.cmds, e.active, buf.handle, vk.DeviceSize(offset), vk.DeviceSize(size), 0)
+	start := offset
+	if e.device.alignedFills && size >= 4096 && offset%16 != 0 {
+		start = (offset + 15) &^ 15
+		vkCmdFillBuffer(e.device.cmds, e.active, buf.handle, vk.DeviceSize(offset), vk.DeviceSize(start-offset), 0)
+	}
+	vkCmdFillBuffer(e.device.cmds, e.active, buf.handle, vk.DeviceSize(start), vk.DeviceSize(offset+size-start), 0)
 }
 
 // CopyBufferToBuffer copies data between buffers.
