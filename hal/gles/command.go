@@ -39,7 +39,8 @@ type CommandEncoder struct {
 	commands        []Command
 	label           string
 	vao             uint32 // persistent VAO from Device for Core Profile
-	maxTextureUnits int32  // Hardware limit passed from Device
+	fbs             *framebuffers
+	maxTextureUnits int32 // Hardware limit passed from Device
 
 	// arena holds the current recording's pooled commands. spareArena and
 	// spareCommands are what ResetAll took back from command buffers that
@@ -194,7 +195,7 @@ func (e *CommandEncoder) CopyTextureToBuffer(src hal.Texture, dst hal.Buffer, re
 
 	for _, region := range regions {
 		e.commands = append(e.commands, &CopyTextureToBufferCommand{
-			glCtx:       e.glCtx,
+			fbs:         e.fbs,
 			srcTexture:  srcTex,
 			dstBuffer:   dstBuf,
 			srcOrigin:   [3]uint32{region.TextureBase.Origin.X, region.TextureBase.Origin.Y, region.TextureBase.Origin.Z},
@@ -218,6 +219,7 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst hal.Texture, regions []ha
 
 	for _, region := range regions {
 		e.commands = append(e.commands, &CopyTextureToTextureCommand{
+			fbs:       e.fbs,
 			srcTex:    srcTex,
 			dstTex:    dstTex,
 			srcOrigin: [3]uint32{region.SrcBase.Origin.X, region.SrcBase.Origin.Y, region.SrcBase.Origin.Z},
@@ -279,15 +281,15 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 
 	// Bind the correct framebuffer and set viewport.
 	// Reference wgpu sets viewport at render pass start — required for correct rendering.
-	if len(desc.ColorAttachments) > 0 {
-		e.setupColorAttachment(desc, rpe)
-	} else if desc.DepthStencilAttachment != nil {
-		e.setupDepthOnlyTarget(desc.DepthStencilAttachment)
+	if tv := firstColorView(desc); tv != nil && tv.isSurface {
+		e.setupSurfaceTarget(desc, tv, rpe)
+	} else if len(desc.ColorAttachments) > 0 || desc.DepthStencilAttachment != nil {
+		e.setupOffscreenTarget(desc, rpe)
 	}
 
-	// Set draw buffers for MRT. Matches Rust wgpu-hal GLES
-	// SetDrawColorBuffers (command.rs:643-646, queue.rs:1202-1207).
-	if len(desc.ColorAttachments) > 0 {
+	// Set draw buffers for MRT, none for a depth-only pass. Matches Rust
+	// wgpu-hal GLES SetDrawColorBuffers (command.rs:643-646, queue.rs:1202-1207).
+	if len(desc.ColorAttachments) > 0 || desc.DepthStencilAttachment != nil {
 		e.commands = append(e.commands, e.store().drawBuffers.put(SetDrawColorBuffersCommand{
 			count: len(desc.ColorAttachments),
 		}))
@@ -335,28 +337,14 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 	return rpe
 }
 
-// setupColorAttachment configures framebuffer, viewport, and MSAA resolve for
-// all color attachments of a render pass. For surface targets only attachment[0]
-// is used (surfaces are always single-target). For offscreen targets, all
-// attachments are bound to GL_COLOR_ATTACHMENT0..N.
-// Matches Rust wgpu-hal GLES begin_render_pass (command.rs:552-627).
-func (e *CommandEncoder) setupColorAttachment(desc *hal.RenderPassDescriptor, rpe *RenderPassEncoder) {
-	ca := desc.ColorAttachments[0]
-	tv, ok := ca.View.(*TextureView)
-	if !ok {
-		return
+// firstColorView returns the view of a pass's first colour attachment, nil
+// when it has none.
+func firstColorView(desc *hal.RenderPassDescriptor) *TextureView {
+	if len(desc.ColorAttachments) == 0 {
+		return nil
 	}
-
-	if tv.isSurface {
-		e.setupSurfaceTarget(desc, tv, rpe)
-		return
-	}
-
-	if tv.texture == nil {
-		return
-	}
-
-	e.setupOffscreenTarget(desc, tv, rpe)
+	tv, _ := desc.ColorAttachments[0].View.(*TextureView)
+	return tv
 }
 
 // setupSurfaceTarget binds the Surface's swapchain offscreen framebuffer and
@@ -399,24 +387,6 @@ func (e *CommandEncoder) setupSurfaceTarget(desc *hal.RenderPassDescriptor, tv *
 	e.commands = append(e.commands, e.store().framebuffers.put(BindFramebufferCommand{fbo: 0}))
 }
 
-// setupDepthOnlyTarget binds the framebuffer that has the pass's depth/stencil
-// texture as its only attachment and sets the viewport and scissor to its
-// size, for a pass with no colour attachment.
-func (e *CommandEncoder) setupDepthOnlyTarget(dsa *hal.RenderPassDepthStencilAttachment) {
-	dsView, ok := dsa.View.(*TextureView)
-	if !ok || dsView.texture == nil {
-		return
-	}
-	tex := dsView.texture
-	e.commands = append(e.commands, &EnsureDepthOnlyFBOCommand{texture: tex})
-	e.commands = append(e.commands, e.store().viewports.put(SetViewportCommand{
-		width:    float32(tex.size.Width),
-		height:   float32(tex.size.Height),
-		maxDepth: 1,
-	}))
-	e.resetScissor(tex.size.Width, tex.size.Height)
-}
-
 // resetScissor opens the scissor to the whole target at pass start, as a
 // WebGPU pass begins: GL keeps the last pass's scissor enabled otherwise, so
 // a frame's second pass was clipped to wherever its first one ended.
@@ -426,59 +396,61 @@ func (e *CommandEncoder) resetScissor(width, height uint32) {
 	}))
 }
 
-// setupOffscreenTarget configures an offscreen FBO with all color attachments,
-// depth/stencil attachment, and MSAA resolve.
-// Matches Rust wgpu-hal GLES begin_render_pass (command.rs:558-595):
-// iterates all color_attachments and calls BindAttachment for each.
-func (e *CommandEncoder) setupOffscreenTarget(
-	desc *hal.RenderPassDescriptor,
-	tv *TextureView,
-	rpe *RenderPassEncoder,
-) {
-	e.commands = append(e.commands, e.store().offscreenFBOs.put(EnsureOffscreenFBOCommand{texture: tv.texture}))
-
-	// Attach additional color textures (attachments 1..N) to the FBO.
-	// Attachment 0 is already bound by EnsureOffscreenFBOCommand.
-	// Matches Rust BindAttachment for each color_attachments[i] (command.rs:558-595).
-	for i := 1; i < len(desc.ColorAttachments); i++ {
-		ca := desc.ColorAttachments[i]
-		atv, ok := ca.View.(*TextureView)
-		if !ok || atv.texture == nil {
-			continue
-		}
-		e.commands = append(e.commands, &AttachColorCommand{
-			attachmentIndex: uint32(i),
-			texture:         atv.texture,
-		})
-	}
-
-	// Attach depth/stencil texture to the FBO if provided.
-	if desc.DepthStencilAttachment != nil {
-		if dsView, ok := desc.DepthStencilAttachment.View.(*TextureView); ok && dsView.texture != nil {
-			e.commands = append(e.commands, &AttachDepthStencilCommand{
-				colorTexture: tv.texture,
-				depthTexture: dsView.texture,
-			})
+// setupOffscreenTarget attaches a pass's colour and depth/stencil views to
+// the draw framebuffer, at their mip levels and layers, and sizes the
+// viewport and scissor to the first one's mip level.
+// Matches Rust wgpu-hal GLES begin_render_pass (command.rs:552-627).
+func (e *CommandEncoder) setupOffscreenTarget(desc *hal.RenderPassDescriptor, rpe *RenderPassEncoder) {
+	cmd := e.store().renderTargets.put(BindRenderTargetsCommand{fbs: e.fbs})
+	var sized *TextureView
+	for i, ca := range desc.ColorAttachments[:min(len(desc.ColorAttachments), maxColorAttachments)] {
+		if tv, ok := ca.View.(*TextureView); ok && tv.texture != nil {
+			cmd.colors[i] = viewAttachment(tv)
+			if sized == nil {
+				sized = tv
+			}
 		}
 	}
+	if dsa := desc.DepthStencilAttachment; dsa != nil {
+		if tv, ok := dsa.View.(*TextureView); ok && tv.texture != nil {
+			cmd.depth = viewAttachment(tv)
+			if sized == nil {
+				sized = tv
+			}
+		}
+	}
+	e.commands = append(e.commands, cmd)
+	if sized == nil {
+		return
+	}
 
-	rpe.fbHeight = tv.texture.size.Height
+	width, height := sized.texture.mipSize(sized.baseMip)
+	rpe.fbHeight = height
 	e.commands = append(e.commands, e.store().viewports.put(SetViewportCommand{
-		width:    float32(tv.texture.size.Width),
-		height:   float32(tv.texture.size.Height),
+		width:    float32(width),
+		height:   float32(height),
 		maxDepth: 1,
 	}))
-	e.resetScissor(tv.texture.size.Width, tv.texture.size.Height)
+	e.resetScissor(width, height)
 
 	// Record MSAA resolve target if present (attachment 0 only).
+	if len(desc.ColorAttachments) == 0 {
+		return
+	}
 	ca := desc.ColorAttachments[0]
+	tv, ok := ca.View.(*TextureView)
+	if !ok || tv.texture == nil {
+		return
+	}
 	if resolveView, ok := ca.ResolveTarget.(*TextureView); ok && ca.ResolveTarget != nil {
 		if resolveView.texture != nil {
 			rpe.msaaTexture = tv.texture
-			rpe.resolveTexture = resolveView.texture
+			rpe.resolve = viewAttachment(resolveView)
+			rpe.resolveWidth, rpe.resolveHeight = width, height
 		} else if resolveView.isSurface {
 			rpe.msaaTexture = tv.texture
 			rpe.resolveToSurface = true
+			rpe.resolveWidth, rpe.resolveHeight = width, height
 		}
 	}
 }
@@ -530,9 +502,10 @@ type RenderPassEncoder struct {
 	fbHeight      uint32 // Framebuffer height for MSAA resolve blit Y-flip
 
 	// MSAA resolve state: set during BeginRenderPass when ResolveTarget is present.
-	msaaTexture      *Texture // The MSAA color texture (source for resolve)
-	resolveTexture   *Texture // The single-sample resolve target (nil when resolveToSurface)
-	resolveToSurface bool     // True when resolve target is the default framebuffer (FBO 0)
+	msaaTexture                 *Texture     // The MSAA color texture (source for resolve)
+	resolve                     fbAttachment // The single-sample resolve target (none when resolveToSurface)
+	resolveToSurface            bool         // True when resolve target is the default framebuffer (FBO 0)
+	resolveWidth, resolveHeight uint32
 
 	// End-of-pass timestamp write (deferred to End()).
 	endTimestampQuerySet hal.QuerySet
@@ -555,13 +528,13 @@ func (e *RenderPassEncoder) resolveTargetSurface() *Surface {
 // emitMSAAResolve appends the appropriate MSAAResolveCommand when the pass has
 // an MSAA resolve target. Must only be called when e.msaaTexture != nil.
 func (e *RenderPassEncoder) emitMSAAResolve() {
-	w := int32(e.msaaTexture.size.Width)
-	h := int32(e.msaaTexture.size.Height)
+	w := int32(e.resolveWidth)
+	h := int32(e.resolveHeight)
 	if e.resolveToSurface {
 		// Resolve into the Surface's swapchain offscreen FBO (not FBO 0).
 		// The Y-flip happens once at Present time (Queue.Present), not here.
 		e.encoder.commands = append(e.encoder.commands, &MSAAResolveCommand{
-			msaaTexture:      e.msaaTexture,
+			fbs:              e.encoder.fbs,
 			resolveToSurface: true,
 			surface:          e.resolveTargetSurface(),
 			width:            w,
@@ -569,13 +542,13 @@ func (e *RenderPassEncoder) emitMSAAResolve() {
 		})
 		return
 	}
-	if e.resolveTexture != nil {
+	if e.resolve.tex != nil {
 		// Resolve into an offscreen texture FBO.
 		e.encoder.commands = append(e.encoder.commands, &MSAAResolveCommand{
-			msaaTexture:    e.msaaTexture,
-			resolveTexture: e.resolveTexture,
-			width:          w,
-			height:         h,
+			fbs:     e.encoder.fbs,
+			resolve: e.resolve,
+			width:   w,
+			height:  h,
 		})
 	}
 }
@@ -594,17 +567,10 @@ func (e *RenderPassEncoder) End() {
 		e.encoder.emitTimestamp(e.endTimestampQuerySet, e.endTimestampIndex)
 	}
 
-	// Check if we were rendering to an offscreen target.
-	if len(e.desc.ColorAttachments) > 0 {
-		if tv, ok := e.desc.ColorAttachments[0].View.(*TextureView); ok {
-			if !tv.isSurface && tv.texture != nil {
-				e.encoder.commands = append(e.encoder.commands, e.encoder.store().framebuffers.put(BindFramebufferCommand{fbo: 0}))
-			}
-		}
-	} else if e.desc.DepthStencilAttachment != nil {
-		if tv, ok := e.desc.DepthStencilAttachment.View.(*TextureView); ok && tv.texture != nil {
-			e.encoder.commands = append(e.encoder.commands, e.encoder.store().framebuffers.put(BindFramebufferCommand{fbo: 0}))
-		}
+	// Leave the draw framebuffer unbound, so that nothing after the pass
+	// lands in its attachments.
+	if tv := firstColorView(e.desc); (tv == nil || !tv.isSurface) && (len(e.desc.ColorAttachments) > 0 || e.desc.DepthStencilAttachment != nil) {
+		e.encoder.commands = append(e.encoder.commands, e.encoder.store().framebuffers.put(BindFramebufferCommand{fbo: 0}))
 	}
 }
 
@@ -965,76 +931,6 @@ func (c *BindSurfaceFramebufferCommand) Execute(ctx *gl.Context) {
 	ctx.BindFramebuffer(gl.FRAMEBUFFER, c.surface.swapchainFBO)
 }
 
-// EnsureOffscreenFBOCommand lazily creates a framebuffer object for an offscreen
-// texture and binds it. If the texture already has an FBO, it simply binds it.
-type EnsureOffscreenFBOCommand struct {
-	texture *Texture
-}
-
-func (c *EnsureOffscreenFBOCommand) Execute(ctx *gl.Context) {
-	if c.texture.fbo == 0 {
-		// Create FBO.
-		fbo := ctx.GenFramebuffers(1)
-		ctx.BindFramebuffer(gl.FRAMEBUFFER, fbo)
-		// Attach the color texture as COLOR_ATTACHMENT0.
-		// Use the texture's actual target (GL_TEXTURE_2D or GL_TEXTURE_2D_MULTISAMPLE).
-		ctx.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, c.texture.target, c.texture.id, 0)
-		// Verify completeness.
-		status := ctx.CheckFramebufferStatus(gl.FRAMEBUFFER)
-		if status != gl.FRAMEBUFFER_COMPLETE {
-			// FBO incomplete — delete and fall back to default framebuffer.
-			ctx.DeleteFramebuffers(fbo)
-			ctx.BindFramebuffer(gl.FRAMEBUFFER, 0)
-			return
-		}
-		c.texture.fbo = fbo
-	} else {
-		ctx.BindFramebuffer(gl.FRAMEBUFFER, c.texture.fbo)
-	}
-}
-
-// EnsureDepthOnlyFBOCommand binds the framebuffer that has texture as its
-// depth/stencil attachment and nothing else, making it the first time.
-type EnsureDepthOnlyFBOCommand struct {
-	texture *Texture
-}
-
-// noDrawBuffers is the draw buffer list of a framebuffer without colour.
-var noDrawBuffers = []uint32{gl.NONE}
-
-func (c *EnsureDepthOnlyFBOCommand) Execute(ctx *gl.Context) {
-	if c.texture.fbo != 0 {
-		ctx.BindFramebuffer(gl.FRAMEBUFFER, c.texture.fbo)
-		return
-	}
-	fbo := ctx.GenFramebuffers(1)
-	ctx.BindFramebuffer(gl.FRAMEBUFFER, fbo)
-	ctx.FramebufferTexture2D(gl.FRAMEBUFFER, depthStencilAttachmentPoint(c.texture.format), c.texture.target, c.texture.id, 0)
-	ctx.DrawBuffers(noDrawBuffers)
-	if ctx.CheckFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE {
-		ctx.DeleteFramebuffers(fbo)
-		ctx.BindFramebuffer(gl.FRAMEBUFFER, 0)
-		return
-	}
-	c.texture.fbo = fbo
-}
-
-// AttachDepthStencilCommand attaches a depth/stencil texture to the currently
-// bound FBO (the one associated with the color texture). This must be recorded
-// after EnsureOffscreenFBOCommand so the FBO is already bound.
-type AttachDepthStencilCommand struct {
-	colorTexture *Texture // used to verify the FBO exists
-	depthTexture *Texture
-}
-
-func (c *AttachDepthStencilCommand) Execute(ctx *gl.Context) {
-	if c.colorTexture.fbo == 0 {
-		return
-	}
-	attachment := depthStencilAttachmentPoint(c.depthTexture.format)
-	ctx.FramebufferTexture2D(gl.FRAMEBUFFER, attachment, c.depthTexture.target, c.depthTexture.id, 0)
-}
-
 // depthStencilAttachmentPoint returns the GL attachment point for a depth/stencil
 // texture format. Matches Rust wgpu-hal GLES (command.rs:577-580).
 func depthStencilAttachmentPoint(format gputypes.TextureFormat) uint32 {
@@ -1070,16 +966,19 @@ func (c *AttachDepthStencilToFBOCommand) Execute(ctx *gl.Context) {
 // using glBlitFramebuffer. This is recorded at render pass End() when a
 // ResolveTarget is specified in the color attachment.
 //
-// When resolveToSurface is true, the destination is the Surface's swapchain
-// offscreen FBO (NOT FBO 0). No Y-flip is applied here — the Y-flip is the
-// sole responsibility of Queue.Present, which blits the swapchain FBO to FBO 0
-// with srcY0=height, srcY1=0 before SwapBuffers. Mirrors Rust wgpu-hal:
-// MSAA resolve lands in an offscreen target, present blit un-flips.
+// The MSAA attachment is read from the draw framebuffer the pass drew into,
+// and written to the resolve framebuffer with the resolve target attached,
+// each bound to its own target. When resolveToSurface is true, the
+// destination is the Surface's swapchain offscreen FBO (NOT FBO 0). No Y-flip
+// is applied here — the Y-flip is the sole responsibility of Queue.Present,
+// which blits the swapchain FBO to FBO 0 with srcY0=height, srcY1=0 before
+// SwapBuffers. Mirrors Rust wgpu-hal: MSAA resolve lands in an offscreen
+// target, present blit un-flips.
 type MSAAResolveCommand struct {
-	msaaTexture      *Texture // MSAA source texture (SampleCount > 1)
-	resolveTexture   *Texture // Single-sample resolve target (nil when resolveToSurface)
-	resolveToSurface bool     // True to resolve into the Surface's swapchain FBO
-	surface          *Surface // Surface owning the swapchain FBO (resolveToSurface only)
+	fbs              *framebuffers
+	resolve          fbAttachment // Single-sample resolve target (none when resolveToSurface)
+	resolveToSurface bool         // True to resolve into the Surface's swapchain FBO
+	surface          *Surface     // Surface owning the swapchain FBO (resolveToSurface only)
 	width, height    int32
 }
 
@@ -1090,21 +989,16 @@ func (c *MSAAResolveCommand) Execute(ctx *gl.Context) {
 	// are copied, leaving the rest of the surface black (gg#226).
 	ctx.Disable(gl.SCISSOR_TEST)
 
-	// Bind MSAA FBO as read source.
-	ctx.BindFramebuffer(gl.READ_FRAMEBUFFER, c.msaaTexture.fbo)
-
-	// Bind the draw target.
+	ctx.BindFramebuffer(gl.READ_FRAMEBUFFER, c.fbs.draw)
 	if c.resolveToSurface {
-		// Resolve into the Surface's swapchain offscreen FBO. The Y-flip is
-		// performed at Present time, not here, so the resolve is a straight
-		// (non-flipped) MSAA resolve.
 		var drawFBO uint32
 		if c.surface != nil {
 			drawFBO = c.surface.swapchainFBO
 		}
 		ctx.BindFramebuffer(gl.DRAW_FRAMEBUFFER, drawFBO)
-	} else if !c.ensureResolveFBO(ctx) {
-		return
+	} else {
+		ctx.BindFramebuffer(gl.DRAW_FRAMEBUFFER, c.fbs.resolve)
+		attach(ctx, gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, c.resolve)
 	}
 
 	// Straight MSAA resolve — no Y-flip. Both source and destination use the
@@ -1120,39 +1014,6 @@ func (c *MSAAResolveCommand) Execute(ctx *gl.Context) {
 	ctx.BindFramebuffer(gl.DRAW_FRAMEBUFFER, 0)
 }
 
-// ensureResolveFBO lazily creates the resolve FBO and binds it as draw target.
-// Returns false if the FBO creation fails.
-func (c *MSAAResolveCommand) ensureResolveFBO(ctx *gl.Context) bool {
-	if c.resolveTexture.fbo == 0 {
-		fbo := ctx.GenFramebuffers(1)
-		ctx.BindFramebuffer(gl.FRAMEBUFFER, fbo)
-		ctx.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
-			c.resolveTexture.target, c.resolveTexture.id, 0)
-		if ctx.CheckFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE {
-			ctx.DeleteFramebuffers(fbo)
-			return false
-		}
-		c.resolveTexture.fbo = fbo
-	}
-	ctx.BindFramebuffer(gl.DRAW_FRAMEBUFFER, c.resolveTexture.fbo)
-	return true
-}
-
-// AttachColorCommand attaches a color texture to a specific FBO attachment point.
-// Used for MRT (Multiple Render Targets) to bind attachments 1..N.
-// Attachment 0 is bound by EnsureOffscreenFBOCommand.
-// Matches Rust wgpu-hal GLES BindAttachment for color targets (command.rs:580-582).
-type AttachColorCommand struct {
-	attachmentIndex uint32 // 0-based index (attachment point = GL_COLOR_ATTACHMENT0 + index)
-	texture         *Texture
-}
-
-func (c *AttachColorCommand) Execute(ctx *gl.Context) {
-	ctx.FramebufferTexture2D(gl.FRAMEBUFFER,
-		gl.COLOR_ATTACHMENT0+c.attachmentIndex,
-		c.texture.target, c.texture.id, 0)
-}
-
 // SetDrawColorBuffersCommand configures the list of draw buffers for MRT output.
 // Matches Rust wgpu-hal GLES SetDrawColorBuffers (command.rs:643-646, queue.rs:1202-1207).
 type SetDrawColorBuffersCommand struct {
@@ -1160,12 +1021,19 @@ type SetDrawColorBuffersCommand struct {
 }
 
 func (c *SetDrawColorBuffersCommand) Execute(ctx *gl.Context) {
+	if c.count == 0 {
+		ctx.DrawBuffers(noDrawBuffers)
+		return
+	}
 	bufs := make([]uint32, c.count)
 	for i := range bufs {
 		bufs[i] = gl.COLOR_ATTACHMENT0 + uint32(i)
 	}
 	ctx.DrawBuffers(bufs)
 }
+
+// noDrawBuffers is the draw buffer list of a framebuffer without colour.
+var noDrawBuffers = []uint32{gl.NONE}
 
 // ClearColorBufferCommand clears a specific color draw buffer using glClearBufferfv.
 // This replaces the old global glClearColor+glClear approach for MRT correctness:
@@ -1438,52 +1306,54 @@ func (c *SetBindGroupCommand) Execute(ctx *gl.Context) {
 	}
 
 	dynamicIdx := 0
-	for _, entry := range c.group.entries {
+	for i := range c.group.bindings {
+		b := &c.group.bindings[i]
+		// The dynamic offsets go to the dynamic buffers in binding order,
+		// whether the pipeline uses them or not.
+		dynOff := 0
+		if b.dynamic {
+			if dynamicIdx < len(c.dynamicOffsets) {
+				dynOff = int(c.dynamicOffsets[dynamicIdx])
+			}
+			dynamicIdx++
+		}
 		// Look up the GL slot index from the pre-computed per-type sequential
 		// binding table (computed in CreatePipelineLayout). This replaces the old
 		// group*16+binding formula and matches Rust wgpu-hal command.rs:720-783.
-		glBinding := c.lookupSlot(entry.Binding)
+		glBinding := c.lookupSlot(b.binding)
 		if glBinding == 0xFF {
 			continue // binding not mapped in pipeline layout
 		}
 
-		switch res := entry.Resource.(type) {
-		case gputypes.BufferBinding:
-			// Buffer handle is the GL buffer object ID (from NativeHandle()).
-			bufID := uint32(res.Buffer)
-			if bufID == 0 {
+		switch b.class {
+		case bindingClassUniformBuffer, bindingClassStorageBuffer:
+			if b.buffer == 0 {
 				continue
 			}
-			offset := int(res.Offset)
-			size := int(res.Size)
-
-			// Determine GL buffer target and apply dynamic offset from layout entry.
 			// Storage buffers use GL_SHADER_STORAGE_BUFFER, uniform buffers use GL_UNIFORM_BUFFER.
 			// Matches Rust wgpu-hal/src/gles/command.rs:731-746 (set_bind_group).
-			target, dynOff := c.resolveBufferTarget(entry.Binding, &dynamicIdx)
-			offset += dynOff
-
+			target := uint32(gl.UNIFORM_BUFFER)
 			slots := &ctx.Shadow.Uniforms
-			if target == gl.SHADER_STORAGE_BUFFER {
+			if b.class == bindingClassStorageBuffer {
+				target = gl.SHADER_STORAGE_BUFFER
 				slots = &ctx.Shadow.Storages
 			}
-			want := gl.ShadowRange{Buffer: bufID, Offset: offset, Size: size, Set: true}
+			offset := b.offset + dynOff
+			want := gl.ShadowRange{Buffer: b.buffer, Offset: offset, Size: b.size, Set: true}
 			if glBinding < gl.MaxShadowIndexed && slots[glBinding] == want {
 				continue
 			}
-			if size > 0 {
-				ctx.BindBufferRange(target, glBinding, bufID, offset, size)
+			if b.size > 0 {
+				ctx.BindBufferRange(target, glBinding, b.buffer, offset, b.size)
 			} else {
-				ctx.BindBufferBase(target, glBinding, bufID)
+				ctx.BindBufferBase(target, glBinding, b.buffer)
 			}
 			if glBinding < gl.MaxShadowIndexed {
 				slots[glBinding] = want
 			}
 
-		case gputypes.TextureViewBinding:
-			// TextureView handle is the GL texture object ID (from NativeHandle()).
-			texID := uint32(res.TextureView)
-			if texID == 0 {
+		case bindingClassTexture, bindingClassImage:
+			if b.view == nil {
 				continue
 			}
 			// Validate texture unit index against hardware limit.
@@ -1495,29 +1365,15 @@ func (c *SetBindGroupCommand) Execute(ctx *gl.Context) {
 						slog.Uint64("glBinding", uint64(glBinding)),
 						slog.Int64("maxTextureUnits", int64(c.maxTextureUnits)),
 						slog.Uint64("group", uint64(c.index)),
-						slog.Uint64("binding", uint64(entry.Binding)),
+						slog.Uint64("binding", uint64(b.binding)),
 					)
 				}
 				continue
 			}
-			sh := &ctx.Shadow
-			want := gl.ShadowObject{ID: texID, Set: true}
-			if glBinding < gl.MaxShadowUnits && sh.Textures[glBinding] == want {
-				continue
-			}
-			if !sh.ActiveUnitSet || sh.ActiveUnit != glBinding {
-				ctx.ActiveTexture(gl.TEXTURE0 + glBinding)
-				sh.ActiveUnit, sh.ActiveUnitSet = glBinding, true
-			}
-			ctx.BindTexture(gl.TEXTURE_2D, texID)
-			if glBinding < gl.MaxShadowUnits {
-				sh.Textures[glBinding] = want
-			}
+			bindTexture(ctx, glBinding, b.view)
 
-		case gputypes.SamplerBinding:
-			// Sampler handle is the GL sampler object ID (from NativeHandle()).
-			samplerID := uint32(res.Sampler)
-			if samplerID == 0 {
+		case bindingClassSampler:
+			if b.sampler == 0 {
 				continue
 			}
 			// Determine the correct texture unit for this sampler.
@@ -1533,12 +1389,12 @@ func (c *SetBindGroupCommand) Execute(ctx *gl.Context) {
 					if c.samplerBindMap[texUnit] != int8(glBinding) {
 						continue
 					}
-					bindSampler(ctx, uint32(texUnit), samplerID)
+					bindSampler(ctx, uint32(texUnit), b.sampler)
 					bound = true
 				}
 			}
 			if !bound {
-				bindSampler(ctx, glBinding, samplerID)
+				bindSampler(ctx, glBinding, b.sampler)
 			}
 		}
 	}
@@ -1566,33 +1422,6 @@ func (c *SetBindGroupCommand) lookupSlot(binding uint32) uint32 {
 		}
 	}
 	return 0xFF
-}
-
-// resolveBufferTarget determines the GL buffer target (UNIFORM_BUFFER or SHADER_STORAGE_BUFFER)
-// and dynamic offset for a binding number by looking up the bind group layout entry.
-// Returns the GL target and the dynamic offset to apply (0 if none).
-// Matches Rust wgpu-hal/src/gles/command.rs:731-746 buffer target selection.
-func (c *SetBindGroupCommand) resolveBufferTarget(binding uint32, dynamicIdx *int) (uint32, int) {
-	target := uint32(gl.UNIFORM_BUFFER)
-	dynOffset := 0
-	if c.group.layout == nil {
-		return target, dynOffset
-	}
-	for _, le := range c.group.layout.entries {
-		if le.Binding != binding || le.Buffer == nil {
-			continue
-		}
-		if le.Buffer.Type == gputypes.BufferBindingTypeStorage ||
-			le.Buffer.Type == gputypes.BufferBindingTypeReadOnlyStorage {
-			target = gl.SHADER_STORAGE_BUFFER
-		}
-		if le.Buffer.HasDynamicOffset && c.dynamicOffsets != nil && *dynamicIdx < len(c.dynamicOffsets) {
-			dynOffset = int(c.dynamicOffsets[*dynamicIdx])
-			*dynamicIdx++
-		}
-		break
-	}
-	return target, dynOffset
 }
 
 // SetVertexBufferCommand binds a vertex buffer and configures vertex attributes.
@@ -1864,7 +1693,7 @@ func (c *DispatchIndirectCommand) Execute(ctx *gl.Context) {
 // CPU-side data slice. This is the standard GLES readback path since GLES lacks
 // glGetTexImage. The approach: bind texture FBO -> glReadPixels -> copy to buffer.
 type CopyTextureToBufferCommand struct {
-	glCtx       *gl.Context
+	fbs         *framebuffers
 	srcTexture  *Texture
 	dstBuffer   *Buffer
 	srcOrigin   [3]uint32 // x, y, z
@@ -1899,25 +1728,7 @@ func (c *CopyTextureToBufferCommand) Execute(ctx *gl.Context) {
 		pitch = uint64(c.bytesPerRow) // usually wider: copies align rows to 256 bytes
 	}
 
-	// Save the current FBO binding so we can restore it after the read.
-	var prevFBO int32
-	ctx.GetIntegerv(gl.FRAMEBUFFER_BINDING, &prevFBO)
-
-	// Ensure the source texture has an FBO. Create one lazily if needed.
-	if c.srcTexture.fbo == 0 {
-		fbo := ctx.GenFramebuffers(1)
-		ctx.BindFramebuffer(gl.FRAMEBUFFER, fbo)
-		ctx.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, c.srcTexture.target, c.srcTexture.id, 0)
-		status := ctx.CheckFramebufferStatus(gl.FRAMEBUFFER)
-		if status != gl.FRAMEBUFFER_COMPLETE {
-			ctx.DeleteFramebuffers(fbo)
-			ctx.BindFramebuffer(gl.FRAMEBUFFER, uint32(prevFBO))
-			return
-		}
-		c.srcTexture.fbo = fbo
-	} else {
-		ctx.BindFramebuffer(gl.FRAMEBUFFER, c.srcTexture.fbo)
-	}
+	c.fbs.bindRead(ctx, fbAttachment{tex: c.srcTexture})
 
 	// Set tight pixel packing (no row alignment padding).
 	ctx.PixelStorei(gl.PACK_ALIGNMENT, 1)
@@ -1940,9 +1751,7 @@ func (c *CopyTextureToBufferCommand) Execute(ctx *gl.Context) {
 		ctx.BufferSubData(gl.COPY_WRITE_BUFFER, int(c.dstOffset+uint64(row)*pitch), int(rowBytes), unsafe.Pointer(&tmpBuf[srcStart]))
 	}
 	ctx.BindBuffer(gl.COPY_WRITE_BUFFER, 0)
-
-	// Restore the previous FBO binding.
-	ctx.BindFramebuffer(gl.FRAMEBUFFER, uint32(prevFBO))
+	ctx.BindFramebuffer(gl.READ_FRAMEBUFFER, 0)
 }
 
 // CopyBufferToTextureCommand copies buffer data to a texture using a pixel unpack
@@ -2027,6 +1836,7 @@ var compressedReadbackOnce sync.Once
 // destination via glCopyTexSubImage2D.
 // Matches Rust wgpu-hal/src/gles/queue.rs CopyTextureToTexture.
 type CopyTextureToTextureCommand struct {
+	fbs       *framebuffers
 	srcTex    *Texture
 	dstTex    *Texture
 	srcOrigin [3]uint32 // x, y, z
@@ -2044,15 +1854,7 @@ func (c *CopyTextureToTextureCommand) Execute(ctx *gl.Context) {
 		return
 	}
 
-	// Save current FBO binding.
-	var prevFBO int32
-	ctx.GetIntegerv(gl.FRAMEBUFFER_BINDING, &prevFBO)
-
-	// Create a temporary FBO for reading from the source texture.
-	readFBO := ctx.GenFramebuffers(1)
-	ctx.BindFramebuffer(gl.READ_FRAMEBUFFER, readFBO)
-	ctx.FramebufferTexture2D(gl.READ_FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
-		c.srcTex.target, c.srcTex.id, int32(c.srcMip))
+	c.fbs.bindRead(ctx, fbAttachment{tex: c.srcTex, mip: c.srcMip})
 
 	// Bind destination texture and copy pixels from the read framebuffer.
 	ctx.BindTexture(c.dstTex.target, c.dstTex.id)
@@ -2061,10 +1863,7 @@ func (c *CopyTextureToTextureCommand) Execute(ctx *gl.Context) {
 		int32(c.srcOrigin[0]), int32(c.srcOrigin[1]),
 		width, height)
 	ctx.BindTexture(c.dstTex.target, 0)
-
-	// Clean up temporary FBO.
-	ctx.DeleteFramebuffers(readFBO)
-	ctx.BindFramebuffer(gl.FRAMEBUFFER, uint32(prevFBO))
+	ctx.BindFramebuffer(gl.READ_FRAMEBUFFER, 0)
 }
 
 // ResolveQuerySetCommand reads query results via glGetQueryObjectui64v and

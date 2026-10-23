@@ -6,9 +6,7 @@
 package gles
 
 import (
-	"cmp"
 	"fmt"
-	"slices"
 	"time"
 	"unsafe"
 
@@ -26,9 +24,10 @@ type Device struct {
 	fence           *Fence // the queue's, which stands for the work in WaitIdle on the helper context
 	displayHandle   uintptr
 	windowHandle    uintptr
-	vao             uint32 // persistent VAO (Core Profile requires one bound)
-	maxTextureUnits int32  // GL_MAX_TEXTURE_IMAGE_UNITS (queried at init)
-	maxMSAA         int32  // GL_MAX_SAMPLES (validate MSAA in CreateTexture)
+	vao             uint32        // persistent VAO (Core Profile requires one bound)
+	fbs             *framebuffers // made with the VAO, on the queue's context
+	maxTextureUnits int32         // GL_MAX_TEXTURE_IMAGE_UNITS (queried at init)
+	maxMSAA         int32         // GL_MAX_SAMPLES (validate MSAA in CreateTexture)
 	formats         formatCaps
 
 	// glslVersion is the target GLSL version for shader compilation, detected
@@ -217,23 +216,18 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *TextureViewDescrip
 	if !ok {
 		return nil, fmt.Errorf("gles: invalid texture type")
 	}
-
-	view := &TextureView{
-		texture: t,
+	v, err := newTextureView(t, desc)
+	if err != nil {
+		return nil, err
 	}
-	if desc != nil {
-		view.aspect = desc.Aspect
-		view.baseMip = desc.BaseMipLevel
-		view.mipCount = desc.MipLevelCount
-		view.baseLayer = desc.BaseArrayLayer
-		view.layerCount = desc.ArrayLayerCount
-	}
-	return view, nil
+	return v, nil
 }
 
 // DestroyTextureView destroys a texture view.
 func (d *Device) DestroyTextureView(view hal.TextureView) {
-	// TextureViews don't hold GL resources in OpenGL
+	if v, ok := view.(*TextureView); ok {
+		v.Destroy()
+	}
 }
 
 // CreateSampler creates a texture sampler using GL sampler objects (GL 3.3+).
@@ -274,18 +268,11 @@ func (d *Device) DestroyBindGroupLayout(layout hal.BindGroupLayout) {}
 
 // CreateBindGroup creates a bind group.
 func (d *Device) CreateBindGroup(desc *BindGroupDescriptor) (hal.BindGroup, error) {
-	layout, ok := desc.Layout.(*BindGroupLayout)
-	if !ok {
-		return nil, fmt.Errorf("gles: invalid bind group layout type")
+	g, err := newBindGroup(desc)
+	if err != nil {
+		return nil, err
 	}
-
-	// The dynamic offsets go by binding number, whatever order the entries came in.
-	entries := slices.Clone(desc.Entries)
-	slices.SortFunc(entries, func(a, b gputypes.BindGroupEntry) int { return cmp.Compare(a.Binding, b.Binding) })
-	return &BindGroup{
-		layout:  layout,
-		entries: entries,
-	}, nil
+	return g, nil
 }
 
 // DestroyBindGroup destroys a bind group.
@@ -602,17 +589,23 @@ func (d *Device) CreateCommandEncoder(_ *CommandEncoderDescriptor) (hal.CommandE
 	glCtx := d.ctx.Lock()
 	defer d.ctx.Unlock()
 
-	if d.vao == 0 {
+	if d.vao == 0 || d.fbs == nil {
 		if d.ctx.OnHelper() {
 			return nil, errOtherThread
 		}
-		d.vao = glCtx.GenVertexArrays(1)
-		glCtx.BindVertexArray(d.vao)
-		hal.Logger().Debug("gles: lazy VAO created", "vao", d.vao)
+		if d.vao == 0 {
+			d.vao = glCtx.GenVertexArrays(1)
+			glCtx.BindVertexArray(d.vao)
+			hal.Logger().Debug("gles: lazy VAO created", "vao", d.vao)
+		}
+		if d.fbs == nil {
+			d.fbs = newFramebuffers(glCtx)
+		}
 	}
 	return &CommandEncoder{
 		glCtx:           glCtx,
 		vao:             d.vao,
+		fbs:             d.fbs,
 		maxTextureUnits: d.maxTextureUnits,
 	}, nil
 }
@@ -734,11 +727,18 @@ func (d *Device) WaitIdle() error {
 
 // Destroy releases the device.
 func (d *Device) Destroy() {
-	if d.vao != 0 && d.ctx != nil {
-		glCtx := d.ctx.Lock()
+	if d.ctx == nil || (d.vao == 0 && d.fbs == nil) {
+		return
+	}
+	glCtx := d.ctx.Lock()
+	defer d.ctx.Unlock()
+	if d.vao != 0 {
 		glCtx.DeleteVertexArrays(d.vao)
-		d.ctx.Unlock()
 		d.vao = 0
+	}
+	if d.fbs != nil {
+		d.fbs.destroy(glCtx)
+		d.fbs = nil
 	}
 }
 

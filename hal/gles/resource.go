@@ -6,7 +6,10 @@
 package gles
 
 import (
+	"cmp"
 	"fmt"
+	"slices"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -53,8 +56,33 @@ type Texture struct {
 	size        hal.Extent3D
 	mipLevels   uint32
 	sampleCount uint32 // 1 for regular textures, >1 for MSAA
-	fbo         uint32 // GL framebuffer object ID (0 = no FBO created)
 	glCtx       *gl.Context
+
+	// baseLevel and maxLevel are the mip range TEXTURE_BASE_LEVEL and
+	// TEXTURE_MAX_LEVEL hold, the range of the view bound last, and
+	// stencilMode whether DEPTH_STENCIL_TEXTURE_MODE reads the stencil.
+	baseLevel, maxLevel int32
+	stencilMode         bool
+}
+
+// layers is how many array layers (or cube faces) the texture has; a 3D
+// texture's slices are not layers.
+func (t *Texture) layers() uint32 {
+	if t.dimension == gputypes.TextureDimension3D {
+		return 1
+	}
+	return max(1, t.size.DepthOrArrayLayers)
+}
+
+// layered reports whether the texture's levels are arrays of images, which
+// are attached and written one layer or slice at a time.
+func (t *Texture) layered() bool {
+	return t.target == gl.TEXTURE_2D_ARRAY || t.target == gl.TEXTURE_3D
+}
+
+// mipSize is the width and height of a mip level.
+func (t *Texture) mipSize(mip uint32) (width, height uint32) {
+	return max(1, t.size.Width>>mip), max(1, t.size.Height>>mip)
 }
 
 // CurrentUsage returns 0 — GLES has no explicit resource state tracking.
@@ -62,24 +90,20 @@ func (t *Texture) CurrentUsage() gputypes.TextureUsage { return 0 }
 func (t *Texture) AddPendingRef()                      {}
 func (t *Texture) DecPendingRef()                      {}
 
-// Destroy releases the texture and any associated framebuffer object.
+// Destroy releases the texture.
 func (t *Texture) Destroy() {
-	if t.glCtx != nil {
-		if t.fbo != 0 {
-			t.glCtx.DeleteFramebuffers(t.fbo)
-			t.fbo = 0
-		}
-		if t.id != 0 {
-			t.glCtx.DeleteTextures(t.id)
-			t.id = 0
-		}
+	if t.glCtx != nil && t.id != 0 {
+		t.glCtx.DeleteTextures(t.id)
+		t.id = 0
 	}
 }
 
 // NativeHandle returns the GL texture object ID.
 func (t *Texture) NativeHandle() uintptr { return uintptr(t.id) }
 
-// TextureView implements hal.TextureView for OpenGL.
+// TextureView implements hal.TextureView for OpenGL. GL has no view
+// objects: the view's mip range and aspect are set on the texture when it is
+// bound, and its mip and layer chosen when it is attached.
 type TextureView struct {
 	texture    *Texture
 	aspect     gputypes.TextureAspect
@@ -87,19 +111,33 @@ type TextureView struct {
 	mipCount   uint32
 	baseLayer  uint32
 	layerCount uint32
+	handle     uintptr         // NativeHandle, which bind group entries find the view by
 	isSurface  bool            // true for default framebuffer (surface texture)
 	surfaceTex *SurfaceTexture // non-nil only when isSurface is true
 }
 
-// Destroy is a no-op for texture views in OpenGL.
-func (v *TextureView) Destroy() {}
+// views are the texture views by their handles.
+var (
+	views       sync.Map // uintptr -> *TextureView
+	lastViewKey atomic.Uintptr
+)
 
-// NativeHandle returns the underlying texture's GL object ID.
-func (v *TextureView) NativeHandle() uintptr {
-	if v.texture != nil {
-		return uintptr(v.texture.id)
+// Destroy forgets the view's handle.
+func (v *TextureView) Destroy() {
+	if v.handle != 0 {
+		views.Delete(v.handle)
 	}
-	return 0
+}
+
+// NativeHandle returns the handle that stands for the view in a bind group
+// entry, 0 for a surface view.
+func (v *TextureView) NativeHandle() uintptr { return v.handle }
+
+// viewByHandle returns the view a bind group entry names, nil for none.
+func viewByHandle(handle uintptr) *TextureView {
+	v, _ := views.Load(handle)
+	view, _ := v.(*TextureView)
+	return view
 }
 
 // Sampler implements hal.Sampler for OpenGL using GL sampler objects (GL 3.3+).
@@ -151,8 +189,54 @@ func (l *BindGroupLayout) Destroy() {}
 
 // BindGroup implements hal.BindGroup for OpenGL.
 type BindGroup struct {
-	layout  *BindGroupLayout
-	entries []gputypes.BindGroupEntry
+	layout   *BindGroupLayout
+	bindings []groupBinding // by binding number, which dynamic offsets go by
+}
+
+// groupBinding is a bind group entry with what binding it takes from its
+// layout entry.
+type groupBinding struct {
+	binding uint32
+	class   bindingClass
+
+	buffer       uint32 // GL buffer name
+	offset, size int
+	dynamic      bool // the buffer takes a dynamic offset
+
+	view    *TextureView
+	sampler uint32 // GL sampler name
+}
+
+// newBindGroup resolves desc's entries against its layout.
+func newBindGroup(desc *BindGroupDescriptor) (*BindGroup, error) {
+	layout, ok := desc.Layout.(*BindGroupLayout)
+	if !ok {
+		return nil, fmt.Errorf("gles: invalid bind group layout type")
+	}
+	g := &BindGroup{layout: layout, bindings: make([]groupBinding, 0, len(desc.Entries))}
+	for _, e := range desc.Entries {
+		b := groupBinding{binding: e.Binding}
+		for _, le := range layout.entries {
+			if le.Binding == e.Binding {
+				b.class = classifyBindGroupEntry(le)
+				b.dynamic = le.Buffer != nil && le.Buffer.HasDynamicOffset
+				break
+			}
+		}
+		switch res := e.Resource.(type) {
+		case gputypes.BufferBinding:
+			b.buffer, b.offset, b.size = uint32(res.Buffer), int(res.Offset), int(res.Size)
+		case gputypes.TextureViewBinding:
+			if b.view = viewByHandle(res.TextureView); b.view == nil {
+				return nil, fmt.Errorf("gles: binding %d: unknown texture view", e.Binding)
+			}
+		case gputypes.SamplerBinding:
+			b.sampler = uint32(res.Sampler)
+		}
+		g.bindings = append(g.bindings, b)
+	}
+	slices.SortFunc(g.bindings, func(a, b groupBinding) int { return cmp.Compare(a.binding, b.binding) })
+	return g, nil
 }
 
 // Destroy is a no-op for bind groups.

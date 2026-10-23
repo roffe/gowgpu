@@ -63,16 +63,15 @@ func TestDepthOnlyPassTargetsItsTexture(t *testing.T) {
 
 	glCtx = adapterCtx.Lock()
 	defer adapterCtx.Unlock()
-	texture := tex.(*Texture)
-	if texture.fbo == 0 {
-		t.Fatal("the pass made no framebuffer for the depth texture")
+	if got := dev.fbs.drawn[maxColorAttachments].tex; got != tex.(*Texture) {
+		t.Fatal("the pass did not attach the depth texture to the draw framebuffer")
 	}
 	var vp [4]int32
 	glCtx.GetIntegerv(gl.VIEWPORT, &vp[0])
 	if vp != [4]int32{0, 0, side, side} {
 		t.Errorf("viewport after the pass is %v, want the texture's %dx%d", vp, side, side)
 	}
-	glCtx.BindFramebuffer(gl.READ_FRAMEBUFFER, texture.fbo)
+	glCtx.BindFramebuffer(gl.READ_FRAMEBUFFER, dev.fbs.draw)
 	var depth [side * side]float32
 	glCtx.ReadPixels(0, 0, side, side, gl.DEPTH_COMPONENT, gl.FLOAT, unsafe.Pointer(&depth[0]))
 	glCtx.BindFramebuffer(gl.READ_FRAMEBUFFER, 0)

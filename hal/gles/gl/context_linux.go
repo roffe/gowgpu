@@ -65,6 +65,14 @@ package gl
 #cgo nocallback gl_v_iiiiii
 #cgo noescape gl_v_iiiiiiii
 #cgo nocallback gl_v_iiiiiiii
+#cgo noescape gl_v_iiiiiiiii
+#cgo nocallback gl_v_iiiiiiiii
+#cgo noescape gl_v_iiiiiiiiiu
+#cgo nocallback gl_v_iiiiiiiiiu
+#cgo noescape gl_v_iiiiiiiiiip
+#cgo nocallback gl_v_iiiiiiiiiip
+#cgo noescape gl_v_iiiiiiiiiiu
+#cgo nocallback gl_v_iiiiiiiiiiu
 #cgo noescape gl_v_iiiiiiiiii
 #cgo nocallback gl_v_iiiiiiiiii
 #cgo noescape gl_v_iiiiiiiip
@@ -189,7 +197,16 @@ type Context struct {
 
 	// Immutable storage and compressed uploads (GL 4.2 / ES 3.0)
 	glTexStorage2D            unsafe.Pointer
+	glTexStorage3D            unsafe.Pointer
 	glCompressedTexSubImage2D unsafe.Pointer
+	glCompressedTexSubImage3D unsafe.Pointer
+
+	// Array and 3D textures (GL 1.2 / ES 3.0)
+	glTexImage3D              unsafe.Pointer
+	glTexSubImage3D           unsafe.Pointer
+	glCopyTexSubImage3D       unsafe.Pointer
+	glFramebufferTextureLayer unsafe.Pointer
+	glReadBuffer              unsafe.Pointer
 
 	// Framebuffers (GL 3.0+)
 	glGenFramebuffers        unsafe.Pointer
@@ -394,7 +411,14 @@ func (c *Context) Load(getProcAddr ProcAddressFunc, isGLES ...bool) error {
 	c.glTexParameteri = getProcAddr("glTexParameteri")
 	c.glGenerateMipmap = getProcAddr("glGenerateMipmap")
 	c.glTexStorage2D = getProcAddr("glTexStorage2D")
+	c.glTexStorage3D = getProcAddr("glTexStorage3D")
 	c.glCompressedTexSubImage2D = getProcAddr("glCompressedTexSubImage2D")
+	c.glCompressedTexSubImage3D = getProcAddr("glCompressedTexSubImage3D")
+	c.glTexImage3D = getProcAddr("glTexImage3D")
+	c.glTexSubImage3D = getProcAddr("glTexSubImage3D")
+	c.glCopyTexSubImage3D = getProcAddr("glCopyTexSubImage3D")
+	c.glFramebufferTextureLayer = getProcAddr("glFramebufferTextureLayer")
+	c.glReadBuffer = getProcAddr("glReadBuffer")
 
 	// Framebuffers
 	c.glGenFramebuffers = getProcAddr("glGenFramebuffers")
@@ -862,6 +886,59 @@ func (c *Context) GenerateMipmap(target uint32) {
 // bound texture (GL 4.2, ARB_texture_storage, ES 3.0).
 func (c *Context) TexStorage2D(target uint32, levels int32, internalformat uint32, width, height int32) {
 	C.gl_v_iiiii(C.uintptr_t(uintptr(c.glTexStorage2D)), C.uint32_t(target), C.uint32_t(levels), C.uint32_t(internalformat), C.uint32_t(width), C.uint32_t(height))
+}
+
+// TexStorage3D allocates immutable storage for levels mip levels of the
+// bound array or 3D texture (GL 4.2, ARB_texture_storage, ES 3.0).
+func (c *Context) TexStorage3D(target uint32, levels int32, internalformat uint32, width, height, depth int32) {
+	C.gl_v_iiiiii(C.uintptr_t(uintptr(c.glTexStorage3D)), C.uint32_t(target), C.uint32_t(levels), C.uint32_t(internalformat), C.uint32_t(width), C.uint32_t(height), C.uint32_t(depth))
+}
+
+// TexImage3D specifies a level of an array or 3D texture. pixels is 0 for
+// no data, or an offset into the bound GL_PIXEL_UNPACK_BUFFER.
+func (c *Context) TexImage3D(target uint32, level, internalformat, width, height, depth, border int32, format, typ uint32, pixels uintptr) {
+	C.gl_v_iiiiiiiiiu(C.uintptr_t(uintptr(c.glTexImage3D)), C.uint32_t(target), C.uint32_t(level), C.uint32_t(internalformat), C.uint32_t(width), C.uint32_t(height), C.uint32_t(depth), C.uint32_t(border), C.uint32_t(format), C.uint32_t(typ), C.uintptr_t(pixels))
+}
+
+// TexSubImage3D replaces a box of layers or slices of a texture level.
+func (c *Context) TexSubImage3D(target uint32, level, xoffset, yoffset, zoffset, width, height, depth int32, format, typ uint32, pixels unsafe.Pointer) {
+	C.gl_v_iiiiiiiiiip(C.uintptr_t(uintptr(c.glTexSubImage3D)), C.uint32_t(target), C.uint32_t(level), C.uint32_t(xoffset), C.uint32_t(yoffset), C.uint32_t(zoffset), C.uint32_t(width), C.uint32_t(height), C.uint32_t(depth), C.uint32_t(format), C.uint32_t(typ), (*C.uint8_t)(pixels))
+}
+
+// TexSubImage3DOffset is TexSubImage3D from the bound
+// GL_PIXEL_UNPACK_BUFFER, offset bytes into it.
+func (c *Context) TexSubImage3DOffset(target uint32, level, xoffset, yoffset, zoffset, width, height, depth int32, format, typ uint32, offset uintptr) {
+	C.gl_v_iiiiiiiiiiu(C.uintptr_t(uintptr(c.glTexSubImage3D)), C.uint32_t(target), C.uint32_t(level), C.uint32_t(xoffset), C.uint32_t(yoffset), C.uint32_t(zoffset), C.uint32_t(width), C.uint32_t(height), C.uint32_t(depth), C.uint32_t(format), C.uint32_t(typ), C.uintptr_t(offset))
+}
+
+// CompressedTexSubImage3D replaces a block-aligned box of a compressed
+// array texture level with imageSize bytes of blocks from data.
+func (c *Context) CompressedTexSubImage3D(target uint32, level, xoffset, yoffset, zoffset, width, height, depth int32, format uint32, imageSize int32, data unsafe.Pointer) {
+	C.gl_v_iiiiiiiiiip(C.uintptr_t(uintptr(c.glCompressedTexSubImage3D)), C.uint32_t(target), C.uint32_t(level), C.uint32_t(xoffset), C.uint32_t(yoffset), C.uint32_t(zoffset), C.uint32_t(width), C.uint32_t(height), C.uint32_t(depth), C.uint32_t(format), C.uint32_t(imageSize), (*C.uint8_t)(data))
+}
+
+// CompressedTexSubImage3DOffset is CompressedTexSubImage3D from the bound
+// GL_PIXEL_UNPACK_BUFFER, offset bytes into it.
+func (c *Context) CompressedTexSubImage3DOffset(target uint32, level, xoffset, yoffset, zoffset, width, height, depth int32, format uint32, imageSize int32, offset uintptr) {
+	C.gl_v_iiiiiiiiiiu(C.uintptr_t(uintptr(c.glCompressedTexSubImage3D)), C.uint32_t(target), C.uint32_t(level), C.uint32_t(xoffset), C.uint32_t(yoffset), C.uint32_t(zoffset), C.uint32_t(width), C.uint32_t(height), C.uint32_t(depth), C.uint32_t(format), C.uint32_t(imageSize), C.uintptr_t(offset))
+}
+
+// CopyTexSubImage3D copies a rectangle of the read framebuffer into a layer
+// or slice of a texture level.
+func (c *Context) CopyTexSubImage3D(target uint32, level, xoffset, yoffset, zoffset, x, y, width, height int32) {
+	C.gl_v_iiiiiiiii(C.uintptr_t(uintptr(c.glCopyTexSubImage3D)), C.uint32_t(target), C.uint32_t(level), C.uint32_t(xoffset), C.uint32_t(yoffset), C.uint32_t(zoffset), C.uint32_t(x), C.uint32_t(y), C.uint32_t(width), C.uint32_t(height))
+}
+
+// FramebufferTextureLayer attaches a layer of an array or 3D texture level,
+// or a face of a cube map, to a framebuffer.
+func (c *Context) FramebufferTextureLayer(target, attachment, texture uint32, level, layer int32) {
+	C.gl_v_iiiii(C.uintptr_t(uintptr(c.glFramebufferTextureLayer)), C.uint32_t(target), C.uint32_t(attachment), C.uint32_t(texture), C.uint32_t(level), C.uint32_t(layer))
+}
+
+// ReadBuffer selects the colour buffer of the read framebuffer that reads
+// and blits take their pixels from.
+func (c *Context) ReadBuffer(mode uint32) {
+	C.gl_v_i(C.uintptr_t(uintptr(c.glReadBuffer)), C.uint32_t(mode))
 }
 
 // CompressedTexSubImage2D replaces a block-aligned region of a compressed

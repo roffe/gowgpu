@@ -54,7 +54,7 @@ type cmdArena struct {
 	vaos           slab[BindVAOCommand]
 	framebuffers   slab[BindFramebufferCommand]
 	surfaceFBOs    slab[BindSurfaceFramebufferCommand]
-	offscreenFBOs  slab[EnsureOffscreenFBOCommand]
+	renderTargets  slab[BindRenderTargetsCommand]
 	drawBuffers    slab[SetDrawColorBuffersCommand]
 	clears         slab[ClearColorBufferCommand]
 	dispatches     slab[DispatchCommand]
@@ -73,7 +73,7 @@ func (a *cmdArena) reset() {
 	a.vaos.reset()
 	a.framebuffers.reset()
 	a.surfaceFBOs.reset()
-	a.offscreenFBOs.reset()
+	a.renderTargets.reset()
 	a.drawBuffers.reset()
 	a.clears.reset()
 	a.dispatches.reset()

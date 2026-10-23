@@ -109,6 +109,10 @@ const (
 	TEXTURE_MAX_LEVEL      = 0x813D
 	TEXTURE_MAX_ANISOTROPY = 0x84FE
 
+	// DEPTH_STENCIL_TEXTURE_MODE picks the aspect a depth/stencil texture
+	// samples (GL 4.3, ES 3.1).
+	DEPTH_STENCIL_TEXTURE_MODE = 0x90EA
+
 	// Texture filter modes
 	NEAREST                = 0x2600
 	LINEAR                 = 0x2601
@@ -411,5 +415,7 @@ const (
 	SYNC_STATUS = 0x9114
 
 	// Pixel storage (GL 3.0+ / ES 3.0+)
-	UNPACK_ROW_LENGTH = 0x0CF2
+	UNPACK_ROW_LENGTH   = 0x0CF2
+	UNPACK_IMAGE_HEIGHT = 0x806E
+	PACK_ROW_LENGTH     = 0x0D02
 )

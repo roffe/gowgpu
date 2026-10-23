@@ -4,6 +4,8 @@ package wgpu
 
 import (
 	"context"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -24,12 +26,37 @@ const texelLoadShader = `
 }
 `
 
+// layerLoadShader is texelLoadShader for a layer of a texture_2d_array.
+const layerLoadShader = `
+@group(0) @binding(0) var t: texture_2d_array<f32>;
+@vertex fn vs_main(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
+	let x = f32(i32(vi & 1u) * 4 - 1);
+	let y = f32(i32(vi >> 1u) * 4 - 1);
+	return vec4<f32>(x, y, 0.5, 1.0);
+}
+@fragment fn fs_main(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
+	return textureLoad(t, vec2<i32>(pos.xy), LAYER, 0);
+}
+`
+
 // loadPixels draws view into a new width by height RGBA8 target with
 // textureLoad, a pixel a texel, and returns the target's pixels, rows packed.
 func loadPixels(t *testing.T, device *Device, view *TextureView, width, height uint32) []byte {
 	t.Helper()
+	return loadPixelsWith(t, device, view, gputypes.TextureViewDimension2D, texelLoadShader, width, height)
+}
+
+// loadLayerPixels is loadPixels for a layer of a 2D array view.
+func loadLayerPixels(t *testing.T, device *Device, view *TextureView, layer int, width, height uint32) []byte {
+	t.Helper()
+	shader := strings.Replace(layerLoadShader, "LAYER", strconv.Itoa(layer), 1)
+	return loadPixelsWith(t, device, view, gputypes.TextureViewDimension2DArray, shader, width, height)
+}
+
+func loadPixelsWith(t *testing.T, device *Device, view *TextureView, dimension gputypes.TextureViewDimension, shader string, width, height uint32) []byte {
+	t.Helper()
 	layout, err := device.CreateBindGroupLayout(&BindGroupLayoutDescriptor{Entries: []gputypes.BindGroupLayoutEntry{
-		{Binding: 0, Visibility: ShaderStageFragment, Texture: &gputypes.TextureBindingLayout{SampleType: gputypes.TextureSampleTypeFloat, ViewDimension: gputypes.TextureViewDimension2D}},
+		{Binding: 0, Visibility: ShaderStageFragment, Texture: &gputypes.TextureBindingLayout{SampleType: gputypes.TextureSampleTypeFloat, ViewDimension: dimension}},
 	}})
 	if err != nil {
 		t.Fatalf("CreateBindGroupLayout: %v", err)
@@ -40,7 +67,7 @@ func loadPixels(t *testing.T, device *Device, view *TextureView, width, height u
 		t.Fatalf("CreatePipelineLayout: %v", err)
 	}
 	defer pl.Release()
-	module, err := device.CreateShaderModule(&ShaderModuleDescriptor{Label: "load", WGSL: texelLoadShader})
+	module, err := device.CreateShaderModule(&ShaderModuleDescriptor{Label: "load", WGSL: shader})
 	if err != nil {
 		t.Fatalf("CreateShaderModule: %v", err)
 	}

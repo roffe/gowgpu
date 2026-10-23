@@ -82,9 +82,10 @@ func TestReplaySendsStateOnce(t *testing.T) {
 	tex, sampler := glCtx.GenTextures(1), glCtx.GenSamplers(1)
 	defer glCtx.DeleteTextures(tex)
 	defer glCtx.DeleteSamplers(sampler)
-	group := &BindGroup{entries: []gputypes.BindGroupEntry{
-		{Binding: 0, Resource: gputypes.TextureViewBinding{TextureView: uintptr(tex)}},
-		{Binding: 1, Resource: gputypes.SamplerBinding{Sampler: uintptr(sampler)}},
+	view := &TextureView{texture: &Texture{id: tex, target: gl.TEXTURE_2D}, mipCount: 1, layerCount: 1}
+	group := &BindGroup{bindings: []groupBinding{
+		{binding: 0, class: bindingClassTexture, view: view},
+		{binding: 1, class: bindingClassSampler, sampler: sampler},
 	}}
 	infos := []BindGroupLayoutInfo{{BindingToSlot: []uint8{3, 3}}} // texture and sampler on unit 3
 	bg := func() *SetBindGroupCommand {

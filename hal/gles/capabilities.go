@@ -584,7 +584,6 @@ func queryDownlevelFlags(glCtx *gl.Context, exts map[string]bool, glMajor, glMin
 		flags |= gputypes.DownlevelFlagsReadOnlyDepthStencil
 		flags |= gputypes.DownlevelFlagsNonblockingQueryResolve
 		flags |= gputypes.DownlevelFlagsLinearInterpolation
-		flags |= gputypes.DownlevelFlagsViewFormats
 	}
 
 	// GL 4.3+ / ARB_polygon_offset_clamp

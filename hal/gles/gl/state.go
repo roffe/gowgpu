@@ -39,7 +39,7 @@ type Shadow struct {
 
 	ActiveUnit    uint32
 	ActiveUnitSet bool
-	Textures      [MaxShadowUnits]ShadowObject // GL_TEXTURE_2D per unit
+	Textures      [MaxShadowUnits]ShadowObject // the texture bound last per unit
 	Samplers      [MaxShadowUnits]ShadowObject
 
 	Uniforms [MaxShadowIndexed]ShadowRange // GL_UNIFORM_BUFFER indexed bindings
@@ -52,10 +52,12 @@ type Shadow struct {
 	Scissor ShadowScissor
 }
 
-// ShadowObject is an object name bound somewhere, Set once known.
+// ShadowObject is an object name bound somewhere, Set once known, and for a
+// texture the target it is bound to.
 type ShadowObject struct {
-	ID  uint32
-	Set bool
+	ID     uint32
+	Target uint32
+	Set    bool
 }
 
 // ShadowRange is an indexed buffer binding, Size 0 for the whole buffer.
