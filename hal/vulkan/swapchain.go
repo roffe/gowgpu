@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"image"
 	"math"
+	"runtime"
 	"unsafe"
 
 	"github.com/roffe/gowgpu/gputypes"
@@ -787,21 +788,20 @@ func (s *Surface) createSwapchain(device *Device, config *hal.SurfaceConfigurati
 		imageLayouts:       imgLayouts,
 	}
 
-	// Create post-acquire fence for frame pacing (Rust wgpu pattern).
-	// vkAcquireNextImageKHR signals this fence when the image is ready.
-	// We wait on it before rendering to sync with the presentation engine.
-	// Critical for Windows where Vulkan uses DXGI swapchain internally.
-	var acquireFence vk.Fence
-	fenceInfo := vk.FenceCreateInfo{
-		SType: vk.StructureTypeFenceCreateInfo,
+	// On Windows, where drivers present through a DXGI swapchain, frames
+	// are paced by waiting for vkAcquireNextImageKHR to signal a fence, as
+	// wgpu-hal does there only.
+	if runtime.GOOS == "windows" {
+		fenceInfo := vk.FenceCreateInfo{
+			SType: vk.StructureTypeFenceCreateInfo,
+		}
+		fenceResult := device.cmds.CreateFence(device.handle, &fenceInfo, nil, &swapchain.acquireFence)
+		if fenceResult != vk.Success {
+			_ = swapchain.destroyResources()
+			vkDestroySwapchainKHR(device, swapchainHandle, nil)
+			return fmt.Errorf("vulkan: vkCreateFence (acquire) failed: %d", fenceResult)
+		}
 	}
-	fenceResult := device.cmds.CreateFence(device.handle, &fenceInfo, nil, &acquireFence)
-	if fenceResult != vk.Success {
-		_ = swapchain.destroyResources()
-		vkDestroySwapchainKHR(device, swapchainHandle, nil)
-		return fmt.Errorf("vulkan: vkCreateFence (acquire) failed: %d", fenceResult)
-	}
-	swapchain.acquireFence = acquireFence
 
 	// Link swapchain to surface textures
 	for _, tex := range surfaceTextures {
@@ -1089,7 +1089,9 @@ func (sc *Swapchain) acquireNextImage() (*SwapchainTexture, bool, error) {
 	if prevValue := sc.acquireFenceValues[acquireIdx]; prevValue > 0 {
 		if err := sc.device.timelineFence.waitForValue(
 			sc.device.cmds, sc.device.handle, prevValue, timeout,
-		); err != nil {
+		); errors.Is(err, hal.ErrTimeout) {
+			return nil, false, nil
+		} else if err != nil {
 			sc.markBroken(fmt.Errorf("vulkan: wait for acquire semaphore %d: %w", acquireIdx, err))
 			return nil, false, sc.failureErr
 		}

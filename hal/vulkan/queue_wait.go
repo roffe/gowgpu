@@ -6,6 +6,8 @@ import (
 	"errors"
 	"math"
 	"time"
+
+	"github.com/roffe/gowgpu/hal"
 )
 
 // WaitSubmission waits up to timeout, or with a negative timeout until it
@@ -18,7 +20,7 @@ func (q *Queue) WaitSubmission(index uint64, timeout time.Duration) (bool, error
 		timeoutNs = uint64(timeout)
 	}
 	err := q.device.timelineFence.waitForValue(q.device.cmds, q.device.handle, index, timeoutNs)
-	if errors.Is(err, errWaitTimeout) {
+	if errors.Is(err, hal.ErrTimeout) {
 		return false, nil
 	}
 	return err == nil, err

@@ -172,7 +172,7 @@ func (p *fencePool) wait(cmds *vk.Commands, device vk.Device, value uint64, time
 		p.maintain(cmds, device)
 		return nil
 	case vk.Timeout:
-		return fmt.Errorf("vulkan: fencePool: wait timed out (value=%d): %w", value, errWaitTimeout)
+		return fmt.Errorf("vulkan: fencePool: wait for value %d: %w", value, hal.ErrTimeout)
 	case vk.ErrorDeviceLost:
 		return hal.ErrDeviceLost
 	default:

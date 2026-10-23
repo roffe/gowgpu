@@ -3,7 +3,9 @@
 package vulkan
 
 import (
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
@@ -68,5 +70,15 @@ func TestRecycledPoolKeepsCommandBuffers(t *testing.T) {
 			t.Fatalf("EndEncoding: %v", err)
 		}
 		d.FreeCommandBuffer(cb)
+	}
+}
+
+// TestFenceWaitTimesOut waits for a submission that never comes: the wait
+// ends in hal.ErrTimeout, which an acquire takes as a frame to skip.
+func TestFenceWaitTimesOut(t *testing.T) {
+	d := openTestDevice(t, 0)
+	err := d.timelineFence.waitForValue(d.cmds, d.handle, d.timelineFence.currentSignalValue()+100, uint64(time.Millisecond))
+	if !errors.Is(err, hal.ErrTimeout) {
+		t.Fatalf("wait for an unsubmitted value returned %v, want hal.ErrTimeout", err)
 	}
 }
