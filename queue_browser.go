@@ -13,6 +13,7 @@ import (
 // On browser, this wraps a GPUQueue via internal/browser.Queue.
 type Queue struct {
 	browser  *browser.Queue
+	device   *Device
 	released bool
 }
 
@@ -22,6 +23,9 @@ type Queue struct {
 func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (uint64, error) {
 	if q.released {
 		return 0, ErrReleased
+	}
+	if err := q.device.lostErr(); err != nil {
+		return 0, err
 	}
 	jsBuffers := make([]js.Value, 0, len(commandBuffers))
 	for _, cb := range commandBuffers {
@@ -46,6 +50,9 @@ func (q *Queue) Poll() uint64 {
 func (q *Queue) WriteBuffer(buffer *Buffer, offset uint64, data []byte) error {
 	if q.released {
 		return ErrReleased
+	}
+	if err := q.device.lostErr(); err != nil {
+		return err
 	}
 	if buffer == nil || buffer.browser == nil {
 		return ErrReleased
@@ -75,6 +82,9 @@ func (q *Queue) WriteBuffer(buffer *Buffer, offset uint64, data []byte) error {
 func (q *Queue) WriteTexture(dst *ImageCopyTexture, data []byte, layout *ImageDataLayout, size *Extent3D) error {
 	if q.released {
 		return ErrReleased
+	}
+	if err := q.device.lostErr(); err != nil {
+		return err
 	}
 	if dst == nil || dst.Texture == nil || dst.Texture.browser == nil {
 		return ErrReleased

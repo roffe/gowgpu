@@ -162,6 +162,9 @@ func (s *Surface) Configure(device *Device, config *SurfaceConfiguration) error 
 	if device == nil {
 		return fmt.Errorf("wgpu: device is nil")
 	}
+	if err := device.usable(); err != nil {
+		return err
+	}
 
 	// Validate present mode (Rust wgpu panics on Mailbox/Immediate on web).
 	switch config.PresentMode {
@@ -208,6 +211,9 @@ func (s *Surface) GetCurrentTexture() (*SurfaceTexture, bool, error) {
 	}
 	if s.device == nil {
 		return nil, false, fmt.Errorf("wgpu: surface not configured")
+	}
+	if err := s.device.lostErr(); err != nil {
+		return nil, false, err
 	}
 
 	bt, err := s.browser.GetCurrentTexture()

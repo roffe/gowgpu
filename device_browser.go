@@ -19,6 +19,31 @@ type Device struct {
 	features gputypes.Features
 	limits   gputypes.Limits
 	released bool
+
+	// errorScopes holds the filters of the pushed error scopes, innermost
+	// last.
+	errorScopes []ErrorFilter
+}
+
+// usable returns ErrReleased for a released device and ErrDeviceLost for a
+// lost one.
+func (d *Device) usable() error {
+	if d.released {
+		return ErrReleased
+	}
+	return d.lostErr()
+}
+
+// lostErr returns ErrDeviceLost, with the browser's message, once the
+// device is lost.
+func (d *Device) lostErr() error {
+	if d == nil || d.browser == nil {
+		return nil
+	}
+	if msg, lost := d.browser.Lost(); lost {
+		return fmt.Errorf("%w: %s", ErrDeviceLost, msg)
+	}
+	return nil
 }
 
 // Queue returns the device's command queue.
@@ -38,8 +63,8 @@ func (d *Device) Limits() gputypes.Limits {
 
 // CreateBuffer creates a GPU buffer from the given descriptor.
 func (d *Device) CreateBuffer(desc *BufferDescriptor) (*Buffer, error) {
-	if d.released {
-		return nil, ErrReleased
+	if err := d.usable(); err != nil {
+		return nil, err
 	}
 	if desc == nil {
 		return nil, fmt.Errorf("wgpu: buffer descriptor is nil")
@@ -83,6 +108,7 @@ func (d *Device) CreateBuffer(desc *BufferDescriptor) (*Buffer, error) {
 
 	return &Buffer{
 		browser:  bb,
+		device:   d,
 		size:     desc.Size,
 		usage:    desc.Usage,
 		released: false,
@@ -92,8 +118,8 @@ func (d *Device) CreateBuffer(desc *BufferDescriptor) (*Buffer, error) {
 
 // CreateTexture creates a GPU texture from the given descriptor.
 func (d *Device) CreateTexture(desc *TextureDescriptor) (*Texture, error) {
-	if d.released {
-		return nil, ErrReleased
+	if err := d.usable(); err != nil {
+		return nil, err
 	}
 	if desc == nil {
 		return nil, fmt.Errorf("wgpu: texture descriptor is nil")
@@ -115,8 +141,8 @@ func (d *Device) CreateTexture(desc *TextureDescriptor) (*Texture, error) {
 
 // CreateTextureView creates a view into a texture.
 func (d *Device) CreateTextureView(texture *Texture, desc *TextureViewDescriptor) (*TextureView, error) {
-	if d.released {
-		return nil, ErrReleased
+	if err := d.usable(); err != nil {
+		return nil, err
 	}
 	if texture == nil || texture.browser == nil {
 		return nil, ErrReleased
@@ -140,8 +166,8 @@ func (d *Device) CreateTextureView(texture *Texture, desc *TextureViewDescriptor
 
 // CreateSampler creates a texture sampler from the given descriptor.
 func (d *Device) CreateSampler(desc *SamplerDescriptor) (*Sampler, error) {
-	if d.released {
-		return nil, ErrReleased
+	if err := d.usable(); err != nil {
+		return nil, err
 	}
 	if desc == nil {
 		desc = &SamplerDescriptor{}
@@ -164,8 +190,8 @@ func (d *Device) CreateSampler(desc *SamplerDescriptor) (*Sampler, error) {
 // On browser, WGSL code goes directly to the browser's createShaderModule.
 // SPIR-V bytecode is not supported in the browser (browser only accepts WGSL).
 func (d *Device) CreateShaderModule(desc *ShaderModuleDescriptor) (*ShaderModule, error) {
-	if d.released {
-		return nil, ErrReleased
+	if err := d.usable(); err != nil {
+		return nil, err
 	}
 	if desc == nil {
 		return nil, fmt.Errorf("wgpu: shader module descriptor is nil")
@@ -180,8 +206,8 @@ func (d *Device) CreateShaderModule(desc *ShaderModuleDescriptor) (*ShaderModule
 
 // CreateBindGroupLayout creates a bind group layout from the given descriptor.
 func (d *Device) CreateBindGroupLayout(desc *BindGroupLayoutDescriptor) (*BindGroupLayout, error) {
-	if d.released {
-		return nil, ErrReleased
+	if err := d.usable(); err != nil {
+		return nil, err
 	}
 	if desc == nil {
 		return nil, fmt.Errorf("wgpu: bind group layout descriptor is nil")
@@ -197,8 +223,8 @@ func (d *Device) CreateBindGroupLayout(desc *BindGroupLayoutDescriptor) (*BindGr
 
 // CreatePipelineLayout creates a pipeline layout from the given descriptor.
 func (d *Device) CreatePipelineLayout(desc *PipelineLayoutDescriptor) (*PipelineLayout, error) {
-	if d.released {
-		return nil, ErrReleased
+	if err := d.usable(); err != nil {
+		return nil, err
 	}
 	if desc == nil {
 		return nil, fmt.Errorf("wgpu: pipeline layout descriptor is nil")
@@ -221,8 +247,8 @@ func (d *Device) CreatePipelineLayout(desc *PipelineLayoutDescriptor) (*Pipeline
 
 // CreateBindGroup creates a bind group from the given descriptor.
 func (d *Device) CreateBindGroup(desc *BindGroupDescriptor) (*BindGroup, error) {
-	if d.released {
-		return nil, ErrReleased
+	if err := d.usable(); err != nil {
+		return nil, err
 	}
 	if desc == nil {
 		return nil, fmt.Errorf("wgpu: bind group descriptor is nil")
@@ -244,8 +270,8 @@ func (d *Device) CreateBindGroup(desc *BindGroupDescriptor) (*BindGroup, error) 
 
 // CreateRenderPipeline creates a render pipeline from the given descriptor.
 func (d *Device) CreateRenderPipeline(desc *RenderPipelineDescriptor) (*RenderPipeline, error) {
-	if d.released {
-		return nil, ErrReleased
+	if err := d.usable(); err != nil {
+		return nil, err
 	}
 	if desc == nil {
 		return nil, fmt.Errorf("wgpu: render pipeline descriptor is nil")
@@ -260,8 +286,8 @@ func (d *Device) CreateRenderPipeline(desc *RenderPipelineDescriptor) (*RenderPi
 
 // CreateComputePipeline creates a compute pipeline from the given descriptor.
 func (d *Device) CreateComputePipeline(desc *ComputePipelineDescriptor) (*ComputePipeline, error) {
-	if d.released {
-		return nil, ErrReleased
+	if err := d.usable(); err != nil {
+		return nil, err
 	}
 	if desc == nil {
 		return nil, fmt.Errorf("wgpu: compute pipeline descriptor is nil")
@@ -290,8 +316,8 @@ func (d *Device) CreateComputePipeline(desc *ComputePipelineDescriptor) (*Comput
 
 // CreateCommandEncoder creates a command encoder for recording GPU commands.
 func (d *Device) CreateCommandEncoder(desc *CommandEncoderDescriptor) (*CommandEncoder, error) {
-	if d.released {
-		return nil, ErrReleased
+	if err := d.usable(); err != nil {
+		return nil, err
 	}
 	label := ""
 	if desc != nil {
@@ -310,8 +336,8 @@ func (d *Device) CreateCommandEncoder(desc *CommandEncoderDescriptor) (*CommandE
 // On browser, fences are not needed (browser auto-polls).
 // Returns a no-op fence for API compatibility.
 func (d *Device) CreateFence() (*Fence, error) {
-	if d.released {
-		return nil, ErrReleased
+	if err := d.usable(); err != nil {
+		return nil, err
 	}
 	return &Fence{}, nil
 }
@@ -335,15 +361,33 @@ func (d *Device) WaitForFence(_ *Fence, _ uint64, _ time.Duration) (bool, error)
 }
 
 // PushErrorScope pushes a new error scope onto the device's error scope stack.
-// Phase 2 — not yet implemented for browser.
 func (d *Device) PushErrorScope(filter ErrorFilter) {
-	panic("wgpu: browser PushErrorScope not yet implemented (Phase 2)")
+	d.errorScopes = append(d.errorScopes, filter)
+	d.browser.PushErrorScope(filter.toJS())
 }
 
 // PopErrorScope pops the most recently pushed error scope.
-// Phase 2 — not yet implemented for browser.
+// Returns the captured error, or nil if no error occurred.
+// Panics if no error scope is pushed.
+//
+// The browser reports the scope's error through a promise, so PopErrorScope
+// blocks until it settles: call it from main or another goroutine, never
+// from a JavaScript callback.
 func (d *Device) PopErrorScope() *GPUError {
-	panic("wgpu: browser PopErrorScope not yet implemented (Phase 2)")
+	n := len(d.errorScopes)
+	if n == 0 {
+		panic("PopErrorScope: error scope stack is empty: no matching PushErrorScope")
+	}
+	filter := d.errorScopes[n-1]
+	d.errorScopes = d.errorScopes[:n-1]
+	jsErr, err := d.browser.PopErrorScope()
+	if err != nil {
+		panic(fmt.Sprintf("PopErrorScope: %v", err))
+	}
+	if jsErr.Type() != js.TypeObject {
+		return nil
+	}
+	return &GPUError{Type: filter, Message: jsErr.Get("message").String()}
 }
 
 // WaitIdle waits for all GPU work to complete.

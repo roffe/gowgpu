@@ -13,6 +13,7 @@ import (
 // Buffer represents a GPU buffer.
 type Buffer struct {
 	browser  *browser.Buffer
+	device   *Device
 	size     uint64
 	usage    gputypes.BufferUsage
 	released bool
@@ -138,6 +139,9 @@ func (b *Buffer) MapAsync(mode MapMode, offset, size uint64) (*MapPending, error
 	if err := validateMapArgs(b, mode, offset, size); err != nil {
 		return nil, err
 	}
+	if b.device.lostErr() != nil {
+		return nil, ErrMapDeviceLost
+	}
 
 	b.mapState = MapStatePending
 	jsMode := mapModeToJS(mode)
@@ -154,7 +158,11 @@ func (b *Buffer) MapAsync(mode MapMode, offset, size uint64) (*MapPending, error
 		err := b.browser.MapAsync(jsMode, offset, size)
 		if err != nil {
 			b.mapState = MapStateUnmapped
-			p.done <- fmt.Errorf("mapAsync: %w", err)
+			if b.device.lostErr() != nil {
+				p.done <- ErrMapDeviceLost
+			} else {
+				p.done <- fmt.Errorf("mapAsync: %w", err)
+			}
 		} else {
 			b.mapState = MapStateMapped
 			p.done <- nil

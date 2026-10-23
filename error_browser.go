@@ -2,7 +2,10 @@
 
 package wgpu
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 // Public API sentinel errors.
 var (
@@ -57,10 +60,16 @@ var (
 
 // GPUError represents a GPU error.
 type GPUError struct {
+	// Type identifies the category of the error.
+	Type ErrorFilter
+
+	// Message provides a human-readable description of the error.
 	Message string
 }
 
-func (e *GPUError) Error() string { return e.Message }
+func (e *GPUError) Error() string {
+	return fmt.Sprintf("GPU %s error: %s", e.Type, e.Message)
+}
 
 // ErrorFilter selects which errors an error scope captures.
 type ErrorFilter int
@@ -70,3 +79,29 @@ const (
 	ErrorFilterOutOfMemory ErrorFilter = 1
 	ErrorFilterInternal    ErrorFilter = 2
 )
+
+// String returns a human-readable name for the error filter.
+func (f ErrorFilter) String() string {
+	switch f {
+	case ErrorFilterValidation:
+		return "Validation"
+	case ErrorFilterOutOfMemory:
+		return "OutOfMemory"
+	case ErrorFilterInternal:
+		return "Internal"
+	default:
+		return fmt.Sprintf("ErrorFilter(%d)", int(f))
+	}
+}
+
+// toJS returns the filter as a GPUErrorFilter string.
+func (f ErrorFilter) toJS() string {
+	switch f {
+	case ErrorFilterOutOfMemory:
+		return "out-of-memory"
+	case ErrorFilterInternal:
+		return "internal"
+	default:
+		return "validation"
+	}
+}

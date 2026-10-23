@@ -56,7 +56,14 @@ func (a *Adapter) RequestDevice(descriptor js.Value) (*Device, error) {
 		return nil, ErrDeviceCreationFailed
 	}
 
-	return NewDevice(result), nil
+	device := NewDevice(result)
+	// A device the adapter could not fulfil arrives with lost already
+	// resolved, so the race settles with its GPUDeviceLostInfo.
+	info, err := AwaitPromise(js.Global().Get("Promise").Call("race", []any{result.Get("lost"), nil}))
+	if err == nil && info.Type() == js.TypeObject {
+		device.setLost(info)
+	}
+	return device, nil
 }
 
 // Features returns the cached GPUSupportedFeatures js.Value.

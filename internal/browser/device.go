@@ -39,6 +39,12 @@ type Device struct {
 	fnCreateCommandEncoder  js.Value
 	fnCreateSampler         js.Value
 	fnCreateQuerySet        js.Value
+
+	// lostInfo gets the GPUDeviceLostInfo as its info property once the
+	// device is lost.
+	lostInfo    js.Value
+	lostMessage string
+	lost        bool
 }
 
 // NewDevice constructs a Device from a GPUDevice js.Value.
@@ -67,7 +73,37 @@ func NewDevice(ref js.Value) *Device {
 	d.fnCreateSampler = bindMethod(ref, "createSampler")
 	d.fnCreateQuerySet = bindMethod(ref, "createQuerySet")
 
+	// The lost promise stores its GPUDeviceLostInfo on lostInfo through a
+	// builtin, not a Go callback, which could fire after the program exits.
+	if lost := ref.Get("lost"); lost.Type() == js.TypeObject {
+		d.lostInfo = newJSObject()
+		reflectSet := js.Global().Get("Reflect").Get("set")
+		lost.Call("then", reflectSet.Call("bind", nil, d.lostInfo, "info"))
+	}
+
 	return d
+}
+
+// setLost records the loss a GPUDeviceLostInfo describes.
+func (d *Device) setLost(info js.Value) {
+	d.lost = true
+	for _, key := range []string{"message", "reason"} {
+		if v := info.Get(key); v.Type() == js.TypeString && v.String() != "" {
+			d.lostMessage = v.String()
+			return
+		}
+	}
+}
+
+// Lost reports whether the device has been lost, and the browser's message
+// for it. A lost device stays lost.
+func (d *Device) Lost() (string, bool) {
+	if !d.lost && d.lostInfo.Type() == js.TypeObject {
+		if info := d.lostInfo.Get("info"); info.Type() == js.TypeObject {
+			d.setLost(info)
+		}
+	}
+	return d.lostMessage, d.lost
 }
 
 // bindMethod returns methodName.bind(obj) so that Invoke() calls the method
@@ -193,6 +229,18 @@ func (d *Device) CreateRenderPipelineFromDesc(desc js.Value) *RenderPipeline {
 func (d *Device) CreateComputePipelineFromDesc(desc js.Value) *ComputePipeline {
 	jsPipeline := d.fnCreateComputePipeline.Invoke(desc)
 	return NewComputePipeline(jsPipeline)
+}
+
+// PushErrorScope pushes an error scope for filter, a GPUErrorFilter string.
+func (d *Device) PushErrorScope(filter string) {
+	d.ref_.Call("pushErrorScope", filter)
+}
+
+// PopErrorScope pops the innermost error scope and blocks until the browser
+// settles it. It returns the scope's GPUError, or null when it caught none,
+// and an error when the browser rejects the pop.
+func (d *Device) PopErrorScope() (js.Value, error) {
+	return AwaitPromise(d.ref_.Call("popErrorScope"))
 }
 
 // Destroy calls GPUDevice.destroy() to release GPU resources.

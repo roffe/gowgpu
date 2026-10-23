@@ -3,6 +3,7 @@
 package wgpu
 
 import (
+	"fmt"
 	"syscall/js"
 
 	"github.com/roffe/gowgpu/gputypes"
@@ -69,12 +70,17 @@ func (a *Adapter) RequestDevice(desc *DeviceDescriptor) (*Device, error) {
 		browser: bd.Queue(),
 	}
 
-	return &Device{
+	device := &Device{
 		browser:  bd,
 		queue:    queue,
 		features: deviceFeatures,
 		limits:   deviceLimits,
-	}, nil
+	}
+	queue.device = device
+	if err := device.lostErr(); err != nil {
+		return nil, fmt.Errorf("wgpu: RequestDevice: %w", err)
+	}
+	return device, nil
 }
 
 // SurfaceCapabilities describes what a surface supports on this adapter.
