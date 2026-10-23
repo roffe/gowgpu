@@ -35,6 +35,10 @@ func createTexture(glCtx *gl.Context, formats formatCaps, maxMSAA int32, desc *T
 		sampleCount = uint32(maxMSAA)
 	}
 
+	if sampleCount > 1 && desc.Usage&gputypes.TextureUsageTextureBinding == 0 {
+		return createRenderbuffer(glCtx, glf, sampleCount, desc)
+	}
+
 	// Map dimension to GL target
 	target := uint32(gl.TEXTURE_2D)
 	switch desc.Dimension {
@@ -89,8 +93,19 @@ func createTexture(glCtx *gl.Context, formats formatCaps, maxMSAA int32, desc *T
 		}
 
 	case target == gl.TEXTURE_2D_MULTISAMPLE:
-		glCtx.TexImage2DMultisample(target, int32(sampleCount), glf.internal,
-			int32(desc.Size.Width), int32(desc.Size.Height), true)
+		// A multisampled texture to sample: ES has only immutable storage
+		// for one, from 3.1 on, and desktop GL glTexImage2DMultisample.
+		switch {
+		case formats.texStorageMS:
+			glCtx.TexStorage2DMultisample(target, int32(sampleCount), glf.internal,
+				int32(desc.Size.Width), int32(desc.Size.Height), true)
+		case formats.es:
+			glCtx.DeleteTextures(id)
+			return nil, fmt.Errorf("gles: multisampled textures to sample need OpenGL ES 3.1")
+		default:
+			glCtx.TexImage2DMultisample(target, int32(sampleCount), glf.internal,
+				int32(desc.Size.Width), int32(desc.Size.Height), true)
+		}
 		if glErr := glCtx.GetError(); glErr != 0 {
 			glCtx.DeleteTextures(id)
 			return nil, fmt.Errorf("gles: TexImage2DMultisample failed: GL error 0x%x (format=0x%x, samples=%d, %dx%d)",
@@ -177,6 +192,32 @@ func createTexture(glCtx *gl.Context, formats formatCaps, maxMSAA int32, desc *T
 		sampleCount: sampleCount,
 		glCtx:       glCtx,
 		maxLevel:    int32(desc.MipLevelCount) - 1,
+	}, nil
+}
+
+// createRenderbuffer makes a multisampled texture that is only rendered to
+// as a renderbuffer, which ES 3.0 has multisampled storage for and no
+// texture, as wgpu-hal makes its render-only textures.
+func createRenderbuffer(glCtx *gl.Context, glf glFormat, samples uint32, desc *TextureDescriptor) (*Texture, error) {
+	id := glCtx.GenRenderbuffers(1)
+	glCtx.BindRenderbuffer(gl.RENDERBUFFER, id)
+	glCtx.RenderbufferStorageMultisample(gl.RENDERBUFFER, int32(samples), glf.internal, int32(desc.Size.Width), int32(desc.Size.Height))
+	glCtx.BindRenderbuffer(gl.RENDERBUFFER, 0)
+	if glErr := glCtx.GetError(); glErr != 0 {
+		glCtx.DeleteRenderbuffers(id)
+		return nil, fmt.Errorf("gles: RenderbufferStorageMultisample failed: GL error 0x%x (format=0x%x, samples=%d, %dx%d)",
+			glErr, glf.internal, samples, desc.Size.Width, desc.Size.Height)
+	}
+	return &Texture{
+		id:          id,
+		target:      gl.RENDERBUFFER,
+		format:      desc.Format,
+		glf:         glf,
+		dimension:   desc.Dimension,
+		size:        desc.Size,
+		mipLevels:   1,
+		sampleCount: samples,
+		glCtx:       glCtx,
 	}, nil
 }
 

@@ -7,6 +7,7 @@ package gles
 
 import (
 	"testing"
+	"unsafe"
 
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
@@ -121,5 +122,64 @@ func TestHeadlessAdapterHasCapabilities(t *testing.T) {
 				t.Errorf("the device writes GLSL %s", v)
 			}
 		})
+	}
+}
+
+// A 4-sample attachment renders and resolves on ES, which has no
+// glTexImage2DMultisample: the texture failed to make on ES, or had no
+// storage where the call was a no-op, and the pass drew nowhere.
+func TestMultisampledAttachmentOnES(t *testing.T) {
+	ctx := newTestESAdapterContext(t)
+	t.Cleanup(ctx.Destroy)
+	dev := openTestDevice(t, ctx)
+	t.Cleanup(dev.Destroy)
+	newTex := func(samples uint32, usage gputypes.TextureUsage) hal.Texture {
+		tex, err := dev.CreateTexture(&hal.TextureDescriptor{
+			Size: hal.Extent3D{Width: 4, Height: 4, DepthOrArrayLayers: 1}, MipLevelCount: 1, SampleCount: samples,
+			Dimension: gputypes.TextureDimension2D, Format: gputypes.TextureFormatRGBA8Unorm, Usage: usage,
+		})
+		if err != nil {
+			t.Fatalf("CreateTexture(%d samples): %v", samples, err)
+		}
+		t.Cleanup(func() { dev.DestroyTexture(tex) })
+		return tex
+	}
+	msaa := newTex(4, gputypes.TextureUsageRenderAttachment)
+	resolve := newTex(1, gputypes.TextureUsageRenderAttachment|gputypes.TextureUsageCopySrc)
+	if dev.formats.texStorageMS {
+		newTex(4, gputypes.TextureUsageRenderAttachment|gputypes.TextureUsageTextureBinding)
+	}
+	msaaView, _ := dev.CreateTextureView(msaa, nil)
+	resolveView, _ := dev.CreateTextureView(resolve, nil)
+
+	enc, err := dev.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	_ = enc.BeginEncoding("msaa")
+	pass := enc.BeginRenderPass(&hal.RenderPassDescriptor{ColorAttachments: []hal.RenderPassColorAttachment{{
+		View: msaaView, ResolveTarget: resolveView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore,
+		ClearValue: gputypes.Color{G: 1, A: 1},
+	}}})
+	pass.End()
+	cb, err := enc.EndEncoding()
+	if err != nil {
+		t.Fatalf("EndEncoding: %v", err)
+	}
+	if _, err := (&Queue{ctx: ctx}).Submit([]hal.CommandBuffer{cb}); err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+
+	glCtx := ctx.Lock()
+	defer ctx.Unlock()
+	glCtx.BindFramebuffer(gl.READ_FRAMEBUFFER, dev.fbs.resolve)
+	var px [4 * 4 * 4]byte
+	glCtx.ReadPixels(0, 0, 4, 4, gl.RGBA, gl.UNSIGNED_BYTE, unsafe.Pointer(&px[0]))
+	glCtx.BindFramebuffer(gl.READ_FRAMEBUFFER, 0)
+	if glErr := glCtx.GetError(); glErr != 0 {
+		t.Fatalf("GL error %#x", glErr)
+	}
+	if [4]byte(px[:4]) != [4]byte{0, 255, 0, 255} {
+		t.Errorf("resolved pixel %v, want green", px[:4])
 	}
 }

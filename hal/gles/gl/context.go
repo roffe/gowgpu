@@ -181,8 +181,10 @@ type Context struct {
 	glMemoryBarrier           uintptr
 
 	// MSAA (GL 3.2+ / ES 3.1+)
-	glTexImage2DMultisample uintptr
-	glBlitFramebuffer       uintptr
+	glTexImage2DMultisample          uintptr
+	glTexStorage2DMultisample        uintptr
+	glRenderbufferStorageMultisample uintptr
+	glBlitFramebuffer                uintptr
 
 	// Sampler objects (GL 3.3+ / ES 3.0+)
 	glGenSamplers       uintptr
@@ -376,6 +378,8 @@ func (c *Context) Load(getProcAddr ProcAddressFunc) error {
 
 	// MSAA (optional - may be nil on older GL versions)
 	c.glTexImage2DMultisample = getProcAddr("glTexImage2DMultisample")
+	c.glTexStorage2DMultisample = getProcAddr("glTexStorage2DMultisample")
+	c.glRenderbufferStorageMultisample = getProcAddr("glRenderbufferStorageMultisample")
 	c.glBlitFramebuffer = getProcAddr("glBlitFramebuffer")
 
 	// Sampler objects (optional - GL 3.3+ / ES 3.0+)
@@ -848,6 +852,22 @@ func (c *Context) TexImage2DMultisample(target uint32, samples int32, internalfo
 	}
 	syscall.SyscallN(c.glTexImage2DMultisample, uintptr(target), uintptr(samples),
 		uintptr(internalformat), uintptr(width), uintptr(height), fixed)
+}
+
+// TexStorage2DMultisample allocates immutable storage for the bound
+// multisample texture (GL 4.3).
+func (c *Context) TexStorage2DMultisample(target uint32, samples int32, internalformat uint32, width, height int32, fixedsamplelocations bool) {
+	var fixed uintptr
+	if fixedsamplelocations {
+		fixed = TRUE
+	}
+	syscall.SyscallN(c.glTexStorage2DMultisample, uintptr(target), uintptr(samples), uintptr(internalformat), uintptr(width), uintptr(height), fixed)
+}
+
+// RenderbufferStorageMultisample allocates multisampled storage for the
+// bound renderbuffer (GL 3.0).
+func (c *Context) RenderbufferStorageMultisample(target uint32, samples int32, internalformat uint32, width, height int32) {
+	syscall.SyscallN(c.glRenderbufferStorageMultisample, uintptr(target), uintptr(samples), uintptr(internalformat), uintptr(width), uintptr(height))
 }
 
 // BlitFramebuffer copies a block of pixels between framebuffers.

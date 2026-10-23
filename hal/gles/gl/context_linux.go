@@ -286,8 +286,10 @@ type Context struct {
 	glMemoryBarrier           unsafe.Pointer
 
 	// MSAA (GL 3.2+ / ES 3.1+)
-	glTexImage2DMultisample unsafe.Pointer
-	glBlitFramebuffer       unsafe.Pointer
+	glTexImage2DMultisample          unsafe.Pointer
+	glTexStorage2DMultisample        unsafe.Pointer
+	glRenderbufferStorageMultisample unsafe.Pointer
+	glBlitFramebuffer                unsafe.Pointer
 
 	// Sampler objects (GL 3.3+ / ES 3.0+)
 	glGenSamplers       unsafe.Pointer
@@ -516,6 +518,8 @@ func (c *Context) Load(getProcAddr ProcAddressFunc, isGLES ...bool) error {
 
 	// MSAA (optional - may be nil on older GL versions)
 	c.glTexImage2DMultisample = getProcAddr("glTexImage2DMultisample")
+	c.glTexStorage2DMultisample = getProcAddr("glTexStorage2DMultisample")
+	c.glRenderbufferStorageMultisample = getProcAddr("glRenderbufferStorageMultisample")
 	c.glBlitFramebuffer = getProcAddr("glBlitFramebuffer")
 
 	// Sampler objects (optional - GL 3.3+ / ES 3.0+)
@@ -978,6 +982,22 @@ func (c *Context) TexImage2DMultisample(target uint32, samples int32, internalfo
 		fixed = 1
 	}
 	C.gl_v_iiiiii(C.uintptr_t(uintptr(c.glTexImage2DMultisample)), C.uint32_t(target), C.uint32_t(samples), C.uint32_t(internalformat), C.uint32_t(width), C.uint32_t(height), C.uint32_t(fixed))
+}
+
+// TexStorage2DMultisample allocates immutable storage for the bound
+// multisample texture (GL 4.3, ES 3.1).
+func (c *Context) TexStorage2DMultisample(target uint32, samples int32, internalformat uint32, width, height int32, fixedsamplelocations bool) {
+	var fixed uint32
+	if fixedsamplelocations {
+		fixed = 1
+	}
+	C.gl_v_iiiiii(C.uintptr_t(uintptr(c.glTexStorage2DMultisample)), C.uint32_t(target), C.uint32_t(samples), C.uint32_t(internalformat), C.uint32_t(width), C.uint32_t(height), C.uint32_t(fixed))
+}
+
+// RenderbufferStorageMultisample allocates multisampled storage for the
+// bound renderbuffer (GL 3.0, ES 3.0).
+func (c *Context) RenderbufferStorageMultisample(target uint32, samples int32, internalformat uint32, width, height int32) {
+	C.gl_v_iiiii(C.uintptr_t(uintptr(c.glRenderbufferStorageMultisample)), C.uint32_t(target), C.uint32_t(samples), C.uint32_t(internalformat), C.uint32_t(width), C.uint32_t(height))
 }
 
 // BlitFramebuffer copies a block of pixels between framebuffers.

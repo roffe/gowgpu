@@ -49,7 +49,7 @@ func (b *Buffer) NativeHandle() uintptr { return uintptr(b.id) }
 // Texture implements hal.Texture for OpenGL.
 type Texture struct {
 	id          uint32 // GL texture object ID
-	target      uint32 // GL_TEXTURE_2D, GL_TEXTURE_2D_MULTISAMPLE, etc.
+	target      uint32 // GL_TEXTURE_2D, GL_TEXTURE_2D_MULTISAMPLE, etc., or GL_RENDERBUFFER
 	format      gputypes.TextureFormat
 	glf         glFormat
 	dimension   gputypes.TextureDimension
@@ -92,10 +92,15 @@ func (t *Texture) DecPendingRef()                      {}
 
 // Destroy releases the texture.
 func (t *Texture) Destroy() {
-	if t.glCtx != nil && t.id != 0 {
-		t.glCtx.DeleteTextures(t.id)
-		t.id = 0
+	if t.glCtx == nil || t.id == 0 {
+		return
 	}
+	if t.target == gl.RENDERBUFFER {
+		t.glCtx.DeleteRenderbuffers(t.id)
+	} else {
+		t.glCtx.DeleteTextures(t.id)
+	}
+	t.id = 0
 }
 
 // NativeHandle returns the GL texture object ID.

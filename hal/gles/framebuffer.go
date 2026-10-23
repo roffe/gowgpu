@@ -59,6 +59,8 @@ func attach(ctx *gl.Context, target, attachment uint32, a fbAttachment) {
 	switch {
 	case a.tex == nil:
 		ctx.FramebufferTexture2D(target, attachment, gl.TEXTURE_2D, 0, 0)
+	case a.tex.target == gl.RENDERBUFFER:
+		ctx.FramebufferRenderbuffer(target, attachment, gl.RENDERBUFFER, a.tex.id)
 	case a.tex.layered():
 		ctx.FramebufferTextureLayer(target, attachment, a.tex.id, int32(a.mip), int32(a.layer))
 	case a.tex.target == gl.TEXTURE_CUBE_MAP:

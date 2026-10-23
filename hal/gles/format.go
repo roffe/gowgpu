@@ -124,8 +124,10 @@ type formatCaps struct {
 	stencil8 bool // STENCIL_INDEX8 textures: GL 4.4, ES 3.2, ARB_texture_stencil8, OES_texture_stencil8
 
 	// texStorage is glTexStorage2D (GL 4.2, ARB_texture_storage, ES 3.0),
-	// which the compressed formats are made with.
-	texStorage bool
+	// which the compressed formats are made with, and texStorageMS
+	// glTexStorage2DMultisample (GL 4.3, ARB_texture_storage_multisample,
+	// ES 3.1), which multisampled textures to sample are made with on ES.
+	texStorage, texStorageMS bool
 }
 
 // newFormatCaps reads the formats a context offers from its capabilities.
@@ -137,6 +139,8 @@ func newFormatCaps(caps *AdapterCapabilities) formatCaps {
 		stencil8: glVersionAtLeast(caps.GLMajor, caps.GLMinor, caps.IsES, [2]int{3, 2}, [2]int{4, 4}) ||
 			hasExtension(caps.Extensions, "GL_ARB_texture_stencil8", "GL_OES_texture_stencil8"),
 		texStorage: hasTexStorage(caps.Extensions, caps.GLMajor, caps.GLMinor, caps.IsES),
+		texStorageMS: glVersionAtLeast(caps.GLMajor, caps.GLMinor, caps.IsES, [2]int{3, 1}, [2]int{4, 3}) ||
+			hasExtension(caps.Extensions, "GL_ARB_texture_storage_multisample"),
 	}
 }
 
