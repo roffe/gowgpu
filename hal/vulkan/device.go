@@ -1203,6 +1203,9 @@ func (d *Device) updateDescriptorSet(set vk.DescriptorSet, entries []gputypes.Bi
 			write.PImageInfo = &imageInfos[len(imageInfos)-1]
 
 		case gputypes.TextureViewBinding:
+			if res.TextureView == 0 {
+				return fmt.Errorf("binding %d: the view's texture has no usage to be bound with", entry.Binding)
+			}
 			// A sampled image is in the layout its barriers put a read-only
 			// texture in (deriveImageLayout): SHADER_READ_ONLY_OPTIMAL for a
 			// colour format, DEPTH_STENCIL_READ_ONLY_OPTIMAL for a depth or

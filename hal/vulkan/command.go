@@ -1261,6 +1261,25 @@ func renderAreaView(desc *hal.RenderPassDescriptor) *TextureView {
 	return nil
 }
 
+// attachmentsViewable reports whether every attachment and resolve target
+// of desc has a VkImageView.
+func attachmentsViewable(desc *hal.RenderPassDescriptor) bool {
+	for _, ca := range desc.ColorAttachments {
+		if v := asTextureView(ca.View); v != nil && v.handle == 0 {
+			return false
+		}
+		if v := asTextureView(ca.ResolveTarget); v != nil && v.handle == 0 {
+			return false
+		}
+	}
+	if ds := desc.DepthStencilAttachment; ds != nil {
+		if v := asTextureView(ds.View); v != nil && v.handle == 0 {
+			return false
+		}
+	}
+	return true
+}
+
 // asTextureView narrows a HAL view to this backend's, treating an absent view,
 // a typed-nil pointer and a view belonging to another backend alike: each comes
 // back as nil. The comma-ok assertion is what makes that true -- a failed
@@ -1306,6 +1325,12 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 	// rpe.begun false, so End knows not to end a pass that was never begun.
 	areaView := renderAreaView(desc)
 	if areaView == nil {
+		return rpe
+	}
+	// A view of a texture made for copies only has no VkImageView: the
+	// framebuffer cannot take it, so there is no pass.
+	if !attachmentsViewable(desc) {
+		hal.Logger().Warn("vulkan: render pass attachment's texture has no RenderAttachment usage")
 		return rpe
 	}
 	renderWidth, renderHeight := areaView.size.Width, areaView.size.Height
