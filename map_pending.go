@@ -29,18 +29,21 @@ type MapPending struct {
 	waiter   *core.MapWaiter
 	resolved bool
 	err      error
+	// index is the submission the map waits for.
+	index uint64
 }
 
 var mapPendingPool = sync.Pool{
 	New: func() any { return &MapPending{} },
 }
 
-func acquireMapPending(buf *Buffer, waiter *core.MapWaiter) *MapPending {
+func acquireMapPending(buf *Buffer, waiter *core.MapWaiter, index uint64) *MapPending {
 	p := mapPendingPool.Get().(*MapPending)
 	p.buf = buf
 	p.waiter = waiter
 	p.resolved = false
 	p.err = nil
+	p.index = index
 	return p
 }
 
@@ -52,6 +55,7 @@ func (p *MapPending) release() {
 	p.waiter = nil
 	p.resolved = false
 	p.err = nil
+	p.index = 0
 	mapPendingPool.Put(p)
 }
 

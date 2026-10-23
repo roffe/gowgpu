@@ -4,7 +4,6 @@ package wgpu
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"runtime"
 	"sync/atomic"
@@ -112,12 +111,15 @@ func (b *Buffer) MapState() MapState {
 //	data := rng.Bytes()
 //
 // Map drives Device.Poll internally; callers do not need to schedule
-// polling themselves. If you need non-blocking behavior use MapAsync.
+// polling themselves. It waits for the GPU to finish the submission the
+// map waits for, not for work submitted after it, and Submit on other
+// goroutines goes on meanwhile. If you need non-blocking behavior use
+// MapAsync.
 //
 // If ctx is done before the map resolves, Map cancels the request and
 // returns ctx.Err(), leaving the buffer unmapped.
 func (b *Buffer) Map(ctx context.Context, mode MapMode, offset, size uint64) error {
-	if b == nil || b.core == nil {
+	if b == nil || b.core == nil || b.device == nil {
 		return ErrReleased
 	}
 	if ctx == nil {
@@ -131,34 +133,17 @@ func (b *Buffer) Map(ctx context.Context, mode MapMode, offset, size uint64) err
 	if err != nil {
 		return err
 	}
-	// Drain the device once synchronously — for backends that complete
-	// instantly (software, noop) and for the common case where the
-	// buffer has no in-flight submission this returns immediately with
-	// the map already resolved.
-	if b.device != nil {
+	defer pending.Release()
+	for {
 		b.device.Poll(PollPoll)
+		if done, err := pending.Status(); done {
+			return err
+		}
+		if err := b.device.waitSubmission(ctx, pending.index); err != nil {
+			_ = b.Unmap()
+			return err
+		}
 	}
-	if done, werr := pending.Status(); done {
-		pending.Release()
-		return werr
-	}
-	// Wait with the caller's context; a PollWait runs inside Device.Poll
-	// concurrently with Wait so the HAL fence advances even if nobody
-	// else calls Submit before the context deadline.
-	if b.device != nil {
-		// Kick a PollWait on a worker goroutine so Wait's select unblocks
-		// as soon as the fence advances. Allocation is a single channel
-		// inside MapPending.Wait; the zero-alloc path is Status-driven.
-		go func() {
-			b.device.Poll(PollWait)
-		}()
-	}
-	werr := pending.Wait(ctx)
-	pending.Release()
-	if ctx.Err() != nil && errors.Is(werr, ctx.Err()) {
-		_ = b.Unmap()
-	}
-	return werr
 }
 
 // MapAsync initiates a buffer map without blocking the caller.
@@ -197,7 +182,7 @@ func (b *Buffer) MapAsync(mode MapMode, offset, size uint64) (*MapPending, error
 		subIdx = b.device.lastSubmissionIndex()
 	}
 	b.core.Device().RegisterPendingMap(subIdx, b.core)
-	return acquireMapPending(b, b.core.Waiter()), nil
+	return acquireMapPending(b, b.core.Waiter(), subIdx), nil
 }
 
 // MappedRange returns a safe view over the mapped region [offset, offset+size).

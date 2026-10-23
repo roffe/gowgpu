@@ -4,6 +4,7 @@ package wgpu
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"fmt"
 	"slices"
@@ -1508,10 +1509,11 @@ func (d *Device) destroyQueue() *core.DestroyQueue {
 // for game loops and is called automatically from Queue.Submit, so
 // beginner code paths never need to call Poll explicitly.
 //
-// PollWait blocks until every currently-pending map resolves: it issues
-// WaitIdle on the HAL device, then drains all buckets. This is the
-// primary path used by Buffer.Map and is appropriate for shutdown
-// drains and short scripts that do not run a render loop.
+// PollWait blocks until the GPU has finished every submission made before
+// the call, then drains all buckets. It waits for the last of them, not
+// for work submitted meanwhile, and does not hold up Submit. It is
+// appropriate for shutdown drains and short scripts that do not run a
+// render loop.
 //
 // The return value reports whether Poll observed any in-flight maps —
 // tests use it to assert that Submit-driven auto-polling drained
@@ -1522,10 +1524,7 @@ func (d *Device) Poll(pollType PollType) bool {
 	}
 	switch pollType {
 	case PollWait:
-		// Wait on the HAL device so all submissions complete, then drain.
-		if halDev, ok := d.core.HalDeviceHandle(); ok {
-			_ = halDev.WaitIdle()
-		}
+		_ = d.waitSubmission(context.Background(), d.lastSubmissionIndex())
 		// Everything submitted before the wait is done; a map against a
 		// submission made since is not, so ask rather than assume all.
 		completed := ^uint64(0)
@@ -1539,6 +1538,57 @@ func (d *Device) Poll(pollType PollType) bool {
 			completed = d.queue.hal.PollCompleted()
 		}
 		return d.core.PollMaps(completed)
+	}
+}
+
+// submissionWaiter is a backend queue that can wait for one of its
+// submissions without its lock and without the work submitted after it.
+type submissionWaiter interface {
+	WaitSubmission(index uint64, timeout time.Duration) (bool, error)
+}
+
+// submissionWaitSlice is how long a wait for a submission blocks in the
+// backend before it looks at its context again.
+const submissionWaitSlice = 10 * time.Millisecond
+
+// waitSubmission waits until the GPU has finished submission index, or ctx
+// is done. A backend that cannot wait for one submission is polled.
+func (d *Device) waitSubmission(ctx context.Context, index uint64) error {
+	q := d.queue
+	if q == nil || q.hal == nil {
+		return nil
+	}
+	if w, ok := q.hal.(submissionWaiter); ok {
+		timeout := time.Duration(-1)
+		if ctx.Done() != nil {
+			timeout = submissionWaitSlice
+		}
+		for {
+			if done, err := w.WaitSubmission(index, timeout); done || err != nil {
+				return err
+			}
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+		}
+	}
+	if q.hal.PollCompleted() >= index {
+		return nil
+	}
+	delay := 50 * time.Microsecond
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-timer.C:
+		}
+		if q.hal.PollCompleted() >= index {
+			return nil
+		}
+		delay = min(2*delay, 2*time.Millisecond)
+		timer.Reset(delay)
 	}
 }
 

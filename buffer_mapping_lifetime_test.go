@@ -83,28 +83,38 @@ fn main() {
 }
 `
 
-// submitBusy submits a dispatch that runs for rounds rounds and then a copy
-// of its result into dst, and returns the submission's index. It skips the
-// test on an adapter without compute shaders.
+// submitBusy submits busyCommands and returns the submission's index.
 func submitBusy(t *testing.T, device *Device, rounds uint32, dst *Buffer) uint64 {
+	t.Helper()
+	idx, err := device.Queue().Submit(busyCommands(t, device, rounds, dst))
+	if err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	return idx
+}
+
+// busyCommands records a dispatch that runs for rounds rounds and then a
+// copy of its result into dst. The test releases what it uses when it ends.
+// It skips the test on an adapter without compute shaders.
+func busyCommands(t *testing.T, device *Device, rounds uint32, dst *Buffer) *CommandBuffer {
 	t.Helper()
 	module, err := device.CreateShaderModule(&ShaderModuleDescriptor{Label: "busy", WGSL: busyWGSL})
 	if err != nil {
 		t.Fatalf("CreateShaderModule: %v", err)
 	}
-	defer module.Release()
+	t.Cleanup(module.Release)
 	layout, err := device.CreateBindGroupLayout(&BindGroupLayoutDescriptor{Entries: []gputypes.BindGroupLayoutEntry{
 		{Binding: 0, Visibility: ShaderStageCompute, Buffer: &gputypes.BufferBindingLayout{Type: gputypes.BufferBindingTypeStorage}},
 	}})
 	if err != nil {
 		t.Fatalf("CreateBindGroupLayout: %v", err)
 	}
-	defer layout.Release()
+	t.Cleanup(layout.Release)
 	pl, err := device.CreatePipelineLayout(&PipelineLayoutDescriptor{BindGroupLayouts: []*BindGroupLayout{layout}})
 	if err != nil {
 		t.Fatalf("CreatePipelineLayout: %v", err)
 	}
-	defer pl.Release()
+	t.Cleanup(pl.Release)
 	pipe, err := device.CreateComputePipeline(&ComputePipelineDescriptor{Label: "busy", Layout: pl, Module: module, EntryPoint: "main"})
 	if err != nil {
 		if strings.Contains(err.Error(), "downlevel") {
@@ -112,17 +122,17 @@ func submitBusy(t *testing.T, device *Device, rounds uint32, dst *Buffer) uint64
 		}
 		t.Fatalf("CreateComputePipeline: %v", err)
 	}
-	defer pipe.Release()
+	t.Cleanup(pipe.Release)
 	data, err := device.CreateBuffer(&BufferDescriptor{Label: "busy", Size: 8, Usage: BufferUsageStorage | BufferUsageCopySrc | BufferUsageCopyDst})
 	if err != nil {
 		t.Fatalf("CreateBuffer: %v", err)
 	}
-	defer data.Release()
+	t.Cleanup(data.Release)
 	group, err := device.CreateBindGroup(&BindGroupDescriptor{Layout: layout, Entries: []BindGroupEntry{{Binding: 0, Buffer: data}}})
 	if err != nil {
 		t.Fatalf("CreateBindGroup: %v", err)
 	}
-	defer group.Release()
+	t.Cleanup(group.Release)
 	init := make([]byte, 8)
 	binary.LittleEndian.PutUint32(init[4:], rounds)
 	if err := device.Queue().WriteBuffer(data, 0, init); err != nil {
@@ -150,11 +160,7 @@ func submitBusy(t *testing.T, device *Device, rounds uint32, dst *Buffer) uint64
 	if err != nil {
 		t.Fatalf("Finish: %v", err)
 	}
-	idx, err := device.Queue().Submit(cb)
-	if err != nil {
-		t.Fatalf("Submit: %v", err)
-	}
-	return idx
+	return cb
 }
 
 // A Map whose context ends before the GPU finishes leaves the buffer
@@ -192,4 +198,85 @@ func TestBufferMapContextEndCancelsTheMap(t *testing.T) {
 	if err := buf.Unmap(); err != nil {
 		t.Fatalf("Unmap: %v", err)
 	}
+}
+
+// A Map waits for the submission its map waits for alone: a Submit on
+// another goroutine goes on meanwhile, and the work it submits is not
+// waited for.
+func TestBufferMapWaitsForItsOwnSubmission(t *testing.T) {
+	inst, adapter, device := newTestDevice(t)
+	defer inst.Release()
+	defer adapter.Release()
+	defer device.Release()
+
+	buf, err := device.CreateBuffer(&BufferDescriptor{Label: "map-own", Size: 4, Usage: BufferUsageMapRead | BufferUsageCopyDst})
+	if err != nil {
+		t.Fatalf("CreateBuffer: %v", err)
+	}
+	defer buf.Release()
+	later := busyCommands(t, device, 50_000_000, nil)
+	start := time.Now()
+	first := submitBusy(t, device, 50_000_000, buf)
+
+	type result struct {
+		err       error
+		completed uint64
+	}
+	mapped := make(chan result, 1)
+	go func() {
+		err := buf.Map(context.Background(), MapModeRead, 0, 4)
+		mapped <- result{err, device.Queue().Poll()}
+	}()
+	for buf.MapState() == MapStateUnmapped {
+		time.Sleep(time.Millisecond)
+	}
+	time.Sleep(10 * time.Millisecond)
+	submitStart := time.Now()
+	second, err := device.Queue().Submit(later)
+	if err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	submitTook := time.Since(submitStart)
+	r := <-mapped
+	if r.err != nil {
+		t.Fatalf("Map: %v", r.err)
+	}
+	if err := buf.Unmap(); err != nil {
+		t.Fatalf("Unmap: %v", err)
+	}
+	device.Poll(PollWait)
+	busy := time.Since(start) / 2
+
+	if r.completed < first {
+		t.Errorf("Map returned with submission %d done, before its own, %d", r.completed, first)
+	}
+	if r.completed >= second {
+		t.Errorf("Map waited for submission %d, made after the map", second)
+	}
+	if submitTook > busy/2 {
+		if submitWaitsForWork(t, device) {
+			t.Skip("the driver holds a Submit until the work before it is done")
+		}
+		t.Errorf("a Submit made while Map waited took %v, a dispatch %v", submitTook, busy)
+	}
+}
+
+// submitWaitsForWork reports whether a Submit made while the GPU runs a
+// dispatch submitted before it returns only once the dispatch is done, as
+// lavapipe's does.
+func submitWaitsForWork(t *testing.T, device *Device) bool {
+	t.Helper()
+	busy, later := busyCommands(t, device, 50_000_000, nil), busyCommands(t, device, 1, nil)
+	start := time.Now()
+	if _, err := device.Queue().Submit(busy); err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	time.Sleep(10 * time.Millisecond)
+	submitStart := time.Now()
+	if _, err := device.Queue().Submit(later); err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	submitTook := time.Since(submitStart)
+	device.Poll(PollWait)
+	return submitTook > time.Since(start)/2
 }

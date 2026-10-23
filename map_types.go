@@ -82,8 +82,7 @@ const (
 	// for game loops that call Poll every frame.
 	PollPoll PollType = iota
 	// PollWait blocks until every submission currently known to the
-	// device has completed, then drains. Used by Buffer.Map and by
-	// Device.Poll(PollWait) for shutdown drains.
+	// device has completed, then drains. Used for shutdown drains.
 	PollWait
 )
 
