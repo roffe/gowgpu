@@ -504,23 +504,38 @@ func (p *RenderPassEncoder) MultiDrawIndexedIndirect(buffer *Buffer, offset uint
 	p.core.MultiDrawIndexedIndirect(buffer.coreBuffer(), offset, drawCount)
 }
 
-// ExecuteBundles executes reusable render command bundles in this render pass.
+// ExecuteBundles executes reusable render command bundles in this render
+// pass. Each bundle starts without a pipeline, bind groups or vertex and
+// index buffers, and the pass has none of them after the bundles either.
 func (p *RenderPassEncoder) ExecuteBundles(bundles ...*RenderBundle) {
-	raw := p.core.RawPass()
-	if raw == nil {
-		return
-	}
-
 	for _, bundle := range bundles {
-		if bundle == nil || bundle.released.Load() || bundle.hal == nil {
+		if bundle == nil || bundle.released.Load() {
 			continue
 		}
 		if p.encoder.foreign("RenderPass.ExecuteBundles", bundle.device, "a bundle") {
 			return
 		}
-
-		raw.ExecuteBundle(bundle.hal)
+		p.resetBindings()
+		for _, command := range bundle.commands {
+			command(p)
+		}
 	}
+	p.resetBindings()
+}
+
+// resetBindings forgets the pipeline, bind groups and vertex and index
+// buffers set so far.
+func (p *RenderPassEncoder) resetBindings() {
+	p.pipelineSet = false
+	p.stubPipeline = false
+	p.binder.reset()
+	p.vertexSteps = nil
+	p.vertexBuffers = p.vertexBuffers[:0]
+	p.indexBufferSet = false
+	p.indexBufferFormat = 0
+	p.indexCount = 0
+	p.currentStripIndexFormat = nil
+	p.blendConstantRequired = false
 }
 
 // MultiDrawIndirectCount draws primitives with a GPU-provided draw count.

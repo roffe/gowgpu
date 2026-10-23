@@ -1619,19 +1619,8 @@ func (d *Device) CreateRenderBundleEncoder(desc *RenderBundleEncoderDescriptor) 
 		return nil, fmt.Errorf("wgpu: render bundle encoder descriptor is nil")
 	}
 
-	if d.released.Load() {
+	if d.released.Load() || d.halDevice() == nil {
 		return nil, ErrReleased
 	}
-
-	halDevice := d.halDevice()
-	if halDevice == nil {
-		return nil, ErrReleased
-	}
-
-	halEncoder, err := halDevice.CreateRenderBundleEncoder(desc.toHAL())
-	if err != nil {
-		return nil, fmt.Errorf("wgpu: failed to create render bundle encoder: %w", err)
-	}
-
-	return &RenderBundleEncoder{hal: halEncoder, device: d}, nil
+	return &RenderBundleEncoder{device: d}, nil
 }

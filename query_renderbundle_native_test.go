@@ -22,11 +22,11 @@ func (*testHALResource) NativeHandle() uintptr { return 0 }
 
 type captureRenderPass struct {
 	*noop.RenderPassEncoder
-	executed []hal.RenderBundle
+	vertexBuffers []hal.Buffer
 }
 
-func (p *captureRenderPass) ExecuteBundle(bundle hal.RenderBundle) {
-	p.executed = append(p.executed, bundle)
+func (p *captureRenderPass) SetVertexBuffer(_ uint32, buffer hal.Buffer, _ uint64) {
+	p.vertexBuffers = append(p.vertexBuffers, buffer)
 }
 
 type captureCommandEncoder struct {
@@ -54,21 +54,12 @@ func (e *captureCommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) 
 
 type captureDevice struct {
 	hal.Device
-	commandEncoder         hal.CommandEncoder
-	renderBundleEncoder    hal.RenderBundleEncoder
-	renderBundleEncoderErr error
-	destroyedRenderBundles int
+	commandEncoder hal.CommandEncoder
 }
 
 func (d *captureDevice) CreateCommandEncoder(*hal.CommandEncoderDescriptor) (hal.CommandEncoder, error) {
 	return d.commandEncoder, nil
 }
-
-func (d *captureDevice) CreateRenderBundleEncoder(*hal.RenderBundleEncoderDescriptor) (hal.RenderBundleEncoder, error) {
-	return d.renderBundleEncoder, d.renderBundleEncoderErr
-}
-
-func (d *captureDevice) DestroyRenderBundle(hal.RenderBundle) { d.destroyedRenderBundles++ }
 
 func newCaptureDevice(h *captureDevice) *Device {
 	limits := DefaultLimits()
@@ -97,72 +88,6 @@ func newTestQuerySet(raw hal.QuerySet, device *Device) *QuerySet {
 	return &QuerySet{
 		core:   core.NewQuerySet(raw, device.core, hal.QueryTypeTimestamp, 4, "test query set"),
 		device: device,
-	}
-}
-
-type testRenderBundleEncoder struct {
-	setPipelineCalls     int
-	setBindGroupCalls    int
-	setVertexBufferCalls int
-	setIndexBufferCalls  int
-	drawCalls            int
-	drawIndexedCalls     int
-	finishCalls          int
-	bundle               hal.RenderBundle
-}
-
-func (e *testRenderBundleEncoder) SetPipeline(hal.RenderPipeline) { e.setPipelineCalls++ }
-func (e *testRenderBundleEncoder) SetBindGroup(uint32, hal.BindGroup, []uint32) {
-	e.setBindGroupCalls++
-}
-func (e *testRenderBundleEncoder) SetVertexBuffer(uint32, hal.Buffer, uint64) {
-	e.setVertexBufferCalls++
-}
-func (e *testRenderBundleEncoder) SetIndexBuffer(hal.Buffer, gputypes.IndexFormat, uint64) {
-	e.setIndexBufferCalls++
-}
-func (e *testRenderBundleEncoder) Draw(gputypes.DrawArgs) { e.drawCalls++ }
-func (e *testRenderBundleEncoder) DrawIndexed(gputypes.DrawIndexedArgs) {
-	e.drawIndexedCalls++
-}
-func (e *testRenderBundleEncoder) Finish() hal.RenderBundle {
-	e.finishCalls++
-	return e.bundle
-}
-
-func (e *testRenderBundleEncoder) commandCalls() int {
-	return e.setPipelineCalls + e.setBindGroupCalls + e.setVertexBufferCalls +
-		e.setIndexBufferCalls + e.drawCalls + e.drawIndexedCalls
-}
-
-func TestRenderBundleEncoderDescriptorToHAL(t *testing.T) {
-	tests := []struct {
-		name string
-		desc *RenderBundleEncoderDescriptor
-	}{
-		{name: "nil"},
-		{name: "populated", desc: &RenderBundleEncoderDescriptor{
-			Label: "encoder", ColorFormats: []gputypes.TextureFormat{gputypes.TextureFormatRGBA8Unorm},
-			DepthStencilFormat: gputypes.TextureFormatDepth24Plus, SampleCount: 4,
-			DepthReadOnly: true, StencilReadOnly: true,
-		}},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := tt.desc.toHAL()
-			if tt.desc == nil {
-				if got != nil {
-					t.Fatalf("toHAL() = %+v, want nil", got)
-				}
-				return
-			}
-			if got.Label != tt.desc.Label || got.SampleCount != tt.desc.SampleCount ||
-				got.DepthReadOnly != tt.desc.DepthReadOnly || got.StencilReadOnly != tt.desc.StencilReadOnly ||
-				got.DepthStencilFormat != tt.desc.DepthStencilFormat || len(got.ColorFormats) != 1 {
-				t.Fatalf("toHAL() = %+v", got)
-			}
-		})
 	}
 }
 
@@ -242,13 +167,12 @@ func TestBeginRenderPassTimestampWrites(t *testing.T) {
 }
 
 func TestRenderBundleEncoderCommandsAfterFinish(t *testing.T) {
-	resource := &testHALResource{}
 	tests := []struct {
 		name string
 		call func(*RenderBundleEncoder)
 	}{
-		{name: "SetPipeline", call: func(e *RenderBundleEncoder) { e.SetPipeline(&RenderPipeline{hal: resource}) }},
-		{name: "SetBindGroup", call: func(e *RenderBundleEncoder) { e.SetBindGroup(0, &BindGroup{hal: resource}, nil) }},
+		{name: "SetPipeline", call: func(e *RenderBundleEncoder) { e.SetPipeline(&RenderPipeline{}) }},
+		{name: "SetBindGroup", call: func(e *RenderBundleEncoder) { e.SetBindGroup(0, &BindGroup{}, nil) }},
 		{name: "SetVertexBuffer", call: func(e *RenderBundleEncoder) { e.SetVertexBuffer(0, &Buffer{}, 0) }},
 		{name: "SetIndexBuffer", call: func(e *RenderBundleEncoder) { e.SetIndexBuffer(&Buffer{}, gputypes.IndexFormatUint16, 0) }},
 		{name: "Draw", call: func(e *RenderBundleEncoder) { e.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1}) }},
@@ -257,25 +181,21 @@ func TestRenderBundleEncoderCommandsAfterFinish(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := &testRenderBundleEncoder{bundle: resource}
-			encoder := &RenderBundleEncoder{hal: h}
+			encoder := &RenderBundleEncoder{}
 			tt.call(encoder)
-			if got := h.commandCalls(); got != 1 {
-				t.Fatalf("HAL command calls before Finish = %d, want 1", got)
-			}
-			if _, err := encoder.Finish(nil); err != nil {
+			bundle, err := encoder.Finish(nil)
+			if err != nil {
 				t.Fatalf("Finish() error = %v", err)
 			}
 			tt.call(encoder)
-			if got := h.commandCalls(); got != 1 {
-				t.Fatalf("HAL command calls after Finish = %d, want 1", got)
+			if len(bundle.commands) != 1 || len(encoder.commands) != 0 {
+				t.Fatalf("commands = %d in the bundle, %d left in the encoder, want 1 and 0", len(bundle.commands), len(encoder.commands))
 			}
 		})
 	}
 }
 
 func TestRenderBundleEncoderFinish(t *testing.T) {
-	resource := &testHALResource{}
 	tests := []struct {
 		name      string
 		desc      *RenderBundleDescriptor
@@ -287,17 +207,14 @@ func TestRenderBundleEncoderFinish(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := &testRenderBundleEncoder{bundle: resource}
-			encoder := &RenderBundleEncoder{hal: h}
+			encoder := &RenderBundleEncoder{}
+			encoder.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1})
 			bundle, err := encoder.Finish(tt.desc)
 			if err != nil {
 				t.Fatalf("Finish() error = %v", err)
 			}
-			if bundle == nil || bundle.hal != resource || bundle.label != tt.wantLabel {
+			if bundle == nil || len(bundle.commands) != 1 || bundle.label != tt.wantLabel {
 				t.Fatalf("Finish() bundle = %+v", bundle)
-			}
-			if h.finishCalls != 1 {
-				t.Fatalf("HAL Finish calls = %d, want 1", h.finishCalls)
 			}
 			if second, secondErr := encoder.Finish(nil); second != nil || !errors.Is(secondErr, ErrReleased) {
 				t.Fatalf("second Finish() = (%v, %v), want (nil, ErrReleased)", second, secondErr)
@@ -307,26 +224,21 @@ func TestRenderBundleEncoderFinish(t *testing.T) {
 }
 
 func TestDeviceCreateRenderBundleEncoder(t *testing.T) {
-	resource := &testHALResource{}
 	tests := []struct {
 		name       string
 		desc       *RenderBundleEncoderDescriptor
 		released   bool
-		halErr     error
 		wantErr    bool
 		wantResult bool
 	}{
 		{name: "nil descriptor", wantErr: true},
 		{name: "released device", desc: &RenderBundleEncoderDescriptor{}, released: true, wantErr: true},
-		{name: "HAL error", desc: &RenderBundleEncoderDescriptor{}, halErr: errors.New("create failed"), wantErr: true},
 		{name: "success", desc: &RenderBundleEncoderDescriptor{}, wantResult: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := &testRenderBundleEncoder{bundle: resource}
-			deviceHAL := &captureDevice{Device: &noop.Device{}, renderBundleEncoder: h, renderBundleEncoderErr: tt.halErr}
-			device := newCaptureDevice(deviceHAL)
+			device := newCaptureDevice(&captureDevice{Device: &noop.Device{}})
 			if tt.released {
 				device.released.Store(true)
 			}
@@ -339,27 +251,11 @@ func TestDeviceCreateRenderBundleEncoder(t *testing.T) {
 }
 
 func TestRenderBundleRelease(t *testing.T) {
-	resource := &testHALResource{}
-	h := &captureDevice{Device: &noop.Device{}}
-	device := newCaptureDevice(h)
-	device.queue = &Queue{}
-	device.queue.lastSubmissionIndex.Store(7)
-	bundle := &RenderBundle{hal: resource, device: device}
+	bundle := &RenderBundle{}
 	bundle.Release()
 	bundle.Release()
-	if got := h.destroyedRenderBundles; got != 0 {
-		t.Fatalf("early HAL destroy calls = %d", got)
-	}
-	device.destroyQueue().Triage(6)
-	if got := h.destroyedRenderBundles; got != 0 {
-		t.Fatalf("in-flight HAL destroy calls = %d", got)
-	}
-	device.destroyQueue().Triage(7)
-	device.destroyQueue().Triage(7)
-	(&RenderBundle{}).Release()
-	(&RenderBundle{hal: resource}).Release()
-	if got := h.destroyedRenderBundles; got != 1 {
-		t.Fatalf("HAL destroy calls = %d, want 1", got)
+	if !bundle.released.Load() {
+		t.Fatal("bundle not released")
 	}
 	var nilRenderBundle *RenderBundle
 	nilRenderBundle.Release()
@@ -386,15 +282,29 @@ func TestResolveQuerySetAndExecuteBundles(t *testing.T) {
 		t.Fatalf("ResolveQuerySet delegation = (%d, %v, %v)", command.resolved, command.querySet, command.buffer)
 	}
 
+	vertices, err := device.CreateBuffer(&BufferDescriptor{Size: 256, Usage: BufferUsageVertex})
+	if err != nil {
+		t.Fatalf("CreateBuffer() error = %v", err)
+	}
+	record := func() *RenderBundle {
+		bundleEncoder := &RenderBundleEncoder{}
+		bundleEncoder.SetVertexBuffer(0, vertices, 0)
+		bundle, err := bundleEncoder.Finish(nil)
+		if err != nil {
+			t.Fatalf("Finish() error = %v", err)
+		}
+		return bundle
+	}
+	released := record()
+	released.Release()
+
 	renderPass, err := encoder.BeginRenderPass(&RenderPassDescriptor{ColorAttachments: captureAttachments(t, device)})
 	if err != nil {
 		t.Fatalf("BeginRenderPass() error = %v", err)
 	}
-	released := &RenderBundle{hal: resource}
-	released.released.Store(true)
-	renderPass.ExecuteBundles(nil, released, &RenderBundle{}, &RenderBundle{hal: resource})
-	if len(pass.executed) != 1 || pass.executed[0] != resource {
-		t.Fatalf("executed bundles = %v, want one active bundle", pass.executed)
+	renderPass.ExecuteBundles(nil, released, &RenderBundle{}, record())
+	if len(pass.vertexBuffers) != 1 || pass.vertexBuffers[0] == nil {
+		t.Fatalf("vertex buffers set = %v, want the one of the active bundle", pass.vertexBuffers)
 	}
 }
 
@@ -590,11 +500,22 @@ func TestExecuteBundlesWithoutRawPass(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateCommandEncoder() error = %v", err)
 	}
+	vertices, err := device.CreateBuffer(&BufferDescriptor{Size: 256, Usage: BufferUsageVertex})
+	if err != nil {
+		t.Fatalf("CreateBuffer() error = %v", err)
+	}
+	bundleEncoder := &RenderBundleEncoder{}
+	bundleEncoder.SetVertexBuffer(0, vertices, 0)
+	bundleEncoder.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1})
+	bundle, err := bundleEncoder.Finish(nil)
+	if err != nil {
+		t.Fatalf("Finish() error = %v", err)
+	}
 	renderPass, err := encoder.BeginRenderPass(&RenderPassDescriptor{ColorAttachments: captureAttachments(t, device)})
 	if err != nil {
 		t.Fatalf("BeginRenderPass() error = %v", err)
 	}
-	renderPass.ExecuteBundles(&RenderBundle{hal: &testHALResource{}})
+	renderPass.ExecuteBundles(bundle)
 }
 
 func TestCreationWithoutHALDevice(t *testing.T) {

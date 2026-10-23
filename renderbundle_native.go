@@ -4,71 +4,55 @@ package wgpu
 
 import (
 	"fmt"
+	"slices"
 	"sync/atomic"
 
 	"github.com/roffe/gowgpu/gputypes"
-	"github.com/roffe/gowgpu/hal"
 )
 
 // RenderBundleEncoder records reusable render commands.
 type RenderBundleEncoder struct {
-	hal      hal.RenderBundleEncoder
 	device   *Device
+	commands []func(*RenderPassEncoder)
 	finished atomic.Bool
 }
 
-func (e *RenderBundleEncoder) SetPipeline(pipeline *RenderPipeline) {
+func (e *RenderBundleEncoder) record(command func(*RenderPassEncoder)) {
 	if e.finished.Load() {
 		return
 	}
+	e.commands = append(e.commands, command)
+}
 
-	e.hal.SetPipeline(pipeline.hal)
+func (e *RenderBundleEncoder) SetPipeline(pipeline *RenderPipeline) {
+	e.record(func(p *RenderPassEncoder) { p.SetPipeline(pipeline) })
 }
 
 func (e *RenderBundleEncoder) SetBindGroup(index uint32, group *BindGroup, offsets []uint32) {
-	if e.finished.Load() {
-		return
-	}
-
-	e.hal.SetBindGroup(index, group.hal, offsets)
+	offsets = slices.Clone(offsets)
+	e.record(func(p *RenderPassEncoder) { p.SetBindGroup(index, group, offsets) })
 }
 
 func (e *RenderBundleEncoder) SetVertexBuffer(slot uint32, buffer *Buffer, offset uint64) {
-	if e.finished.Load() {
-		return
-	}
-
-	e.hal.SetVertexBuffer(slot, buffer.halBuffer(), offset)
+	e.record(func(p *RenderPassEncoder) { p.SetVertexBuffer(slot, buffer, offset) })
 }
 
 func (e *RenderBundleEncoder) SetIndexBuffer(buffer *Buffer, format gputypes.IndexFormat, offset uint64) {
-	if e.finished.Load() {
-		return
-	}
-
-	e.hal.SetIndexBuffer(buffer.halBuffer(), format, offset)
+	e.record(func(p *RenderPassEncoder) { p.SetIndexBuffer(buffer, format, offset) })
 }
 
 func (e *RenderBundleEncoder) Draw(args gputypes.DrawArgs) {
-	if e.finished.Load() {
-		return
-	}
-
-	e.hal.Draw(args)
+	e.record(func(p *RenderPassEncoder) { p.Draw(args) })
 }
 
 func (e *RenderBundleEncoder) DrawIndexed(args gputypes.DrawIndexedArgs) {
-	if e.finished.Load() {
-		return
-	}
-
-	e.hal.DrawIndexed(args)
+	e.record(func(p *RenderPassEncoder) { p.DrawIndexed(args) })
 }
 
 // Finish completes recording and returns the reusable render bundle.
 func (e *RenderBundleEncoder) Finish(desc *RenderBundleDescriptor) (_ *RenderBundle, err error) {
 	defer e.device.reportError(&err)
-	if e == nil || e.hal == nil || e.finished.Swap(true) {
+	if e == nil || e.finished.Swap(true) {
 		return nil, fmt.Errorf("wgpu: RenderBundleEncoder.Finish: %w", ErrReleased)
 	}
 
@@ -76,36 +60,25 @@ func (e *RenderBundleEncoder) Finish(desc *RenderBundleDescriptor) (_ *RenderBun
 	if desc != nil {
 		label = desc.Label
 	}
-	return &RenderBundle{hal: e.hal.Finish(), device: e.device, label: label}, nil
+	commands := e.commands
+	e.commands = nil
+	return &RenderBundle{commands: commands, device: e.device, label: label}, nil
 }
 
-// RenderBundle is a reusable sequence of render commands.
+// RenderBundle is a reusable sequence of render commands. A render pass
+// executes it through its own encoder, so its commands are validated and
+// their resources tracked as if the pass had recorded them.
 type RenderBundle struct {
-	hal      hal.RenderBundle
+	commands []func(*RenderPassEncoder)
 	device   *Device
 	label    string
 	released atomic.Bool
 }
 
-// Release defers destruction until the GPU completes any submission that may
-// reference the bundle. It is safe to call Release more than once.
+// Release marks the bundle released; render passes skip it after that. It is
+// safe to call Release more than once.
 func (b *RenderBundle) Release() {
-	if b == nil || b.released.Swap(true) {
-		return
+	if b != nil {
+		b.released.Store(true)
 	}
-	if b.device == nil || b.hal == nil {
-		return
-	}
-	device := b.device.halDevice()
-	if device == nil {
-		return
-	}
-	dq := b.device.destroyQueue()
-	if dq == nil {
-		device.DestroyRenderBundle(b.hal)
-		return
-	}
-	dq.Defer(b.device.lastSubmissionIndex(), "RenderBundle", func() {
-		device.DestroyRenderBundle(b.hal)
-	})
 }
