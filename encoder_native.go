@@ -220,6 +220,12 @@ func (e *CommandEncoder) setError(err error) {
 	}
 }
 
+// hasDownlevel reports whether the encoder's adapter has flag. An encoder
+// without a device has every one.
+func (e *CommandEncoder) hasDownlevel(flag gputypes.DownlevelFlags) bool {
+	return e.device == nil || e.device.core == nil || e.device.core.DownlevelCapabilitiesRef().Flags.Contains(flag)
+}
+
 // foreign records an error for what, an object made on owner, passed to op
 // when owner is another device than e's, and reports whether it did.
 func (e *CommandEncoder) foreign(op string, owner *Device, what string) bool {

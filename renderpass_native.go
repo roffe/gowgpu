@@ -324,6 +324,11 @@ func (p *RenderPassEncoder) DrawIndexed(args gputypes.DrawIndexedArgs) {
 			p.indexBufferFormat, *p.currentStripIndexFormat, ErrDrawIndexFormatMismatch))
 		return
 	}
+	if args.BaseVertex != 0 && !p.encoder.hasDownlevel(gputypes.DownlevelFlagsBaseVertex) {
+		p.encoder.setError(fmt.Errorf("wgpu: RenderPass.DrawIndexed: base vertex %d needs DownlevelFlagsBaseVertex, which the adapter lacks",
+			args.BaseVertex))
+		return
+	}
 	if last := uint64(args.FirstIndex) + uint64(args.IndexCount); last > p.indexCount {
 		p.encoder.setError(fmt.Errorf("wgpu: RenderPass.DrawIndexed: draws up to index %d, the index buffer holds %d", last, p.indexCount))
 		return
