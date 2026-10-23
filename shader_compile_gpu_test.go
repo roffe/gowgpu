@@ -5,6 +5,7 @@ package wgpu
 import (
 	"context"
 	"encoding/binary"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -44,6 +45,15 @@ func readU32s(t *testing.T, device *Device, buf *Buffer, n int) []uint32 {
 		t.Fatalf("Unmap: %v", err)
 	}
 	return out
+}
+
+// skipWithoutComputeShaders skips the test when a compute pipeline failed
+// for want of compute shaders, as on desktop GL 3.3.
+func skipWithoutComputeShaders(t *testing.T, err error) {
+	t.Helper()
+	if strings.Contains(err.Error(), "ComputeShaders") {
+		t.Skipf("no compute shaders on this adapter: %v", err)
+	}
 }
 
 func newStorageBuffer(t *testing.T, device *Device, size uint64) *Buffer {
@@ -96,6 +106,7 @@ func TestOneModuleUnderTwoLayouts(t *testing.T) {
 		t.Cleanup(pl.Release)
 		pipe, err := device.CreateComputePipeline(&ComputePipelineDescriptor{Label: "group-one-store", Layout: pl, Module: module, EntryPoint: "cs_main"})
 		if err != nil {
+			skipWithoutComputeShaders(t, err)
 			t.Fatalf("CreateComputePipeline: %v", err)
 		}
 		t.Cleanup(pipe.Release)
@@ -158,6 +169,13 @@ func TestConcurrentPipelineCreationFromOneModule(t *testing.T) {
 		}
 		defer layouts[i].Release()
 	}
+
+	probe, err := device.CreateComputePipeline(&ComputePipelineDescriptor{Label: "probe", Layout: layouts[0], Module: module, EntryPoint: "cs_main"})
+	if err != nil {
+		skipWithoutComputeShaders(t, err)
+		t.Fatalf("CreateComputePipeline: %v", err)
+	}
+	probe.Release()
 
 	var wg sync.WaitGroup
 	errs := make(chan error, 8*10)
