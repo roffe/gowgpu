@@ -239,6 +239,9 @@ func (t *TextureTracker) apply(index TrackerIndex, start, end stateSource, dst [
 		t.metadata.SetOwned(index, true)
 		return dst
 	}
+	if start.simple() && end.simple() && t.setSimple(index, start.uses, end.uses, &dst) {
+		return dst
+	}
 	dst = t.set.barrier(index, start, dst)
 	t.set.update(index, end, nil, 0)
 	return dst
@@ -255,15 +258,36 @@ func (t *TextureTracker) Merge(scope *TextureUsageScope) []TexturePendingTransit
 
 // MergeInto is Merge appending the transitions to dst.
 func (t *TextureTracker) MergeInto(scope *TextureUsageScope, dst []TexturePendingTransition) []TexturePendingTransition {
-	for i := range scope.set.simple {
+	for i, uses := range scope.set.simple {
 		index, valid := trackerIndexAt(i)
 		if !valid || !scope.metadata.IsOwned(index) {
+			continue
+		}
+		if uses != usesComplex && t.setSimple(index, uses, uses, &dst) {
 			continue
 		}
 		src := sourceOf(&scope.set, index)
 		dst = t.apply(index, src, src, dst)
 	}
 	return dst
+}
+
+// setSimple is apply for a texture that is tracked and in one state, from
+// start to end, which are one state each: it appends the transition to dst
+// and reports true. It does nothing and reports false for anything else.
+func (t *TextureTracker) setSimple(index TrackerIndex, start, end TextureUses, dst *[]TexturePendingTransition) bool {
+	if !t.IsTracked(index) {
+		return false
+	}
+	cur := t.set.simple[index]
+	if cur == usesComplex {
+		return false
+	}
+	if !SkipBarrier(cur, start) {
+		*dst = append(*dst, TexturePendingTransition{Index: index, Usage: TextureStateTransition{From: cur, To: start}})
+	}
+	t.set.simple[index] = end
+	return true
 }
 
 // MergeEncoder merges a submitted command buffer's tracker into the device
@@ -284,9 +308,12 @@ func (t *TextureTracker) MergeEncoderInto(enc *EncoderTextureTracker, dst []Text
 	if enc == nil {
 		return dst
 	}
-	for i := range enc.end.simple {
+	for i, end := range enc.end.simple {
 		index, valid := trackerIndexAt(i)
 		if !valid || !enc.metadata.IsOwned(index) {
+			continue
+		}
+		if start := enc.start.simple[i]; start != usesComplex && end != usesComplex && t.setSimple(index, start, end, &dst) {
 			continue
 		}
 		dst = t.apply(index, sourceOf(&enc.start, index), sourceOf(&enc.end, index), dst)
@@ -340,7 +367,22 @@ func NewTextureUsageScope() *TextureUsageScope {
 // SetUsage adds a usage of every subresource of a texture to the scope.
 // Returns an error if a subresource already has an incompatible usage.
 func (s *TextureUsageScope) SetUsage(index TrackerIndex, usage TextureUses) error {
-	return s.SetSubresourceUsage(index, TextureSelector{}, TextureSelector{}, usage)
+	s.set.ensureSize(int(index) + 1)
+	if !s.metadata.IsOwned(index) {
+		s.set.setSimple(index, usage)
+		s.metadata.SetOwned(index, true)
+		return nil
+	}
+	cur := s.set.simple[index]
+	if cur == usesComplex {
+		return s.set.merge(index, stateSource{uses: usage})
+	}
+	merged := cur | usage
+	if conflicting(merged) {
+		return &TextureUsageConflictError{Index: index, Existing: cur, New: usage}
+	}
+	s.set.simple[index] = merged
+	return nil
 }
 
 // SetSubresourceUsage adds a usage of the subresources sel selects of the
@@ -350,8 +392,11 @@ func (s *TextureUsageScope) SetUsage(index TrackerIndex, usage TextureUses) erro
 // Reference: wgpu-core track/texture.rs TextureUsageScope::merge_single
 func (s *TextureUsageScope) SetSubresourceUsage(index TrackerIndex, full, sel TextureSelector, usage TextureUses) error {
 	src, ok := selection(full, sel, usage)
-	if !ok {
+	switch {
+	case !ok:
 		return nil
+	case src.simple():
+		return s.SetUsage(index, usage)
 	}
 	s.set.ensureSize(int(index) + 1)
 	if !s.metadata.IsOwned(index) {

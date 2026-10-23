@@ -97,6 +97,13 @@ func (t *EncoderTextureTracker) apply(index TrackerIndex, src, start stateSource
 		t.metadata.SetOwned(index, true)
 		return dst
 	}
+	if cur := t.end.simple[index]; cur != usesComplex && src.simple() {
+		if emit && !SkipBarrier(cur, src.uses) {
+			dst = append(dst, TexturePendingTransition{Index: index, Usage: TextureStateTransition{From: cur, To: src.uses}})
+		}
+		t.end.simple[index] = src.uses
+		return dst
+	}
 	if emit {
 		dst = t.end.barrier(index, src, dst)
 	}
@@ -119,9 +126,13 @@ func (t *EncoderTextureTracker) SetFromScopeInto(scope *TextureUsageScope, dst [
 	if scope == nil {
 		return dst
 	}
-	for i := range scope.set.simple {
+	for i, uses := range scope.set.simple {
 		index, valid := trackerIndexAt(i)
 		if !valid || !scope.metadata.IsOwned(index) {
+			continue
+		}
+		if uses != usesComplex {
+			dst = t.apply(index, stateSource{uses: uses}, stateSource{uses: uses}, 0, true, dst)
 			continue
 		}
 		src := sourceOf(&scope.set, index)
