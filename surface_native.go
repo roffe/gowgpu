@@ -423,6 +423,13 @@ func (s *Surface) PresentWithDamage(texture *SurfaceTexture, damageRects []image
 	if texture.surface != s || !texture.isUsable() {
 		return ErrReleased
 	}
+	// Queue writes, into the surface texture among them, run before the
+	// present, as wgpu-core submits them at present.
+	if q := s.device.queue; q.pending != nil && q.pending.recording() {
+		if _, err := q.Submit(); err != nil {
+			return err
+		}
+	}
 
 	return s.core.PresentWithDamage(s.device.queue.hal, damageRects)
 }

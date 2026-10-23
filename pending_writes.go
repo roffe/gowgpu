@@ -1400,6 +1400,13 @@ func (pw *pendingWrites) activate() (hal.CommandEncoder, error) {
 // The encoder is detached for inflight tracking — after GPU completion,
 // maintain() calls ResetAll and returns it to the pool.
 // Must be called with pw.mu held.
+// recording reports whether writes wait for the next submit.
+func (pw *pendingWrites) recording() bool {
+	pw.mu.Lock()
+	defer pw.mu.Unlock()
+	return pw.isRecording
+}
+
 func (pw *pendingWrites) flush() (hal.CommandBuffer, hal.CommandEncoder, []hal.Texture, []hal.Buffer, error) {
 	// Textures nothing wrote since they were made are zeroed now, in the
 	// batch that runs ahead of the command buffers that could read them.
