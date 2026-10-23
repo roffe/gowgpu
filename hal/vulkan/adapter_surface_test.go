@@ -171,3 +171,38 @@ func TestAPIVersions(t *testing.T) {
 		t.Errorf("SPIR-V %d.%d on a 1.0 device, want 1.0", v.Major, v.Minor)
 	}
 }
+
+// Limits as wgpu-hal clamps them: the 2D size every 2D use allows, the
+// per-stage counts within the per-set ones shared by two stages and within
+// lavapipe's maxFragmentCombinedOutputResources and maxPerStageResources,
+// and binding sizes within 2^31-1.
+func TestLimitsFromPropsClamps(t *testing.T) {
+	props := &vk.PhysicalDeviceProperties{VendorID: 0x10005, Limits: vk.PhysicalDeviceLimits{
+		MaxImageDimension2D: 16384, MaxImageDimensionCube: 8192, MaxFramebufferWidth: 16384, MaxFramebufferHeight: 4096,
+		MaxPerStageDescriptorSamplers: 1 << 20, MaxPerStageDescriptorUniformBuffers: 1 << 20,
+		MaxPerStageDescriptorStorageBuffers: 1 << 20, MaxPerStageDescriptorSampledImages: 1 << 20,
+		MaxPerStageDescriptorStorageImages: 1 << 20,
+		MaxDescriptorSetSamplers:           1 << 20, MaxDescriptorSetUniformBuffers: 1 << 20,
+		MaxDescriptorSetStorageBuffers: 1 << 20, MaxDescriptorSetSampledImages: 1 << 20,
+		MaxDescriptorSetStorageImages: 40,
+		MaxPerStageResources:          1 << 20, MaxFragmentCombinedOutputResources: 104,
+		MaxColorAttachments: 8, MaxFragmentOutputAttachments: 8,
+		MaxStorageBufferRange: 1<<32 - 1, MaxUniformBufferRange: 65536,
+	}}
+	l := limitsFromProps(props, 1<<20)
+	if l.MaxTextureDimension2D != 4096 {
+		t.Errorf("MaxTextureDimension2D = %d, want the framebuffer height 4096", l.MaxTextureDimension2D)
+	}
+	if l.MaxStorageTexturesPerShaderStage != 20 {
+		t.Errorf("MaxStorageTexturesPerShaderStage = %d, want 20, half the per-set count", l.MaxStorageTexturesPerShaderStage)
+	}
+	if sum := l.MaxStorageTexturesPerShaderStage + l.MaxStorageBuffersPerShaderStage + l.MaxColorAttachments; sum > 104 {
+		t.Errorf("storage textures, storage buffers and colour attachments sum to %d, over 104", sum)
+	}
+	if l.MaxColorAttachments != 8 {
+		t.Errorf("MaxColorAttachments = %d, want 8", l.MaxColorAttachments)
+	}
+	if l.MaxStorageBufferBindingSize != 1<<31-1 {
+		t.Errorf("MaxStorageBufferBindingSize = %d, want 2^31-1", l.MaxStorageBufferBindingSize)
+	}
+}

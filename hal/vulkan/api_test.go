@@ -187,8 +187,18 @@ func TestLimitsFromProps(t *testing.T) {
 		Limits: vk.PhysicalDeviceLimits{
 			MaxImageDimension1D:                 16384,
 			MaxImageDimension2D:                 16384,
+			MaxImageDimensionCube:               16384,
+			MaxFramebufferWidth:                 16384,
+			MaxFramebufferHeight:                16384,
 			MaxImageDimension3D:                 2048,
 			MaxImageArrayLayers:                 2048,
+			MaxDescriptorSetSamplers:            1 << 20,
+			MaxDescriptorSetUniformBuffers:      1 << 20,
+			MaxDescriptorSetStorageBuffers:      1 << 20,
+			MaxDescriptorSetSampledImages:       1 << 20,
+			MaxDescriptorSetStorageImages:       1 << 20,
+			MaxPerStageResources:                1 << 20,
+			MaxFragmentCombinedOutputResources:  1 << 20,
 			MaxUniformBufferRange:               65536,
 			MaxStorageBufferRange:               2 << 27,
 			MaxPushConstantsSize:                256,
@@ -210,7 +220,7 @@ func TestLimitsFromProps(t *testing.T) {
 		},
 	}
 
-	limits := limitsFromProps(props)
+	limits := limitsFromProps(props, 1024)
 
 	// Verify texture dimensions are mapped from Vulkan limits
 	if limits.MaxTextureDimension1D != 16384 {
@@ -267,12 +277,15 @@ func TestLimitsFromPropsMinimal(t *testing.T) {
 	props := &vk.PhysicalDeviceProperties{
 		Limits: vk.PhysicalDeviceLimits{
 			MaxImageDimension2D:   256,
+			MaxImageDimensionCube: 256,
+			MaxFramebufferWidth:   256,
+			MaxFramebufferHeight:  256,
 			MaxImageDimension3D:   128,
 			MaxUniformBufferRange: 16384,
 		},
 	}
 
-	limits := limitsFromProps(props)
+	limits := limitsFromProps(props, 1024)
 
 	// Currently returns DefaultLimits() - verify it's not zero
 	if limits.MaxTextureDimension2D == 0 {
@@ -421,6 +434,10 @@ func TestLimitsAllFields(t *testing.T) {
 	props := &vk.PhysicalDeviceProperties{
 		Limits: vk.PhysicalDeviceLimits{
 			MaxImageDimension2D:                 8192,
+			MaxImageDimensionCube:               8192,
+			MaxPerStageResources:                128,
+			MaxFragmentCombinedOutputResources:  64,
+			MaxFragmentOutputAttachments:        8,
 			MaxTexelBufferElements:              128 * 1024 * 1024,
 			MaxUniformBufferRange:               65536,
 			MaxStorageBufferRange:               1 << 30,
@@ -457,7 +474,7 @@ func TestLimitsAllFields(t *testing.T) {
 		},
 	}
 
-	limits := limitsFromProps(props)
+	limits := limitsFromProps(props, 1024)
 
 	// Verify critical fields are set
 	if limits.MaxTextureDimension2D == 0 {

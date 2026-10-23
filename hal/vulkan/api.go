@@ -6,9 +6,11 @@
 package vulkan
 
 import (
+	"cmp"
 	"fmt"
 	"os"
 	"runtime"
+	"slices"
 	"strings"
 	"unsafe"
 
@@ -301,7 +303,7 @@ func (i *Instance) EnumerateAdapters(surfaceHint hal.Surface) []hal.ExposedAdapt
 			},
 			Features: featuresFromPhysicalDevice(&features, features12.DrawIndirectCount != 0, adapter.supportsDepthAttachment(vk.FormatD32SfloatS8Uint)),
 			Capabilities: hal.Capabilities{
-				Limits: limitsFromProps(&props),
+				Limits: limitsFromProps(&props, maxPerSetDescriptors(&i.cmds, device)),
 				AlignmentsMask: hal.Alignments{
 					BufferCopyOffset: 4,
 					BufferCopyPitch:  256,
@@ -698,9 +700,13 @@ func downlevelCapabilitiesFromFeatures(features *vk.PhysicalDeviceFeatures) gput
 	}
 }
 
-// limitsFromProps maps Vulkan physical device limits to WebGPU limits.
-// Reference: wgpu-hal/src/vulkan/adapter.rs:1254-1392
-func limitsFromProps(props *vk.PhysicalDeviceProperties) gputypes.Limits {
+// limitsFromProps maps Vulkan physical device limits to WebGPU limits, with
+// maxPerSetDescriptors from VkPhysicalDeviceMaintenance3Properties. Like
+// wgpu-hal and Dawn it takes the 2D size every 2D use allows, a cube and a
+// framebuffer too, and caps the per-stage counts by the per-set ones, shared
+// by the two stages of a pipeline, and by what Vulkan limits their sums to.
+// Reference: wgpu-hal/src/vulkan/adapter.rs to_wgpu_limits
+func limitsFromProps(props *vk.PhysicalDeviceProperties, maxPerSetDescriptors uint32) gputypes.Limits {
 	vkLimits := props.Limits
 
 	// Start with default limits and override with actual hardware values
@@ -708,30 +714,48 @@ func limitsFromProps(props *vk.PhysicalDeviceProperties) gputypes.Limits {
 
 	// Texture dimensions
 	limits.MaxTextureDimension1D = vkLimits.MaxImageDimension1D
-	limits.MaxTextureDimension2D = vkLimits.MaxImageDimension2D
+	limits.MaxTextureDimension2D = min(vkLimits.MaxImageDimension2D, vkLimits.MaxImageDimensionCube,
+		vkLimits.MaxFramebufferWidth, vkLimits.MaxFramebufferHeight)
 	limits.MaxTextureDimension3D = vkLimits.MaxImageDimension3D
 	limits.MaxTextureArrayLayers = vkLimits.MaxImageArrayLayers
 
 	// Descriptor/binding limits
+	const stagesPerPipeline = 2
+	perStage := func(stage, set uint32) uint32 { return min(stage, set/stagesPerPipeline) }
+	sampled := perStage(vkLimits.MaxPerStageDescriptorSampledImages, vkLimits.MaxDescriptorSetSampledImages)
+	samplers := perStage(vkLimits.MaxPerStageDescriptorSamplers, vkLimits.MaxDescriptorSetSamplers)
+	storageBuffers := perStage(vkLimits.MaxPerStageDescriptorStorageBuffers, vkLimits.MaxDescriptorSetStorageBuffers)
+	storageTextures := perStage(vkLimits.MaxPerStageDescriptorStorageImages, vkLimits.MaxDescriptorSetStorageImages)
+	uniforms := perStage(vkLimits.MaxPerStageDescriptorUniformBuffers, vkLimits.MaxDescriptorSetUniformBuffers)
+	colorAttachments := min(vkLimits.MaxColorAttachments, vkLimits.MaxFragmentOutputAttachments, 8) // WebGPU max is 8
+	// Intel, NVIDIA, AMD and ImgTec do not report
+	// maxFragmentCombinedOutputResources right (gpuweb#3631).
+	switch props.VendorID {
+	case 0x8086, 0x10DE, 0x1002, 0x1010:
+	default:
+		capSum(vkLimits.MaxFragmentCombinedOutputResources, &storageTextures, &storageBuffers, &colorAttachments)
+	}
+	capSum(vkLimits.MaxPerStageResources, &sampled, &uniforms, &storageTextures, &storageBuffers, &colorAttachments)
+	capSum(maxPerSetDescriptors/stagesPerPipeline, &sampled, &uniforms, &storageTextures, &storageBuffers, &samplers)
 	limits.MaxBindGroups = min(vkLimits.MaxBoundDescriptorSets, 8) // WebGPU max is 8
-	limits.MaxSampledTexturesPerShaderStage = vkLimits.MaxPerStageDescriptorSampledImages
-	limits.MaxSamplersPerShaderStage = vkLimits.MaxPerStageDescriptorSamplers
-	limits.MaxStorageBuffersPerShaderStage = vkLimits.MaxPerStageDescriptorStorageBuffers
-	limits.MaxStorageTexturesPerShaderStage = vkLimits.MaxPerStageDescriptorStorageImages
-	limits.MaxUniformBuffersPerShaderStage = vkLimits.MaxPerStageDescriptorUniformBuffers
+	limits.MaxSampledTexturesPerShaderStage = sampled
+	limits.MaxSamplersPerShaderStage = samplers
+	limits.MaxStorageBuffersPerShaderStage = storageBuffers
+	limits.MaxStorageTexturesPerShaderStage = storageTextures
+	limits.MaxUniformBuffersPerShaderStage = uniforms
+	limits.MaxColorAttachments = colorAttachments
 
-	// Buffer limits
-	limits.MaxUniformBufferBindingSize = uint64(vkLimits.MaxUniformBufferRange)
-	limits.MaxStorageBufferBindingSize = uint64(vkLimits.MaxStorageBufferRange)
+	// Buffer limits, binding sizes within what a signed 32-bit offset in a
+	// shader reaches (NVIDIA reports 4 GiB storage buffer ranges).
+	const maxBindingSize = 1<<31 - 1
+	limits.MaxUniformBufferBindingSize = uint64(min(vkLimits.MaxUniformBufferRange, maxBindingSize))
+	limits.MaxStorageBufferBindingSize = uint64(min(vkLimits.MaxStorageBufferRange, maxBindingSize))
 	limits.MinUniformBufferOffsetAlignment = uint32(vkLimits.MinUniformBufferOffsetAlignment)
 	limits.MinStorageBufferOffsetAlignment = uint32(vkLimits.MinStorageBufferOffsetAlignment)
 
 	// Vertex limits
 	limits.MaxVertexAttributes = min(vkLimits.MaxVertexInputAttributes, 32) // WebGPU max is 32
 	limits.MaxVertexBufferArrayStride = min(vkLimits.MaxVertexInputBindingStride, 2048)
-
-	// Color attachment limits
-	limits.MaxColorAttachments = min(vkLimits.MaxColorAttachments, 8) // WebGPU max is 8
 
 	// Compute limits
 	limits.MaxComputeWorkgroupStorageSize = vkLimits.MaxComputeSharedMemorySize
@@ -749,6 +773,32 @@ func limitsFromProps(props *vk.PhysicalDeviceProperties) gputypes.Limits {
 	limits.MaxPushConstantSize = vkLimits.MaxPushConstantsSize
 
 	return limits
+}
+
+// capSum lowers limits so that together they stay within sum, the smallest
+// kept whole where they fit and the rest sharing what remains evenly, as
+// wgpu-hal's cap_limits_to_be_under_the_sum_limit does.
+func capSum(sum uint32, limits ...*uint32) {
+	slices.SortFunc(limits, func(a, b *uint32) int { return cmp.Compare(*a, *b) })
+	for i, limit := range limits {
+		*limit = min(*limit, sum/uint32(len(limits)-i))
+		sum -= *limit
+	}
+}
+
+// maxPerSetDescriptors is VkPhysicalDeviceMaintenance3Properties' of device,
+// or 256 where it cannot be queried, the lowest any device reports.
+func maxPerSetDescriptors(cmds *vk.Commands, device vk.PhysicalDevice) uint32 {
+	maint3 := vk.PhysicalDeviceMaintenance3Properties{SType: vk.StructureTypePhysicalDeviceMaintenance3Properties}
+	props2 := vk.PhysicalDeviceProperties2{
+		SType: vk.StructureTypePhysicalDeviceProperties2,
+		PNext: (*uintptr)(unsafe.Pointer(&maint3)),
+	}
+	cmds.GetPhysicalDeviceProperties2(device, &props2)
+	if maint3.MaxPerSetDescriptors == 0 {
+		return 256
+	}
+	return maint3.MaxPerSetDescriptors
 }
 
 // isLayerAvailable checks if a Vulkan instance layer is available.
