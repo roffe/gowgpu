@@ -367,9 +367,14 @@ func (d *Device) CreateBindGroupLayout(desc *BindGroupLayoutDescriptor) (*BindGr
 		return nil, ErrReleased
 	}
 
+	// In binding order, whatever order they come in: layouts with the same
+	// entries are the same to the backend and compare equal entry by entry,
+	// as wgpu-core keeps them in a map sorted by binding.
+	entries := slices.Clone(desc.Entries)
+	slices.SortFunc(entries, func(a, b gputypes.BindGroupLayoutEntry) int { return cmp.Compare(a.Binding, b.Binding) })
 	halDesc := &hal.BindGroupLayoutDescriptor{
 		Label:   desc.Label,
-		Entries: desc.Entries,
+		Entries: entries,
 	}
 
 	if err := core.ValidateBindGroupLayoutDescriptor(halDesc, d.core.Limits); err != nil {
@@ -381,12 +386,7 @@ func (d *Device) CreateBindGroupLayout(desc *BindGroupLayoutDescriptor) (*BindGr
 		return nil, fmt.Errorf("wgpu: failed to create bind group layout: %w", err)
 	}
 
-	// Store a defensive copy of entries for entry-by-entry compatibility checks.
-	// This matches Rust wgpu-core's pattern where binder compares layouts by entries.
-	entriesCopy := make([]gputypes.BindGroupLayoutEntry, len(desc.Entries))
-	copy(entriesCopy, desc.Entries)
-
-	return &BindGroupLayout{hal: halLayout, device: d, entries: entriesCopy}, nil
+	return &BindGroupLayout{hal: halLayout, device: d, entries: entries}, nil
 }
 
 // CreatePipelineLayout creates a pipeline layout.

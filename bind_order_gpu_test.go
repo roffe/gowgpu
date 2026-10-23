@@ -141,3 +141,98 @@ func TestBindGroupsSetAheadOfTheirPipeline(t *testing.T) {
 	}
 	assertNoValidation(t, h)
 }
+
+// Two bind group layouts with the same entries listed in another order are
+// the same layout: a group of one binds where the pipeline has the other,
+// and each binding gets its own buffer.
+func TestBindGroupLayoutEntryOrderDoesNotMatter(t *testing.T) {
+	device, h := newValidatedDevice(t)
+
+	storage := func(binding uint32) gputypes.BindGroupLayoutEntry {
+		return gputypes.BindGroupLayoutEntry{Binding: binding, Visibility: gputypes.ShaderStageCompute,
+			Buffer: &gputypes.BufferBindingLayout{Type: gputypes.BufferBindingTypeStorage}}
+	}
+	layout := func(entries ...gputypes.BindGroupLayoutEntry) *BindGroupLayout {
+		l, err := device.CreateBindGroupLayout(&BindGroupLayoutDescriptor{Entries: entries})
+		if err != nil {
+			t.Fatalf("CreateBindGroupLayout: %v", err)
+		}
+		t.Cleanup(l.Release)
+		return l
+	}
+	forward, backward := layout(storage(0), storage(1)), layout(storage(1), storage(0))
+	shader, err := device.CreateShaderModule(&ShaderModuleDescriptor{WGSL: `
+@group(0) @binding(0) var<storage, read_write> a: array<u32>;
+@group(0) @binding(1) var<storage, read_write> b: array<u32>;
+@compute @workgroup_size(1) fn main() { a[0] = 5u; b[0] = 6u; }`})
+	if err != nil {
+		t.Fatalf("CreateShaderModule: %v", err)
+	}
+	defer shader.Release()
+	pl, err := device.CreatePipelineLayout(&PipelineLayoutDescriptor{BindGroupLayouts: []*BindGroupLayout{backward}})
+	if err != nil {
+		t.Fatalf("CreatePipelineLayout: %v", err)
+	}
+	defer pl.Release()
+	pipeline, err := device.CreateComputePipeline(&ComputePipelineDescriptor{Layout: pl, Module: shader, EntryPoint: "main"})
+	if err != nil {
+		if strings.Contains(err.Error(), "ComputeShaders") {
+			t.Skipf("no compute shaders: %v", err)
+		}
+		t.Fatalf("CreateComputePipeline: %v", err)
+	}
+	defer pipeline.Release()
+	buf, err := device.CreateBuffer(&BufferDescriptor{Size: 512, Usage: BufferUsageStorage | BufferUsageCopySrc})
+	if err != nil {
+		t.Fatalf("CreateBuffer: %v", err)
+	}
+	defer buf.Release()
+	group, err := device.CreateBindGroup(&BindGroupDescriptor{Layout: forward, Entries: []BindGroupEntry{
+		{Binding: 0, Buffer: buf, Offset: 0, Size: 16},
+		{Binding: 1, Buffer: buf, Offset: 256, Size: 16},
+	}})
+	if err != nil {
+		t.Fatalf("CreateBindGroup: %v", err)
+	}
+	defer group.Release()
+
+	enc, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	pass, err := enc.BeginComputePass(nil)
+	if err != nil {
+		t.Fatalf("BeginComputePass: %v", err)
+	}
+	pass.SetPipeline(pipeline)
+	pass.SetBindGroup(0, group, nil)
+	pass.Dispatch(1, 1, 1)
+	if err := pass.End(); err != nil {
+		t.Fatalf("End: %v", err)
+	}
+	read, err := device.CreateBuffer(&BufferDescriptor{Size: 512, Usage: BufferUsageCopyDst | BufferUsageMapRead})
+	if err != nil {
+		t.Fatalf("CreateBuffer: %v", err)
+	}
+	defer read.Release()
+	enc.CopyBufferToBuffer(buf, 0, read, 0, 512)
+	finishAndSubmit(t, device, enc)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := read.Map(ctx, MapModeRead, 0, 512); err != nil {
+		t.Fatalf("Map: %v", err)
+	}
+	rng, err := read.MappedRange(0, 512)
+	if err != nil {
+		t.Fatalf("MappedRange: %v", err)
+	}
+	data := rng.Bytes()
+	if a, b := binary.LittleEndian.Uint32(data), binary.LittleEndian.Uint32(data[256:]); a != 5 || b != 6 {
+		t.Errorf("a[0], b[0] = %d, %d, want 5, 6", a, b)
+	}
+	if err := read.Unmap(); err != nil {
+		t.Fatalf("Unmap: %v", err)
+	}
+	assertNoValidation(t, h)
+}
