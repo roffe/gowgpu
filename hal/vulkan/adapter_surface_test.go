@@ -129,3 +129,17 @@ func TestMakeSurfaceSnapshotRejectsUnknownMappings(t *testing.T) {
 		t.Fatal("unknown composite alpha flags were converted into fabricated opaque capability")
 	}
 }
+
+// VeriSilicon's driver advertises timeline semaphores and crashes with
+// them, so its devices take the binary fence pool.
+func TestUsesTimelineSemaphore(t *testing.T) {
+	if !usesTimelineSemaphore(0x10DE, vk.True) {
+		t.Error("NVIDIA with timeline semaphores does not use them")
+	}
+	if usesTimelineSemaphore(0x10DE, vk.False) {
+		t.Error("a device without timeline semaphores uses them")
+	}
+	if usesTimelineSemaphore(vendorVeriSilicon, vk.True) {
+		t.Error("VeriSilicon uses timeline semaphores")
+	}
+}

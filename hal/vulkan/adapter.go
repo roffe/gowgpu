@@ -112,7 +112,7 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 			has12.PNext = (*uintptr)(unsafe.Pointer(&has13))
 		}
 		a.instance.cmds.GetPhysicalDeviceFeatures2(a.physicalDevice, &features2)
-		hasTimelineSemaphore = has12.TimelineSemaphore != 0
+		hasTimelineSemaphore = usesTimelineSemaphore(a.properties.VendorID, has12.TimelineSemaphore)
 	}
 	video := videoDecodeSetup(a.properties.ApiVersion, available, queueFamilies, graphicsFamily, &has11, &has12, &has13)
 
@@ -287,6 +287,18 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 		Device: dev,
 		Queue:  q,
 	}, nil
+}
+
+// vendorVeriSilicon is VK_VENDOR_ID_VSI.
+const vendorVeriSilicon = 0x10002
+
+// usesTimelineSemaphore reports whether a device of vendor whose
+// timelineSemaphore feature is supported gets the timeline semaphore fence.
+// VeriSilicon's proprietary driver, as on NXP's i.MX 8, advertises timeline
+// semaphores but crashes in vkQueueSubmit with them, wgpu-hal reports, and
+// calls itself RADV, so only the vendor ID tells it.
+func usesTimelineSemaphore(vendor uint32, supported vk.Bool32) bool {
+	return supported != 0 && vendor != vendorVeriSilicon
 }
 
 // selectGraphicsQueueFamily preserves the exact family chosen during surface
