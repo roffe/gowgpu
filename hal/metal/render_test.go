@@ -268,3 +268,75 @@ func TestEmptyWorkIsNotEncoded(t *testing.T) {
 	}
 	submitMetalTextureCopyTestEncoder(t, device, queue, encoder)
 }
+
+// TestOpenPassesEndWithTheEncoder leaves passes open, with and without a
+// native encoder made, and discards or finishes the command encoder: every
+// pass's encoder is ended and released with it, and a finished one
+// submits.
+func TestOpenPassesEndWithTheEncoder(t *testing.T) {
+	device, queue := newMetalTextureCopyTestDevice(t)
+	pipeline := renderTestPipeline(t, device, `
+@vertex fn vs_main(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
+	return vec4<f32>(f32(i32(vi & 1u) * 4 - 1), f32(i32(vi >> 1u) * 4 - 1), 0.0, 1.0);
+}
+@fragment fn fs_main() -> @location(0) vec4<f32> { return vec4<f32>(0.0, 1.0, 0.0, 1.0); }
+`, nil, gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList})
+	target, err := device.CreateTexture(&hal.TextureDescriptor{
+		Size:          hal.Extent3D{Width: renderTestSide, Height: renderTestSide, DepthOrArrayLayers: 1},
+		MipLevelCount: 1,
+		SampleCount:   1,
+		Dimension:     gputypes.TextureDimension2D,
+		Format:        gputypes.TextureFormatRGBA8Unorm,
+		Usage:         gputypes.TextureUsageRenderAttachment,
+	})
+	if err != nil {
+		t.Fatalf("CreateTexture failed: %v", err)
+	}
+	defer target.Destroy()
+	view, err := device.CreateTextureView(target, nil)
+	if err != nil {
+		t.Fatalf("CreateTextureView failed: %v", err)
+	}
+	defer view.Destroy()
+	begin := func() *CommandEncoder {
+		t.Helper()
+		encoder := &CommandEncoder{device: device}
+		if err := encoder.BeginEncoding("open pass"); err != nil {
+			t.Fatalf("BeginEncoding failed: %v", err)
+		}
+		return encoder
+	}
+	renderPass := func(encoder *CommandEncoder, draw bool) *RenderPassEncoder {
+		t.Helper()
+		pass := encoder.BeginRenderPass(&hal.RenderPassDescriptor{ColorAttachments: []hal.RenderPassColorAttachment{{
+			View: view, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore,
+		}}}).(*RenderPassEncoder)
+		if draw {
+			pass.SetPipeline(pipeline)
+			pass.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1})
+		}
+		return pass
+	}
+
+	for _, draw := range []bool{false, true} {
+		encoder := begin()
+		pass := renderPass(encoder, draw)
+		encoder.DiscardEncoding()
+		if pass.raw != 0 || pass.descriptor != 0 {
+			t.Errorf("discarded render pass (drawn in: %v) kept encoder %#x, descriptor %#x", draw, pass.raw, pass.descriptor)
+		}
+	}
+	encoder := begin()
+	compute := encoder.BeginComputePass(nil).(*ComputePassEncoder)
+	encoder.DiscardEncoding()
+	if compute.raw != 0 {
+		t.Errorf("discarded compute pass kept encoder %#x", compute.raw)
+	}
+
+	encoder = begin()
+	pass := renderPass(encoder, true)
+	submitMetalTextureCopyTestEncoder(t, device, queue, encoder)
+	if pass.raw != 0 {
+		t.Errorf("finished render pass kept encoder %#x", pass.raw)
+	}
+}

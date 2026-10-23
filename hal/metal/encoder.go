@@ -34,6 +34,9 @@ type CommandEncoder struct {
 	finished  *CommandBuffer
 	passState renderPassPendingState
 	recordErr error
+	// openPass is the pass begun and not ended yet, which DiscardEncoding
+	// and EndEncoding end: Metal wants every encoder ended.
+	openPass interface{ close() }
 }
 
 // IsRecording returns true if the encoder has an active command buffer.
@@ -86,6 +89,7 @@ func (e *CommandEncoder) EndEncoding() (hal.CommandBuffer, error) {
 	if e.cmdBuffer == 0 {
 		return nil, fmt.Errorf("metal: command encoder is not recording")
 	}
+	e.closeOpenPass()
 	if e.recordErr != nil {
 		err := e.recordErr
 		e.recordErr = nil
@@ -106,6 +110,7 @@ func (e *CommandEncoder) EndEncoding() (hal.CommandBuffer, error) {
 // DiscardEncoding discards the encoder without creating a command buffer.
 // After call, IsRecording() returns false.
 func (e *CommandEncoder) DiscardEncoding() {
+	e.closeOpenPass()
 	if e.cmdBuffer != 0 {
 		hal.Logger().Debug("metal: encoding discarded")
 		e.releaseCommandBuffer()
@@ -138,6 +143,7 @@ func (e *CommandEncoder) Destroy() {
 	if e == nil {
 		return
 	}
+	e.closeOpenPass()
 	if e.cmdBuffer != 0 {
 		e.releaseCommandBuffer()
 	}
@@ -146,6 +152,13 @@ func (e *CommandEncoder) Destroy() {
 	if e.finished != nil {
 		e.finished.Destroy()
 		e.finished = nil
+	}
+}
+
+func (e *CommandEncoder) closeOpenPass() {
+	if e.openPass != nil {
+		e.openPass.close()
+		e.openPass = nil
 	}
 }
 
@@ -561,7 +574,9 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 	// encoder before the render encoder exists; retaining the descriptor gives
 	// that backend-private lowering a narrow seam without journaling draw calls.
 	e.passState = renderPassPendingState{}
-	return &RenderPassEncoder{descriptor: rpDesc, commandEncoder: e, device: e.device, pending: &e.passState}
+	pass := &RenderPassEncoder{descriptor: rpDesc, commandEncoder: e, device: e.device, pending: &e.passState}
+	e.openPass = pass
+	return pass
 }
 
 // BeginComputePass begins a compute pass.
@@ -583,7 +598,9 @@ func (e *CommandEncoder) BeginComputePass(desc *hal.ComputePassDescriptor) hal.C
 		_ = MsgSend(encoder, Sel("setLabel:"), uintptr(nsLabel))
 		Release(nsLabel)
 	}
-	return &ComputePassEncoder{raw: encoder, device: e.device}
+	pass := &ComputePassEncoder{raw: encoder, device: e.device, commandEncoder: e}
+	e.openPass = pass
+	return pass
 }
 
 // CommandBuffer implements hal.CommandBuffer for Metal.
@@ -760,6 +777,15 @@ func (e *RenderPassEncoder) applyPendingVertexBuffers() {
 // End finishes the render pass.
 func (e *RenderPassEncoder) End() {
 	e.beginNative()
+	e.close()
+	if e.commandEncoder != nil && e.commandEncoder.openPass == e {
+		e.commandEncoder.openPass = nil
+	}
+}
+
+// close ends and releases the native encoder, and releases the descriptor
+// of a pass that never made one.
+func (e *RenderPassEncoder) close() {
 	if e.raw != 0 {
 		_ = MsgSend(e.raw, Sel("endEncoding"))
 		Release(e.raw)
@@ -1174,10 +1200,11 @@ func (e *RenderPassEncoder) ExecuteBundle(_ hal.RenderBundle) {}
 
 // ComputePassEncoder implements hal.ComputePassEncoder for Metal.
 type ComputePassEncoder struct {
-	raw           ID
-	device        *Device
-	pipeline      *ComputePipeline
-	currentLayout *PipelineLayout // set by SetPipeline for SetBindGroup slot offsets
+	raw            ID
+	device         *Device
+	commandEncoder *CommandEncoder
+	pipeline       *ComputePipeline
+	currentLayout  *PipelineLayout // set by SetPipeline for SetBindGroup slot offsets
 	// groups are the bind groups set so far, bound again when a pipeline
 	// brings another layout, as in RenderPassEncoder.
 	groups [maxRenderBindGroups]renderBindGroupState
@@ -1190,6 +1217,13 @@ type ComputePassEncoder struct {
 
 // End finishes the compute pass.
 func (e *ComputePassEncoder) End() {
+	e.close()
+	if e.commandEncoder != nil && e.commandEncoder.openPass == e {
+		e.commandEncoder.openPass = nil
+	}
+}
+
+func (e *ComputePassEncoder) close() {
 	if e.raw != 0 {
 		_ = MsgSend(e.raw, Sel("endEncoding"))
 		Release(e.raw)
