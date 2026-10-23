@@ -28,7 +28,7 @@ There is no software backend, no `-tags rust` backend, no goffi and no gpucontex
 
 ## Rules
 
-- Native calls go through cgo: header-free C trampolines, one per C signature, function pointer first. Pass Go memory as typed pointers, never `uintptr`. Use `#cgo noescape`/`nocallback` only when C neither keeps the pointer nor calls back into Go. Load libraries at run time with `internal/dl`, don't link them. DX12 and WGL use `syscall` instead.
+- Native calls go through cgo: header-free C trampolines, one per C signature, function pointer first. Pass Go memory as typed pointers, never `uintptr`. Go memory a C argument points at that holds pointers itself needs what they point at pinned for the call (`vk.Pin`, a `runtime.Pinner`) or kept in a local on the stack: cgocheck checks it and the call panics otherwise. Use `#cgo noescape`/`nocallback` only when C neither keeps the pointer nor calls back into Go. Load libraries at run time with `internal/dl`, don't link them. DX12 and WGL use `syscall` instead.
 - `hal/vulkan/vk` is generated. Change `cmd/vk-gen` or `cmd/vk-cgo` and regenerate: `(cd cmd/vk-gen && go run . -spec vk.xml -out ../../hal/vulkan/vk/) && go run ./cmd/vk-cgo hal/vulkan/vk`.
 - Build every platform a change touches. See [CONTRIBUTING.md](CONTRIBUTING.md) for the cross compile commands and `cmd/cgocheck` for Apple targets.
 - Root tests run on the machine's real GPU and skip without one. None of them fail today; keep it that way.
@@ -45,3 +45,5 @@ golangci-lint run
 CGO_ENABLED=1 GOOS=windows CC=x86_64-w64-mingw32-gcc go build ./...
 GOOS=js GOARCH=wasm go build .
 ```
+
+`GOWGPU_TEST_BACKEND=gl`, `dx12` or `vulkan` picks the backend for the GPU tests in package `wgpu`. CONTRIBUTING.md has the GL, wine and Proton recipes and the 32-bit builds.
