@@ -6,6 +6,7 @@
 package metal
 
 import (
+	"sync/atomic"
 	"unsafe"
 
 	"github.com/gogpu/naga/ir"
@@ -326,6 +327,9 @@ func (q *QuerySet) Destroy() {
 type Fence struct {
 	event  ID // id<MTLSharedEvent>
 	device *Device
+	// base is the event's value at the last ResetFence: the fence's value
+	// is the event's less base.
+	base atomic.Uint64
 }
 
 // Destroy releases the fence.

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 	"unsafe"
 
 	"github.com/gogpu/naga/ir"
@@ -475,5 +476,37 @@ func TestOcclusionQuerySetResolves(t *testing.T) {
 		if b != want {
 			t.Fatalf("byte %d = %#x, want %#x", i, b, want)
 		}
+	}
+}
+
+// TestResetFenceAfterSignal resets a fence whose event was signaled, which
+// an MTLSharedEvent can't go back from: the fence reads unsignaled after,
+// and waits for values past the reset.
+func TestResetFenceAfterSignal(t *testing.T) {
+	device, _ := newMetalTextureCopyTestDevice(t)
+	raw, err := device.CreateFence()
+	if err != nil {
+		t.Fatalf("CreateFence failed: %v", err)
+	}
+	defer device.DestroyFence(raw)
+	fence := raw.(*Fence)
+	signal := func(v uint64) { _ = MsgSend(fence.event, Sel("setSignaledValue:"), uintptr(v)) }
+
+	signal(5)
+	if done, _ := device.GetFenceStatus(fence); !done {
+		t.Fatal("signaled fence reads unsignaled")
+	}
+	if err := device.ResetFence(fence); err != nil {
+		t.Fatalf("ResetFence failed: %v", err)
+	}
+	if done, _ := device.GetFenceStatus(fence); done {
+		t.Error("reset fence reads signaled")
+	}
+	if done, _ := device.Wait(fence, 1, 10*time.Millisecond); done {
+		t.Error("Wait for 1 on a reset fence returned at once")
+	}
+	signal(6)
+	if done, _ := device.Wait(fence, 1, time.Second); !done {
+		t.Error("Wait for 1 after the event passed the reset by 1 timed out")
 	}
 }

@@ -1253,6 +1253,7 @@ func (d *Device) Wait(fence hal.Fence, value uint64, timeout time.Duration) (boo
 	if !ok || mtlFence == nil {
 		return false, fmt.Errorf("metal: invalid fence")
 	}
+	value += mtlFence.base.Load()
 
 	// Fast path: already signaled.
 	signaled := MsgSendUint(mtlFence.event, Sel("signaledValue"))
@@ -1342,14 +1343,14 @@ func (d *Device) waitPolling(mtlFence *Fence, value uint64, timeout time.Duratio
 	}
 }
 
-// ResetFence resets a fence to the unsignaled state.
-// Sets the MTLSharedEvent.signaledValue to 0 via Objective-C message send.
+// ResetFence resets a fence to the unsignaled state. An MTLSharedEvent's
+// value only grows, so the fence counts from the value it has now.
 func (d *Device) ResetFence(fence hal.Fence) error {
 	mtlFence, ok := fence.(*Fence)
 	if !ok || mtlFence == nil {
 		return fmt.Errorf("metal: invalid fence")
 	}
-	_ = MsgSend(mtlFence.event, Sel("setSignaledValue:"), uintptr(0))
+	mtlFence.base.Store(uint64(MsgSendUint(mtlFence.event, Sel("signaledValue"))))
 	return nil
 }
 
@@ -1361,7 +1362,7 @@ func (d *Device) GetFenceStatus(fence hal.Fence) (bool, error) {
 		return false, fmt.Errorf("metal: invalid fence")
 	}
 	signaled := MsgSendUint(mtlFence.event, Sel("signaledValue"))
-	return signaled > 0, nil
+	return uint64(signaled) > mtlFence.base.Load(), nil
 }
 
 // FreeCommandBuffer releases a submitted command buffer.
