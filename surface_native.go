@@ -295,6 +295,13 @@ func (s *Surface) Configure(device *Device, config *SurfaceConfiguration) error 
 	if err := s.ensureHALSurface(device.core.Backend()); err != nil {
 		return err
 	}
+	if adapter := device.core.ParentAdapter(); adapter != nil && adapter.HasHAL() {
+		if caps := adapter.HALAdapter().SurfaceCapabilities(s.core.RawSurface()); caps != nil {
+			if err := core.ValidateSurfaceConfiguration(halConfig, caps, device.core.Limits); err != nil {
+				return fmt.Errorf("wgpu: Surface.Configure: %w", err)
+			}
+		}
+	}
 
 	// Destroy the cached swapchain texture on reconfigure. The new swapchain
 	// may have different format, usage, or dimensions. A fresh core.Texture
