@@ -3,6 +3,7 @@
 package dx12
 
 import (
+	"math"
 	"testing"
 
 	"github.com/roffe/gowgpu/gputypes"
@@ -43,5 +44,11 @@ func TestStorageLimitsFitTheUAVsOfTheBindingTier(t *testing.T) {
 			t.Errorf("tier %d: storage buffers %d, storage textures %d per stage, want %d each",
 				tc.tier, limits.MaxStorageBuffersPerShaderStage, limits.MaxStorageTexturesPerShaderStage, tc.want)
 		}
+	}
+}
+
+func TestMaxBufferSizeFitsAVertexBufferView(t *testing.T) {
+	if got := (&Adapter{}).limits().MaxBufferSize; got > math.MaxUint32 {
+		t.Fatalf("MaxBufferSize = %d, more than the 32-bit size of a vertex or index buffer view", got)
 	}
 }

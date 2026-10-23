@@ -7,6 +7,7 @@ package dx12
 
 import (
 	"fmt"
+	"math"
 	"unsafe"
 
 	"github.com/roffe/gowgpu/gputypes"
@@ -297,9 +298,11 @@ func (a *Adapter) limits() gputypes.Limits {
 	}
 	limits.MaxUniformBuffersPerShaderStage = 14 // D3D12_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT
 
-	// Buffer limits
-	limits.MaxBufferSize = 128 * 1024 * 1024 * 1024 // 128 GB (virtual address space)
-	limits.MaxUniformBufferBindingSize = 65536      // 64 KB per CBV
+	// Buffer limits. Vertex and index buffer views take a 32-bit size, and
+	// Rust's wgpu-hal keeps buffers to i32 sizes for drivers that keep the
+	// size in a signed 32-bit int.
+	limits.MaxBufferSize = math.MaxInt32
+	limits.MaxUniformBufferBindingSize = 65536 // 64 KB per CBV
 
 	// Compute limits
 	limits.MaxComputeWorkgroupStorageSize = 32768 // 32 KB shared memory
