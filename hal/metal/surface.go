@@ -25,6 +25,9 @@ type Surface struct {
 	// Required for smooth live window resize on macOS (wgpu #3756, Flutter/Skia).
 	presentsWithTransaction bool
 	configured              bool
+	// hasBeenVisible is whether the macOS window showing the layer has been
+	// visible since the surface was made, see occluded.
+	hasBeenVisible bool
 }
 
 // Configure configures the surface for presentation.
@@ -192,15 +195,20 @@ func (s *Surface) SetPresentsWithTransaction(enabled bool) {
 	hal.Logger().Debug("metal: presentsWithTransaction", "enabled", enabled)
 }
 
-// AcquireTexture acquires the next surface texture for rendering.
+// AcquireTexture acquires the next surface texture for rendering. It
+// returns hal.ErrTimeout when no drawable comes, and when the window showing
+// the layer is occluded: nextDrawable doesn't time out, and would block until
+// the window is visible again.
 func (s *Surface) AcquireTexture(_ hal.Fence) (*hal.AcquiredSurfaceTexture, error) {
 	pool := NewAutoreleasePool()
 	defer pool.Drain()
 
+	if s.occluded() {
+		return nil, hal.ErrTimeout
+	}
 	drawable := MsgSend(s.layer, Sel("nextDrawable"))
 	if drawable == 0 {
-		hal.Logger().Error("metal: nextDrawable failed", "layer", s.layer)
-		return nil, fmt.Errorf("metal: failed to get next drawable")
+		return nil, hal.ErrTimeout
 	}
 	Retain(drawable)
 
@@ -242,6 +250,44 @@ func (s *Surface) AcquireTexture(_ hal.Fence) (*hal.AcquiredSurfaceTexture, erro
 		},
 		Suboptimal: false,
 	}, nil
+}
+
+// occluded reports whether the macOS window showing the layer is hidden,
+// minimised or covered, once it has been visible: the drawables presented to
+// it then wait for a vsync that doesn't come. Before that, nextDrawable
+// returns right away, and an app may draw its first frame before the window
+// shows.
+//
+// Reference: Rust wgpu-hal metal/surface.rs acquire_texture (wgpu #8309).
+func (s *Surface) occluded() bool {
+	if runtime.GOOS != "darwin" {
+		return false
+	}
+	window := hostingWindow(s.layer)
+	if window == 0 {
+		return false
+	}
+	const nsWindowOcclusionStateVisible = 1 << 1
+	if MsgSendUint(window, Sel("occlusionState"))&nsWindowOcclusionStateVisible != 0 {
+		s.hasBeenVisible = true
+		return false
+	}
+	return s.hasBeenVisible
+}
+
+// hostingWindow returns the window of the view whose layer is layer or one
+// of its superlayers, or 0.
+func hostingWindow(layer ID) ID {
+	window := Sel("window")
+	for l := layer; l != 0; l = MsgSend(l, Sel("superlayer")) {
+		if delegate := MsgSend(l, Sel("delegate")); delegate != 0 {
+			if !MsgSendBool(delegate, Sel("respondsToSelector:"), uintptr(window)) {
+				return 0
+			}
+			return MsgSend(delegate, window)
+		}
+	}
+	return 0
 }
 
 // DiscardTexture discards a surface texture without presenting it.

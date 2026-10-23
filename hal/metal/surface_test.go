@@ -188,3 +188,31 @@ func TestSurfaceTextureCopies(t *testing.T) {
 	}
 	expect("WriteTexture", readBack("surface readback after WriteTexture"))
 }
+
+// TestHostingWindowOfLayers finds no window for layers without a view, or
+// with a delegate that isn't one, instead of sending it a message it doesn't
+// take.
+func TestHostingWindowOfLayers(t *testing.T) {
+	if err := Init(); err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+	pool := NewAutoreleasePool()
+	defer pool.Drain()
+
+	parent := MsgSend(ID(GetClass("CALayer")), Sel("new"))
+	defer Release(parent)
+	layer := MsgSend(ID(GetClass("CAMetalLayer")), Sel("new"))
+	defer Release(layer)
+	_ = MsgSend(parent, Sel("addSublayer:"), uintptr(layer))
+	if w := hostingWindow(layer); w != 0 {
+		t.Errorf("layer without a view: window %#x, want none", w)
+	}
+
+	delegate := MsgSend(ID(GetClass("NSObject")), Sel("new"))
+	defer Release(delegate)
+	_ = MsgSend(parent, Sel("setDelegate:"), uintptr(delegate))
+	if w := hostingWindow(layer); w != 0 {
+		t.Errorf("layer whose superlayer's delegate is no view: window %#x, want none", w)
+	}
+	_ = MsgSend(parent, Sel("setDelegate:"), 0)
+}
