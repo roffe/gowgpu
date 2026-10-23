@@ -136,11 +136,11 @@ func NewHiddenWindow() (*HiddenWindow, error) {
 		runtime.LockOSThread()
 		defer close(hw.exited)
 		hwnd, hdc, err := makeHiddenWindow()
+		hw.hwnd, hw.hdc = hwnd, hdc
 		setup <- err
 		if err != nil {
 			return
 		}
-		hw.hwnd, hw.hdc = hwnd, hdc
 		<-hw.done
 		ReleaseDC(hwnd, hdc)
 		destroyWindow(hwnd)
