@@ -208,26 +208,12 @@ func (q *Queue) submitLocked(commandBuffers []hal.CommandBuffer, external bool) 
 		}
 	}
 	q.raw.ExecuteCommandLists(uint32(len(executionLists)), &executionLists[0])
-	if external {
-		if err := q.signalExternal(); err != nil {
-			q.retainPreamblesWithoutFence(nativePreambles)
-			return 0, err
-		}
-	}
-
-	// Check for immediate device removal after execution.
-	if reason := q.device.raw.GetDeviceRemovedReason(); reason != nil {
-		q.device.logDREDBreadcrumbs()
-		q.retainPreamblesWithoutFence(nativePreambles)
-		return 0, fmt.Errorf("dx12: device removed after ExecuteCommandLists: %w", deviceLost(reason))
-	}
 	q.commitScheduledStates(finalStates)
 
-	// Drain debug messages after submission.
-	q.device.DrainDebugMessages()
-
 	// Signal the frame fence for per-frame allocator tracking and return its value
-	// as the submission index.
+	// as the submission index. From here on the lists are submitted: an error
+	// comes back with the index, so the caller recycles their allocators by
+	// the fence rather than resetting them under the GPU.
 	if err := q.device.signalFrameFence(); err != nil {
 		// ExecuteCommandLists has already handed these lists to the GPU. A
 		// failed Signal leaves no completion value with which to prove that
@@ -241,6 +227,17 @@ func (q *Queue) submitLocked(commandBuffers []hal.CommandBuffer, external bool) 
 		nativePreambles[i].submission = submission
 	}
 	q.state.preambleInFlight = append(q.state.preambleInFlight, nativePreambles...)
+
+	if external {
+		if err := q.signalExternal(); err != nil {
+			return submission, err
+		}
+	}
+	if reason := q.device.raw.GetDeviceRemovedReason(); reason != nil {
+		q.device.logDREDBreadcrumbs()
+		return submission, fmt.Errorf("dx12: device removed after ExecuteCommandLists: %w", deviceLost(reason))
+	}
+	q.device.DrainDebugMessages()
 
 	hal.Logger().Debug("dx12: command list submitted",
 		"cmdLists", len(executionLists),
