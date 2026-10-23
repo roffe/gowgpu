@@ -46,6 +46,10 @@ func (s *Surface) Configure(device hal.Device, config *hal.SurfaceConfiguration)
 	if !ok {
 		return fmt.Errorf("metal: invalid device type")
 	}
+	pixelFormat := layerPixelFormat(config.Format)
+	if pixelFormat == MTLPixelFormatInvalid {
+		return fmt.Errorf("metal: a CAMetalLayer takes no %s drawables", config.Format)
+	}
 
 	// A reconfigure that keeps the size, format and device only changes
 	// the modes.
@@ -79,7 +83,6 @@ func (s *Surface) Configure(device hal.Device, config *hal.SurfaceConfiguration)
 
 	// Set pixel format
 	s.format = config.Format
-	pixelFormat := textureFormatToMTL(config.Format)
 	_ = MsgSend(s.layer, Sel("setPixelFormat:"), uintptr(pixelFormat))
 
 	// Set size
@@ -149,6 +152,18 @@ func (s *Surface) Configure(device hal.Device, config *hal.SurfaceConfiguration)
 
 	s.configured = true
 	return nil
+}
+
+// layerPixelFormat is the pixel format of a CAMetalLayer whose drawables
+// have format, or MTLPixelFormatInvalid for a format the layer doesn't take:
+// setPixelFormat: raises an exception on it.
+func layerPixelFormat(format gputypes.TextureFormat) MTLPixelFormat {
+	switch format {
+	case gputypes.TextureFormatBGRA8Unorm, gputypes.TextureFormatBGRA8UnormSrgb,
+		gputypes.TextureFormatRGBA16Float, gputypes.TextureFormatRGB10A2Unorm:
+		return textureFormatToMTL(format)
+	}
+	return MTLPixelFormatInvalid
 }
 
 // applyModes sets what a configuration changes without new drawables: the

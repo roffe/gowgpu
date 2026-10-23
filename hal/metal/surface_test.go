@@ -284,3 +284,30 @@ func TestSurfaceReconfigureAppliesUsageAndAlpha(t *testing.T) {
 		}
 	}
 }
+
+// TestSurfaceConfigureRejectsLayerlessFormats configures a format a
+// CAMetalLayer doesn't take, whose setPixelFormat: raises: it must be an
+// error, and leave the surface to a configuration that works.
+func TestSurfaceConfigureRejectsLayerlessFormats(t *testing.T) {
+	surface, open := newSurfaceTest(t)
+	config := &hal.SurfaceConfiguration{
+		Format:      gputypes.TextureFormatRGBA8Unorm,
+		Width:       16,
+		Height:      16,
+		PresentMode: hal.PresentModeFifo,
+		Usage:       gputypes.TextureUsageRenderAttachment,
+		AlphaMode:   hal.CompositeAlphaModeOpaque,
+	}
+	if err := surface.Configure(open.Device, config); err == nil {
+		t.Fatal("Configure of an RGBA8Unorm surface succeeded")
+	}
+	for _, format := range []gputypes.TextureFormat{
+		gputypes.TextureFormatBGRA8Unorm, gputypes.TextureFormatBGRA8UnormSrgb,
+		gputypes.TextureFormatRGBA16Float, gputypes.TextureFormatRGB10A2Unorm,
+	} {
+		config.Format = format
+		if err := surface.Configure(open.Device, config); err != nil {
+			t.Errorf("Configure(%s) failed: %v", format, err)
+		}
+	}
+}
