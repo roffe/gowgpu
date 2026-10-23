@@ -309,25 +309,35 @@ func BarrierCB(
 	resolve BarrierResolver,
 	scratch *BarrierScratch,
 ) (hal.CommandBuffer, error) {
+	if err := halEncoder.BeginEncoding("barrier-inject"); err != nil {
+		return nil, err
+	}
+	RecordBarriers(halEncoder, textureTransitions, bufferTransitions, resolve, scratch)
+	return halEncoder.EndEncoding()
+}
+
+// RecordBarriers records the barriers of the transitions on halEncoder,
+// which is recording, against the HAL resources resolve finds for them. A
+// transition of a resource it finds none for is skipped: the resource was
+// destroyed. scratch may be nil.
+func RecordBarriers(
+	halEncoder hal.CommandEncoder,
+	textureTransitions []track.TexturePendingTransition,
+	bufferTransitions []track.PendingTransition,
+	resolve BarrierResolver,
+	scratch *BarrierScratch,
+) {
 	if scratch == nil {
 		scratch = &BarrierScratch{}
 	}
 	defer scratch.clear()
 
-	// Begin a short-lived encoding for the barrier commands
-	if err := halEncoder.BeginEncoding("barrier-inject"); err != nil {
-		return nil, err
-	}
-
-	// Emit texture barriers
 	if len(textureTransitions) > 0 {
 		barriers := scratch.Textures[:0]
 		for _, t := range textureTransitions {
-			tex := resolve.ResolveTexture(t.Index)
-			if tex == nil {
-				continue // destroyed texture — skip
+			if tex := resolve.ResolveTexture(t.Index); tex != nil {
+				barriers = append(barriers, t.IntoHAL(tex))
 			}
-			barriers = append(barriers, t.IntoHAL(tex))
 		}
 		scratch.Textures = barriers
 		if len(barriers) > 0 {
@@ -335,23 +345,18 @@ func BarrierCB(
 		}
 	}
 
-	// Emit buffer barriers
 	if len(bufferTransitions) > 0 {
 		barriers := scratch.Buffers[:0]
 		for _, t := range bufferTransitions {
-			buf := resolve.ResolveBuffer(t.Index)
-			if buf == nil {
-				continue // destroyed buffer — skip
+			if buf := resolve.ResolveBuffer(t.Index); buf != nil {
+				barriers = append(barriers, t.IntoHAL(buf))
 			}
-			barriers = append(barriers, t.IntoHAL(buf))
 		}
 		scratch.Buffers = barriers
 		if len(barriers) > 0 {
 			halEncoder.TransitionBuffers(barriers)
 		}
 	}
-
-	return halEncoder.EndEncoding()
 }
 
 // clear empties the lists, so they pin no resource between submits.

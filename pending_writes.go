@@ -1002,38 +1002,36 @@ func (pw *pendingWrites) forgetZero(t *Texture) {
 	delete(pw.zero, t)
 }
 
-// queueDiscardedLocked puts back on the zero list the textures whose
-// contents a pass of cbs, a submit's command buffers in order, discarded
-// and no later one of them used: they read as zeros, so the next submit
-// zeroes them unless a pass of it clears them first. pw.mu is held.
+// queueDiscardedLocked looks at the textures whose contents a pass of one
+// of cbs, a submit's command buffers in order, discarded, which read as
+// zeros. It returns, by command buffer, the ones a later command buffer of
+// the submit uses, to zero ahead of it, unless a pass of it clears them
+// first. The ones no later one uses go back on the zero list, which the
+// next submit zeroes unless a pass of it clears them first. pw.mu is held.
 //
 // Reference: wgpu-core command/memory_init.rs (discarded surfaces are
 // initialized again before their next use)
-func (pw *pendingWrites) queueDiscardedLocked(cbs []*CommandBuffer) {
-	var discarded map[*Texture]bool
-	for _, cb := range cbs {
-		if discarded != nil {
+func (pw *pendingWrites) queueDiscardedLocked(cbs []*CommandBuffer) [][]*Texture {
+	var scan discardScan
+	for i, cb := range cbs {
+		if scan.discarded != nil {
 			for _, t := range cb.usedTextures {
-				if discarded[t] {
-					discarded[t] = false
-				}
+				scan.use(cbs, i, t)
 			}
 			for _, g := range cb.usedBindGroups {
 				for _, t := range g.boundTextures {
-					if discarded[t] {
-						discarded[t] = false
-					}
+					scan.use(cbs, i, t)
 				}
 			}
 		}
 		for _, t := range cb.discards {
-			if discarded == nil {
-				discarded = make(map[*Texture]bool)
+			if scan.discarded == nil {
+				scan.discarded = make(map[*Texture]bool)
 			}
-			discarded[t] = true
+			scan.discarded[t] = true
 		}
 	}
-	for t, d := range discarded {
+	for t, d := range scan.discarded {
 		if d {
 			if pw.zero == nil {
 				pw.zero = make(map[*Texture]struct{})
@@ -1041,6 +1039,31 @@ func (pw *pendingWrites) queueDiscardedLocked(cbs []*CommandBuffer) {
 			pw.zero[t] = struct{}{}
 		}
 	}
+	return scan.zeros
+}
+
+// discardScan follows the textures the command buffers of a submit leave
+// discarded, in order, for queueDiscardedLocked.
+type discardScan struct {
+	discarded map[*Texture]bool
+	zeros     [][]*Texture
+}
+
+// use notes that cbs[i] uses t: when an earlier command buffer left t
+// discarded, it is zeroed ahead of cbs[i], unless a pass of that clears it
+// first, and is not discarded any more.
+func (s *discardScan) use(cbs []*CommandBuffer, i int, t *Texture) {
+	if !s.discarded[t] {
+		return
+	}
+	s.discarded[t] = false
+	if slices.Contains(cbs[i].clearsFirst, t) {
+		return
+	}
+	if s.zeros == nil {
+		s.zeros = make([][]*Texture, len(cbs))
+	}
+	s.zeros[i] = append(s.zeros[i], t)
 }
 
 // zeroing reports whether t is on the list of textures to zero.

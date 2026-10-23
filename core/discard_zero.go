@@ -78,12 +78,8 @@ func newPassZero(texture *Texture, raw hal.Texture, view hal.TextureView) (passZ
 // take them there.
 func (p *passScope) zeroTransitionsOf(tracker *track.EncoderTextureTracker, zeros []passZero) {
 	for _, z := range zeros {
-		uses := track.TextureUsesColorTarget
-		if z.format.IsDepthStencil() {
-			uses = track.TextureUsesDepthStencilWrite
-		}
 		n := len(p.zeroTransitions)
-		p.zeroTransitions = tracker.SetSubresourceUsage(z.index, track.TextureSelector{}, track.TextureSelector{}, uses, p.zeroTransitions)
+		p.zeroTransitions = tracker.SetSubresourceUsage(z.index, track.TextureSelector{}, track.TextureSelector{}, ZeroUses(z.format), p.zeroTransitions)
 		for _, t := range p.zeroTransitions[n:] {
 			p.zeroBarriers = append(p.zeroBarriers, t.IntoHAL(z.raw))
 		}
@@ -97,22 +93,38 @@ func (p *passScope) recordZeros(halEncoder hal.CommandEncoder, zeros []passZero)
 		halEncoder.TransitionTextures(p.zeroBarriers)
 	}
 	for _, z := range zeros {
-		desc := &hal.RenderPassDescriptor{Label: "(wgpu internal) zero discarded texture"}
-		if z.format.IsDepthStencil() {
-			ds := &hal.RenderPassDepthStencilAttachment{View: z.view}
-			if z.format.HasDepth() {
-				ds.DepthLoadOp, ds.DepthStoreOp = gputypes.LoadOpClear, gputypes.StoreOpStore
-			}
-			if z.format.HasStencil() {
-				ds.StencilLoadOp, ds.StencilStoreOp = gputypes.LoadOpClear, gputypes.StoreOpStore
-			}
-			desc.DepthStencilAttachment = ds
-		} else {
-			desc.ColorAttachments = []hal.RenderPassColorAttachment{{View: z.view, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore}}
+		ZeroWithPass(halEncoder, z.view, z.format)
+	}
+}
+
+// ZeroUses is the state a pass that clears a texture of format leaves it
+// in.
+func ZeroUses(format gputypes.TextureFormat) track.TextureUses {
+	if format.IsDepthStencil() {
+		return track.TextureUsesDepthStencilWrite
+	}
+	return track.TextureUsesColorTarget
+}
+
+// ZeroWithPass records on halEncoder a render pass that clears view, of a
+// texture of format, to zero and stores: every aspect of a depth/stencil
+// format. The texture is in the state ZeroUses names for it.
+func ZeroWithPass(halEncoder hal.CommandEncoder, view hal.TextureView, format gputypes.TextureFormat) {
+	desc := &hal.RenderPassDescriptor{Label: "(wgpu internal) zero discarded texture"}
+	if format.IsDepthStencil() {
+		ds := &hal.RenderPassDepthStencilAttachment{View: view}
+		if format.HasDepth() {
+			ds.DepthLoadOp, ds.DepthStoreOp = gputypes.LoadOpClear, gputypes.StoreOpStore
 		}
-		if pass := halEncoder.BeginRenderPass(desc); pass != nil {
-			pass.End()
+		if format.HasStencil() {
+			ds.StencilLoadOp, ds.StencilStoreOp = gputypes.LoadOpClear, gputypes.StoreOpStore
 		}
+		desc.DepthStencilAttachment = ds
+	} else {
+		desc.ColorAttachments = []hal.RenderPassColorAttachment{{View: view, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore}}
+	}
+	if pass := halEncoder.BeginRenderPass(desc); pass != nil {
+		pass.End()
 	}
 }
 

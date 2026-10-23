@@ -165,3 +165,89 @@ func TestDiscardedTextureSampledReadsZeros(t *testing.T) {
 	}
 	assertNoValidation(t, h)
 }
+
+// A texture whose contents a pass of one command buffer discarded reads as
+// zeros in a later command buffer of the same submit: sampled, loaded by a
+// pass and copied, it reads zeros, and a pass that clears it first sets it.
+func TestDiscardedTextureReadByALaterCommandBuffer(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	r := layoutRig{t, device}
+	bgl := r.bgl(gputypes.BindGroupLayoutEntry{Binding: 0, Visibility: ShaderStageFragment,
+		Texture: &gputypes.TextureBindingLayout{SampleType: gputypes.TextureSampleTypeFloat, ViewDimension: gputypes.TextureViewDimension2D}})
+	pipe := r.renderPipeline(r.layout(bgl), `
+@group(0) @binding(0) var src: texture_2d<f32>;
+@fragment fn fs_main(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
+	return textureLoad(src, vec2<i32>(pos.xy), 0) + vec4<f32>(0.0, 0.0, 1.0, 1.0);
+}
+`)
+	encoder := func() *CommandEncoder {
+		enc, err := device.CreateCommandEncoder(nil)
+		if err != nil {
+			t.Fatalf("CreateCommandEncoder: %v", err)
+		}
+		return enc
+	}
+	pass := func(enc *CommandEncoder, view *TextureView, load gputypes.LoadOp, store gputypes.StoreOp) {
+		p, err := enc.BeginRenderPass(&RenderPassDescriptor{ColorAttachments: []RenderPassColorAttachment{
+			{View: view, LoadOp: load, StoreOp: store, ClearValue: red},
+		}})
+		if err != nil {
+			t.Fatalf("BeginRenderPass: %v", err)
+		}
+		if err := p.End(); err != nil {
+			t.Fatalf("End: %v", err)
+		}
+	}
+	// submit discards a texture in one command buffer and has read record
+	// what reads it in the next one, submitted together.
+	submit := func(read func(*CommandEncoder, *Texture, *TextureView) *Buffer) []byte {
+		tex, view := pixTexture(t, device, "discarded", TextureUsageRenderAttachment|TextureUsageTextureBinding|TextureUsageCopySrc)
+		t.Cleanup(func() { releaseTextureView(tex, view) })
+		first, second := encoder(), encoder()
+		pass(first, view, gputypes.LoadOpClear, gputypes.StoreOpDiscard)
+		out := read(second, tex, view)
+		cbs := make([]*CommandBuffer, 2)
+		for i, enc := range []*CommandEncoder{first, second} {
+			var err error
+			if cbs[i], err = enc.Finish(); err != nil {
+				t.Fatalf("Finish: %v", err)
+			}
+		}
+		if _, err := device.Queue().Submit(cbs...); err != nil {
+			t.Fatalf("Submit: %v", err)
+		}
+		return readback(t, out)
+	}
+
+	expectPixels(t, "sampled", submit(func(enc *CommandEncoder, _ *Texture, view *TextureView) *Buffer {
+		group := r.group(bgl, BindGroupEntry{Binding: 0, TextureView: view})
+		tex, target := pixTexture(t, device, "sampled into", TextureUsageRenderAttachment|TextureUsageCopySrc)
+		t.Cleanup(func() { releaseTextureView(tex, target) })
+		clearPass(t, enc, target, gputypes.LoadOpClear, black, func(p *RenderPassEncoder) {
+			p.SetPipeline(pipe)
+			p.SetBindGroup(0, group, nil)
+			p.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1})
+		})
+		out := readbackBuffer(t, device, "sampled")
+		copyOut(enc, tex, out)
+		return out
+	}), 0, 0, 255, 255)
+	expectPixels(t, "loaded", submit(func(enc *CommandEncoder, tex *Texture, view *TextureView) *Buffer {
+		pass(enc, view, gputypes.LoadOpLoad, gputypes.StoreOpStore)
+		out := readbackBuffer(t, device, "loaded")
+		copyOut(enc, tex, out)
+		return out
+	}), 0, 0, 0, 0)
+	expectPixels(t, "copied", submit(func(enc *CommandEncoder, tex *Texture, _ *TextureView) *Buffer {
+		out := readbackBuffer(t, device, "copied")
+		copyOut(enc, tex, out)
+		return out
+	}), 0, 0, 0, 0)
+	expectPixels(t, "cleared first", submit(func(enc *CommandEncoder, tex *Texture, view *TextureView) *Buffer {
+		pass(enc, view, gputypes.LoadOpClear, gputypes.StoreOpStore)
+		out := readbackBuffer(t, device, "cleared")
+		copyOut(enc, tex, out)
+		return out
+	}), 255, 0, 0, 255)
+	assertNoValidation(t, h)
+}

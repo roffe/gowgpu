@@ -50,13 +50,14 @@ type Queue struct {
 	// transitions of one command buffer and the tracker index resolvers for
 	// barrier injection. Cleared after each use so they pin nothing between
 	// submits.
-	submitBufs     []hal.CommandBuffer
-	cbBarriers     []hal.CommandBuffer
-	texTransitions []track.TexturePendingTransition
-	bufTransitions []track.PendingTransition
-	texResolver    map[track.TrackerIndex]hal.Texture
-	bufResolver    map[track.TrackerIndex]hal.Buffer
-	barrierScratch core.BarrierScratch
+	submitBufs      []hal.CommandBuffer
+	cbBarriers      []hal.CommandBuffer
+	texTransitions  []track.TexturePendingTransition
+	zeroTransitions []track.TexturePendingTransition
+	bufTransitions  []track.PendingTransition
+	texResolver     map[track.TrackerIndex]hal.Texture
+	bufResolver     map[track.TrackerIndex]hal.Buffer
+	barrierScratch  core.BarrierScratch
 
 	// Scratch for WriteTexture, under mu: the HAL forms of its arguments,
 	// which travel by pointer and would otherwise be heap copies every call.
@@ -116,13 +117,14 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (_ uint64, err error) {
 	var flushedEncoder hal.CommandEncoder
 	var flushedDstTextures []hal.Texture
 	var flushedDstBuffers []hal.Buffer
+	var zeros [][]*Texture
 
 	if q.pending != nil {
 		q.pending.mu.Lock()
 		q.pending.forgetClearsLocked(commandBuffers)
 		var err error
 		pendingCmdBuf, flushedEncoder, flushedDstTextures, flushedDstBuffers, err = q.pending.flush()
-		q.pending.queueDiscardedLocked(commandBuffers)
+		zeros = q.pending.queueDiscardedLocked(commandBuffers)
 		q.pending.mu.Unlock()
 		if err != nil {
 			return 0, fmt.Errorf("wgpu: flush pending writes: %w", err)
@@ -136,7 +138,7 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (_ uint64, err error) {
 	// command buffer that runs right ahead of that user CB.
 	//
 	// Reference: wgpu-core device/queue.rs pre_submit_for_command_buffers
-	if err := q.injectBarriers(commandBuffers); err != nil {
+	if err := q.injectBarriers(commandBuffers, zeros); err != nil {
 		q.cancelSubmit(pendingCmdBuf, flushedEncoder, flushedDstTextures)
 		return 0, fmt.Errorf("wgpu: submit barrier injection: %w", err)
 	}
@@ -749,7 +751,9 @@ func validateSubmitTexture(tex *Texture, index int) error {
 // injectBarriers merges each command buffer's texture and buffer trackers
 // into the device-level DeviceTracker and records any resulting transitions
 // into a new barrier command buffer. Returns the barrier CB (or nil if no
-// transitions are needed).
+// transitions are needed). The textures of zeros[i] are zeroed first in
+// the barrier command buffer of command buffer i: an earlier command buffer
+// of the submit discarded their contents, which read as zeros.
 //
 // The barrier CB is prepended before user command buffers in the Submit call,
 // ensuring correct resource state transitions before GPU execution.
@@ -759,7 +763,7 @@ func validateSubmitTexture(tex *Texture, index int) error {
 // command encoders.
 //
 // Reference: wgpu-core device/queue.rs pre_submit_for_command_buffers
-func (q *Queue) injectBarriers(commandBuffers []*CommandBuffer) error {
+func (q *Queue) injectBarriers(commandBuffers []*CommandBuffer, zeros [][]*Texture) error {
 	q.cbBarriers = q.cbBarriers[:0]
 	if q.device == nil || q.device.core == nil {
 		return nil
@@ -787,9 +791,20 @@ func (q *Queue) injectBarriers(commandBuffers []*CommandBuffer) error {
 		if cb == nil || cb.core == nil {
 			continue
 		}
+		var cbZeros []*Texture
+		if i < len(zeros) {
+			cbZeros = zeros[i]
+		}
+		q.zeroTransitions = q.zeroTransitions[:0]
+		for _, t := range cbZeros {
+			if idx, ok := q.pending.trackedIndex(t); ok {
+				q.zeroTransitions = tracker.SetTextureUsage(idx, t.coreTexture.Subresources(), track.TextureSelector{},
+					core.ZeroUses(t.format), q.zeroTransitions)
+			}
+		}
 		q.texTransitions = tracker.MergeTextureScopeInto(cb.core.TextureScope(), q.texTransitions[:0])
 		q.bufTransitions = tracker.MergeBufferScopeInto(cb.core.BufferScope(), q.bufTransitions[:0])
-		if len(q.texTransitions) == 0 && len(q.bufTransitions) == 0 {
+		if len(cbZeros) == 0 && len(q.texTransitions) == 0 && len(q.bufTransitions) == 0 {
 			continue
 		}
 		if q.device.cmdEncoderPool == nil {
@@ -808,12 +823,13 @@ func (q *Queue) injectBarriers(commandBuffers []*CommandBuffer) error {
 			fillBufferResolver(q.bufResolver, commandBuffers)
 			resolved = true
 		}
-		barrierCB, err := q.recordAndTrackBarriers(q.texTransitions, q.bufTransitions)
+		barrierCB, err := q.recordAndTrackBarriers(cbZeros, q.texTransitions, q.bufTransitions)
 		if err != nil {
 			return err
 		}
 		q.cbBarriers[i] = barrierCB
 	}
+	clear(q.zeroTransitions)
 	return nil
 }
 
@@ -917,9 +933,11 @@ func addTrackedBuffer(resolver map[track.TrackerIndex]hal.Buffer, buf *Buffer) {
 
 // recordAndTrackBarriers records the texture and buffer barriers of one
 // command buffer of the submit into a HAL command buffer of their own, on
-// the submit's barrier encoder, taken from the pool for the first one. The
+// the submit's barrier encoder, taken from the pool for the first one,
+// after the zeroing of zeros, whose barriers q.zeroTransitions holds. The
 // encoder and its command buffers are recycled after GPU completion.
 func (q *Queue) recordAndTrackBarriers(
+	zeros []*Texture,
 	texTransitions []track.TexturePendingTransition,
 	bufTransitions []track.PendingTransition,
 ) (hal.CommandBuffer, error) {
@@ -930,9 +948,24 @@ func (q *Queue) recordAndTrackBarriers(
 		}
 		q.barrierEncoder = halEnc
 	}
-	barrierCB, err := core.BarrierCB(q.barrierEncoder, texTransitions, bufTransitions, q, &q.barrierScratch)
+	enc := q.barrierEncoder
+	if err := enc.BeginEncoding("barrier-inject"); err != nil {
+		return nil, fmt.Errorf("record barriers: %w", err)
+	}
+	core.RecordBarriers(enc, q.zeroTransitions, nil, q, &q.barrierScratch)
+	for _, t := range zeros {
+		raw, dev := t.resolveHAL(), q.device.halDevice()
+		if raw == nil || dev == nil {
+			continue
+		}
+		if view, _ := t.sharedDefaultView(dev, raw); view != nil {
+			core.ZeroWithPass(enc, view, t.format)
+		}
+	}
+	core.RecordBarriers(enc, texTransitions, bufTransitions, q, &q.barrierScratch)
+	barrierCB, err := enc.EndEncoding()
 	if err != nil {
-		q.barrierEncoder.DiscardEncoding()
+		enc.DiscardEncoding()
 		return nil, fmt.Errorf("record barriers: %w", err)
 	}
 

@@ -608,7 +608,7 @@ func createTrackedTexture(t *testing.T, device *Device, label string) *Texture {
 // recorded for the first command buffer that needed one, or nil: the tests
 // submit one command buffer at a time.
 func injectBarriersFirst(q *Queue, commandBuffers []*CommandBuffer) (hal.CommandBuffer, error) {
-	if err := q.injectBarriers(commandBuffers); err != nil {
+	if err := q.injectBarriers(commandBuffers, nil); err != nil {
 		return nil, err
 	}
 	for _, b := range q.cbBarriers {
