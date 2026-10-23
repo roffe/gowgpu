@@ -73,3 +73,31 @@ func TestDiscardOneOfTwoAcquiredSwapchains(t *testing.T) {
 		t.Errorf("submit after the discard waits for %v, want the second's acquire semaphore", got)
 	}
 }
+
+// A discarded image stays acquired from Vulkan, so the next acquire hands
+// it out again, its acquire semaphore no submit has to wait for: a few
+// discarded images kept acquired stopped vkAcquireNextImageKHR returning
+// any, every acquire timing out after a second.
+func TestDiscardedImageIsAcquiredAgain(t *testing.T) {
+	q, sc := fakeSwapchainQueue(1)
+	swapchain := sc[0]
+	swapchain.handle = 7
+	swapchain.images = []vk.Image{30, 31}
+	swapchain.surfaceTextures = []*SwapchainTexture{{index: 0}, {index: 1}}
+	swapchain.presentPools = append(swapchain.presentPools, presentSemaphorePool{})
+	swapchain.imageLayouts = []vk.ImageLayout{vk.ImageLayoutUndefined, vk.ImageLayoutPresentSrcKhr}
+	swapchain.currentImage = 1
+	surface := &Surface{swapchain: swapchain, device: q.device}
+
+	surface.DiscardTexture(nil)
+	got, err := surface.AcquireTexture(nil)
+	if err != nil {
+		t.Fatalf("AcquireTexture after a discard: %v", err)
+	}
+	if got.Texture != swapchain.surfaceTextures[1] {
+		t.Errorf("AcquireTexture after a discard returned %v, want the discarded image", got.Texture)
+	}
+	if !swapchain.imageAcquired || !swapchain.acquireUsed || !q.holds(swapchain) {
+		t.Errorf("image acquired %v, acquire semaphore waited %v, held %v; want all", swapchain.imageAcquired, swapchain.acquireUsed, q.holds(swapchain))
+	}
+}

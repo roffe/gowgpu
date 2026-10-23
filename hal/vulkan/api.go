@@ -404,6 +404,9 @@ func (s *Surface) AcquireTexture(_ hal.Fence) (*hal.AcquiredSurfaceTexture, erro
 		return nil, fmt.Errorf("vulkan: surface not configured")
 	}
 
+	// A discarded image comes back without an acquire, its acquire
+	// semaphore waited for already.
+	waited := s.swapchain.discarded
 	texture, suboptimal, err := s.swapchain.acquireNextImage()
 	if err != nil {
 		return nil, err
@@ -420,7 +423,7 @@ func (s *Surface) AcquireTexture(_ hal.Fence) (*hal.AcquiredSurfaceTexture, erro
 	if s.device != nil && s.device.queue != nil {
 		q := s.device.queue
 		q.mu.Lock()
-		s.swapchain.acquireUsed = false
+		s.swapchain.acquireUsed = waited
 		q.hold(s.swapchain)
 		q.mu.Unlock()
 	}
@@ -437,13 +440,15 @@ func (s *Surface) DiscardTexture(_ hal.SurfaceTexture) {
 		return
 	}
 	if s.swapchain != nil && s.swapchain.imageAcquired {
-		// Discarding an acquired texture is a normal lifecycle operation during
-		// resize or minimization. Match Rust wgpu-hal: release the acquisition
-		// without poisoning the swapchain and let the next frame continue.
-		// The acquire semaphore is waited for by a submission of nothing
-		// when no Submit did, so that it is unsignaled when its turn to be
-		// acquired with comes round again.
+		// Vulkan has no way to give an acquired image back without
+		// VK_EXT_swapchain_maintenance1, and a few kept acquired stop
+		// vkAcquireNextImageKHR returning any: the next AcquireTexture
+		// hands the image out again, as Dawn does. The acquire semaphore
+		// is waited for by a submission of nothing when no Submit did, so
+		// that it is unsignaled when its turn to be acquired with comes
+		// round again.
 		s.swapchain.imageAcquired = false
+		s.swapchain.discarded = true
 		if s.device != nil && s.device.queue != nil {
 			q := s.device.queue
 			q.mu.Lock()

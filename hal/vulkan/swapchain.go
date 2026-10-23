@@ -44,6 +44,7 @@ type Swapchain struct {
 	currentAcquireSem vk.Semaphore // The acquire semaphore used for current frame
 	acquireUsed       bool         // a submission waited for currentAcquireSem; the queue's mu guards it
 	imageAcquired     bool
+	discarded         bool // currentImage was discarded and is still acquired from Vulkan
 	surfaceTextures   []*SwapchainTexture
 	acquireFence      vk.Fence // Post-acquire fence for frame pacing (Rust wgpu pattern)
 
@@ -926,6 +927,7 @@ func (sc *Swapchain) destroyResourcesAfterIdle() error {
 	}
 	sc.barrierPending = false
 	sc.imageLayouts = nil
+	sc.discarded = false
 	sc.currentAcquireSem = 0
 	sc.currentAcquireIdx = 0
 	sc.nextAcquireIdx = 0
@@ -1048,6 +1050,11 @@ func (sc *Swapchain) acquireNextImage() (*SwapchainTexture, bool, error) {
 		err := fmt.Errorf("vulkan: swapchain image state is inconsistent")
 		sc.markBroken(err)
 		return nil, false, err
+	}
+	if sc.discarded && sc.currentImage < uint32(len(sc.surfaceTextures)) {
+		sc.discarded = false
+		sc.imageAcquired = true
+		return sc.surfaceTextures[sc.currentImage], false, nil
 	}
 
 	// Timeout for acquire - match wgpu-core's FRAME_TIMEOUT_MS = 1000
