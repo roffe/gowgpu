@@ -135,17 +135,6 @@ type depthRig struct {
 	sampler  *Sampler
 }
 
-// skipDepthSamplingOnGL skips a test whose shader samples or loads a
-// texture_depth_2d: naga's GLSL writer declares one as sampler2DShadow, which
-// texture() without a reference and texelFetch don't take, so the pipeline
-// doesn't compile on GL. GL has no image layouts for these tests to check.
-func skipDepthSamplingOnGL(t *testing.T, h *captureHandler) {
-	t.Helper()
-	if h.backend == gputypes.BackendGL {
-		t.Skip("naga declares texture_depth_2d as sampler2DShadow in GLSL, which this shader can't sample or load")
-	}
-}
-
 func newDepthRig(t *testing.T, device *Device, attached bool) *depthRig {
 	t.Helper()
 	entries := []gputypes.BindGroupLayoutEntry{
@@ -291,7 +280,6 @@ func TestDepthReadOnlyAttachedAndSampled(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			device, h := newValidatedDevice(t)
-			skipDepthSamplingOnGL(t, h)
 			rig := newDepthRig(t, device, true)
 			_, depthView := depthTexture(t, device)
 			dst, dstView := pixTexture(t, device, "depth-sampled-dst", TextureUsageRenderAttachment|TextureUsageCopySrc)
@@ -350,7 +338,6 @@ func TestDepthSampledInLaterPass(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			device, h := newValidatedDevice(t)
-			skipDepthSamplingOnGL(t, h)
 			rig := newDepthRig(t, device, false)
 			_, depthView := depthTexture(t, device)
 			dst, dstView := pixTexture(t, device, "depth-later-dst", TextureUsageRenderAttachment|TextureUsageCopySrc)
@@ -392,7 +379,6 @@ func TestDepthSampledInLaterPass(t *testing.T) {
 // depth DONT_CARE, and stored it with a write no barrier waited for.
 func TestDepthReadOnlyOneAspect(t *testing.T) {
 	device, h := newValidatedDevice(t)
-	skipDepthSamplingOnGL(t, h)
 	rig := newDepthRig(t, device, true)
 	_, depthView := depthTexture(t, device)
 	dst, dstView := pixTexture(t, device, "depth-one-aspect-dst", TextureUsageRenderAttachment|TextureUsageCopySrc)

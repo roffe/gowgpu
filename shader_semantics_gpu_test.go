@@ -467,3 +467,62 @@ func TestTextureWithTwoSamplers(t *testing.T) {
 	expectPixels(t, "repeat green, clamp blue", pix, 255, 255, 0, 255)
 	assertNoValidation(t, h)
 }
+
+// TestDepthTexturesSampledLoadedAndCompared samples a depth texture cleared
+// to 0.25 with a sampler that doesn't compare, in a helper function, and
+// loads it, and samples one cleared to 0.75 with a less comparison against
+// 0.5, in one fragment shader. GLSL declares the first a sampler2D and the
+// second a sampler2DShadow.
+func TestDepthTexturesSampledLoadedAndCompared(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	_, plainView := depthTexture(t, device)
+	_, shadowView := depthTexture(t, device)
+	enc, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	clearDepth(t, enc, plainView, 0.25)
+	clearDepth(t, enc, shadowView, 0.75)
+	finishAndSubmit(t, device, enc)
+	nearest := &SamplerDescriptor{MagFilter: gputypes.FilterModeNearest, MinFilter: gputypes.FilterModeNearest, LodMaxClamp: 32}
+	s, err := device.CreateSampler(nearest)
+	if err != nil {
+		t.Fatalf("CreateSampler: %v", err)
+	}
+	t.Cleanup(s.Release)
+	compare := *nearest
+	compare.Compare = gputypes.CompareFunctionLess
+	sc, err := device.CreateSampler(&compare)
+	if err != nil {
+		t.Fatalf("CreateSampler(compare): %v", err)
+	}
+	t.Cleanup(sc.Release)
+
+	depthEntry := func(binding uint32) gputypes.BindGroupLayoutEntry {
+		return gputypes.BindGroupLayoutEntry{Binding: binding, Visibility: ShaderStageFragment,
+			Texture: &gputypes.TextureBindingLayout{SampleType: gputypes.TextureSampleTypeDepth, ViewDimension: gputypes.TextureViewDimension2D}}
+	}
+	pix, err := semanticsDraw(t, device, "depth-kinds", `
+@group(0) @binding(0) var plain: texture_depth_2d;
+@group(0) @binding(1) var shadow: texture_depth_2d;
+@group(0) @binding(2) var s: sampler;
+@group(0) @binding(3) var sc: sampler_comparison;
+fn sampled(t: texture_depth_2d, uv: vec2<f32>) -> f32 {
+    return textureSample(t, s, uv);
+}
+@fragment fn fs_main(@builtin(position) p: vec4<f32>) -> @location(0) vec4<f32> {
+    let uv = p.xy / 4.0;
+    return vec4<f32>(sampled(plain, uv), textureLoad(plain, vec2<i32>(p.xy), 0), textureSampleCompare(shadow, sc, uv, 0.5), 1.0);
+}
+`, []gputypes.BindGroupLayoutEntry{
+		depthEntry(0),
+		depthEntry(1),
+		{Binding: 2, Visibility: ShaderStageFragment, Sampler: &gputypes.SamplerBindingLayout{Type: gputypes.SamplerBindingTypeNonFiltering}},
+		{Binding: 3, Visibility: ShaderStageFragment, Sampler: &gputypes.SamplerBindingLayout{Type: gputypes.SamplerBindingTypeComparison}},
+	}, []BindGroupEntry{{Binding: 0, TextureView: plainView}, {Binding: 1, TextureView: shadowView}, {Binding: 2, Sampler: s}, {Binding: 3, Sampler: sc}})
+	if err != nil {
+		t.Fatalf("CreateRenderPipeline: %v", err)
+	}
+	expectPixels(t, "sampled and loaded 0.25, compared 1", pix, 64, 64, 255, 255)
+	assertNoValidation(t, h)
+}
