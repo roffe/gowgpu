@@ -82,3 +82,45 @@ func TestCopyRegionsAreOnTheCopysTextures(t *testing.T) {
 		}
 	}
 }
+
+// A copy of all of a depth-only or stencil-only texture reaches the backend
+// as a copy of its one aspect, which Vulkan otherwise took for color.
+func TestCopiesOfOneAspectFormatsNameTheAspect(t *testing.T) {
+	enc := &copyCaptureEncoder{CommandEncoder: &noop.CommandEncoder{}}
+	device := newCaptureDevice(&captureDevice{Device: &noop.Device{}, commandEncoder: enc})
+	buf, err := device.CreateBuffer(&BufferDescriptor{Size: 1024, Usage: BufferUsageCopySrc | BufferUsageCopyDst})
+	if err != nil {
+		t.Fatalf("CreateBuffer: %v", err)
+	}
+	encoder, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	formats := []gputypes.TextureFormat{gputypes.TextureFormatDepth32Float, gputypes.TextureFormatStencil8}
+	for _, f := range formats {
+		tex, err := device.CreateTexture(&TextureDescriptor{
+			Size: Extent3D{Width: 4, Height: 4, DepthOrArrayLayers: 1}, MipLevelCount: 1, SampleCount: 1,
+			Dimension: TextureDimension2D, Format: f, Usage: TextureUsageCopySrc,
+		})
+		if err != nil {
+			t.Fatalf("CreateTexture(%v): %v", f, err)
+		}
+		encoder.CopyTextureToBuffer(tex, buf, []BufferTextureCopy{{
+			BufferLayout: ImageDataLayout{BytesPerRow: 256},
+			TextureBase:  ImageCopyTexture{Aspect: gputypes.TextureAspectAll},
+			Size:         Extent3D{Width: 4, Height: 4, DepthOrArrayLayers: 1},
+		}})
+	}
+	if _, err := encoder.Finish(); err != nil {
+		t.Fatalf("Finish: %v", err)
+	}
+	want := []gputypes.TextureAspect{gputypes.TextureAspectDepthOnly, gputypes.TextureAspectStencilOnly}
+	if len(enc.bases) != len(want) {
+		t.Fatalf("HAL copies saw %d texture bases, want %d", len(enc.bases), len(want))
+	}
+	for i, w := range want {
+		if got := enc.bases[i].Aspect; got != w {
+			t.Errorf("%v copy aspect = %v, want %v", formats[i], got, w)
+		}
+	}
+}

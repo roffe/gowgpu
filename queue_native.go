@@ -463,6 +463,9 @@ func (q *Queue) WriteTexture(dst *ImageCopyTexture, data []byte, layout *ImageDa
 	// Into the queue's scratch: the HAL takes these by pointer and keeps
 	// none of them.
 	q.wtDst, q.wtLayout, q.wtSize = dst.halValue(), layout.toHAL(), hal.Extent3D(copySize)
+	if ct := dst.Texture.coreTexture; ct != nil {
+		q.wtDst.Aspect = core.CopyAspect(ct.Format(), dst.Aspect)
+	}
 	defer func() { q.wtDst = hal.ImageCopyTexture{} }()
 
 	if q.pending != nil {

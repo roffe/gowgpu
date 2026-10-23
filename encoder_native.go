@@ -818,6 +818,8 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst *Texture, regions []Textu
 			return
 		}
 		halRegions[i].Size = hal.Extent3D(size)
+		halRegions[i].SrcBase.Aspect = core.CopyAspect(src.coreTexture.Format(), r.Source.Aspect)
+		halRegions[i].DstBase.Aspect = core.CopyAspect(dst.coreTexture.Format(), r.Destination.Aspect)
 	}
 	// A region with nothing in it is valid and copies nothing, which no
 	// backend takes.
@@ -934,6 +936,7 @@ func bufferTextureCopies(op string, t *Texture, halTex hal.Texture, buf *Buffer,
 			return nil, fmt.Errorf("wgpu: CommandEncoder.%s: region %d: %w", op, i, err)
 		}
 		halRegions[i].Size = hal.Extent3D(size)
+		halRegions[i].TextureBase.Aspect = core.CopyAspect(t.coreTexture.Format(), r.TextureBase.Aspect)
 	}
 	return slices.DeleteFunc(halRegions, func(r hal.BufferTextureCopy) bool { return emptyExtent(r.Size) }), nil
 }

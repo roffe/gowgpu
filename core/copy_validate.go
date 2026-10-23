@@ -184,3 +184,20 @@ func ValidateTextureToTextureCopy(src, dst *TexelCopyTexture, size gputypes.Exte
 		DepthOrArrayLayers: size.DepthOrArrayLayers,
 	}, nil
 }
+
+// CopyAspect is the aspect backends copy for a copy of aspect a of a texture
+// of format f: the one aspect of a depth-only or stencil-only format where a
+// is All, which a backend would otherwise take for color.
+//
+// Reference: wgpu-hal FormatAspects::new
+func CopyAspect(f gputypes.TextureFormat, a gputypes.TextureAspect) gputypes.TextureAspect {
+	if a == gputypes.TextureAspectAll || a == gputypes.TextureAspectUndefined {
+		switch {
+		case f.HasDepth() && !f.HasStencil():
+			return gputypes.TextureAspectDepthOnly
+		case f.HasStencil() && !f.HasDepth():
+			return gputypes.TextureAspectStencilOnly
+		}
+	}
+	return a
+}
