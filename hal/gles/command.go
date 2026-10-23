@@ -42,6 +42,8 @@ type CommandEncoder struct {
 	fbs             *framebuffers
 	maxTextureUnits int32 // Hardware limit passed from Device
 
+	fixedIndexRestart bool // as the Device's
+
 	// arena holds the current recording's pooled commands. spareArena and
 	// spareCommands are what ResetAll took back from command buffers that
 	// have run, for the next recording to fill.
@@ -703,6 +705,7 @@ func (e *RenderPassEncoder) DrawIndexed(args gputypes.DrawIndexedArgs) {
 		indexOffset:   e.indexOffset,
 		indexFormat:   e.indexFormat,
 		topology:      topology,
+		fixedRestart:  e.encoder.fixedIndexRestart,
 	}))
 	e.endInstanceBuffers(args.FirstInstance, baseInstance)
 }
@@ -1639,6 +1642,7 @@ type DrawIndexedCommand struct {
 	indexOffset               uint64
 	indexFormat               gputypes.IndexFormat
 	topology                  gputypes.PrimitiveTopology
+	fixedRestart              bool // the context has GL_PRIMITIVE_RESTART_FIXED_INDEX
 }
 
 func (c *DrawIndexedCommand) Execute(ctx *gl.Context) {
@@ -1651,6 +1655,7 @@ func (c *DrawIndexedCommand) Execute(ctx *gl.Context) {
 
 	offset := uintptr(c.indexOffset) + uintptr(c.firstIndex)*indexSize
 	mode := primitiveTopologyToGL(c.topology)
+	c.setRestart(ctx)
 
 	if c.instanceCount != 0 {
 		c.pipeline.setFirstInstance(ctx, c.firstInstance)
@@ -1665,6 +1670,38 @@ func (c *DrawIndexedCommand) Execute(ctx *gl.Context) {
 	default:
 		ctx.DrawElementsInstanced(mode, int32(c.indexCount), indexType, offset, int32(c.instanceCount))
 	}
+}
+
+// setRestart turns primitive restart on for a strip and off for a list, as
+// WebGPU strips restart at the index format's largest value and Dawn does.
+func (c *DrawIndexedCommand) setRestart(ctx *gl.Context) {
+	var want uint32
+	if c.topology == gputypes.PrimitiveTopologyLineStrip || c.topology == gputypes.PrimitiveTopologyTriangleStrip {
+		switch {
+		case c.fixedRestart:
+			want = 1
+		case c.indexFormat == gputypes.IndexFormatUint32:
+			want = 0xFFFFFFFF
+		default:
+			want = 0xFFFF
+		}
+	}
+	sh := &ctx.Shadow
+	if sh.RestartSet && sh.Restart == want {
+		return
+	}
+	switch {
+	case c.fixedRestart && want == 0:
+		ctx.Disable(gl.PRIMITIVE_RESTART_FIXED_INDEX)
+	case c.fixedRestart:
+		ctx.Enable(gl.PRIMITIVE_RESTART_FIXED_INDEX)
+	case want == 0:
+		ctx.Disable(gl.PRIMITIVE_RESTART)
+	default:
+		ctx.Enable(gl.PRIMITIVE_RESTART)
+		ctx.PrimitiveRestartIndex(want)
+	}
+	sh.Restart, sh.RestartSet = want, true
 }
 
 // CopyBufferCommand copies between buffers.

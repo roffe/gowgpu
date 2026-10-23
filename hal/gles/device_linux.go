@@ -33,6 +33,10 @@ type Device struct {
 	// independentBlend is blending and write masks per draw buffer (GL 4.0,
 	// ES 3.2, OES/EXT_draw_buffers_indexed).
 	independentBlend bool
+	// fixedIndexRestart is primitive restart at the largest index (ES 3.0,
+	// GL 4.3, ARB_ES3_compatibility); without it strips restart through
+	// glPrimitiveRestartIndex.
+	fixedIndexRestart bool
 
 	// glslVersion is the target GLSL version for shader compilation, detected
 	// from the adapter's GL_SHADING_LANGUAGE_VERSION at Open time.
@@ -412,10 +416,11 @@ func (d *Device) CreateCommandEncoder(_ *CommandEncoderDescriptor) (hal.CommandE
 		}
 	}
 	return &CommandEncoder{
-		glCtx:           glCtx,
-		vao:             d.vao,
-		fbs:             d.fbs,
-		maxTextureUnits: d.maxTextureUnits,
+		glCtx:             glCtx,
+		vao:               d.vao,
+		fbs:               d.fbs,
+		maxTextureUnits:   d.maxTextureUnits,
+		fixedIndexRestart: d.fixedIndexRestart,
 	}, nil
 }
 

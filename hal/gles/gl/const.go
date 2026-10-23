@@ -40,15 +40,20 @@ const (
 	INVALID_FRAMEBUFFER_OPERATION = 0x0506
 
 	// Capabilities
-	BLEND               = 0x0BE2
-	CULL_FACE           = 0x0B44
-	DEPTH_CLAMP         = 0x864F
-	DEPTH_TEST          = 0x0B71
-	DITHER              = 0x0BD0
-	FRAMEBUFFER_SRGB    = 0x8DB9
-	POLYGON_OFFSET_FILL = 0x8037
-	SCISSOR_TEST        = 0x0C11
-	STENCIL_TEST        = 0x0B90
+	BLEND       = 0x0BE2
+	CULL_FACE   = 0x0B44
+	DEPTH_CLAMP = 0x864F
+
+	// Primitive restart at the index type's largest value (ES 3.0, GL 4.3,
+	// ARB_ES3_compatibility), or at the glPrimitiveRestartIndex (GL 3.1).
+	PRIMITIVE_RESTART_FIXED_INDEX = 0x8D69
+	PRIMITIVE_RESTART             = 0x8F9D
+	DEPTH_TEST                    = 0x0B71
+	DITHER                        = 0x0BD0
+	FRAMEBUFFER_SRGB              = 0x8DB9
+	POLYGON_OFFSET_FILL           = 0x8037
+	SCISSOR_TEST                  = 0x0C11
+	STENCIL_TEST                  = 0x0B90
 
 	// Buffer targets
 	ARRAY_BUFFER              = 0x8892

@@ -50,6 +50,11 @@ type Shadow struct {
 
 	// Scissor is set when the scissor test is enabled with this rectangle.
 	Scissor ShadowScissor
+
+	// Restart is the primitive restart in place, RestartSet once known:
+	// 0 for none, the restart index otherwise (1 for the fixed one).
+	Restart    uint32
+	RestartSet bool
 }
 
 // ShadowObject is an object name bound somewhere, Set once known, and for a

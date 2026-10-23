@@ -67,13 +67,15 @@ func (a *Adapter) Open(_ gputypes.Features, _ gputypes.Limits) (hal.OpenDevice, 
 	glslVer := GLSLVersionToNaga(a.caps.GLSLVersion, a.caps.IsES)
 
 	device := &Device{
-		ctx:                 a.ctx,
-		vao:                 vao,
-		maxTextureUnits:     maxTexUnits,
-		maxMSAA:             a.caps.MaxMSAASamples,
-		formats:             newFormatCaps(&a.caps),
-		depthClamp:          a.caps.Features.Contains(gputypes.FeatureDepthClipControl),
-		independentBlend:    a.caps.DownlevelFlags.Contains(gputypes.DownlevelFlagsIndependentBlend),
+		ctx:              a.ctx,
+		vao:              vao,
+		maxTextureUnits:  maxTexUnits,
+		maxMSAA:          a.caps.MaxMSAASamples,
+		formats:          newFormatCaps(&a.caps),
+		depthClamp:       a.caps.Features.Contains(gputypes.FeatureDepthClipControl),
+		independentBlend: a.caps.DownlevelFlags.Contains(gputypes.DownlevelFlagsIndependentBlend),
+		fixedIndexRestart: glVersionAtLeast(a.caps.GLMajor, a.caps.GLMinor, a.caps.IsES, [2]int{3, 0}, [2]int{4, 3}) ||
+			hasExtension(a.caps.Extensions, "GL_ARB_ES3_compatibility"),
 		glslVersion:         glslVer,
 		shaderBindingLayout: glslVer.SupportsExplicitLocations(),
 	}

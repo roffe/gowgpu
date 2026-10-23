@@ -282,6 +282,7 @@ type Context struct {
 	glDrawArraysInstanced   unsafe.Pointer
 	glDrawElementsInstanced unsafe.Pointer
 	glVertexAttribDivisor   unsafe.Pointer
+	glPrimitiveRestartIndex unsafe.Pointer
 
 	// Base instance (GL 4.2 / ARB_base_instance, ES EXT_base_instance; optional)
 	glDrawArraysInstancedBaseInstance   unsafe.Pointer
@@ -515,6 +516,7 @@ func (c *Context) Load(getProcAddr ProcAddressFunc, isGLES ...bool) error {
 	c.glDrawArraysInstanced = getProcAddr("glDrawArraysInstanced")
 	c.glDrawElementsInstanced = getProcAddr("glDrawElementsInstanced")
 	c.glVertexAttribDivisor = getProcAddr("glVertexAttribDivisor")
+	c.glPrimitiveRestartIndex = getProcAddr("glPrimitiveRestartIndex")
 	if gles {
 		c.glDrawArraysInstancedBaseInstance = getProcAddr("glDrawArraysInstancedBaseInstanceEXT")
 		c.glDrawElementsInstancedBaseInstance = getProcAddr("glDrawElementsInstancedBaseInstanceEXT")
@@ -1380,6 +1382,12 @@ func (c *Context) DrawArraysInstanced(mode uint32, first, count, instanceCount i
 
 func (c *Context) DrawElementsInstanced(mode uint32, count int32, typ uint32, indices uintptr, instanceCount int32) {
 	C.gl_v_iiiui(C.uintptr_t(uintptr(c.glDrawElementsInstanced)), C.uint32_t(mode), C.uint32_t(count), C.uint32_t(typ), C.uintptr_t(indices), C.uint32_t(instanceCount))
+}
+
+// PrimitiveRestartIndex sets the index GL_PRIMITIVE_RESTART restarts at
+// (desktop GL 3.1).
+func (c *Context) PrimitiveRestartIndex(index uint32) {
+	C.gl_v_i(C.uintptr_t(uintptr(c.glPrimitiveRestartIndex)), C.uint32_t(index))
 }
 
 // DrawArraysInstancedBaseInstance is DrawArraysInstanced with the instance

@@ -177,6 +177,7 @@ type Context struct {
 	glDrawArraysInstanced   uintptr
 	glDrawElementsInstanced uintptr
 	glVertexAttribDivisor   uintptr
+	glPrimitiveRestartIndex uintptr
 
 	// Base instance (GL 4.2 / ARB_base_instance; optional)
 	glDrawArraysInstancedBaseInstance   uintptr
@@ -380,6 +381,7 @@ func (c *Context) Load(getProcAddr ProcAddressFunc) error {
 	c.glDrawArraysInstanced = getProcAddr("glDrawArraysInstanced")
 	c.glDrawElementsInstanced = getProcAddr("glDrawElementsInstanced")
 	c.glVertexAttribDivisor = getProcAddr("glVertexAttribDivisor")
+	c.glPrimitiveRestartIndex = getProcAddr("glPrimitiveRestartIndex")
 	c.glDrawArraysInstancedBaseInstance = getProcAddr("glDrawArraysInstancedBaseInstance")
 	c.glDrawElementsInstancedBaseInstance = getProcAddr("glDrawElementsInstancedBaseInstance")
 
@@ -1249,6 +1251,12 @@ func (c *Context) DrawArraysInstanced(mode uint32, first, count, instanceCount i
 func (c *Context) DrawElementsInstanced(mode uint32, count int32, typ uint32, indices uintptr, instanceCount int32) {
 	syscall.SyscallN(c.glDrawElementsInstanced, uintptr(mode), uintptr(count),
 		uintptr(typ), indices, uintptr(instanceCount))
+}
+
+// PrimitiveRestartIndex sets the index GL_PRIMITIVE_RESTART restarts at
+// (desktop GL 3.1).
+func (c *Context) PrimitiveRestartIndex(index uint32) {
+	syscall.SyscallN(c.glPrimitiveRestartIndex, uintptr(index))
 }
 
 // DrawArraysInstancedBaseInstance is DrawArraysInstanced with the instance

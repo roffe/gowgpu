@@ -71,16 +71,18 @@ func (a *Adapter) Open(_ gputypes.Features, _ gputypes.Limits) (hal.OpenDevice, 
 
 	fence := NewFence(glCtx)
 	device := &Device{
-		fence:               fence,
-		ctx:                 a.ctx,
-		displayHandle:       a.displayHandle,
-		windowHandle:        a.windowHandle,
-		vao:                 vao,
-		maxTextureUnits:     maxTexUnits,
-		maxMSAA:             a.caps.MaxMSAASamples,
-		formats:             newFormatCaps(&a.caps),
-		depthClamp:          a.caps.Features.Contains(gputypes.FeatureDepthClipControl),
-		independentBlend:    a.caps.DownlevelFlags.Contains(gputypes.DownlevelFlagsIndependentBlend),
+		fence:            fence,
+		ctx:              a.ctx,
+		displayHandle:    a.displayHandle,
+		windowHandle:     a.windowHandle,
+		vao:              vao,
+		maxTextureUnits:  maxTexUnits,
+		maxMSAA:          a.caps.MaxMSAASamples,
+		formats:          newFormatCaps(&a.caps),
+		depthClamp:       a.caps.Features.Contains(gputypes.FeatureDepthClipControl),
+		independentBlend: a.caps.DownlevelFlags.Contains(gputypes.DownlevelFlagsIndependentBlend),
+		fixedIndexRestart: glVersionAtLeast(a.caps.GLMajor, a.caps.GLMinor, a.caps.IsES, [2]int{3, 0}, [2]int{4, 3}) ||
+			hasExtension(a.caps.Extensions, "GL_ARB_ES3_compatibility"),
 		glslVersion:         glslVer,
 		shaderBindingLayout: glslVer.SupportsExplicitLocations(),
 	}

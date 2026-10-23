@@ -533,3 +533,74 @@ func TestInstanceIndexStartsAtFirstInstance(t *testing.T) {
 	}
 	assertNoValidation(t, h)
 }
+
+// stripRestartShader places strip vertices by vertex_index: a thin
+// triangle down each side, and every vertex past 5, the restart index as a
+// vertex, at the top centre.
+const stripRestartShader = `
+@vertex fn vs_main(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
+	var pos = array<vec2<f32>, 6>(
+		vec2<f32>(-1.0, -1.0), vec2<f32>(-1.0, 1.0), vec2<f32>(-0.5, -1.0),
+		vec2<f32>(0.5, -1.0), vec2<f32>(1.0, 1.0), vec2<f32>(1.0, -1.0));
+	var p = vec2<f32>(0.0, 1.0);
+	if vi < 6u {
+		p = pos[vi];
+	}
+	return vec4<f32>(p, 0.0, 1.0);
+}
+@fragment fn fs_main() -> @location(0) vec4<f32> { return vec4<f32>(0.0, 1.0, 0.0, 1.0); }
+`
+
+// TestStripRestartsAtTheLargestIndex draws a triangle strip of two
+// triangles split by 0xFFFF: the middle of the target stays clear. GL never
+// enabled primitive restart, so the strip went on through a vertex 65535
+// and filled the middle.
+func TestStripRestartsAtTheLargestIndex(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	module, err := device.CreateShaderModule(&ShaderModuleDescriptor{Label: "strip-restart", WGSL: stripRestartShader})
+	if err != nil {
+		t.Fatalf("CreateShaderModule: %v", err)
+	}
+	defer module.Release()
+	stripFormat := gputypes.IndexFormatUint16
+	pipe, err := device.CreateRenderPipeline(&RenderPipelineDescriptor{
+		Label:  "strip-restart",
+		Vertex: VertexState{Module: module, EntryPoint: "vs_main"},
+		Primitive: gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleStrip,
+			StripIndexFormat: &stripFormat},
+		Fragment: &FragmentState{Module: module, EntryPoint: "fs_main",
+			Targets: []gputypes.ColorTargetState{{Format: gputypes.TextureFormatRGBA8Unorm, WriteMask: gputypes.ColorWriteMaskAll}}},
+	})
+	if err != nil {
+		t.Fatalf("CreateRenderPipeline: %v", err)
+	}
+	defer pipe.Release()
+	indices := []uint16{0, 1, 2, 0xffff, 3, 4, 5, 0}
+	ib, err := device.CreateBuffer(&BufferDescriptor{Label: "strip-indices", Size: 16, Usage: BufferUsageIndex | BufferUsageCopyDst})
+	if err != nil {
+		t.Fatalf("CreateBuffer: %v", err)
+	}
+	defer ib.Release()
+	if err := device.Queue().WriteBuffer(ib, 0, unsafe.Slice((*byte)(unsafe.Pointer(&indices[0])), 16)); err != nil {
+		t.Fatalf("WriteBuffer: %v", err)
+	}
+	tex, view := pixTexture(t, device, "strip-restart", TextureUsageRenderAttachment|TextureUsageCopySrc)
+	defer releaseTextureView(tex, view)
+	st := readbackBuffer(t, device, "strip-restart-st")
+	enc, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	clearPass(t, enc, view, gputypes.LoadOpClear, red, func(p *RenderPassEncoder) {
+		p.SetPipeline(pipe)
+		p.SetIndexBuffer(ib, gputypes.IndexFormatUint16, 0)
+		p.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: 7, InstanceCount: 1})
+	})
+	copyOut(enc, tex, st)
+	finishAndSubmit(t, device, enc)
+	pix := readback(t, st)
+	at := func(x, y int) []byte { return pix[(y*pixSide+x)*4 : (y*pixSide+x)*4+4] }
+	expectPixels(t, "the left triangle", at(0, 3), 0, 255, 0, 255)
+	expectPixels(t, "the middle, between the triangles", append(at(1, 2), at(2, 2)...), 255, 0, 0, 255)
+	assertNoValidation(t, h)
+}
