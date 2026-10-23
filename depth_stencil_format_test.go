@@ -163,3 +163,22 @@ func TestStencil8Attachment(t *testing.T) {
 	expectPixels(t, "stencil equal to the reference", drawGreenAgainst(t, device, dsDraw{format: gputypes.TextureFormatStencil8, state: equal}), 0, 255, 0, 255)
 	expectPixels(t, "stencil not equal to the reference", drawGreenAgainst(t, device, dsDraw{format: gputypes.TextureFormatStencil8, state: equal, ref: 1}), 255, 0, 0, 255)
 }
+
+// TestStencilClearValue clears stencil to 1 and tests against references 1
+// and 0: GL cleared every stencil to 0, glClearStencil never set.
+func TestStencilClearValue(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	equal := DepthStencilState{DepthCompare: gputypes.CompareFunctionAlways,
+		StencilFront:    StencilFaceState{Compare: gputypes.CompareFunctionEqual},
+		StencilBack:     StencilFaceState{Compare: gputypes.CompareFunctionEqual},
+		StencilReadMask: 0xff, StencilWriteMask: 0xff}
+	for _, format := range []gputypes.TextureFormat{gputypes.TextureFormatStencil8, gputypes.TextureFormatDepth24PlusStencil8} {
+		t.Run(format.String(), func(t *testing.T) {
+			if format == gputypes.TextureFormatStencil8 {
+				skipStencil8OnVulkan(t, h)
+			}
+			expectPixels(t, "reference 1", drawGreenAgainst(t, device, dsDraw{format: format, state: equal, depthClear: 1, stencil: 1, ref: 1}), 0, 255, 0, 255)
+			expectPixels(t, "reference 0", drawGreenAgainst(t, device, dsDraw{format: format, state: equal, depthClear: 1, stencil: 1}), 255, 0, 0, 255)
+		})
+	}
+}

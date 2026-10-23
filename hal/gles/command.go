@@ -1049,6 +1049,7 @@ func (c *ClearStencilCommand) Execute(ctx *gl.Context) {
 	// Ensure stencil write mask allows the clear to take effect.
 	ctx.StencilMaskSeparate(gl.FRONT_AND_BACK, 0xFF)
 	ctx.Shadow.Scissor, ctx.Shadow.Pipeline = gl.ShadowScissor{}, nil
+	ctx.ClearStencil(c.stencil)
 	ctx.Clear(gl.STENCIL_BUFFER_BIT)
 }
 

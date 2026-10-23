@@ -127,6 +127,7 @@ type Context struct {
 	glClear        unsafe.Pointer
 	glClearColor   unsafe.Pointer
 	glClearDepth   unsafe.Pointer
+	glClearStencil unsafe.Pointer
 	glViewport     unsafe.Pointer
 	glScissor      unsafe.Pointer
 	glDrawArrays   unsafe.Pointer
@@ -332,6 +333,7 @@ func (c *Context) Load(getProcAddr ProcAddressFunc, isGLES ...bool) error {
 	} else {
 		c.glClearDepth = getProcAddr("glClearDepth")
 	}
+	c.glClearStencil = getProcAddr("glClearStencil")
 	c.glViewport = getProcAddr("glViewport")
 	c.glScissor = getProcAddr("glScissor")
 	c.glDrawArrays = getProcAddr("glDrawArrays")
@@ -582,6 +584,11 @@ func (c *Context) ClearDepth(depth float64) {
 		return
 	}
 	C.gl_v_d(C.uintptr_t(uintptr(c.glClearDepth)), C.double(depth))
+}
+
+// ClearStencil sets the value glClear(GL_STENCIL_BUFFER_BIT) clears to.
+func (c *Context) ClearStencil(s int32) {
+	C.gl_v_i(C.uintptr_t(uintptr(c.glClearStencil)), C.uint32_t(s))
 }
 
 // DepthRange sets the mapping of NDC depth to window depth: glDepthRangef
