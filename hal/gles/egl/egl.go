@@ -62,6 +62,7 @@ import "C"
 
 import (
 	"fmt"
+	"sync"
 	"unsafe"
 
 	"github.com/roffe/gowgpu/internal/dl"
@@ -104,8 +105,19 @@ var (
 	hasPlatformWindowSurface bool
 )
 
-// Init loads the EGL library and initializes function pointers.
+var (
+	initOnce sync.Once
+	errInit  error
+)
+
+// Init loads the EGL library and initializes function pointers, once for
+// the process: the contexts made later, and those in use, share them.
 func Init() error {
+	initOnce.Do(func() { errInit = load() })
+	return errInit
+}
+
+func load() error {
 	var err error
 
 	if eglLib, err = dl.Open("libEGL.so.1", "libEGL.so"); err != nil {

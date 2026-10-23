@@ -9,6 +9,7 @@ package wgl
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"syscall"
 	"unsafe"
 )
@@ -40,8 +41,11 @@ var (
 	// WGL extension function pointers (loaded at runtime via wglGetProcAddress)
 	procSwapIntervalEXT  uintptr
 	procGetExtensionsARB uintptr
-	extensionsLoaded     bool
+	extensionsOnce       sync.Once
 	swapControlAvailable bool
+
+	initOnce sync.Once
+	errInit  error
 )
 
 // Windows types
@@ -92,8 +96,14 @@ type PIXELFORMATDESCRIPTOR struct {
 	DamageMask     uint32
 }
 
-// Init loads the required DLLs and procedures.
+// Init loads the required DLLs and procedures, once for the process: the
+// instances made later, and those in use, share them.
 func Init() error {
+	initOnce.Do(func() { errInit = load() })
+	return errInit
+}
+
+func load() error {
 	var err error
 
 	opengl32, err = syscall.LoadDLL("opengl32.dll")
@@ -334,21 +344,18 @@ func GetGLProcAddress(name string) uintptr {
 	return addr
 }
 
-// LoadExtensions loads WGL extension functions via wglGetProcAddress.
-// Must be called with a current GL context.
+// LoadExtensions loads WGL extension functions via wglGetProcAddress, the
+// first time it is called. Must be called with a current GL context.
 func LoadExtensions(hdc HDC) {
-	if extensionsLoaded {
-		return
-	}
-	extensionsLoaded = true
+	extensionsOnce.Do(func() {
+		procSwapIntervalEXT = GetProcAddress("wglSwapIntervalEXT")
+		procGetExtensionsARB = GetProcAddress("wglGetExtensionsStringARB")
 
-	procSwapIntervalEXT = GetProcAddress("wglSwapIntervalEXT")
-	procGetExtensionsARB = GetProcAddress("wglGetExtensionsStringARB")
-
-	// Check extension availability via extension string
-	ext := getExtensionsString(hdc)
-	swapControlAvailable = strings.Contains(ext, "WGL_EXT_swap_control") &&
-		procSwapIntervalEXT != 0
+		// Check extension availability via extension string
+		ext := getExtensionsString(hdc)
+		swapControlAvailable = strings.Contains(ext, "WGL_EXT_swap_control") &&
+			procSwapIntervalEXT != 0
+	})
 }
 
 // getExtensionsString queries WGL extension string via wglGetExtensionsStringARB.

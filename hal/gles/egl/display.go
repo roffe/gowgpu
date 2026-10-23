@@ -13,25 +13,61 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"unsafe"
 
 	"github.com/roffe/gowgpu/internal/dl"
 )
 
+// libX11 and libwayland-client are loaded once, by loadX11 and
+// loadWaylandClient, for every display owner of the process.
 var (
-	// x11Lib is the loaded libX11.so library.
-	x11Lib dl.Lib
-	// waylandClientLib is the loaded libwayland-client.so library.
-	waylandClientLib dl.Lib
+	x11Once sync.Once
+	errX11  error
+	x11Lib  dl.Lib
 
-	// X11 function symbols
-	symXOpenDisplay  unsafe.Pointer
-	symXCloseDisplay unsafe.Pointer
+	symXOpenDisplay  unsafe.Pointer // Display* XOpenDisplay(char* display_name)
+	symXCloseDisplay unsafe.Pointer // int XCloseDisplay(Display* display)
 
-	// Wayland function symbols
-	symWlDisplayConnect    unsafe.Pointer
-	symWlDisplayDisconnect unsafe.Pointer
+	waylandClientOnce sync.Once
+	errWaylandClient  error
+	waylandClientLib  dl.Lib
+
+	symWlDisplayConnect    unsafe.Pointer // wl_display* wl_display_connect(const char* name)
+	symWlDisplayDisconnect unsafe.Pointer // void wl_display_disconnect(wl_display* display)
 )
+
+func loadX11() error {
+	x11Once.Do(func() { errX11 = openX11() })
+	return errX11
+}
+
+func openX11() (err error) {
+	if x11Lib, err = dl.Open("libX11.so.6", "libX11.so"); err != nil {
+		return err
+	}
+	if symXOpenDisplay, err = x11Lib.Sym("XOpenDisplay"); err != nil {
+		return err
+	}
+	symXCloseDisplay, err = x11Lib.Sym("XCloseDisplay")
+	return err
+}
+
+func loadWaylandClient() error {
+	waylandClientOnce.Do(func() { errWaylandClient = openWaylandClient() })
+	return errWaylandClient
+}
+
+func openWaylandClient() (err error) {
+	if waylandClientLib, err = dl.Open("libwayland-client.so.0", "libwayland-client.so"); err != nil {
+		return err
+	}
+	if symWlDisplayConnect, err = waylandClientLib.Sym("wl_display_connect"); err != nil {
+		return err
+	}
+	symWlDisplayDisconnect, err = waylandClientLib.Sym("wl_display_disconnect")
+	return err
+}
 
 // DisplayOwner manages the lifetime of a native display connection.
 // It ensures the display is properly closed when the owner is destroyed.
@@ -44,17 +80,7 @@ type DisplayOwner struct {
 // OpenX11Display opens an X11 display connection.
 // Returns nil if X11 libraries are not available or display cannot be opened.
 func OpenX11Display() *DisplayOwner {
-	var err error
-
-	if x11Lib, err = dl.Open("libX11.so.6", "libX11.so"); err != nil {
-		return nil
-	}
-	// Display* XOpenDisplay(char* display_name)
-	if symXOpenDisplay, err = x11Lib.Sym("XOpenDisplay"); err != nil {
-		return nil
-	}
-	// int XCloseDisplay(Display* display)
-	if symXCloseDisplay, err = x11Lib.Sym("XCloseDisplay"); err != nil {
+	if loadX11() != nil {
 		return nil
 	}
 
@@ -77,17 +103,7 @@ func OpenX11Display() *DisplayOwner {
 // Returns nil if Wayland libraries are not available or display cannot be opened.
 // This function connects and immediately disconnects to test availability.
 func TestWaylandDisplay() *DisplayOwner {
-	var err error
-
-	if waylandClientLib, err = dl.Open("libwayland-client.so.0", "libwayland-client.so"); err != nil {
-		return nil
-	}
-	// wl_display* wl_display_connect(const char* name)
-	if symWlDisplayConnect, err = waylandClientLib.Sym("wl_display_connect"); err != nil {
-		return nil
-	}
-	// void wl_display_disconnect(wl_display* display)
-	if symWlDisplayDisconnect, err = waylandClientLib.Sym("wl_display_disconnect"); err != nil {
+	if loadWaylandClient() != nil {
 		return nil
 	}
 
