@@ -212,11 +212,11 @@ func setTextureDefaults(ctx *gl.Context, target, levels uint32) {
 }
 
 // zero sets every texel of t, a new texture bound to its target, to zero
-// when it is one the queue's zeroing leaves to the GL backend: a depth,
-// stencil or multisampled texture is cleared through a framebuffer, as
-// the other backends clear them with a render pass, and a compressed one
-// filled with blocks of zeros. GL hands out a texture with whatever its
-// memory held.
+// when it is a depth, stencil, multisampled or compressed one: the first
+// three are cleared through a framebuffer, as the other backends clear
+// them with a render pass, and a compressed one is filled with blocks of
+// zeros. GL hands out a texture with whatever its memory held, and the
+// queue writes zeros from the CPU only into the other textures.
 func (t *Texture) zero(ctx *gl.Context) {
 	switch {
 	case t.glf.compressed():

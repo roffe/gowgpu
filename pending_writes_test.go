@@ -1281,8 +1281,8 @@ func TestZeroableTexture(t *testing.T) {
 		{"compressed", gputypes.TextureFormatBC7RGBAUnorm, gputypes.TextureDimension2D, 1, sampled | dst, true, true, false},
 		{"GL sampled", gputypes.TextureFormatRGBA8Unorm, gputypes.TextureDimension2D, 1, sampled, false, true, false},
 		{"GL render target", gputypes.TextureFormatRGBA8Unorm, gputypes.TextureDimension2D, 1, rt, false, true, true},
-		{"GL multisampled", gputypes.TextureFormatRGBA8Unorm, gputypes.TextureDimension2D, 4, rt, false, false, true},
-		{"GL depth", gputypes.TextureFormatDepth32Float, gputypes.TextureDimension2D, 1, rt, false, false, true},
+		{"GL multisampled", gputypes.TextureFormatRGBA8Unorm, gputypes.TextureDimension2D, 4, rt, false, true, true},
+		{"GL depth", gputypes.TextureFormatDepth32Float, gputypes.TextureDimension2D, 1, rt, false, true, true},
 		{"GL compressed", gputypes.TextureFormatBC1RGBAUnorm, gputypes.TextureDimension2D, 1, sampled, false, false, false},
 	} {
 		desc := &hal.TextureDescriptor{Format: tc.format, Dimension: tc.dim, SampleCount: tc.samples, Usage: tc.usage}

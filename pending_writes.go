@@ -26,8 +26,9 @@ import (
 // and returned to the pool. This avoids creating new DX12 command allocators or
 // Vulkan command pools every frame, enabling maxFramesInFlight=2 on DX12.
 //
-// For GLES and Software backends (which use direct API calls, not command
-// encoders for writes), pendingWrites delegates directly to the HAL queue.
+// GL writes with direct API calls, so there pendingWrites hands the writes
+// to the HAL queue straight away and records only the passes that zero
+// textures.
 type pendingWrites struct {
 	mu sync.Mutex
 
@@ -39,7 +40,7 @@ type pendingWrites struct {
 
 	// pool is a reference to the shared device-level encoder pool.
 	// Not owned by pendingWrites — owned by Device. destroy() clears the
-	// reference without destroying the pool. nil for non-batching backends.
+	// reference without destroying the pool.
 	pool *encoderPool
 
 	// belt manages reusable staging buffer chunks for zero-allocation
@@ -348,7 +349,7 @@ func dropHeld(destroys []heldDestroy, refs []*core.ResourceRef) {
 // CreateCommandEncoder). This matches Rust wgpu-core which uses a single
 // device.command_allocator for both user command encoders and internal
 // PendingWrites (queue.rs:1373). GL, whose writes go straight to the HAL,
-// records nothing in it but the clear of a surface texture presented unset.
+// records only the passes that zero textures in it.
 //
 // The staging belt's maxStagingBufferSize is automatically queried from the HAL
 // device via the optional hal.MaxStagingBufferSizer interface (BUG-VK-001).
@@ -617,6 +618,9 @@ func (pw *pendingWrites) writeTextureLocked(
 	size *hal.Extent3D,
 ) error {
 	if !pw.usesBatching {
+		if err := pw.submitRecordedLocked(); err != nil {
+			return err
+		}
 		return pw.halQueue.WriteTexture(dst, data, layout, size)
 	}
 
@@ -961,21 +965,19 @@ func (pw *pendingWrites) trackedIndex(owner *Texture) (track.TrackerIndex, bool)
 
 // zeroableTexture reports whether a texture made from desc gets zeroed through
 // the pending writes, and whether by a pass (zeroByPass) rather than by
-// copies, which take a color format with a copy size and one sample.
-// ponytail: GL writes to textures straight away instead of recording the
-// writes, so it zeroes uncompressed color textures from the CPU and leaves
-// depth, multisampled and compressed ones to the GL HAL, which zeroes them
-// when it makes them but not after a pass discards them: a clear pass would
-// need an encoder of its own, submitted ahead of the rest.
+// copies, which take a color format with a copy size and one sample. GL
+// writes to a texture straight away, so it zeroes the textures a pass
+// doesn't from the CPU, all but the compressed ones, which the GL HAL zeroes
+// when it makes them.
 func zeroableTexture(desc *hal.TextureDescriptor, batching bool) (zero, pass bool) {
 	f := desc.Format
 	color := !f.IsDepthStencil() && desc.SampleCount <= 1 && f.BlockCopySize() != 0
 	pass = zeroByPass(f, desc.Dimension, desc.SampleCount, desc.Usage)
 	switch {
-	case !batching:
-		return color && f <= gputypes.TextureFormatRGBA32Sint, pass // the uncompressed ones, in webgpu.h order
 	case pass:
 		return desc.Dimension == gputypes.TextureDimension2D, true
+	case !batching:
+		return color && f <= gputypes.TextureFormatRGBA32Sint, false // the uncompressed ones, in webgpu.h order
 	}
 	return color, false
 }
@@ -1159,21 +1161,16 @@ func (pw *pendingWrites) zeroTextureLocked(t *Texture) error {
 	if raw == nil {
 		return nil
 	}
-	// A surface texture can be zeroed by a pass only, which the GL queue
-	// writes don't record.
+	// A surface texture can be zeroed by a pass only.
 	if t.surface != nil {
-		if !pw.usesBatching {
-			return nil
-		}
 		return pw.clearTextureLocked(t, raw)
 	}
-	// GL writes nothing any other way, a color render target included.
-	cpu := !pw.usesBatching
 	ct := t.coreTexture
 	f := ct.Format()
-	if zeroByPass(f, ct.Dimension(), ct.SampleCount(), ct.Usage()) && (!cpu || f.IsDepthStencil()) {
+	if zeroByPass(f, ct.Dimension(), ct.SampleCount(), ct.Usage()) {
 		return pw.clearTextureLocked(t, raw)
 	}
+	cpu := !pw.usesBatching
 	s := ct.Size()
 	// The copies go by rows of blocks, which a compressed format makes 4 or
 	// more texels high, and stop at the edge of the mip level, where a block
@@ -1220,7 +1217,7 @@ func (pw *pendingWrites) zeroTextureLocked(t *Texture) error {
 
 // zeroForPresent zeroes t, a surface texture about to be presented, when
 // nothing set it since its acquire, with a pass in the batch the present
-// submits, on GL too, whose batches hold nothing else.
+// submits.
 //
 // Reference: wgpu-core device/queue.rs prepare_surface_texture_for_present
 func (pw *pendingWrites) zeroForPresent(t *Texture) error {
@@ -1242,8 +1239,7 @@ func (pw *pendingWrites) zeroForPresent(t *Texture) error {
 // and layer that clears it (color 0, depth 0, stencil 0) and stores, as Rust
 // wgpu-core's clear_texture_via_render_passes does. A texture on the zero
 // list was made after the last submit and nothing in the batch touched it, so
-// the passes start from the state it was made in. pw.mu is held and
-// usesBatching is set.
+// the passes start from the state it was made in. pw.mu is held.
 func (pw *pendingWrites) clearTextureLocked(t *Texture, raw hal.Texture) error {
 	enc, err := pw.activate()
 	if err != nil {
@@ -1295,6 +1291,47 @@ func (pw *pendingWrites) clearTextureLocked(t *Texture, raw hal.Texture) error {
 		pw.tracker.InsertTexture(idx, uses)
 	}
 	pw.trackDst(t, raw)
+	return nil
+}
+
+// submitRecordedLocked submits what the batch recorded so far, which on GL
+// is passes that zero textures, ahead of a write GL makes straight away,
+// and keeps it until the GPU is done with it, as Submit keeps a batch.
+// pw.mu is held.
+func (pw *pendingWrites) submitRecordedLocked() error {
+	if !pw.isRecording {
+		return nil
+	}
+	cmdBuf, err := pw.encoder.EndEncoding()
+	if err != nil {
+		pw.discardRecording()
+		return fmt.Errorf("wgpu: pending writes: end encoding: %w", err)
+	}
+	sub := inflightSubmission{cmdBuf: cmdBuf, encoder: pw.encoder, views: pw.views, destroys: pw.destroys, refs: pw.refs}
+	for raw := range pw.dstTextures {
+		sub.dstTextures = append(sub.dstTextures, raw)
+	}
+	pw.isRecording, pw.encoder = false, nil
+	pw.views, pw.destroys, pw.refs = nil, nil, nil
+	clear(pw.dstTextures)
+	pw.clearOwners()
+	sub.submissionIndex, err = pw.halQueue.Submit([]hal.CommandBuffer{cmdBuf})
+	if err != nil && sub.submissionIndex == 0 {
+		for _, raw := range sub.dstTextures {
+			raw.DecPendingRef()
+		}
+		sub.encoder.ResetAll([]hal.CommandBuffer{cmdBuf})
+		pw.pool.release(sub.encoder)
+		pw.destroyViews(sub.views)
+		dropHeld(sub.destroys, sub.refs)
+		pw.rollback()
+		return fmt.Errorf("wgpu: pending writes: submit: %w", err)
+	}
+	pw.inflight = append(pw.inflight, sub)
+	pw.forgetUndo()
+	if err != nil {
+		return fmt.Errorf("wgpu: pending writes: submit: %w", err)
+	}
 	return nil
 }
 

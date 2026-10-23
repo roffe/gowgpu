@@ -3,6 +3,7 @@
 package wgpu
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/roffe/gowgpu/gputypes"
@@ -249,5 +250,219 @@ func TestDiscardedTextureReadByALaterCommandBuffer(t *testing.T) {
 		copyOut(enc, tex, out)
 		return out
 	}), 255, 0, 0, 255)
+	assertNoValidation(t, h)
+}
+
+// A depth texture whose contents a pass discarded reads as zeros, as a
+// color one does: loaded by a later pass of the encoder, copied by the
+// encoder, by a later command buffer of the submit and in the next submit.
+// The discarding passes clear it to 0.75.
+func TestDiscardedDepthTextureReadsZeros(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	if h.backend == gputypes.BackendGL && !device.core.DownlevelCapabilitiesRef().Flags.Contains(gputypes.DownlevelFlagsDepthTextureAndBufferCopies) {
+		t.Skip("GL ES reads no depth back")
+	}
+	target := func() (*Texture, *TextureView) {
+		return depthStencilTexture(t, device, gputypes.TextureFormatDepth16Unorm, TextureUsageRenderAttachment|TextureUsageCopySrc)
+	}
+	pass := func(enc *CommandEncoder, view *TextureView, load gputypes.LoadOp, store gputypes.StoreOp) {
+		passOn(t, enc, &RenderPassDescriptor{DepthStencilAttachment: &RenderPassDepthStencilAttachment{
+			View: view, DepthLoadOp: load, DepthStoreOp: store, DepthClearValue: 0.75,
+		}})
+	}
+	copyDepth := func(enc *CommandEncoder, tex *Texture, what string) *Buffer {
+		out := readbackBuffer(t, device, what)
+		enc.CopyTextureToBuffer(tex, out, []BufferTextureCopy{{
+			TextureBase:  ImageCopyTexture{Texture: tex, Aspect: gputypes.TextureAspectDepthOnly},
+			BufferLayout: ImageDataLayout{BytesPerRow: pixRow, RowsPerImage: pixSide},
+			Size:         Extent3D{Width: pixSide, Height: pixSide, DepthOrArrayLayers: 1},
+		}})
+		return out
+	}
+	// depthOf is the depth copyDepth copied into out, its rows packed.
+	depthOf := func(out *Buffer) []byte {
+		pix, depth := readback(t, out), make([]byte, 0, pixSide*pixSide*2)
+		for y := range pixSide {
+			depth = append(depth, pix[y*pixSide*4:y*pixSide*4+pixSide*2]...)
+		}
+		return depth
+	}
+	encoder := func() *CommandEncoder {
+		enc, err := device.CreateCommandEncoder(nil)
+		if err != nil {
+			t.Fatalf("CreateCommandEncoder: %v", err)
+		}
+		return enc
+	}
+	discarded := func() (*Texture, *TextureView) {
+		tex, view := target()
+		enc := encoder()
+		pass(enc, view, gputypes.LoadOpClear, gputypes.StoreOpDiscard)
+		finishAndSubmit(t, device, enc)
+		return tex, view
+	}
+
+	tex, view := target()
+	enc := encoder()
+	pass(enc, view, gputypes.LoadOpClear, gputypes.StoreOpDiscard)
+	pass(enc, view, gputypes.LoadOpLoad, gputypes.StoreOpStore)
+	out := copyDepth(enc, tex, "loaded")
+	finishAndSubmit(t, device, enc)
+	expectBytes(t, "loaded after a discard in the encoder", depthOf(out), 0)
+
+	tex, view = target()
+	enc = encoder()
+	pass(enc, view, gputypes.LoadOpClear, gputypes.StoreOpDiscard)
+	out = copyDepth(enc, tex, "copied")
+	finishAndSubmit(t, device, enc)
+	expectBytes(t, "copied after a discard in the encoder", depthOf(out), 0)
+
+	tex, view = target()
+	first, second := encoder(), encoder()
+	pass(first, view, gputypes.LoadOpClear, gputypes.StoreOpDiscard)
+	out = copyDepth(second, tex, "later command buffer")
+	cbs := make([]*CommandBuffer, 2)
+	for i, enc := range []*CommandEncoder{first, second} {
+		var err error
+		if cbs[i], err = enc.Finish(); err != nil {
+			t.Fatalf("Finish: %v", err)
+		}
+	}
+	if _, err := device.Queue().Submit(cbs...); err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	expectBytes(t, "copied by a later command buffer of the submit", depthOf(out), 0)
+
+	tex, view = discarded()
+	enc = encoder()
+	pass(enc, view, gputypes.LoadOpLoad, gputypes.StoreOpStore)
+	out = copyDepth(enc, tex, "next submit")
+	finishAndSubmit(t, device, enc)
+	expectBytes(t, "loaded in the submit after the discard", depthOf(out), 0)
+
+	tex, _ = discarded()
+	enc = encoder()
+	out = copyDepth(enc, tex, "copied next submit")
+	finishAndSubmit(t, device, enc)
+	expectBytes(t, "copied in the submit after the discard", depthOf(out), 0)
+
+	assertNoValidation(t, h)
+}
+
+// A multisampled texture whose contents a pass discarded reads as zeros: a
+// pass that loads it resolves zeros, later in the encoder, in a later
+// command buffer of the submit and in the next submit. The discarding
+// passes clear it to red.
+func TestDiscardedMultisampledTextureReadsZeros(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	target := func() *TextureView {
+		tex, err := device.CreateTexture(&TextureDescriptor{
+			Label: "discarded multisampled", Size: Extent3D{Width: pixSide, Height: pixSide, DepthOrArrayLayers: 1},
+			MipLevelCount: 1, SampleCount: 4, Dimension: TextureDimension2D, Format: TextureFormatRGBA8Unorm,
+			Usage: TextureUsageRenderAttachment,
+		})
+		if err != nil {
+			t.Fatalf("CreateTexture: %v", err)
+		}
+		view, err := device.CreateTextureView(tex, nil)
+		if err != nil {
+			t.Fatalf("CreateTextureView: %v", err)
+		}
+		t.Cleanup(func() { releaseTextureView(tex, view) })
+		return view
+	}
+	discard := func(enc *CommandEncoder, view *TextureView) {
+		passOn(t, enc, &RenderPassDescriptor{ColorAttachments: []RenderPassColorAttachment{{
+			View: view, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpDiscard, ClearValue: red,
+		}}})
+	}
+	// resolve records a pass that loads view and resolves it, and the copy
+	// of what it resolved into the buffer it returns.
+	resolve := func(enc *CommandEncoder, view *TextureView) *Buffer {
+		tex, into := pixTexture(t, device, "resolved", TextureUsageRenderAttachment|TextureUsageCopySrc)
+		t.Cleanup(func() { releaseTextureView(tex, into) })
+		passOn(t, enc, &RenderPassDescriptor{ColorAttachments: []RenderPassColorAttachment{{
+			View: view, ResolveTarget: into, LoadOp: gputypes.LoadOpLoad, StoreOp: gputypes.StoreOpStore,
+		}}})
+		out := readbackBuffer(t, device, "resolved")
+		copyOut(enc, tex, out)
+		return out
+	}
+	encoder := func() *CommandEncoder {
+		enc, err := device.CreateCommandEncoder(nil)
+		if err != nil {
+			t.Fatalf("CreateCommandEncoder: %v", err)
+		}
+		return enc
+	}
+
+	view := target()
+	enc := encoder()
+	discard(enc, view)
+	out := resolve(enc, view)
+	finishAndSubmit(t, device, enc)
+	expectPixels(t, "resolved after a discard in the encoder", readback(t, out), 0, 0, 0, 0)
+
+	view = target()
+	first, second := encoder(), encoder()
+	discard(first, view)
+	out = resolve(second, view)
+	cbs := make([]*CommandBuffer, 2)
+	for i, enc := range []*CommandEncoder{first, second} {
+		var err error
+		if cbs[i], err = enc.Finish(); err != nil {
+			t.Fatalf("Finish: %v", err)
+		}
+	}
+	if _, err := device.Queue().Submit(cbs...); err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	expectPixels(t, "resolved by a later command buffer of the submit", readback(t, out), 0, 0, 0, 0)
+
+	view = target()
+	enc = encoder()
+	discard(enc, view)
+	finishAndSubmit(t, device, enc)
+	enc = encoder()
+	out = resolve(enc, view)
+	finishAndSubmit(t, device, enc)
+	expectPixels(t, "resolved in the submit after the discard", readback(t, out), 0, 0, 0, 0)
+	assertNoValidation(t, h)
+}
+
+// A write into the stencil of a combined depth/stencil texture whose
+// contents a pass discarded zeroes the texture first and keeps what it
+// wrote, on GL too, where the write goes to the texture straight away and
+// the zeroing is a pass.
+func TestStencilWriteAfterADiscard(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	skipStencilWritesOnGLES(t, device, h)
+	skipStencilCopiesOnVkd3d(t, h)
+	tex, view := depthStencilTexture(t, device, gputypes.TextureFormatDepth24PlusStencil8,
+		TextureUsageRenderAttachment|TextureUsageCopySrc|TextureUsageCopyDst)
+	enc, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	passOn(t, enc, &RenderPassDescriptor{DepthStencilAttachment: &RenderPassDepthStencilAttachment{
+		View:        view,
+		DepthLoadOp: gputypes.LoadOpClear, DepthStoreOp: gputypes.StoreOpDiscard, DepthClearValue: 0.75,
+		StencilLoadOp: gputypes.LoadOpClear, StencilStoreOp: gputypes.StoreOpDiscard, StencilClearValue: 0x55,
+	}})
+	finishAndSubmit(t, device, enc)
+	rows := make([]byte, pixSide*pixSide)
+	for i := range rows {
+		rows[i] = byte(0x10 + i)
+	}
+	if err := device.Queue().WriteTexture(&ImageCopyTexture{Texture: tex, Aspect: gputypes.TextureAspectStencilOnly}, rows,
+		&ImageDataLayout{BytesPerRow: pixSide, RowsPerImage: pixSide}, &Extent3D{Width: pixSide, Height: pixSide, DepthOrArrayLayers: 1}); err != nil {
+		t.Fatalf("WriteTexture: %v", err)
+	}
+	got := readTextureAspect(t, device, tex, gputypes.TextureAspectStencilOnly)
+	for y := range pixSide {
+		if row, want := got[y*pixRow:y*pixRow+pixSide], rows[y*pixSide:(y+1)*pixSide]; !bytes.Equal(row, want) {
+			t.Errorf("stencil row %d = % x, want % x", y, row, want)
+		}
+	}
 	assertNoValidation(t, h)
 }
