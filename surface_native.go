@@ -249,7 +249,8 @@ func (t SurfaceTargetUnsafe) halTarget() (hal.SurfaceTarget, error) {
 
 // Configure configures the surface for presentation.
 // Must be called before GetCurrentTexture().
-func (s *Surface) Configure(device *Device, config *SurfaceConfiguration) error {
+func (s *Surface) Configure(device *Device, config *SurfaceConfiguration) (err error) {
+	defer device.reportError(&err)
 	if s.released {
 		return ErrReleased
 	}

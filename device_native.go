@@ -4,6 +4,7 @@ package wgpu
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"slices"
 	"sync/atomic"
@@ -66,7 +67,8 @@ func (d *Device) Limits() gputypes.Limits {
 }
 
 // CreateBuffer creates a GPU buffer.
-func (d *Device) CreateBuffer(desc *BufferDescriptor) (*Buffer, error) {
+func (d *Device) CreateBuffer(desc *BufferDescriptor) (_ *Buffer, err error) {
+	defer d.reportError(&err)
 	if d.released.Load() {
 		return nil, ErrReleased
 	}
@@ -114,7 +116,8 @@ func (d *Device) CreateBuffer(desc *BufferDescriptor) (*Buffer, error) {
 }
 
 // CreateTexture creates a GPU texture.
-func (d *Device) CreateTexture(desc *TextureDescriptor) (*Texture, error) {
+func (d *Device) CreateTexture(desc *TextureDescriptor) (_ *Texture, err error) {
+	defer d.reportError(&err)
 	if d.released.Load() {
 		return nil, ErrReleased
 	}
@@ -185,7 +188,8 @@ func (d *Device) CreateTexture(desc *TextureDescriptor) (*Texture, error) {
 }
 
 // CreateTextureView creates a view into a texture.
-func (d *Device) CreateTextureView(texture *Texture, desc *TextureViewDescriptor) (*TextureView, error) {
+func (d *Device) CreateTextureView(texture *Texture, desc *TextureViewDescriptor) (_ *TextureView, err error) {
+	defer d.reportError(&err)
 	if d.released.Load() {
 		return nil, ErrReleased
 	}
@@ -247,7 +251,8 @@ func (d *Device) CreateTextureView(texture *Texture, desc *TextureViewDescriptor
 }
 
 // CreateSampler creates a texture sampler.
-func (d *Device) CreateSampler(desc *SamplerDescriptor) (*Sampler, error) {
+func (d *Device) CreateSampler(desc *SamplerDescriptor) (_ *Sampler, err error) {
+	defer d.reportError(&err)
 	if d.released.Load() {
 		return nil, ErrReleased
 	}
@@ -302,7 +307,8 @@ func (d *Device) CreateSampler(desc *SamplerDescriptor) (*Sampler, error) {
 }
 
 // CreateShaderModule creates a shader module.
-func (d *Device) CreateShaderModule(desc *ShaderModuleDescriptor) (*ShaderModule, error) {
+func (d *Device) CreateShaderModule(desc *ShaderModuleDescriptor) (_ *ShaderModule, err error) {
+	defer d.reportError(&err)
 	if d.released.Load() {
 		return nil, ErrReleased
 	}
@@ -354,7 +360,8 @@ func (d *Device) CreateShaderModule(desc *ShaderModuleDescriptor) (*ShaderModule
 }
 
 // CreateBindGroupLayout creates a bind group layout.
-func (d *Device) CreateBindGroupLayout(desc *BindGroupLayoutDescriptor) (*BindGroupLayout, error) {
+func (d *Device) CreateBindGroupLayout(desc *BindGroupLayoutDescriptor) (_ *BindGroupLayout, err error) {
+	defer d.reportError(&err)
 	if d.released.Load() {
 		return nil, ErrReleased
 	}
@@ -390,7 +397,8 @@ func (d *Device) CreateBindGroupLayout(desc *BindGroupLayoutDescriptor) (*BindGr
 }
 
 // CreatePipelineLayout creates a pipeline layout.
-func (d *Device) CreatePipelineLayout(desc *PipelineLayoutDescriptor) (*PipelineLayout, error) {
+func (d *Device) CreatePipelineLayout(desc *PipelineLayoutDescriptor) (_ *PipelineLayout, err error) {
+	defer d.reportError(&err)
 	if d.released.Load() {
 		return nil, ErrReleased
 	}
@@ -450,7 +458,8 @@ func (d *Device) CreatePipelineLayout(desc *PipelineLayoutDescriptor) (*Pipeline
 }
 
 // CreateBindGroup creates a bind group.
-func (d *Device) CreateBindGroup(desc *BindGroupDescriptor) (*BindGroup, error) {
+func (d *Device) CreateBindGroup(desc *BindGroupDescriptor) (_ *BindGroup, err error) {
+	defer d.reportError(&err)
 	if d.released.Load() {
 		return nil, ErrReleased
 	}
@@ -752,7 +761,8 @@ func buildBindGroupEntryMap(entries []BindGroupEntry) map[uint32]*BindGroupEntry
 }
 
 // CreateRenderPipeline creates a render pipeline.
-func (d *Device) CreateRenderPipeline(desc *RenderPipelineDescriptor) (*RenderPipeline, error) {
+func (d *Device) CreateRenderPipeline(desc *RenderPipelineDescriptor) (_ *RenderPipeline, err error) {
+	defer d.reportError(&err)
 	if d.released.Load() {
 		return nil, ErrReleased
 	}
@@ -947,7 +957,8 @@ func mergeShaderBindingSizes(
 }
 
 // CreateComputePipeline creates a compute pipeline.
-func (d *Device) CreateComputePipeline(desc *ComputePipelineDescriptor) (*ComputePipeline, error) {
+func (d *Device) CreateComputePipeline(desc *ComputePipelineDescriptor) (_ *ComputePipeline, err error) {
+	defer d.reportError(&err)
 	if d.released.Load() {
 		return nil, ErrReleased
 	}
@@ -1116,7 +1127,8 @@ func (d *Device) validateComputeWorkgroupSize(label, entryPoint string, module *
 // expensive GPU resources (DX12 ID3D12CommandAllocator ~64KB, Vulkan VkCommandPool)
 // on every frame. After GPU completion, the encoder is reset and returned to the
 // pool for reuse. Matches Rust wgpu-core's CommandAllocator pattern (allocator.rs).
-func (d *Device) CreateCommandEncoder(desc *CommandEncoderDescriptor) (*CommandEncoder, error) {
+func (d *Device) CreateCommandEncoder(desc *CommandEncoderDescriptor) (_ *CommandEncoder, err error) {
+	defer d.reportError(&err)
 	if d.released.Load() {
 		return nil, ErrReleased
 	}
@@ -1294,8 +1306,33 @@ func (d *Device) PushErrorScope(filter ErrorFilter) {
 
 // PopErrorScope pops the most recently pushed error scope.
 // Returns the captured error, or nil if no error occurred.
+// Panics if no error scope is pushed.
 func (d *Device) PopErrorScope() *GPUError {
 	return d.core.PopErrorScope()
+}
+
+// reportError hands *err, an error a call on d returns, to the innermost
+// error scope that captures its kind, or to uncapturedError when none
+// does. A lost or released device reports nothing.
+//
+// Reference: WebGPU "dispatch error"; wgpu's ErrorSink::handle_error
+func (d *Device) reportError(err *error) {
+	if *err == nil || d == nil || d.core == nil || d.released.Load() || errors.Is(*err, ErrDeviceLost) {
+		return
+	}
+	gpuErr := &GPUError{Type: ErrorFilterValidation, Message: (*err).Error()}
+	if errors.Is(*err, ErrOutOfMemory) {
+		gpuErr.Type = ErrorFilterOutOfMemory
+	}
+	if !d.core.ReportError(gpuErr.Type, gpuErr.Message) {
+		d.uncapturedError(gpuErr)
+	}
+}
+
+// uncapturedError gets the errors of d that no error scope captured. The
+// calls that made them return them as well.
+func (d *Device) uncapturedError(gpuErr *GPUError) {
+	hal.Logger().Debug("wgpu: uncaptured error", "type", gpuErr.Type, "message", gpuErr.Message)
 }
 
 // WaitIdle waits for all GPU work to complete.
@@ -1491,7 +1528,8 @@ func (d *Device) halDevice() hal.Device {
 }
 
 // CreateRenderBundleEncoder creates an encoder for reusable render commands.
-func (d *Device) CreateRenderBundleEncoder(desc *RenderBundleEncoderDescriptor) (*RenderBundleEncoder, error) {
+func (d *Device) CreateRenderBundleEncoder(desc *RenderBundleEncoderDescriptor) (_ *RenderBundleEncoder, err error) {
+	defer d.reportError(&err)
 	if desc == nil {
 		return nil, fmt.Errorf("wgpu: render bundle encoder descriptor is nil")
 	}

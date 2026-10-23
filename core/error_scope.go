@@ -210,25 +210,19 @@ func (d *Device) PopErrorScope() *GPUError {
 	return gpuErr
 }
 
-// reportError reports a GPU error to the device's error scope stack.
+// ReportError reports a GPU error to the device's error scope stack.
 //
-// This is called internally when a GPU error occurs during validation
-// or GPU operations. The error is delivered to the topmost matching
-// error scope. If no scope matches, the error is considered uncaptured.
+// The error is delivered to the topmost matching error scope. If no scope
+// matches, the error is uncaptured.
 //
 // Returns true if the error was captured by a scope, false otherwise.
-func (d *Device) reportError(filter ErrorFilter, message string) bool {
+func (d *Device) ReportError(filter ErrorFilter, message string) bool {
 	return d.errorScopes().ReportError(filter, message)
 }
 
-// errorScopes returns the device's ErrorScopeManager, creating it lazily
-// if needed. This supports both the HAL-based and ID-based device paths.
-//
-// Note: This is not thread-safe for the initial creation of the manager
-// when called concurrently on a brand-new Device. In practice, this is
-// not an issue because PushErrorScope is always called before any GPU
-// operations, and GPU operations happen on a single goroutine per device.
-// The ErrorScopeManager itself is fully thread-safe once created.
+// errorScopes returns the device's ErrorScopeManager. NewDevice makes it;
+// a Device made another way gets one on first use, which is not safe for
+// concurrent first use.
 func (d *Device) errorScopes() *ErrorScopeManager {
 	if d.errorScopeManager == nil {
 		d.errorScopeManager = NewErrorScopeManager()

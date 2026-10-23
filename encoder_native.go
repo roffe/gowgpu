@@ -1225,7 +1225,8 @@ func (e *CommandEncoder) returnEncoderToPool() {
 // The HAL encoder ownership transfers from the CommandEncoder to the
 // CommandBuffer. After GPU completion, Submit() schedules the encoder
 // to be reset via ResetAll and returned to the Device's encoder pool.
-func (e *CommandEncoder) Finish() (*CommandBuffer, error) {
+func (e *CommandEncoder) Finish() (_ *CommandBuffer, err error) {
+	defer e.device.reportError(&err)
 	if e.released {
 		return nil, ErrReleased
 	}

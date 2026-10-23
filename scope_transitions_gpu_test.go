@@ -53,14 +53,18 @@ func (h *captureHandler) Handle(_ context.Context, r slog.Record) error {
 func (h *captureHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
 func (h *captureHandler) WithGroup(string) slog.Handler      { return h }
 
-// validation returns the validation-layer messages captured so far. The
-// Vulkan messenger drains every 50ms, so it waits for the drain first.
+// validation returns the validation-layer messages captured so far, not the
+// errors gowgpu itself reports. The Vulkan messenger drains every 50ms, so
+// it waits for the drain first.
 func (h *captureHandler) validation() []string {
 	time.Sleep(250 * time.Millisecond)
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	var out []string
 	for _, m := range h.msgs {
+		if strings.HasPrefix(m, "wgpu: uncaptured error") {
+			continue
+		}
 		if strings.Contains(m, "Validation") || strings.Contains(m, "VUID") {
 			out = append(out, m)
 		}

@@ -79,7 +79,8 @@ func (q *Queue) ResolveBuffer(idx track.TrackerIndex) hal.Buffer { return q.bufR
 // If there are pending WriteBuffer/WriteTexture operations, they are flushed
 // and run ahead of the barriers and the user command buffers in a single HAL
 // submit.
-func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (uint64, error) {
+func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (_ uint64, err error) {
+	defer q.device.reportError(&err)
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
@@ -352,7 +353,8 @@ func (q *Queue) released() bool {
 //   - offset + data size must not exceed buffer size
 //
 // Matches Rust wgpu-core queue.rs:647-672 (validate_write_buffer_impl).
-func (q *Queue) WriteBuffer(buffer *Buffer, offset uint64, data []byte) error {
+func (q *Queue) WriteBuffer(buffer *Buffer, offset uint64, data []byte) (err error) {
+	defer q.device.reportError(&err)
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
@@ -422,7 +424,8 @@ func (q *Queue) WriteBuffer(buffer *Buffer, offset uint64, data []byte) error {
 // recorded into a shared command encoder and flushed on the next Submit.
 // Resource barriers are computed from the texture's tracked CurrentUsage().
 // For GLES/Software backends, the write is performed immediately via HAL.
-func (q *Queue) WriteTexture(dst *ImageCopyTexture, data []byte, layout *ImageDataLayout, size *Extent3D) error {
+func (q *Queue) WriteTexture(dst *ImageCopyTexture, data []byte, layout *ImageDataLayout, size *Extent3D) (err error) {
+	defer q.device.reportError(&err)
 	q.mu.Lock()
 	defer q.mu.Unlock()
 

@@ -126,7 +126,8 @@ type Device struct {
 	valid *atomic.Bool
 
 	// errorScopeManager manages the error scope stack for this device.
-	// Initialized lazily on first use. This is a plain pointer because
+	// NewDevice makes it, errorScopes for a Device made otherwise. This is
+	// a plain pointer because
 	// Device is passed by value in the legacy ID-based API, which
 	// prohibits noCopy types (sync.Once, atomic.Pointer, etc.).
 	// Thread-safety is provided by ErrorScopeManager's internal mutex.
@@ -197,6 +198,8 @@ func NewDevice(
 		Features:       features,
 		Limits:         limits,
 		downlevel:      downlevel,
+
+		errorScopeManager: NewErrorScopeManager(),
 	}
 	valid := &atomic.Bool{}
 	valid.Store(true)

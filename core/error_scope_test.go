@@ -412,9 +412,9 @@ func TestDeviceErrorScopes(t *testing.T) {
 	device.PushErrorScope(ErrorFilterValidation)
 
 	// Report a validation error
-	captured := device.reportError(ErrorFilterValidation, "device validation error")
+	captured := device.ReportError(ErrorFilterValidation, "device validation error")
 	if !captured {
-		t.Fatal("device.reportError should return true")
+		t.Fatal("device.ReportError should return true")
 	}
 
 	// Pop the scope

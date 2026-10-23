@@ -78,7 +78,8 @@ func (qs *QuerySet) Release() {
 }
 
 // CreateQuerySet creates a query set for occlusion or timestamp queries.
-func (d *Device) CreateQuerySet(desc *QuerySetDescriptor) (*QuerySet, error) {
+func (d *Device) CreateQuerySet(desc *QuerySetDescriptor) (_ *QuerySet, err error) {
+	defer d.reportError(&err)
 	if d.released.Load() {
 		return nil, ErrReleased
 	}
