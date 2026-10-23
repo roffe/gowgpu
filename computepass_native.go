@@ -194,7 +194,7 @@ func (p *ComputePassEncoder) DispatchIndirect(buffer *Buffer, offset uint64) {
 	}
 	// VAL-B3: Validate indirect args fit within buffer.
 	// DispatchIndirect args: 3 x uint32 = 12 bytes. Matches Rust compute.rs:903-909.
-	if offset+12 > buffer.Size() {
+	if offset > buffer.Size() || buffer.Size()-offset < 12 {
 		p.encoder.setError(fmt.Errorf(
 			"wgpu: ComputePass.DispatchIndirect: offset %d + 12 bytes exceeds buffer size %d: %w",
 			offset, buffer.Size(), ErrDispatchIndirectBufferOverrun))

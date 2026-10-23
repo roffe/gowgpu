@@ -81,6 +81,15 @@ func TestValidateIndirectCountBuffers(t *testing.T) {
 			wantErr:      ErrDrawIndirectBufferOverrun,
 		},
 		{
+			name:         "count offset that wraps past the end",
+			indirect:     indirect,
+			count:        count,
+			countOff:     ^uint64(0) - 3,
+			maxDrawCount: 1,
+			stride:       drawIndirectRecordSize,
+			wantErr:      ErrDrawIndirectBufferOverrun,
+		},
+		{
 			name:         "nil count buffer",
 			indirect:     indirect,
 			count:        nil,

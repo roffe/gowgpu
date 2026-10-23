@@ -546,7 +546,7 @@ func (p *RenderPassEncoder) validateIndirectCountBuffers(
 			"wgpu: RenderPass.DrawIndirect: count offset %d is not 4-byte aligned: %w",
 			countOffset, ErrDrawIndirectOffsetAlignment)
 	}
-	if countOffset+4 > countBuffer.Size() {
+	if countOffset > countBuffer.Size() || countBuffer.Size()-countOffset < 4 {
 		return fmt.Errorf(
 			"wgpu: RenderPass.DrawIndirect: count offset %d + 4 exceeds count buffer size %d: %w",
 			countOffset, countBuffer.Size(), ErrDrawIndirectBufferOverrun)
