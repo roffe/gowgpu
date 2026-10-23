@@ -138,7 +138,7 @@ func (d *Device) CreateTexture(desc *TextureDescriptor) (_ *Texture, err error) 
 	if err := core.ValidateTextureDescriptor(halDesc, d.core.Limits, d.core.Features); err != nil {
 		return nil, err
 	}
-	if err := core.ValidateViewFormats(desc.Format, desc.ViewFormats); err != nil {
+	if err := d.core.RequireViewFormats(desc.Format, desc.ViewFormats, gputypes.DownlevelFlagsViewFormats); err != nil {
 		return nil, fmt.Errorf("wgpu: CreateTexture: %w", err)
 	}
 	var zero, pass bool
