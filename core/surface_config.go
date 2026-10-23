@@ -18,8 +18,8 @@ var ErrSurfaceConfiguration = errors.New("unsupported surface configuration")
 // ValidateSurfaceConfiguration checks config against what the surface
 // supports on the device's adapter: a format, present mode and alpha mode
 // from caps (an undefined present mode and the automatic alpha mode leave
-// the choice to the backend) and a size of at least 1x1 and at most
-// MaxTextureDimension2D.
+// the choice to the backend), usages among caps', and a size of at least
+// 1x1 and at most MaxTextureDimension2D.
 //
 // Reference: wgpu-core device/surface_config.rs
 // validate_surface_configuration
@@ -35,6 +35,8 @@ func ValidateSurfaceConfiguration(config *hal.SurfaceConfiguration, caps *hal.Su
 		return fmt.Errorf("%w: present mode %v, the surface has %v", ErrSurfaceConfiguration, config.PresentMode, caps.PresentModes)
 	case config.AlphaMode != gputypes.CompositeAlphaModeAuto && !slices.Contains(caps.AlphaModes, config.AlphaMode):
 		return fmt.Errorf("%w: alpha mode %v, the surface has %v", ErrSurfaceConfiguration, config.AlphaMode, caps.AlphaModes)
+	case !caps.Usage.Contains(config.Usage):
+		return fmt.Errorf("%w: usage %#x, the surface's textures can have %#x", ErrSurfaceConfiguration, config.Usage, caps.Usage)
 	}
 	return nil
 }
