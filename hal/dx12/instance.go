@@ -435,6 +435,7 @@ type Surface struct {
 	height                     uint32
 	format                     dxgi.DXGI_FORMAT
 	halFormat                  gputypes.TextureFormat
+	viewFormats                []gputypes.TextureFormat
 	presentMode                gputypes.PresentMode
 	swapchainFlags             uint32
 	allowTearing               bool
@@ -565,6 +566,7 @@ func (s *Surface) AcquireTexture(_ hal.Fence) (*hal.AcquiredSurfaceTexture, erro
 		resource:   bb.resource,
 		stateOwner: bb.texture,
 		rtvHandle:  bb.rtvHandle,
+		viewRTVs:   bb.viewRTVs,
 		format:     s.halFormat,
 		width:      s.width,
 		height:     s.height,

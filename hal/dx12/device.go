@@ -1537,10 +1537,19 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 	}
 
 	// Handle SurfaceTexture (swapchain back buffer) — return a lightweight view
-	// with the pre-existing RTV handle, similar to Vulkan's SwapchainTexture path.
-	// hasRTV=true so BeginRenderPass uses this RTV, but isExternal=true tells
-	// Destroy() to skip freeing the RTV heap slot (the Surface owns it).
+	// with the pre-existing RTV handle of its format, similar to Vulkan's
+	// SwapchainTexture path. hasRTV=true so BeginRenderPass uses this RTV, but
+	// isExternal=true tells Destroy() to skip freeing the RTV heap slot (the
+	// Surface owns it).
 	if st, ok := texture.(*SurfaceTexture); ok {
+		format, rtvHandle, err := st.rtv(desc)
+		if err != nil {
+			return nil, err
+		}
+		dimension := gputypes.TextureViewDimension2D
+		if desc != nil && desc.Dimension != gputypes.TextureViewDimensionUndefined {
+			dimension = desc.Dimension
+		}
 		owner := st.stateOwner
 		if owner == nil {
 			owner = &Texture{
@@ -1560,15 +1569,15 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 		}
 		return &TextureView{
 			texture:    owner,
-			format:     st.format,
-			dimension:  gputypes.TextureViewDimension2D,
+			format:     format,
+			dimension:  dimension,
 			aspect:     gputypes.TextureAspectAll,
 			baseMip:    0,
 			mipCount:   1,
 			baseLayer:  0,
 			layerCount: 1,
 			device:     d,
-			rtvHandle:  st.rtvHandle,
+			rtvHandle:  rtvHandle,
 			hasRTV:     true,
 		}, nil
 	}

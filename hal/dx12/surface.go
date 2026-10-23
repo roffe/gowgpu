@@ -8,6 +8,7 @@ package dx12
 import (
 	"fmt"
 	"os"
+	"slices"
 	"unsafe"
 
 	"github.com/roffe/gowgpu/gputypes"
@@ -35,6 +36,16 @@ type backBuffer struct {
 	texture   *Texture // shared queue-scheduled state owner
 	rtvHandle d3d12.D3D12_CPU_DESCRIPTOR_HANDLE
 	rtvIndex  uint32 // Heap index for recycling on release
+	// viewRTVs are its RTVs in the surface's view formats.
+	viewRTVs []viewRTV
+}
+
+// viewRTV is a render target view of a back buffer in a view format of the
+// surface.
+type viewRTV struct {
+	format gputypes.TextureFormat
+	handle d3d12.D3D12_CPU_DESCRIPTOR_HANDLE
+	index  uint32
 }
 
 // createSwapchain creates a new DXGI swapchain for the surface.
@@ -48,6 +59,7 @@ func (s *Surface) createSwapchain(device *Device, config *hal.SurfaceConfigurati
 	}
 	s.format = format
 	s.halFormat = config.Format
+	s.viewFormats = config.ViewFormats
 
 	// Determine swapchain flags
 	var swapchainFlags uint32
@@ -233,7 +245,9 @@ func useDComp(config *hal.SurfaceConfiguration) bool {
 	return config.AlphaMode == hal.CompositeAlphaModePremultiplied && os.Getenv("GOGPU_DX12_FORCE_HWND") != "1"
 }
 
-// createBackBufferRTVs creates render target views for each back buffer.
+// createBackBufferRTVs creates render target views for each back buffer:
+// one in the surface's format and one in each of its view formats. The
+// buffers are of the linear format, which an sRGB RTV may view.
 func (s *Surface) createBackBufferRTVs() error {
 	// Get swapchain description to know buffer count
 	desc, err := s.swapchain.GetDesc1()
@@ -284,9 +298,39 @@ func (s *Surface) createBackBufferRTVs() error {
 			rtvIndex:  rtvIndex,
 		}
 		s.backBuffers[i].texture.stateOwner.setTextureStates([]d3d12.D3D12_RESOURCE_STATES{d3d12.D3D12_RESOURCE_STATE_PRESENT})
+
+		views, err := s.device.createViewRTVs(resource, s.halFormat, s.viewFormats)
+		if err != nil {
+			s.releaseBackBuffers()
+			return fmt.Errorf("dx12: buffer %d: %w", i, err)
+		}
+		s.backBuffers[i].viewRTVs = views
 	}
 
 	return nil
+}
+
+// createViewRTVs creates the render target views of resource, a back
+// buffer of format, in each of viewFormats but format.
+func (d *Device) createViewRTVs(resource *d3d12.ID3D12Resource, format gputypes.TextureFormat, viewFormats []gputypes.TextureFormat) ([]viewRTV, error) {
+	var views []viewRTV
+	for _, f := range viewFormats {
+		if f == format || slices.ContainsFunc(views, func(v viewRTV) bool { return v.format == f }) {
+			continue
+		}
+		handle, index, err := d.rtvHeap.allocate()
+		if err != nil {
+			for _, v := range views {
+				d.rtvHeap.free(v.index)
+			}
+			return nil, fmt.Errorf("dx12: failed to allocate an RTV in %v: %w", f, err)
+		}
+		desc := d3d12.D3D12_RENDER_TARGET_VIEW_DESC{Format: textureFormatToD3D12(f)}
+		desc.SetTexture2D(0, 0)
+		d.raw.CreateRenderTargetView(resource, &desc, handle)
+		views = append(views, viewRTV{format: f, handle: handle, index: index})
+	}
+	return views, nil
 }
 
 // releaseBackBuffers releases all back buffer resources and recycles RTV descriptors.
@@ -307,6 +351,9 @@ func (s *Surface) releaseBackBuffers() {
 		// Recycle RTV descriptor slot for reuse (prevents heap exhaustion on resize)
 		if s.device != nil && s.device.rtvHeap != nil {
 			s.device.rtvHeap.free(s.backBuffers[i].rtvIndex)
+			for _, v := range s.backBuffers[i].viewRTVs {
+				s.device.rtvHeap.free(v.index)
+			}
 		}
 	}
 	s.backBuffers = nil
@@ -347,6 +394,7 @@ func (s *Surface) resizeSwapchain(config *hal.SurfaceConfiguration) error {
 	s.height = config.Height
 	s.format = format
 	s.halFormat = config.Format
+	s.viewFormats = config.ViewFormats
 	s.presentMode = config.PresentMode
 
 	// Recreate RTVs
@@ -533,10 +581,36 @@ type SurfaceTexture struct {
 	resource   *d3d12.ID3D12Resource
 	stateOwner *Texture
 	rtvHandle  d3d12.D3D12_CPU_DESCRIPTOR_HANDLE
+	viewRTVs   []viewRTV
 	format     gputypes.TextureFormat
 	width      uint32
 	height     uint32
 	suboptimal bool
+}
+
+// rtv returns the format and render target view of the view of t that desc
+// asks for, of its one mip level and layer, in the surface's format or one
+// of its view formats.
+func (t *SurfaceTexture) rtv(desc *hal.TextureViewDescriptor) (gputypes.TextureFormat, d3d12.D3D12_CPU_DESCRIPTOR_HANDLE, error) {
+	var r hal.TextureViewDescriptor
+	if desc != nil {
+		r = *desc
+	}
+	switch {
+	case r.Dimension != gputypes.TextureViewDimensionUndefined && r.Dimension != gputypes.TextureViewDimension2D && r.Dimension != gputypes.TextureViewDimension2DArray:
+		return 0, d3d12.D3D12_CPU_DESCRIPTOR_HANDLE{}, fmt.Errorf("dx12: a view of a surface texture cannot be %v", r.Dimension)
+	case r.Aspect != gputypes.TextureAspectUndefined && r.Aspect != gputypes.TextureAspectAll,
+		r.BaseMipLevel != 0, r.MipLevelCount > 1, r.BaseArrayLayer != 0, r.ArrayLayerCount > 1:
+		return 0, d3d12.D3D12_CPU_DESCRIPTOR_HANDLE{}, fmt.Errorf("dx12: a view of a surface texture is of all of its one mip level and layer")
+	case r.Format == gputypes.TextureFormatUndefined || r.Format == t.format:
+		return t.format, t.rtvHandle, nil
+	}
+	for _, v := range t.viewRTVs {
+		if v.format == r.Format {
+			return v.format, v.handle, nil
+		}
+	}
+	return 0, d3d12.D3D12_CPU_DESCRIPTOR_HANDLE{}, fmt.Errorf("dx12: a view of a surface texture of %v cannot be %v, which is not one of the surface's view formats", t.format, r.Format)
 }
 
 // textureOf is the texture a HAL texture names: a texture of this device,
