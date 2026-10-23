@@ -53,21 +53,23 @@ func TestCreateTextureViewResolvesAndChecksTheDescriptor(t *testing.T) {
 		view.Release()
 	}
 
-	storage, err := device.CreateTexture(&TextureDescriptor{
-		Label: "view-srgb-storage", Size: Extent3D{Width: 8, Height: 8, DepthOrArrayLayers: 1},
-		MipLevelCount: 1, SampleCount: 1, Dimension: TextureDimension2D,
-		Format: TextureFormatRGBA8Unorm, Usage: TextureUsageTextureBinding | TextureUsageStorageBinding,
-		ViewFormats: []gputypes.TextureFormat{gputypes.TextureFormatRGBA8UnormSrgb},
-	})
-	if err != nil {
-		t.Fatalf("CreateTexture(storage): %v", err)
+	if device.core.DownlevelCapabilitiesRef().Flags.Contains(gputypes.DownlevelFlagsViewFormats) {
+		storage, err := device.CreateTexture(&TextureDescriptor{
+			Label: "view-srgb-storage", Size: Extent3D{Width: 8, Height: 8, DepthOrArrayLayers: 1},
+			MipLevelCount: 1, SampleCount: 1, Dimension: TextureDimension2D,
+			Format: TextureFormatRGBA8Unorm, Usage: TextureUsageTextureBinding | TextureUsageStorageBinding,
+			ViewFormats: []gputypes.TextureFormat{gputypes.TextureFormatRGBA8UnormSrgb},
+		})
+		if err != nil {
+			t.Fatalf("CreateTexture(storage): %v", err)
+		}
+		defer storage.Release()
+		srgb, err := device.CreateTextureView(storage, &TextureViewDescriptor{Format: gputypes.TextureFormatRGBA8UnormSrgb})
+		if err != nil {
+			t.Fatalf("sRGB view of a storage texture: %v", err)
+		}
+		srgb.Release()
 	}
-	defer storage.Release()
-	srgb, err := device.CreateTextureView(storage, &TextureViewDescriptor{Format: gputypes.TextureFormatRGBA8UnormSrgb})
-	if err != nil {
-		t.Fatalf("sRGB view of a storage texture: %v", err)
-	}
-	srgb.Release()
 
 	flat, _ := pixTexture(t, device, "view-flat", TextureUsageTextureBinding)
 	defer flat.Release()
