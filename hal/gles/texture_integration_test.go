@@ -10,6 +10,7 @@ import (
 
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/gowgpu/hal/gles/gl"
 )
 
 // openTestDevice opens a device on ctx the way an adapter on it would, with
@@ -54,5 +55,40 @@ func TestDepthStencilTexturesCreate(t *testing.T) {
 				dev.DestroyTexture(tex)
 			}
 		})
+	}
+}
+
+// An ETC2 texture, the compressed format every ES context offers, is made
+// with its own internal format and takes its blocks: it was RGBA8, and an
+// upload read eight times the blocks' size.
+func TestETC2TextureOnES(t *testing.T) {
+	ctx := newTestESAdapterContext(t)
+	t.Cleanup(ctx.Destroy)
+	dev := openTestDevice(t, ctx)
+	if !dev.formats.texStorage {
+		t.Skip("no glTexStorage2D")
+	}
+	tex, err := dev.CreateTexture(&hal.TextureDescriptor{
+		Size: hal.Extent3D{Width: 8, Height: 8, DepthOrArrayLayers: 1}, MipLevelCount: 1, SampleCount: 1,
+		Dimension: gputypes.TextureDimension2D, Format: gputypes.TextureFormatETC2RGB8Unorm,
+		Usage: gputypes.TextureUsageTextureBinding | gputypes.TextureUsageCopyDst,
+	})
+	if err != nil {
+		t.Fatalf("CreateTexture: %v", err)
+	}
+	t.Cleanup(func() { dev.DestroyTexture(tex) })
+	q := &Queue{ctx: ctx}
+	blocks := make([]byte, 4*8)
+	if err := q.WriteTexture(&hal.ImageCopyTexture{Texture: tex}, blocks, &hal.ImageDataLayout{BytesPerRow: 16},
+		&hal.Extent3D{Width: 8, Height: 8, DepthOrArrayLayers: 1}); err != nil {
+		t.Fatalf("WriteTexture: %v", err)
+	}
+	glCtx := ctx.Lock()
+	defer ctx.Unlock()
+	if glErr := glCtx.GetError(); glErr != 0 {
+		t.Fatalf("GL error %#x after the upload", glErr)
+	}
+	if got := tex.(*Texture).glf.internal; got != gl.COMPRESSED_RGB8_ETC2 {
+		t.Errorf("internal format %#x, want COMPRESSED_RGB8_ETC2", got)
 	}
 }

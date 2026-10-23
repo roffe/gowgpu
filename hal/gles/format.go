@@ -73,12 +73,59 @@ var glFormats = map[gputypes.TextureFormat]glFormat{
 	gputypes.TextureFormatDepth32FloatStencil8: {gl.DEPTH32F_STENCIL8, gl.DEPTH_STENCIL, gl.FLOAT_32_UNSIGNED_INT_24_8_REV},
 }
 
+// compressedFormats are the internal formats of the compressed formats,
+// which move as blocks with glCompressedTex*Image and no transfer pair.
+var compressedFormats = map[gputypes.TextureFormat]uint32{
+	gputypes.TextureFormatBC1RGBAUnorm:     gl.COMPRESSED_RGBA_S3TC_DXT1_EXT,
+	gputypes.TextureFormatBC1RGBAUnormSrgb: gl.COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT,
+	gputypes.TextureFormatBC2RGBAUnorm:     gl.COMPRESSED_RGBA_S3TC_DXT3_EXT,
+	gputypes.TextureFormatBC2RGBAUnormSrgb: gl.COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT,
+	gputypes.TextureFormatBC3RGBAUnorm:     gl.COMPRESSED_RGBA_S3TC_DXT5_EXT,
+	gputypes.TextureFormatBC3RGBAUnormSrgb: gl.COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT,
+	gputypes.TextureFormatBC4RUnorm:        gl.COMPRESSED_RED_RGTC1,
+	gputypes.TextureFormatBC4RSnorm:        gl.COMPRESSED_SIGNED_RED_RGTC1,
+	gputypes.TextureFormatBC5RGUnorm:       gl.COMPRESSED_RG_RGTC2,
+	gputypes.TextureFormatBC5RGSnorm:       gl.COMPRESSED_SIGNED_RG_RGTC2,
+	gputypes.TextureFormatBC6HRGBUfloat:    gl.COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT,
+	gputypes.TextureFormatBC6HRGBFloat:     gl.COMPRESSED_RGB_BPTC_SIGNED_FLOAT,
+	gputypes.TextureFormatBC7RGBAUnorm:     gl.COMPRESSED_RGBA_BPTC_UNORM,
+	gputypes.TextureFormatBC7RGBAUnormSrgb: gl.COMPRESSED_SRGB_ALPHA_BPTC_UNORM,
+
+	gputypes.TextureFormatETC2RGB8Unorm:       gl.COMPRESSED_RGB8_ETC2,
+	gputypes.TextureFormatETC2RGB8UnormSrgb:   gl.COMPRESSED_SRGB8_ETC2,
+	gputypes.TextureFormatETC2RGB8A1Unorm:     gl.COMPRESSED_RGB8_PUNCHTHROUGH_ALPHA1_ETC2,
+	gputypes.TextureFormatETC2RGB8A1UnormSrgb: gl.COMPRESSED_SRGB8_PUNCHTHROUGH_ALPHA1_ETC2,
+	gputypes.TextureFormatETC2RGBA8Unorm:      gl.COMPRESSED_RGBA8_ETC2_EAC,
+	gputypes.TextureFormatETC2RGBA8UnormSrgb:  gl.COMPRESSED_SRGB8_ALPHA8_ETC2_EAC,
+	gputypes.TextureFormatEACR11Unorm:         gl.COMPRESSED_R11_EAC,
+	gputypes.TextureFormatEACR11Snorm:         gl.COMPRESSED_SIGNED_R11_EAC,
+	gputypes.TextureFormatEACRG11Unorm:        gl.COMPRESSED_RG11_EAC,
+	gputypes.TextureFormatEACRG11Snorm:        gl.COMPRESSED_SIGNED_RG11_EAC,
+}
+
+func init() {
+	// The ASTC formats come as a Unorm and a UnormSrgb format a block size,
+	// in the order of GL's internal formats.
+	for i := range uint32(14) {
+		unorm := gputypes.TextureFormatASTC4x4Unorm + gputypes.TextureFormat(2*i)
+		compressedFormats[unorm] = gl.COMPRESSED_RGBA_ASTC_4x4 + i
+		compressedFormats[unorm+1] = gl.COMPRESSED_SRGB8_ALPHA8_ASTC_4x4 + i
+	}
+}
+
+// compressed reports whether f moves as compressed blocks.
+func (f glFormat) compressed() bool { return f.typ == 0 }
+
 // formatCaps is what a context offers beyond the formats of glFormats.
 type formatCaps struct {
 	es       bool
 	bgra8    bool // ES: EXT_texture_format_BGRA8888 or APPLE_texture_format_BGRA8888
 	norm16   bool // ES: EXT_texture_norm16, for the 16-bit unorm and snorm formats
 	stencil8 bool // STENCIL_INDEX8 textures: GL 4.4, ES 3.2, ARB_texture_stencil8, OES_texture_stencil8
+
+	// texStorage is glTexStorage2D (GL 4.2, ARB_texture_storage, ES 3.0),
+	// which the compressed formats are made with.
+	texStorage bool
 }
 
 // newFormatCaps reads the formats a context offers from its capabilities.
@@ -89,7 +136,14 @@ func newFormatCaps(caps *AdapterCapabilities) formatCaps {
 		norm16: hasExtension(caps.Extensions, "GL_EXT_texture_norm16"),
 		stencil8: glVersionAtLeast(caps.GLMajor, caps.GLMinor, caps.IsES, [2]int{3, 2}, [2]int{4, 4}) ||
 			hasExtension(caps.Extensions, "GL_ARB_texture_stencil8", "GL_OES_texture_stencil8"),
+		texStorage: hasTexStorage(caps.Extensions, caps.GLMajor, caps.GLMinor, caps.IsES),
 	}
+}
+
+// hasTexStorage reports whether a context has glTexStorage2D.
+func hasTexStorage(exts map[string]bool, glMajor, glMinor int, isES bool) bool {
+	return glVersionAtLeast(glMajor, glMinor, isES, [2]int{3, 0}, [2]int{4, 2}) ||
+		hasExtension(exts, "GL_ARB_texture_storage")
 }
 
 // glFormat returns how GL stores format, false when the context can't.
@@ -101,6 +155,9 @@ func (fc formatCaps) glFormat(format gputypes.TextureFormat) (glFormat, bool) {
 			return glFormat{gl.STENCIL_INDEX8, gl.STENCIL_INDEX, gl.UNSIGNED_BYTE}, true
 		}
 		return glFormat{gl.DEPTH24_STENCIL8, gl.DEPTH_STENCIL, gl.UNSIGNED_INT_24_8}, true
+	}
+	if internal, ok := compressedFormats[format]; ok {
+		return glFormat{internal: internal}, fc.texStorage
 	}
 	f, ok := glFormats[format]
 	if !ok || !fc.es {

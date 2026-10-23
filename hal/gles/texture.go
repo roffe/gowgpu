@@ -70,8 +70,20 @@ func createTexture(glCtx *gl.Context, formats formatCaps, maxMSAA int32, desc *T
 	glCtx.BindTexture(target, id)
 
 	// Allocate texture storage
-	switch target {
-	case gl.TEXTURE_2D_MULTISAMPLE:
+	switch {
+	case glf.compressed():
+		if target != gl.TEXTURE_2D && target != gl.TEXTURE_CUBE_MAP {
+			glCtx.DeleteTextures(id)
+			return nil, fmt.Errorf("gles: %s textures with %d layers are not supported", desc.Format, desc.Size.DepthOrArrayLayers)
+		}
+		glCtx.TexStorage2D(target, int32(desc.MipLevelCount), glf.internal, int32(desc.Size.Width), int32(desc.Size.Height))
+		if glErr := glCtx.GetError(); glErr != 0 {
+			glCtx.DeleteTextures(id)
+			return nil, fmt.Errorf("gles: TexStorage2D failed: GL error 0x%x (format=0x%x, %dx%d)",
+				glErr, glf.internal, desc.Size.Width, desc.Size.Height)
+		}
+
+	case target == gl.TEXTURE_2D_MULTISAMPLE:
 		glCtx.TexImage2DMultisample(target, int32(sampleCount), glf.internal,
 			int32(desc.Size.Width), int32(desc.Size.Height), true)
 		if glErr := glCtx.GetError(); glErr != 0 {
@@ -80,7 +92,7 @@ func createTexture(glCtx *gl.Context, formats formatCaps, maxMSAA int32, desc *T
 				glErr, glf.internal, sampleCount, desc.Size.Width, desc.Size.Height)
 		}
 
-	case gl.TEXTURE_2D:
+	case target == gl.TEXTURE_2D:
 		for level := uint32(0); level < desc.MipLevelCount; level++ {
 			width := max(1, int32(desc.Size.Width>>level))
 			height := max(1, int32(desc.Size.Height>>level))
@@ -93,7 +105,7 @@ func createTexture(glCtx *gl.Context, formats formatCaps, maxMSAA int32, desc *T
 			}
 		}
 
-	case gl.TEXTURE_CUBE_MAP:
+	case target == gl.TEXTURE_CUBE_MAP:
 		for face := uint32(0); face < 6; face++ {
 			faceTarget := gl.TEXTURE_CUBE_MAP_POSITIVE_X + face
 			for level := uint32(0); level < desc.MipLevelCount; level++ {
@@ -146,7 +158,27 @@ func writeTexture(glCtx *gl.Context, tex *Texture, dst *hal.ImageCopyTexture, da
 	f := tex.glf
 	glCtx.BindTexture(tex.target, tex.id)
 
-	if tex.target == gl.TEXTURE_2D {
+	if tex.target == gl.TEXTURE_2D && f.compressed() {
+		if layout != nil && layout.Offset > 0 {
+			data = data[layout.Offset:]
+		}
+		var pitch uint32
+		if layout != nil {
+			pitch = layout.BytesPerRow
+		}
+		blocks, rowBytes := compressedRows(tex.format, size.Width, size.Height)
+		if pitch != 0 && pitch != rowBytes {
+			// GL ES has no row length for compressed uploads: the rows go
+			// in packed.
+			packed := make([]byte, rowBytes*blocks)
+			for r := range blocks {
+				copy(packed[r*rowBytes:], data[r*pitch:r*pitch+rowBytes])
+			}
+			data = packed
+		}
+		glCtx.CompressedTexSubImage2D(tex.target, int32(dst.MipLevel), int32(dst.Origin.X), int32(dst.Origin.Y),
+			int32(size.Width), int32(size.Height), f.internal, int32(rowBytes*blocks), unsafe.Pointer(&data[0]))
+	} else if tex.target == gl.TEXTURE_2D {
 		// The copy lands at dst.Origin, and the source rows may be longer
 		// than the copy (a region of a larger image): an atlas fills in one
 		// small rectangle at a time.
@@ -187,4 +219,11 @@ func writeTexture(glCtx *gl.Context, tex *Texture, dst *hal.ImageCopyTexture, da
 			"height", size.Height,
 		)
 	}
+}
+
+// compressedRows returns how many rows of blocks a width by height region
+// of a compressed format has, and how many bytes a row of them takes.
+func compressedRows(format gputypes.TextureFormat, width, height uint32) (rows, rowBytes uint32) {
+	bw, bh := format.BlockDimensions()
+	return (height + bh - 1) / bh, (width + bw - 1) / bw * format.BlockCopySize()
 }

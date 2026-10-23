@@ -92,6 +92,10 @@ type Context struct {
 	glTexParameteri  uintptr
 	glGenerateMipmap uintptr
 
+	// Immutable storage and compressed uploads (GL 4.2)
+	glTexStorage2D            uintptr
+	glCompressedTexSubImage2D uintptr
+
 	// Framebuffers (GL 3.0+)
 	glGenFramebuffers        uintptr
 	glDeleteFramebuffers     uintptr
@@ -272,6 +276,8 @@ func (c *Context) Load(getProcAddr ProcAddressFunc) error {
 	c.glTexSubImage2D = getProcAddr("glTexSubImage2D")
 	c.glTexParameteri = getProcAddr("glTexParameteri")
 	c.glGenerateMipmap = getProcAddr("glGenerateMipmap")
+	c.glTexStorage2D = getProcAddr("glTexStorage2D")
+	c.glCompressedTexSubImage2D = getProcAddr("glCompressedTexSubImage2D")
 
 	// Framebuffers
 	c.glGenFramebuffers = getProcAddr("glGenFramebuffers")
@@ -721,6 +727,26 @@ func (c *Context) TexSubImage2DOffset(target uint32, level int32, xoffset, yoffs
 
 func (c *Context) GenerateMipmap(target uint32) {
 	syscall.SyscallN(c.glGenerateMipmap, uintptr(target))
+}
+
+// TexStorage2D allocates immutable storage for levels mip levels of the
+// bound texture (GL 4.2, ARB_texture_storage).
+func (c *Context) TexStorage2D(target uint32, levels int32, internalformat uint32, width, height int32) {
+	syscall.SyscallN(c.glTexStorage2D, uintptr(target), uintptr(levels), uintptr(internalformat), uintptr(width), uintptr(height))
+}
+
+// CompressedTexSubImage2D replaces a block-aligned region of a compressed
+// texture level with imageSize bytes of blocks from data.
+func (c *Context) CompressedTexSubImage2D(target uint32, level, xoffset, yoffset, width, height int32, format uint32, imageSize int32, data unsafe.Pointer) {
+	syscall.SyscallN(c.glCompressedTexSubImage2D, uintptr(target), uintptr(level), uintptr(xoffset), uintptr(yoffset),
+		uintptr(width), uintptr(height), uintptr(format), uintptr(imageSize), uintptr(data))
+}
+
+// CompressedTexSubImage2DOffset is CompressedTexSubImage2D from the bound
+// GL_PIXEL_UNPACK_BUFFER, offset bytes into it.
+func (c *Context) CompressedTexSubImage2DOffset(target uint32, level, xoffset, yoffset, width, height int32, format uint32, imageSize int32, offset uintptr) {
+	syscall.SyscallN(c.glCompressedTexSubImage2D, uintptr(target), uintptr(level), uintptr(xoffset), uintptr(yoffset),
+		uintptr(width), uintptr(height), uintptr(format), uintptr(imageSize), offset)
 }
 
 // TexImage2DMultisample creates a multisample 2D texture image.

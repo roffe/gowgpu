@@ -85,3 +85,24 @@ func TestGLFormatES(t *testing.T) {
 		t.Error("RGBA16Snorm refused on ES with EXT_texture_norm16")
 	}
 }
+
+func TestGLFormatCompressed(t *testing.T) {
+	storage := formatCaps{texStorage: true}
+	for format, want := range map[gputypes.TextureFormat]uint32{
+		gputypes.TextureFormatBC1RGBAUnorm:       gl.COMPRESSED_RGBA_S3TC_DXT1_EXT,
+		gputypes.TextureFormatBC7RGBAUnormSrgb:   gl.COMPRESSED_SRGB_ALPHA_BPTC_UNORM,
+		gputypes.TextureFormatETC2RGB8Unorm:      gl.COMPRESSED_RGB8_ETC2,
+		gputypes.TextureFormatEACRG11Snorm:       gl.COMPRESSED_SIGNED_RG11_EAC,
+		gputypes.TextureFormatASTC4x4Unorm:       0x93B0,
+		gputypes.TextureFormatASTC10x8UnormSrgb:  0x93DA,
+		gputypes.TextureFormatASTC12x12UnormSrgb: 0x93DD,
+	} {
+		got, ok := storage.glFormat(format)
+		if !ok || got.internal != want || !got.compressed() {
+			t.Errorf("%s: got %#x %v, want the compressed %#x", format, got, ok, want)
+		}
+		if _, ok := (formatCaps{}).glFormat(format); ok {
+			t.Errorf("%s made without glTexStorage2D", format)
+		}
+	}
+}

@@ -172,11 +172,12 @@ func (e *CommandEncoder) CopyBufferToTexture(src hal.Buffer, dst hal.Texture, re
 
 	for _, region := range regions {
 		e.commands = append(e.commands, &CopyBufferToTextureCommand{
-			srcBuffer: srcBuf,
-			dstTex:    dstTex,
-			origin:    [3]uint32{region.TextureBase.Origin.X, region.TextureBase.Origin.Y, region.TextureBase.Origin.Z},
-			copySize:  [3]uint32{region.Size.Width, region.Size.Height, region.Size.DepthOrArrayLayers},
-			bufOffset: region.BufferLayout.Offset,
+			srcBuffer:   srcBuf,
+			dstTex:      dstTex,
+			origin:      [3]uint32{region.TextureBase.Origin.X, region.TextureBase.Origin.Y, region.TextureBase.Origin.Z},
+			copySize:    [3]uint32{region.Size.Width, region.Size.Height, region.Size.DepthOrArrayLayers},
+			bufOffset:   region.BufferLayout.Offset,
+			bytesPerRow: region.BufferLayout.BytesPerRow,
 		})
 	}
 }
@@ -1881,6 +1882,13 @@ func (c *CopyTextureToBufferCommand) Execute(ctx *gl.Context) {
 	if width == 0 || height == 0 || c.dstBuffer.id == 0 {
 		return
 	}
+	if c.srcTexture.glf.compressed() {
+		// glReadPixels reads no blocks, and ES has no glGetCompressedTexImage.
+		compressedReadbackOnce.Do(func() {
+			hal.Logger().Error("gles: CopyTextureToBuffer from a compressed texture is not supported", "format", c.srcTexture.format)
+		})
+		return
+	}
 
 	// Rows come out in the texture's own transfer format, sized by what
 	// glReadPixels writes for it.
@@ -1942,11 +1950,12 @@ func (c *CopyTextureToBufferCommand) Execute(ctx *gl.Context) {
 // glTexSubImage2D with offset=0 so GL reads from the bound PBO.
 // Matches Rust wgpu-hal/src/gles/queue.rs CopyBufferToTexture.
 type CopyBufferToTextureCommand struct {
-	srcBuffer *Buffer
-	dstTex    *Texture
-	origin    [3]uint32 // x, y, z
-	copySize  [3]uint32 // width, height, depthOrArrayLayers
-	bufOffset uint64
+	srcBuffer   *Buffer
+	dstTex      *Texture
+	origin      [3]uint32 // x, y, z
+	copySize    [3]uint32 // width, height, depthOrArrayLayers
+	bufOffset   uint64
+	bytesPerRow uint32
 }
 
 func (c *CopyBufferToTextureCommand) Execute(ctx *gl.Context) {
@@ -1965,6 +1974,13 @@ func (c *CopyBufferToTextureCommand) Execute(ctx *gl.Context) {
 	// Bind destination texture.
 	ctx.BindTexture(c.dstTex.target, c.dstTex.id)
 
+	if c.dstTex.glf.compressed() {
+		c.uploadBlocks(ctx)
+		ctx.BindBuffer(gl.PIXEL_UNPACK_BUFFER, 0)
+		ctx.BindTexture(c.dstTex.target, 0)
+		return
+	}
+
 	// Set pixel alignment to 1 for formats whose rows may not be 4-byte aligned.
 	ctx.PixelStorei(gl.UNPACK_ALIGNMENT, 1)
 	ctx.PixelStorei(gl.UNPACK_ROW_LENGTH, 0) // use default (tightly packed)
@@ -1982,6 +1998,29 @@ func (c *CopyBufferToTextureCommand) Execute(ctx *gl.Context) {
 	ctx.BindBuffer(gl.PIXEL_UNPACK_BUFFER, 0)
 	ctx.BindTexture(c.dstTex.target, 0)
 }
+
+// uploadBlocks copies a compressed region from the bound pixel unpack
+// buffer, a row of blocks at a time when the buffer's rows are padded: ES
+// has no row length for compressed uploads.
+func (c *CopyBufferToTextureCommand) uploadBlocks(ctx *gl.Context) {
+	f := c.dstTex.glf
+	blocks, rowBytes := compressedRows(c.dstTex.format, c.copySize[0], c.copySize[1])
+	if c.bytesPerRow == 0 || c.bytesPerRow == rowBytes {
+		ctx.CompressedTexSubImage2DOffset(c.dstTex.target, 0, int32(c.origin[0]), int32(c.origin[1]),
+			int32(c.copySize[0]), int32(c.copySize[1]), f.internal, int32(rowBytes*blocks), uintptr(c.bufOffset))
+		return
+	}
+	_, bh := c.dstTex.format.BlockDimensions()
+	for r := range blocks {
+		y := r * bh
+		ctx.CompressedTexSubImage2DOffset(c.dstTex.target, 0, int32(c.origin[0]), int32(c.origin[1]+y),
+			int32(c.copySize[0]), int32(min(bh, c.copySize[1]-y)), f.internal, int32(rowBytes), uintptr(c.bufOffset+uint64(r)*uint64(c.bytesPerRow)))
+	}
+}
+
+// compressedReadbackOnce guards the one error a readback of a compressed
+// texture logs.
+var compressedReadbackOnce sync.Once
 
 // CopyTextureToTextureCommand copies pixels between textures using an FBO.
 // Attaches the source texture to GL_READ_FRAMEBUFFER, then copies into the

@@ -278,30 +278,30 @@ func queryFeatures(exts map[string]bool, glMajor, glMinor int, isES bool, glCtx 
 		features.Insert(gputypes.FeatureDepthClipControl)
 	}
 
-	// BC texture compression -- requires S3TC + RGTC + BPTC
+	// The compressed formats are made with glTexStorage2D.
+	compressed := hasTexStorage(exts, glMajor, glMinor, isES)
+
+	// BC texture compression -- requires S3TC + RGTC + BPTC, and on GLES
+	// the sRGB S3TC formats too
+	bc := hasExtension(exts, "GL_EXT_texture_compression_s3tc") &&
+		hasExtension(exts, "GL_EXT_texture_compression_rgtc")
 	if isES {
-		// GLES needs srgb variant too
-		if hasExtension(exts, "GL_EXT_texture_compression_s3tc") &&
-			hasExtension(exts, "GL_EXT_texture_compression_s3tc_srgb") &&
-			hasExtension(exts, "GL_EXT_texture_compression_rgtc") &&
-			hasExtension(exts, "GL_EXT_texture_compression_bptc") {
-			features.Insert(gputypes.FeatureTextureCompressionBC)
-		}
+		bc = bc && hasExtension(exts, "GL_EXT_texture_compression_s3tc_srgb") &&
+			hasExtension(exts, "GL_EXT_texture_compression_bptc")
 	} else {
-		if hasExtension(exts, "GL_EXT_texture_compression_s3tc") &&
-			hasExtension(exts, "GL_EXT_texture_compression_rgtc") &&
-			hasExtension(exts, "GL_ARB_texture_compression_bptc") {
-			features.Insert(gputypes.FeatureTextureCompressionBC)
-		}
+		bc = bc && hasExtension(exts, "GL_ARB_texture_compression_bptc")
+	}
+	if compressed && bc {
+		features.Insert(gputypes.FeatureTextureCompressionBC)
 	}
 
 	// ETC2 -- built into ES 3.0+, needs GL_ARB_ES3_compatibility on desktop
-	if isES || hasExtension(exts, "GL_ARB_ES3_compatibility") {
+	if compressed && (isES || hasExtension(exts, "GL_ARB_ES3_compatibility")) {
 		features.Insert(gputypes.FeatureTextureCompressionETC2)
 	}
 
 	// ASTC
-	if hasExtension(exts, "GL_OES_texture_compression_astc",
+	if compressed && hasExtension(exts, "GL_OES_texture_compression_astc",
 		"GL_KHR_texture_compression_astc_ldr") {
 		features.Insert(gputypes.FeatureTextureCompressionASTC)
 	}

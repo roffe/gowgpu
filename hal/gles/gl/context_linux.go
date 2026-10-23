@@ -187,6 +187,10 @@ type Context struct {
 	glTexParameteri  unsafe.Pointer
 	glGenerateMipmap unsafe.Pointer
 
+	// Immutable storage and compressed uploads (GL 4.2 / ES 3.0)
+	glTexStorage2D            unsafe.Pointer
+	glCompressedTexSubImage2D unsafe.Pointer
+
 	// Framebuffers (GL 3.0+)
 	glGenFramebuffers        unsafe.Pointer
 	glDeleteFramebuffers     unsafe.Pointer
@@ -389,6 +393,8 @@ func (c *Context) Load(getProcAddr ProcAddressFunc, isGLES ...bool) error {
 	c.glTexSubImage2D = getProcAddr("glTexSubImage2D")
 	c.glTexParameteri = getProcAddr("glTexParameteri")
 	c.glGenerateMipmap = getProcAddr("glGenerateMipmap")
+	c.glTexStorage2D = getProcAddr("glTexStorage2D")
+	c.glCompressedTexSubImage2D = getProcAddr("glCompressedTexSubImage2D")
 
 	// Framebuffers
 	c.glGenFramebuffers = getProcAddr("glGenFramebuffers")
@@ -850,6 +856,24 @@ func (c *Context) TexSubImage2DOffset(target uint32, level int32, xoffset, yoffs
 
 func (c *Context) GenerateMipmap(target uint32) {
 	C.gl_v_i(C.uintptr_t(uintptr(c.glGenerateMipmap)), C.uint32_t(target))
+}
+
+// TexStorage2D allocates immutable storage for levels mip levels of the
+// bound texture (GL 4.2, ARB_texture_storage, ES 3.0).
+func (c *Context) TexStorage2D(target uint32, levels int32, internalformat uint32, width, height int32) {
+	C.gl_v_iiiii(C.uintptr_t(uintptr(c.glTexStorage2D)), C.uint32_t(target), C.uint32_t(levels), C.uint32_t(internalformat), C.uint32_t(width), C.uint32_t(height))
+}
+
+// CompressedTexSubImage2D replaces a block-aligned region of a compressed
+// texture level with imageSize bytes of blocks from data.
+func (c *Context) CompressedTexSubImage2D(target uint32, level, xoffset, yoffset, width, height int32, format uint32, imageSize int32, data unsafe.Pointer) {
+	C.gl_v_iiiiiiiip(C.uintptr_t(uintptr(c.glCompressedTexSubImage2D)), C.uint32_t(target), C.uint32_t(level), C.uint32_t(xoffset), C.uint32_t(yoffset), C.uint32_t(width), C.uint32_t(height), C.uint32_t(format), C.uint32_t(imageSize), (*C.uint8_t)(data))
+}
+
+// CompressedTexSubImage2DOffset is CompressedTexSubImage2D from the bound
+// GL_PIXEL_UNPACK_BUFFER, offset bytes into it.
+func (c *Context) CompressedTexSubImage2DOffset(target uint32, level, xoffset, yoffset, width, height int32, format uint32, imageSize int32, offset uintptr) {
+	C.gl_v_iiiiiiiiu(C.uintptr_t(uintptr(c.glCompressedTexSubImage2D)), C.uint32_t(target), C.uint32_t(level), C.uint32_t(xoffset), C.uint32_t(yoffset), C.uint32_t(width), C.uint32_t(height), C.uint32_t(format), C.uint32_t(imageSize), C.uintptr_t(offset))
 }
 
 // TexImage2DMultisample creates a multisample 2D texture image.
