@@ -17,6 +17,16 @@ import (
 	"github.com/roffe/gowgpu/hal/gles/gl"
 )
 
+// boundsChecks has image loads read zero out of bounds, where texelFetch is
+// undefined, from GLSL 4.30, which has the textureQueryLevels the check
+// needs. wgpu-hal checks them from GL 4.3 the same way.
+func boundsChecks(v glsl.Version) glsl.BoundsCheckPolicies {
+	if v.ES || v.Major < 4 || v.Major == 4 && v.Minor < 30 {
+		return glsl.BoundsCheckPolicies{}
+	}
+	return glsl.BoundsCheckPolicies{ImageLoad: glsl.BoundsCheckReadZeroSkipWrite}
+}
+
 // compileWGSLToGLSL compiles a WGSL shader source to GLSL for the given entry point.
 // OpenGL does not understand WGSL, so we use naga to parse WGSL and emit GLSL.
 //
@@ -54,10 +64,11 @@ func compileWGSLToGLSL(version glsl.Version, source hal.ShaderSource, entryPoint
 	// (< 420 desktop / < 310 ES) naga omits them and the HAL assigns bindings at
 	// runtime after linking (see assignBindingsAfterLink).
 	glslCode, translationInfo, err := glsl.Compile(module, glsl.Options{
-		LangVersion:        version,
-		EntryPoint:         entryPoint,
-		ForceHighPrecision: true,
-		BindingMap:         bindingMap,
+		LangVersion:         version,
+		EntryPoint:          entryPoint,
+		ForceHighPrecision:  true,
+		BindingMap:          bindingMap,
+		BoundsCheckPolicies: boundsChecks(version),
 		// ADJUST_COORDINATE_SPACE: naga appends gl_Position.yz = vec2(-gl_Position.y, gl_Position.z * 2.0 - gl_Position.w)
 		// at the end of vertex shaders. This flips Y and remaps Z from [0,1] to [-1,1].
 		// The scene renders upside-down inside the Surface's swapchain offscreen FBO
