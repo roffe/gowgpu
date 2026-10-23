@@ -303,6 +303,21 @@ func (p *ComputePipeline) Destroy() {
 	}
 }
 
+// QuerySet implements hal.QuerySet for Metal: an occlusion query set, whose
+// results are a buffer of a uint64 a query.
+type QuerySet struct {
+	buffer ID // id<MTLBuffer>
+	count  uint32
+	device *Device
+}
+
+// Destroy releases the query set.
+func (q *QuerySet) Destroy() {
+	if q.device != nil {
+		q.device.DestroyQuerySet(q)
+	}
+}
+
 // Fence implements hal.Fence for Metal using MTLSharedEvent.
 //
 // MTLSharedEvent (unlike MTLEvent) exposes signaledValue to the CPU,

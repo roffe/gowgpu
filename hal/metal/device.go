@@ -1135,27 +1135,45 @@ func (d *Device) DestroyComputePipeline(pipeline hal.ComputePipeline) {
 	mtlPipeline.device = nil
 }
 
-// CreateCommandEncoder creates a command encoder.
-//
-// The Metal command buffer is NOT created here — it is deferred to BeginEncoding.
-// This matches the two-step pattern used by Vulkan (allocate → vkBeginCommandBuffer)
-// CreateQuerySet creates a query set.
-// TODO: implement using Metal counter sample buffers for timestamp support.
-func (d *Device) CreateQuerySet(_ *hal.QuerySetDescriptor) (hal.QuerySet, error) {
-	return nil, hal.ErrTimestampsNotSupported
+// CreateQuerySet creates an occlusion query set: a visibility result buffer
+// of a uint64 a query, as in wgpu-hal. Timestamp query sets need counter
+// sample buffers, which this backend doesn't make yet, and return
+// hal.ErrTimestampsNotSupported.
+func (d *Device) CreateQuerySet(desc *hal.QuerySetDescriptor) (hal.QuerySet, error) {
+	if desc == nil || desc.Type != hal.QueryTypeOcclusion {
+		return nil, hal.ErrTimestampsNotSupported
+	}
+	pool := NewAutoreleasePool()
+	defer pool.Drain()
+	raw := MsgSend(d.raw, Sel("newBufferWithLength:options:"),
+		uintptr(uint64(max(desc.Count, 1))*8), uintptr(MTLResourceStorageModeShared))
+	if raw == 0 {
+		return nil, fmt.Errorf("metal: failed to create the visibility result buffer of a query set")
+	}
+	if desc.Label != "" {
+		label := NSString(desc.Label)
+		_ = MsgSend(raw, Sel("setLabel:"), uintptr(label))
+		Release(label)
+	}
+	return &QuerySet{buffer: raw, count: desc.Count, device: d}, nil
 }
 
 // DestroyQuerySet destroys a query set.
-func (d *Device) DestroyQuerySet(_ hal.QuerySet) {
-	// Stub: Metal query set implementation pending.
+func (d *Device) DestroyQuerySet(querySet hal.QuerySet) {
+	q, ok := querySet.(*QuerySet)
+	if !ok || q == nil {
+		return
+	}
+	if q.buffer != 0 {
+		Release(q.buffer)
+		q.buffer = 0
+	}
+	q.device = nil
 }
 
 // CreateCommandEncoder creates a command encoder for recording GPU commands.
-//
-// and DX12 (create list → Reset). Creating the command buffer eagerly here would
-// conflict with BeginEncoding's guard (cmdBuffer != 0 → "already recording"),
-// causing every subsequent BeginEncoding call to fail and leak the pre-allocated
-// command buffer and its autorelease pool.
+// BeginEncoding makes its Metal command buffer, as Vulkan allocates a command
+// buffer and then begins it.
 func (d *Device) CreateCommandEncoder(desc *hal.CommandEncoderDescriptor) (hal.CommandEncoder, error) {
 	label := ""
 	if desc != nil {

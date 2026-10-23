@@ -75,10 +75,9 @@ func (i *Instance) EnumerateAdapters(surfaceHint hal.Surface) []hal.ExposedAdapt
 		}
 
 		// Build features
+		// ponytail: no TimestampQuery until query sets get counter sample
+		// buffers.
 		var features gputypes.Features
-		if DeviceSupportsFamily(device, MTLGPUFamilyMetal3) {
-			features.Insert(gputypes.FeatureTimestampQuery)
-		}
 		features.Insert(gputypes.FeatureDepthClipControl)
 		// ponytail: no TextureCompressionBC, textureFormatToMTL maps no BC
 		// format and Metal aborts on pixel format 0. Map them (MTLPixelFormat

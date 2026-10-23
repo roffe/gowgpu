@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"unsafe"
 
 	"github.com/gogpu/naga/ir"
 	"github.com/roffe/gowgpu/gputypes"
@@ -438,5 +439,41 @@ func TestUncommittedCommandBuffersBalance(t *testing.T) {
 	if err := enc.BeginEncoding("one too many"); err == nil {
 		enc.DiscardEncoding()
 		t.Fatal("BeginEncoding succeeded with the queue's command buffers all uncommitted")
+	}
+}
+
+// TestOcclusionQuerySetResolves makes an occlusion query set, which needs no
+// feature, and resolves it: its queries, never written, read 0. Timestamp
+// query sets aren't offered.
+func TestOcclusionQuerySetResolves(t *testing.T) {
+	device, queue := newMetalTextureCopyTestDevice(t)
+	if _, err := device.CreateQuerySet(&hal.QuerySetDescriptor{Type: hal.QueryTypeTimestamp, Count: 2}); err == nil {
+		t.Error("a timestamp query set was made")
+	}
+	raw, err := device.CreateQuerySet(&hal.QuerySetDescriptor{Type: hal.QueryTypeOcclusion, Count: 4})
+	if err != nil {
+		t.Fatalf("CreateQuerySet(occlusion) failed: %v", err)
+	}
+	defer raw.Destroy()
+	readback := createMetalTextureCopyTestReadback(t, device, 64)
+	defer readback.Destroy()
+	results := unsafe.Slice((*byte)(readback.Contents()), 64)
+	for i := range results {
+		results[i] = 0xff
+	}
+	encoder := &CommandEncoder{device: device}
+	if err := encoder.BeginEncoding("resolve"); err != nil {
+		t.Fatalf("BeginEncoding failed: %v", err)
+	}
+	encoder.ResolveQuerySet(raw, 1, 3, readback, 8)
+	submitMetalTextureCopyTestEncoder(t, device, queue, encoder)
+	for i, b := range results {
+		want := byte(0)
+		if i < 8 || i >= 32 {
+			want = 0xff
+		}
+		if b != want {
+			t.Fatalf("byte %d = %#x, want %#x", i, b, want)
+		}
 	}
 }

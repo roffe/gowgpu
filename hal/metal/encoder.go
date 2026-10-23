@@ -390,9 +390,26 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst hal.Texture, regions []ha
 }
 
 // ResolveQuerySet copies query results from a query set into a destination buffer.
-// TODO: implement using Metal counter sample buffer readback.
-func (e *CommandEncoder) ResolveQuerySet(_ hal.QuerySet, _, _ uint32, _ hal.Buffer, _ uint64) {
-	// Stub: Metal timestamp query implementation pending.
+func (e *CommandEncoder) ResolveQuerySet(querySet hal.QuerySet, firstQuery, queryCount uint32, destination hal.Buffer, destinationOffset uint64) {
+	if e.cmdBuffer == 0 || queryCount == 0 {
+		return
+	}
+	q, ok := querySet.(*QuerySet)
+	dst, dstOK := destination.(*Buffer)
+	if !ok || q == nil || !dstOK || dst == nil || uint64(firstQuery)+uint64(queryCount) > uint64(q.count) ||
+		destinationOffset > dst.size || uint64(queryCount)*8 > dst.size-destinationOffset {
+		e.failRecording(fmt.Errorf("metal: ResolveQuerySet: invalid query set or destination range"))
+		return
+	}
+	pool := NewAutoreleasePool()
+	defer pool.Drain()
+	blitEncoder := MsgSend(e.cmdBuffer, Sel("blitCommandEncoder"))
+	if blitEncoder == 0 {
+		return
+	}
+	_ = MsgSend(blitEncoder, Sel("copyFromBuffer:sourceOffset:toBuffer:destinationOffset:size:"),
+		uintptr(q.buffer), uintptr(firstQuery)*8, uintptr(dst.raw), uintptr(destinationOffset), uintptr(queryCount)*8)
+	_ = MsgSend(blitEncoder, Sel("endEncoding"))
 }
 
 // BuildAccelerationStructures builds one or more acceleration structures.
