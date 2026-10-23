@@ -16,8 +16,15 @@ import (
 	"github.com/roffe/gowgpu/hal/dx12/dxgi"
 )
 
-// defaultBufferCount is the default number of back buffers in the swapchain.
-const defaultBufferCount = 2
+// bufferCount is the number of buffers of a swap chain for a present
+// mode. Mailbox takes a third, as in Dawn, so a new frame can replace the
+// queued one while another is on screen; with two it paces like Fifo.
+func bufferCount(mode gputypes.PresentMode) uint32 {
+	if mode == hal.PresentModeMailbox {
+		return 3
+	}
+	return 2
+}
 
 // maxFrameLatency is the maximum number of frames that can be queued.
 const maxFrameLatency = 2
@@ -78,7 +85,7 @@ func (s *Surface) createSwapchain(device *Device, config *hal.SurfaceConfigurati
 		Stereo:      0,
 		SampleDesc:  dxgi.DXGI_SAMPLE_DESC{Count: 1, Quality: 0},
 		BufferUsage: dxgi.DXGI_USAGE_RENDER_TARGET_OUTPUT,
-		BufferCount: defaultBufferCount,
+		BufferCount: bufferCount(config.PresentMode),
 		Scaling:     dxgi.DXGI_SCALING_STRETCH,
 		SwapEffect:  swapEffect,
 		AlphaMode:   alphaMode,
@@ -324,9 +331,8 @@ func (s *Surface) resizeSwapchain(config *hal.SurfaceConfiguration) error {
 		return fmt.Errorf("dx12: unsupported surface format: %v", config.Format)
 	}
 
-	// Resize buffers (0 means keep current buffer count)
 	err := s.swapchain.ResizeBuffers(
-		0, // keep buffer count
+		bufferCount(config.PresentMode),
 		config.Width,
 		config.Height,
 		format,
