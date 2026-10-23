@@ -564,6 +564,13 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 	}
 	e.emitStateBarrierPlans(attachmentPlans)
 
+	// The beginning timestamp goes ahead of the clears, the end one after
+	// the resolves (End), as Rust's wgpu-hal writes them.
+	if desc.TimestampWrites != nil {
+		tw := renderTSW{desc.TimestampWrites}
+		rpe.endOfPassTimerHeap, rpe.endOfPassTimerIndex = e.writeBeginTimestamp(tw.querySet(), tw)
+	}
+
 	// Attachment i goes in slot i, the PSO's RTVFormats[i]: a hole in the
 	// attachments gets a null RTV, as in Rust's wgpu-hal and Dawn.
 	rtvHandles := make([]d3d12.D3D12_CPU_DESCRIPTOR_HANDLE, 0, len(desc.ColorAttachments))
@@ -644,12 +651,6 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 		e.cmdList.RSSetScissorRects(1, &scissor)
 	}
 
-	// Write beginning-of-pass timestamp and store end-of-pass for later.
-	if desc.TimestampWrites != nil {
-		tw := renderTSW{desc.TimestampWrites}
-		rpe.endOfPassTimerHeap, rpe.endOfPassTimerIndex = e.writeBeginTimestamp(tw.querySet(), tw)
-	}
-
 	return rpe
 }
 
@@ -701,14 +702,6 @@ type RenderPassEncoder struct {
 func (e *RenderPassEncoder) End() {
 	if e.desc == nil || e.encoder == nil || !e.encoder.isRecording {
 		return
-	}
-
-	// Write end-of-pass timestamp before state transitions.
-	// Rust wgpu-hal reference: dx12/command.rs end_render_pass calls
-	// write_pass_end_timestamp_if_requested after resolves but before end_pass.
-	if e.endOfPassTimerHeap != nil {
-		e.encoder.cmdList.EndQuery(e.endOfPassTimerHeap, d3d12.D3D12_QUERY_TYPE_TIMESTAMP, e.endOfPassTimerIndex)
-		e.endOfPassTimerHeap = nil
 	}
 
 	for _, ca := range e.desc.ColorAttachments {
@@ -777,6 +770,11 @@ func (e *RenderPassEncoder) End() {
 				}
 			}
 		}
+	}
+
+	if e.endOfPassTimerHeap != nil {
+		e.encoder.cmdList.EndQuery(e.endOfPassTimerHeap, d3d12.D3D12_QUERY_TYPE_TIMESTAMP, e.endOfPassTimerIndex)
+		e.endOfPassTimerHeap = nil
 	}
 }
 
