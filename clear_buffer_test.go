@@ -166,3 +166,56 @@ func TestMapWriteRangeKeepsTheRest(t *testing.T) {
 	}
 	assertNoValidation(t, h)
 }
+
+// A MapWrite mapping holds the buffer's contents: GL started every mapping
+// zeroed and uploaded it whole at Unmap, so a second mapping that wrote 16
+// bytes zeroed the other 240.
+func TestMapWriteKeepsBufferContents(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	const size = 256
+	src := clearTestBuffer(t, device, BufferUsageMapWrite|BufferUsageCopySrc, size)
+	write := func(data []byte) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := src.Map(ctx, MapModeWrite, 0, size); err != nil {
+			t.Fatalf("Map: %v", err)
+		}
+		rng, err := src.MappedRange(0, size)
+		if err != nil {
+			t.Fatalf("MappedRange: %v", err)
+		}
+		copy(rng.Bytes(), data)
+		if err := src.Unmap(); err != nil {
+			t.Fatalf("Unmap: %v", err)
+		}
+	}
+	write(bytes.Repeat([]byte{0xab}, size))
+	write(bytes.Repeat([]byte{0xcd}, 16))
+
+	st := clearTestBuffer(t, device, BufferUsageCopyDst|BufferUsageMapRead, size)
+	enc, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	enc.CopyBufferToBuffer(src, 0, st, 0, size)
+	finishAndSubmit(t, device, enc)
+	device.Poll(PollWait)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := st.Map(ctx, MapModeRead, 0, size); err != nil {
+		t.Fatalf("Map: %v", err)
+	}
+	rng, err := st.MappedRange(0, size)
+	if err != nil {
+		t.Fatalf("MappedRange: %v", err)
+	}
+	want := append(bytes.Repeat([]byte{0xcd}, 16), bytes.Repeat([]byte{0xab}, size-16)...)
+	if got := rng.Bytes(); !bytes.Equal(got, want) {
+		t.Errorf("buffer holds % x..., byte 100 is %#x, want 0xab", got[:20], got[100])
+	}
+	if err := st.Unmap(); err != nil {
+		t.Fatalf("Unmap: %v", err)
+	}
+	assertNoValidation(t, h)
+}

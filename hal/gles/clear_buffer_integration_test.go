@@ -7,6 +7,8 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/roffe/gowgpu/gputypes"
+	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/gles/gl"
 )
 
@@ -46,4 +48,42 @@ func TestClearBufferCommandZeroesRange(t *testing.T) {
 			t.Fatalf("byte %d is %#x, want %#x", i, b, want)
 		}
 	}
+}
+
+// A MapRead buffer starts zeroed and its mappings are read from GL, never
+// written back: Unmap uploaded every mapping, so bytes written into a read
+// mapping reached the buffer. An empty range at the end maps to a pointer
+// rather than indexing past the shadow.
+func TestReadMappingIsNotWrittenBack(t *testing.T) {
+	ctx := newTestAdapterContext(t)
+	t.Cleanup(ctx.Destroy)
+	dev := openTestDevice(t, ctx)
+	t.Cleanup(dev.Destroy)
+	buf, err := dev.CreateBuffer(&hal.BufferDescriptor{Size: 64, Usage: gputypes.BufferUsageMapRead | gputypes.BufferUsageCopyDst})
+	if err != nil {
+		t.Fatalf("CreateBuffer: %v", err)
+	}
+	defer dev.DestroyBuffer(buf)
+	mapped := func(offset, size uint64) []byte {
+		t.Helper()
+		m, err := dev.MapBuffer(buf, offset, size)
+		if err != nil || m.Ptr == nil {
+			t.Fatalf("MapBuffer(%d, %d): %v, %p", offset, size, err, m.Ptr)
+		}
+		return unsafe.Slice((*byte)(m.Ptr), size)
+	}
+	got := mapped(0, 64)
+	if !bytes.Equal(got, make([]byte, 64)) {
+		t.Errorf("a new MapRead buffer holds % x", got)
+	}
+	for i := range got {
+		got[i] = 0x11
+	}
+	_ = dev.UnmapBuffer(buf)
+	if got := mapped(0, 64); got[0] != 0 {
+		t.Errorf("bytes written into a read mapping reached the buffer: % x", got[:8])
+	}
+	_ = dev.UnmapBuffer(buf)
+	mapped(64, 0)
+	_ = dev.UnmapBuffer(buf)
 }

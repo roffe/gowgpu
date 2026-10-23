@@ -8,7 +8,6 @@ package gles
 import (
 	"fmt"
 	"time"
-	"unsafe"
 
 	"github.com/gogpu/naga/glsl"
 	"github.com/roffe/gowgpu/gputypes"
@@ -97,10 +96,14 @@ func (d *Device) CreateBuffer(desc *BufferDescriptor) (hal.Buffer, error) {
 		glCtx:  glCtx,
 	}
 
-	// Handle MappedAtCreation
-	if desc.MappedAtCreation {
+	switch {
+	case desc.MappedAtCreation:
 		buf.mapped = make([]byte, desc.Size)
 		buf.mapSize = desc.Size
+		buf.writeBack = true
+	case desc.Usage&gputypes.BufferUsageMapRead != 0:
+		// Read mappings aren't written back, so nothing else would zero it.
+		(&ClearBufferCommand{buffer: buf, size: desc.Size}).Execute(glCtx)
 	}
 
 	return buf, nil
@@ -117,76 +120,6 @@ func (d *Device) DestroyBuffer(buffer hal.Buffer) {
 	_ = d.ctx.Lock()
 	defer d.ctx.Unlock()
 	b.Destroy()
-}
-
-// MapBuffer establishes a CPU-visible mapping for a GL buffer via a CPU
-// shadow slice. See device.go (Windows variant) for rationale.
-func (d *Device) MapBuffer(buffer hal.Buffer, offset, size uint64) (hal.BufferMapping, error) {
-	buf, ok := buffer.(*Buffer)
-	if !ok || buf == nil {
-		return hal.BufferMapping{}, hal.ErrInvalidMapRange
-	}
-	if offset+size > buf.size {
-		return hal.BufferMapping{}, hal.ErrInvalidMapRange
-	}
-
-	glCtx := d.ctx.Lock()
-	defer d.ctx.Unlock()
-
-	if buf.mapped == nil {
-		buf.mapped = make([]byte, buf.size)
-		buf.mapOffset, buf.mapSize = offset, size
-		if buf.usage&gputypes.BufferUsageMapRead != 0 {
-			switch {
-			case len(buf.data) == int(buf.size):
-				copy(buf.mapped, buf.data)
-			case buf.id != 0 && size > 0:
-				glCtx.BindBuffer(gl.COPY_READ_BUFFER, buf.id)
-				glPtr := glCtx.MapBufferRange(gl.COPY_READ_BUFFER, int(offset), int(size), gl.MAP_READ_BIT)
-				if glPtr != 0 {
-					basePtr := *(**byte)(unsafe.Pointer(&glPtr))
-					copy(buf.mapped[offset:], unsafe.Slice(basePtr, size))
-					glCtx.UnmapBuffer(gl.COPY_READ_BUFFER)
-				}
-				glCtx.BindBuffer(gl.COPY_READ_BUFFER, 0)
-			}
-		}
-	}
-	return hal.BufferMapping{
-		Ptr:        unsafe.Pointer(&buf.mapped[offset]),
-		IsCoherent: true,
-	}, nil
-}
-
-// UnmapBuffer releases a GL buffer mapping. Writable buffers push the
-// shadow back into the GL buffer via glBufferSubData; the shadow is then
-// released so subsequent MapBuffer calls pick up fresh contents.
-func (d *Device) UnmapBuffer(buffer hal.Buffer) error {
-	buf, ok := buffer.(*Buffer)
-	if !ok || buf == nil {
-		return nil
-	}
-	if buf.mapped == nil {
-		return nil
-	}
-
-	glCtx := d.ctx.Lock()
-	defer d.ctx.Unlock()
-
-	// Flush the CPU-side shadow buffer to the GL buffer. This must happen for
-	// ALL writable mappings, not only MapWrite buffers. MappedAtCreation works
-	// with any buffer usage (Uniform, Vertex, Index, CopyDst) per the WebGPU
-	// spec: "mappedAtCreation does not require MAP_WRITE usage." Without this
-	// flush, data written via MappedRange is silently discarded and the GL
-	// buffer remains zero-filled — uniform buffers get zero matrices, vertex
-	// buffers get zero positions, etc.
-	if buf.id != 0 && buf.mapSize > 0 {
-		glCtx.BindBuffer(buf.target, buf.id)
-		glCtx.BufferSubData(buf.target, int(buf.mapOffset), int(buf.mapSize), unsafe.Pointer(&buf.mapped[buf.mapOffset]))
-		glCtx.BindBuffer(buf.target, 0)
-	}
-	buf.mapped = nil
-	return nil
 }
 
 // CreateTexture creates a GPU texture.

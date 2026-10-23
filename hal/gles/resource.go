@@ -12,6 +12,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/gogpu/naga/glsl"
 	"github.com/roffe/gowgpu/gputypes"
@@ -28,11 +29,15 @@ type Buffer struct {
 	size   uint64
 	usage  gputypes.BufferUsage
 	glCtx  *gl.Context
-	mapped []byte // For mapped buffers
+	// mapped is the CPU shadow mappings point into, kept between the
+	// mappings of a MapWrite buffer, which only its mappings write: a
+	// mapping holds the buffer's contents, as WebGPU's do.
+	mapped []byte
 	// mapOffset and mapSize are the range of mapped the mapping covers,
-	// what Unmap uploads.
+	// what Unmap uploads when writeBack is set: for a mapping at creation
+	// or of a MapWrite buffer.
 	mapOffset, mapSize uint64
-	data               []byte // CPU-side storage for readback (populated by CopyTextureToBuffer)
+	writeBack          bool
 }
 
 // Destroy releases the buffer.
@@ -45,6 +50,57 @@ func (b *Buffer) Destroy() {
 
 // NativeHandle returns the GL buffer object ID.
 func (b *Buffer) NativeHandle() uintptr { return uintptr(b.id) }
+
+// MapBuffer maps a range of a buffer through its CPU shadow, which a
+// MapRead buffer's mapping reads from GL.
+func (d *Device) MapBuffer(buffer hal.Buffer, offset, size uint64) (hal.BufferMapping, error) {
+	buf, ok := buffer.(*Buffer)
+	if !ok || buf == nil || offset+size > buf.size {
+		return hal.BufferMapping{}, hal.ErrInvalidMapRange
+	}
+	if !buf.writeBack { // a mapping at creation is ready
+		if buf.mapped == nil {
+			buf.mapped = make([]byte, buf.size)
+		}
+		buf.mapOffset, buf.mapSize = offset, size
+		buf.writeBack = buf.usage&gputypes.BufferUsageMapWrite != 0
+		if buf.usage&gputypes.BufferUsageMapRead != 0 && buf.id != 0 && size > 0 {
+			glCtx := d.ctx.Lock()
+			glCtx.BindBuffer(gl.COPY_READ_BUFFER, buf.id)
+			if p := glCtx.MapBufferRange(gl.COPY_READ_BUFFER, int(offset), int(size), gl.MAP_READ_BIT); p != 0 {
+				copy(buf.mapped[offset:], unsafe.Slice(*(**byte)(unsafe.Pointer(&p)), size))
+				glCtx.UnmapBuffer(gl.COPY_READ_BUFFER)
+			}
+			glCtx.BindBuffer(gl.COPY_READ_BUFFER, 0)
+			d.ctx.Unlock()
+		}
+	}
+	ptr := unsafe.Pointer(unsafe.SliceData(buf.mapped)) // an empty range at the end has no byte of its own
+	if offset < uint64(len(buf.mapped)) {
+		ptr = unsafe.Pointer(&buf.mapped[offset])
+	}
+	return hal.BufferMapping{Ptr: ptr, IsCoherent: true}, nil
+}
+
+// UnmapBuffer ends a mapping, uploading the range of a writable one.
+func (d *Device) UnmapBuffer(buffer hal.Buffer) error {
+	buf, ok := buffer.(*Buffer)
+	if !ok || buf == nil || buf.mapped == nil {
+		return nil
+	}
+	if buf.writeBack && buf.id != 0 && buf.mapSize > 0 {
+		glCtx := d.ctx.Lock()
+		glCtx.BindBuffer(buf.target, buf.id)
+		glCtx.BufferSubData(buf.target, int(buf.mapOffset), int(buf.mapSize), unsafe.Pointer(&buf.mapped[buf.mapOffset]))
+		glCtx.BindBuffer(buf.target, 0)
+		d.ctx.Unlock()
+	}
+	buf.writeBack = false
+	if buf.usage&gputypes.BufferUsageMapWrite == 0 {
+		buf.mapped = nil
+	}
+	return nil
+}
 
 // Texture implements hal.Texture for OpenGL.
 type Texture struct {
