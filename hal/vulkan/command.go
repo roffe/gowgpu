@@ -22,6 +22,9 @@ import (
 type CommandBuffer struct {
 	handle vk.CommandBuffer
 	pool   vk.CommandPool
+	// spare are the pool's other command buffers, for a standalone encoder
+	// that takes the pool after FreeCommandBuffer recycles it.
+	spare []vk.CommandBuffer
 }
 
 // Destroy releases the command buffer resources.
@@ -33,6 +36,7 @@ func (c *CommandBuffer) Destroy() {
 	// 2. Proper solution requires fence-based tracking or pool reset after WaitIdle
 	c.handle = 0
 	c.pool = 0
+	c.spare = nil
 	cmdBufferResultPool.Put(c)
 }
 
@@ -251,16 +255,14 @@ func (e *CommandEncoder) EndEncoding() (hal.CommandBuffer, error) {
 		// encoder.Destroy() also destroys the same pool at shutdown.
 		cb.pool = 0
 	} else {
-		// Standalone mode: CommandBuffer takes ownership of pool.
+		// Standalone mode: CommandBuffer takes ownership of the pool and
+		// of the buffers allocated from it.
 		cb.pool = e.pool
+		cb.spare = append(e.free, e.discarded...)
 
-		// Detach resources to CommandBuffer, return encoder struct.
-		// The pool goes with the CommandBuffer; free/discarded buffers
-		// are abandoned (they belong to the pool and will be reset when
-		// the pool is recycled via FreeCommandBuffer).
 		e.device = nil
 		e.pool = 0
-		e.free = e.free[:0]
+		e.free = nil
 		e.discarded = e.discarded[:0]
 		e.label = ""
 		e.swapchainImage = 0
@@ -591,14 +593,12 @@ func (e *CommandEncoder) DiscardEncoding() {
 
 	if !e.poolManaged {
 		// Standalone mode: recycle pool and encoder struct (VK-POOL-001).
-		// The pool contains all free+discarded buffers; they will be reset
-		// when the pool is recycled via FreeCommandBuffer/acquireAllocator.
 		if e.device != nil && e.pool != 0 {
-			e.device.recyclePool(e.pool)
+			e.device.recyclePool(e.pool, append(e.free, e.discarded...))
 		}
 		e.device = nil
 		e.pool = 0
-		e.free = e.free[:0]
+		e.free = nil
 		e.discarded = e.discarded[:0]
 		e.label = ""
 		encoderPool.Put(e)

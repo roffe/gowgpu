@@ -21,7 +21,8 @@ import (
 	"github.com/roffe/gowgpu/hal/vulkan/vk"
 )
 
-// commandAllocator holds a recycled VkCommandPool.
+// commandAllocator holds a recycled VkCommandPool and the command buffers
+// allocated from it, which the encoder that takes the pool starts with.
 // Each CreateCommandEncoder gets its own dedicated pool. The encoder manages
 // its own free list of VkCommandBuffers internally (VK-CMD-001).
 // After GPU completion, FreeCommandBuffer recycles the pool back for reuse.
@@ -29,7 +30,8 @@ import (
 // Reference: Rust wgpu-hal uses the same per-encoder pool pattern — each
 // CommandEncoder owns its own VkCommandPool with internal free list.
 type commandAllocator struct {
-	pool vk.CommandPool
+	pool    vk.CommandPool
+	buffers []vk.CommandBuffer
 }
 
 // encoderPool reuses CommandEncoder structs across CreateCommandEncoder calls.
@@ -1572,13 +1574,13 @@ func (d *Device) acquireAllocator() (commandAllocator, error) {
 // allowing them to be re-allocated by the next encoder that acquires this pool.
 // Without this reset, vkAllocateCommandBuffers may return CBs still in
 // "executable" state, causing VUID-vkBeginCommandBuffer-commandBuffer-00049.
-func (d *Device) recyclePool(pool vk.CommandPool) {
+func (d *Device) recyclePool(pool vk.CommandPool, buffers []vk.CommandBuffer) {
 	if pool == 0 {
 		return
 	}
 	d.cmds.ResetCommandPool(d.handle, pool, 0)
 	d.allocatorMu.Lock()
-	d.freeAllocators = append(d.freeAllocators, commandAllocator{pool: pool})
+	d.freeAllocators = append(d.freeAllocators, commandAllocator{pool: pool, buffers: buffers})
 	d.allocatorMu.Unlock()
 }
 
@@ -1600,8 +1602,7 @@ func (d *Device) CreateCommandEncoder(desc *hal.CommandEncoderDescriptor) (hal.C
 	e.pool = alloc.pool
 	e.active = 0
 	e.label = desc.Label
-	// free and discarded slices may retain capacity from previous use — clear length.
-	e.free = e.free[:0]
+	e.free = append(e.free[:0], alloc.buffers...)
 	e.discarded = e.discarded[:0]
 	return e, nil
 }
@@ -1645,10 +1646,11 @@ func (d *Device) FreeCommandBuffer(cmdBuffer hal.CommandBuffer) {
 	// The pool contains all command buffers (active + free + discarded from
 	// the encoder). Destroying the pool frees them all; resetting the pool
 	// puts them all back to initial state.
-	d.recyclePool(vkCmdBuf.pool)
+	d.recyclePool(vkCmdBuf.pool, append(vkCmdBuf.spare, vkCmdBuf.handle))
 
 	vkCmdBuf.handle = 0
 	vkCmdBuf.pool = 0
+	vkCmdBuf.spare = nil
 	cmdBufferResultPool.Put(vkCmdBuf)
 }
 
