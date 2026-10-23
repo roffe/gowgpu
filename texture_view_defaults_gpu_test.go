@@ -35,6 +35,7 @@ const viewDefaultsShader = `
 // array texture through the 2D view, which read nothing.
 func TestTextureViewDefaults(t *testing.T) {
 	device, h := newValidatedDevice(t)
+	skipWithoutGLTextureViews(t, device, h)
 	tex, err := device.CreateTexture(&TextureDescriptor{
 		Label:         "two-layers",
 		Size:          Extent3D{Width: pixSide, Height: pixSide, DepthOrArrayLayers: 2},
@@ -103,9 +104,6 @@ func TestTextureViewDefaults(t *testing.T) {
 		{Binding: 0, TextureView: arrayView},
 		{Binding: 1, TextureView: layerView},
 	}})
-	if err != nil && h.backend == gputypes.BackendGL && strings.Contains(err.Error(), "GL texture view") {
-		t.Skipf("no texture views on this GL context: %v", err)
-	}
 	if err != nil {
 		t.Fatalf("CreateBindGroup: %v", err)
 	}
@@ -137,4 +135,44 @@ func TestTextureViewDefaults(t *testing.T) {
 	expectPixels(t, "layer 1 of the default view", left, 0, 255, 0, 255)
 	expectPixels(t, "2D view of layer 1", right, 0, 255, 0, 255)
 	assertNoValidation(t, h)
+}
+
+// skipWithoutGLTextureViews skips on a GL context without texture views,
+// which the GL backend samples a view of some of a texture's layers or mip
+// levels through: without them it refuses such a view to sample, and an
+// image unit that stores to one level of a texture while a view of another
+// is sampled stores nothing.
+func skipWithoutGLTextureViews(t *testing.T, device *Device, h *captureHandler) {
+	t.Helper()
+	if h.backend != gputypes.BackendGL {
+		return
+	}
+	tex, err := device.CreateTexture(&TextureDescriptor{
+		Label: "view-probe", Size: Extent3D{Width: 1, Height: 1, DepthOrArrayLayers: 2}, MipLevelCount: 1, SampleCount: 1,
+		Dimension: TextureDimension2D, Format: TextureFormatRGBA8Unorm, Usage: TextureUsageTextureBinding,
+	})
+	if err != nil {
+		t.Fatalf("CreateTexture: %v", err)
+	}
+	defer tex.Release()
+	view, err := device.CreateTextureView(tex, &TextureViewDescriptor{Dimension: gputypes.TextureViewDimension2D, BaseArrayLayer: 1, ArrayLayerCount: 1})
+	if err != nil {
+		t.Fatalf("CreateTextureView: %v", err)
+	}
+	defer view.Release()
+	bgl, err := device.CreateBindGroupLayout(&BindGroupLayoutDescriptor{Entries: []gputypes.BindGroupLayoutEntry{
+		{Binding: 0, Visibility: ShaderStageFragment, Texture: &gputypes.TextureBindingLayout{SampleType: gputypes.TextureSampleTypeFloat, ViewDimension: gputypes.TextureViewDimension2D}},
+	}})
+	if err != nil {
+		t.Fatalf("CreateBindGroupLayout: %v", err)
+	}
+	defer bgl.Release()
+	group, err := device.CreateBindGroup(&BindGroupDescriptor{Layout: bgl, Entries: []BindGroupEntry{{Binding: 0, TextureView: view}}})
+	if err != nil && strings.Contains(err.Error(), "needs a GL texture view") {
+		t.Skipf("no texture views on this GL context: %v", err)
+	}
+	if err != nil {
+		t.Fatalf("CreateBindGroup: %v", err)
+	}
+	group.Release()
 }

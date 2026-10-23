@@ -815,3 +815,122 @@ func TestLayerViewsSample(t *testing.T) {
 		})
 	}
 }
+
+// mipStoreShader stores the texel of a sampled view under each texel of a
+// storage view of another size, its channels turned one place (g, b, r, a).
+const mipStoreShader = `
+@group(0) @binding(0) var src: texture_2d<f32>;
+@group(0) @binding(1) var dst: texture_storage_2d<rgba8unorm, write>;
+@compute @workgroup_size(1) fn cs_main(@builtin(global_invocation_id) id: vec3<u32>) {
+	let at = id.xy * textureDimensions(src) / textureDimensions(dst);
+	textureStore(dst, vec2<i32>(id.xy), textureLoad(src, vec2<i32>(at), 0).gbra);
+}
+`
+
+// A dispatch stores into the mip level of its storage view while it
+// samples a view of another level of the same texture: into level 2 from
+// level 0, then into level 1 from level 2, below the sampled level. A view
+// of one level sampled through its texture set the texture's base and max
+// level to it, and an image unit storing to a level outside them stores
+// nothing; such a view is a texture view of its own now.
+func TestStoreIntoAMipBesideASampledMip(t *testing.T) {
+	ctx := newTestAdapterContext(t)
+	t.Cleanup(ctx.Destroy)
+	dev := openTestDevice(t, ctx)
+	if !dev.formats.textureView {
+		t.Skip("no texture views on this context")
+	}
+	const side = 8
+	raw, err := dev.CreateTexture(&hal.TextureDescriptor{
+		Size: hal.Extent3D{Width: side, Height: side, DepthOrArrayLayers: 1}, MipLevelCount: 3, SampleCount: 1,
+		Dimension: gputypes.TextureDimension2D, Format: gputypes.TextureFormatRGBA8Unorm,
+		Usage: gputypes.TextureUsageTextureBinding | gputypes.TextureUsageStorageBinding | gputypes.TextureUsageCopyDst,
+	})
+	if err != nil {
+		t.Fatalf("CreateTexture: %v", err)
+	}
+	t.Cleanup(func() { dev.DestroyTexture(raw) })
+	tex := raw.(*Texture)
+	q := &Queue{ctx: ctx}
+	green := bytes.Repeat([]byte{0, 255, 0, 255}, side*side)
+	if err := q.WriteTexture(&hal.ImageCopyTexture{Texture: tex}, green, &hal.ImageDataLayout{BytesPerRow: side * 4},
+		&hal.Extent3D{Width: side, Height: side, DepthOrArrayLayers: 1}); err != nil {
+		t.Fatalf("WriteTexture: %v", err)
+	}
+	level := func(mip uint32) hal.TextureView {
+		t.Helper()
+		v, err := dev.CreateTextureView(tex, &hal.TextureViewDescriptor{Dimension: gputypes.TextureViewDimension2D, BaseMipLevel: mip, MipLevelCount: 1})
+		if err != nil {
+			t.Fatalf("CreateTextureView(level %d): %v", mip, err)
+		}
+		t.Cleanup(func() { dev.DestroyTextureView(v) })
+		return v
+	}
+	bgl, err := dev.CreateBindGroupLayout(&hal.BindGroupLayoutDescriptor{Entries: []gputypes.BindGroupLayoutEntry{
+		{Binding: 0, Visibility: gputypes.ShaderStageCompute, Texture: &gputypes.TextureBindingLayout{
+			SampleType: gputypes.TextureSampleTypeFloat, ViewDimension: gputypes.TextureViewDimension2D}},
+		{Binding: 1, Visibility: gputypes.ShaderStageCompute, StorageTexture: &gputypes.StorageTextureBindingLayout{
+			Access: gputypes.StorageTextureAccessWriteOnly, Format: gputypes.TextureFormatRGBA8Unorm, ViewDimension: gputypes.TextureViewDimension2D}},
+	}})
+	if err != nil {
+		t.Fatalf("CreateBindGroupLayout: %v", err)
+	}
+	pl, err := dev.CreatePipelineLayout(&hal.PipelineLayoutDescriptor{BindGroupLayouts: []hal.BindGroupLayout{bgl}})
+	if err != nil {
+		t.Fatalf("CreatePipelineLayout: %v", err)
+	}
+	module, err := dev.CreateShaderModule(&hal.ShaderModuleDescriptor{Source: hal.ShaderSource{WGSL: mipStoreShader}})
+	if err != nil {
+		t.Fatalf("CreateShaderModule: %v", err)
+	}
+	t.Cleanup(func() { dev.DestroyShaderModule(module) })
+	pipe, err := dev.CreateComputePipeline(&hal.ComputePipelineDescriptor{Layout: pl, Compute: hal.ComputeState{Module: module, EntryPoint: "cs_main"}})
+	if err != nil {
+		t.Fatalf("CreateComputePipeline: %v", err)
+	}
+	t.Cleanup(func() { dev.DestroyComputePipeline(pipe) })
+	enc, err := dev.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	_ = enc.BeginEncoding("store into a mip level")
+	for _, step := range []struct{ src, dst uint32 }{{0, 2}, {2, 1}} {
+		group, err := dev.CreateBindGroup(&hal.BindGroupDescriptor{Layout: bgl, Entries: []gputypes.BindGroupEntry{
+			{Binding: 0, Resource: gputypes.TextureViewBinding{TextureView: level(step.src).NativeHandle()}},
+			{Binding: 1, Resource: gputypes.TextureViewBinding{TextureView: level(step.dst).NativeHandle()}},
+		}})
+		if err != nil {
+			t.Fatalf("CreateBindGroup: %v", err)
+		}
+		pass := enc.BeginComputePass(&hal.ComputePassDescriptor{})
+		pass.SetPipeline(pipe)
+		pass.SetBindGroup(0, group, nil)
+		pass.Dispatch(side>>step.dst, side>>step.dst, 1)
+		pass.End()
+		enc.TransitionTextures([]hal.TextureBarrier{{Texture: tex, Usage: hal.TextureUsageTransition{
+			OldUsage: gputypes.TextureUsageStorageBinding, NewUsage: gputypes.TextureUsageTextureBinding}}})
+	}
+	cb, err := enc.EndEncoding()
+	if err != nil {
+		t.Fatalf("EndEncoding: %v", err)
+	}
+	if _, err := q.Submit([]hal.CommandBuffer{cb}); err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+
+	glCtx := ctx.Lock()
+	defer ctx.Unlock()
+	for mip, want := range map[uint32][4]byte{1: {0, 0, 255, 255}, 2: {255, 0, 0, 255}} {
+		n := side >> mip
+		pixels := make([]byte, n*n*4)
+		withFramebuffer(glCtx, gl.READ_FRAMEBUFFER, func() {
+			attach(glCtx, gl.READ_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, fbAttachment{tex: tex, mip: mip})
+			glCtx.ReadPixels(0, 0, int32(n), int32(n), gl.RGBA, gl.UNSIGNED_BYTE, unsafe.Pointer(&pixels[0]))
+		})
+		for i := 0; i < len(pixels); i += 4 {
+			if [4]byte(pixels[i:i+4]) != want {
+				t.Fatalf("mip level %d texel %d = % x, want % x", mip, i/4, pixels[i:i+4], want)
+			}
+		}
+	}
+}

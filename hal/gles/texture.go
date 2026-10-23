@@ -635,13 +635,17 @@ func (v *TextureView) apart() bool {
 	return viewTarget(v.dimension, t.sampleCount) != t.target || v.baseLayer != 0 || v.layerCount != t.layers()
 }
 
-// wantsTexture reports whether v is sampled and loaded through a texture of
-// its own, a texture view, on a context with them (views): a view apart
-// from a texture the shaders bind, made with immutable storage, as Dawn
-// makes views on GL.
+// wantsTexture reports whether v is sampled, loaded and stored through a
+// texture of its own, a texture view, on a context with them (views): a
+// view apart from a texture the shaders bind, made with immutable storage,
+// as Dawn makes views on GL, or one of only some of its mip levels. Such a
+// view sampled through its texture would set the texture's base and max
+// level, and an image unit that stores to another level of the texture
+// while the texture samples with them stores nothing.
 func (v *TextureView) wantsTexture(views bool) bool {
 	t := v.texture
-	return views && t.immutable && t.usage&(gputypes.TextureUsageTextureBinding|gputypes.TextureUsageStorageBinding) != 0 && v.apart()
+	return views && t.immutable && t.usage&(gputypes.TextureUsageTextureBinding|gputypes.TextureUsageStorageBinding) != 0 &&
+		(v.apart() || v.baseMip != 0 || v.mipCount != t.mipLevels)
 }
 
 // makeTexture makes v's texture view, of its dimension, mip levels, layers
