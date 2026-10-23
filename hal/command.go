@@ -370,9 +370,9 @@ type ImageDataLayout struct {
 	// Can be 0 for single-row images.
 	BytesPerRow uint32
 
-	// RowsPerImage is the number of rows per image slice.
-	// Only needed for 3D textures.
-	// Can be 0 to use the image height.
+	// RowsPerImage is the number of rows of texel blocks per image, an
+	// array layer or a depth slice, as in WebGPU: rows of texels for an
+	// uncompressed format. Can be 0 for a copy of one image.
 	RowsPerImage uint32
 }
 
