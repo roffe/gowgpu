@@ -8,6 +8,7 @@ package metal
 import (
 	"fmt"
 	"image"
+	"sync"
 	"sync/atomic"
 	"unsafe"
 
@@ -25,6 +26,10 @@ const maxFramesInFlight = 2
 type Queue struct {
 	device       *Device
 	commandQueue ID // id<MTLCommandQueue>
+
+	// mu orders Submit's commits and the submission index with
+	// Device.WaitIdle, which may run on another goroutine.
+	mu sync.Mutex
 
 	// submissionIndex is a monotonically increasing counter for tracking submissions.
 	submissionIndex uint64
@@ -65,6 +70,8 @@ func (q *Queue) Submit(commandBuffers []hal.CommandBuffer) (uint64, error) {
 		hal.Logger().Debug("metal: Submit", "buffers", len(commandBuffers))
 	}
 
+	q.mu.Lock()
+	defer q.mu.Unlock()
 	q.submissionIndex++
 	subIdx := q.submissionIndex
 
