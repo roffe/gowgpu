@@ -136,6 +136,11 @@ type SurfaceConfiguration struct {
 	// AlphaMode controls alpha compositing.
 	AlphaMode gputypes.CompositeAlphaMode
 
+	// ViewFormats are the formats, besides Format, that views of the
+	// surface's textures may have: Format's sRGB or linear twin. A view in
+	// another format is refused.
+	ViewFormats []gputypes.TextureFormat
+
 	// EnableDamagePresent requests the backend to configure for damage-aware
 	// presentation. On DX12, this selects DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL
 	// instead of FLIP_DISCARD, enabling IDXGISwapChain1::Present1 with dirty
