@@ -193,7 +193,7 @@ func (e *CommandEncoder) TransitionBuffers(barriers []hal.BufferBarrier) {
 			continue
 		}
 
-		afterState := bufferUsageToD3D12State(b.Usage.NewUsage)
+		afterState := bufferBarrierState(b.Usage.NewUsage, b.Usage.New)
 		beforeState, needsBarrier := e.stateTracker.transitionBuffer(buf, afterState)
 		if needsBarrier || keepsUnorderedAccess(beforeState, afterState) {
 			plans = append(plans, stateBarrierPlan{resource: buf, subresource: d3d12.D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, before: beforeState, after: afterState})
@@ -1386,6 +1386,43 @@ func bufferUsageToD3D12State(usage gputypes.BufferUsage) d3d12.D3D12_RESOURCE_ST
 		state = d3d12.D3D12_RESOURCE_STATE_COMMON
 	}
 
+	return state
+}
+
+// bufferBarrierState is the D3D12 state of a barrier's new buffer usage:
+// from the fine-grained uses when the barrier has them, which tell
+// read-only storage, read through an SRV, from read-write storage, written
+// through a UAV, and from the coarse usage otherwise.
+//
+// Reference: wgpu-hal dx12/conv.rs map_buffer_usage_to_state
+func bufferBarrierState(usage gputypes.BufferUsage, uses hal.BufferUses) d3d12.D3D12_RESOURCE_STATES {
+	if uses == 0 {
+		return bufferUsageToD3D12State(usage)
+	}
+	var state d3d12.D3D12_RESOURCE_STATES
+	if uses&hal.BufferUsesCopySrc != 0 {
+		state |= d3d12.D3D12_RESOURCE_STATE_COPY_SOURCE
+	}
+	if uses&(hal.BufferUsesCopyDst|hal.BufferUsesQueryResolve) != 0 {
+		state |= d3d12.D3D12_RESOURCE_STATE_COPY_DEST
+	}
+	if uses&hal.BufferUsesIndex != 0 {
+		state |= d3d12.D3D12_RESOURCE_STATE_INDEX_BUFFER
+	}
+	if uses&(hal.BufferUsesVertex|hal.BufferUsesUniform) != 0 {
+		state |= d3d12.D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+	}
+	if uses&hal.BufferUsesStorageWrite != 0 {
+		state |= d3d12.D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+	} else if uses&hal.BufferUsesStorageRead != 0 {
+		state |= d3d12.D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | d3d12.D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+	}
+	if uses&hal.BufferUsesIndirect != 0 {
+		state |= d3d12.D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT
+	}
+	if state == 0 {
+		state = d3d12.D3D12_RESOURCE_STATE_COMMON
+	}
 	return state
 }
 
