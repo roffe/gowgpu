@@ -21,23 +21,12 @@ import (
 type ComputePassEncoder struct {
 	core    *core.CoreComputePassEncoder
 	encoder *CommandEncoder
-	// currentPipelineBindGroupCount tracks the bind group count of the
-	// currently set pipeline. Used by SetBindGroup to validate that the
-	// group index is within the pipeline layout bounds. Zero means no
-	// pipeline has been set yet.
-	currentPipelineBindGroupCount uint32
 	// pipelineSet tracks whether SetPipeline has been called.
 	// Dispatch commands require a pipeline to be set first.
 	pipelineSet bool
 	// currentPipeline tracks the currently set pipeline for state restoration
 	// after indirect dispatch validation. Set by SetPipeline.
 	currentPipeline *ComputePipeline
-	// assignedBindGroups tracks the bind groups set at each slot for state
-	// restoration after indirect dispatch validation.
-	assignedBindGroups [MaxBindGroups]*BindGroup
-	// assignedDynOffsets tracks the dynamic offsets for each bind group slot
-	// for state restoration after indirect dispatch validation.
-	assignedDynOffsets [MaxBindGroups][]uint32
 	// binder tracks bind group assignments and validates compatibility
 	// at dispatch time, matching Rust wgpu-core's Binder pattern.
 	binder binder
@@ -62,7 +51,6 @@ func (p *ComputePassEncoder) SetPipeline(pipeline *ComputePipeline) {
 		p.encoder.setError(fmt.Errorf("wgpu: ComputePass.SetPipeline: pipeline is released: %w", ErrReleased))
 		return
 	}
-	p.currentPipelineBindGroupCount = pipeline.bindGroupCount
 	p.pipelineSet = true
 	p.currentPipeline = pipeline
 	p.binder.updateExpectations(pipeline.bindGroupLayouts)
@@ -71,28 +59,28 @@ func (p *ComputePassEncoder) SetPipeline(pipeline *ComputePipeline) {
 	raw := p.core.RawPass()
 	if raw != nil && pipeline.hal != nil {
 		raw.SetPipeline(pipeline.hal)
+		p.binder.issue(raw.SetBindGroup)
 	}
 }
 
-// SetBindGroup sets a bind group for the given index.
+// SetBindGroup sets a bind group for the given index. The backend gets it
+// once the pipeline's layout takes it at index.
 func (p *ComputePassEncoder) SetBindGroup(index uint32, group *BindGroup, offsets []uint32) {
-	if err := validateSetBindGroup("ComputePass", index, group, offsets, p.currentPipelineBindGroupCount, p.encoder.limits()); err != nil {
+	if err := validateSetBindGroup("ComputePass", index, group, offsets, p.encoder.limits()); err != nil {
 		p.encoder.setError(err)
 		return
 	}
 	p.binder.assign(index, group.layout)
 	p.binder.assignBindGroup(index, group)
-	p.assignedBindGroups[index] = group
-	p.assignedDynOffsets[index] = append(p.assignedDynOffsets[index][:0], offsets...)
+	p.binder.setGroup(index, group, offsets)
 	// Keeps the group and its buffers alive and lists the group for
 	// submit-time validation, once per encoder. Its textures and buffers
 	// enter a usage scope only when a dispatch runs with it (recordDispatch),
 	// so a group bound and replaced before the dispatch conflicts with
 	// nothing.
 	p.encoder.trackBindGroup(group)
-	raw := p.core.RawPass()
-	if raw != nil && group.hal != nil {
-		raw.SetBindGroup(index, group.hal, offsets)
+	if raw := p.core.RawPass(); raw != nil && p.pipelineSet {
+		p.binder.issue(raw.SetBindGroup)
 	}
 }
 
@@ -167,7 +155,7 @@ func (p *ComputePassEncoder) recordDispatch(op string) bool {
 	}
 	wasErr := enc.core.Status() == core.CommandEncoderStatusError
 	for i := uint32(0); i < p.binder.maxSlots && i < MaxBindGroups; i++ {
-		enc.recordDispatchBindGroup(p.assignedBindGroups[i], op)
+		enc.recordDispatchBindGroup(p.binder.groups[i], op)
 	}
 	return wasErr || enc.core.Status() != core.CommandEncoderStatusError
 }
@@ -335,12 +323,7 @@ func (p *ComputePassEncoder) restoreComputeState(raw hal.ComputePassEncoder) {
 	}
 
 	// Restore user's bind groups.
-	for i := uint32(0); i < p.currentPipelineBindGroupCount; i++ {
-		bg := p.assignedBindGroups[i]
-		if bg != nil && bg.hal != nil {
-			raw.SetBindGroup(i, bg.hal, p.assignedDynOffsets[i])
-		}
-	}
+	p.binder.reissue(raw.SetBindGroup)
 }
 
 // End ends the compute pass.

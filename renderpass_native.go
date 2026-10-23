@@ -19,11 +19,6 @@ import (
 type RenderPassEncoder struct {
 	core    *core.CoreRenderPassEncoder
 	encoder *CommandEncoder
-	// currentPipelineBindGroupCount tracks the bind group count of the
-	// currently set pipeline. Used by SetBindGroup to validate that the
-	// group index is within the pipeline layout bounds. Zero means no
-	// pipeline has been set yet.
-	currentPipelineBindGroupCount uint32
 	// pipelineSet tracks whether SetPipeline has been called.
 	// Draw commands require a pipeline to be set first.
 	pipelineSet bool
@@ -82,7 +77,6 @@ func (p *RenderPassEncoder) SetPipeline(pipeline *RenderPipeline) {
 			return
 		}
 	}
-	p.currentPipelineBindGroupCount = pipeline.bindGroupCount
 	p.pipelineSet = true
 	p.vertexSteps = pipeline.vertexSteps
 	p.currentStripIndexFormat = pipeline.stripIndexFormat
@@ -95,25 +89,27 @@ func (p *RenderPassEncoder) SetPipeline(pipeline *RenderPipeline) {
 	raw := p.core.RawPass()
 	if raw != nil && pipeline.hal != nil {
 		raw.SetPipeline(pipeline.hal)
+		p.binder.issue(raw.SetBindGroup)
 	}
 }
 
-// SetBindGroup sets a bind group for the given index.
+// SetBindGroup sets a bind group for the given index. The backend gets it
+// once the pipeline's layout takes it at index.
 func (p *RenderPassEncoder) SetBindGroup(index uint32, group *BindGroup, offsets []uint32) {
-	if err := validateSetBindGroup("RenderPass", index, group, offsets, p.currentPipelineBindGroupCount, p.encoder.limits()); err != nil {
+	if err := validateSetBindGroup("RenderPass", index, group, offsets, p.encoder.limits()); err != nil {
 		p.encoder.setError(err)
 		return
 	}
 	p.binder.assign(index, group.layout)
 	p.binder.assignBindGroup(index, group)
+	p.binder.setGroup(index, group, offsets)
 	// Keeps the group and its buffers alive and lists the group for
 	// submit-time validation, once per encoder; and puts its textures and
 	// buffers in the pass's usage scope, once per pass.
 	p.encoder.trackBindGroup(group)
 	p.encoder.recordPassBindGroup(group)
-	raw := p.core.RawPass()
-	if raw != nil && group.hal != nil {
-		raw.SetBindGroup(index, group.hal, offsets)
+	if raw := p.core.RawPass(); raw != nil && p.pipelineSet {
+		p.binder.issue(raw.SetBindGroup)
 	}
 }
 

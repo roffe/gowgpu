@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/roffe/gowgpu/gputypes"
+	"github.com/roffe/gowgpu/hal"
 )
 
 // lateBufferBinding tracks a single buffer binding that requires late validation.
@@ -56,34 +57,89 @@ type binder struct {
 	// payloads holds per-slot late buffer binding tracking.
 	// Matches Rust wgpu-core's Binder.payloads (command/bind.rs:322).
 	payloads [MaxBindGroups]binderPayload
+
+	// groups are the bind groups set at each slot and offsets their dynamic
+	// offsets. A group goes to the backend only once the current pipeline's
+	// layout has a compatible layout at its slot, which the backends bind
+	// it with; issued says which groups the backend has that way.
+	//
+	// Reference: wgpu-core command/bind.rs Binder (assign_group and
+	// change_pipeline_layout return the groups to bind)
+	groups  [MaxBindGroups]*BindGroup
+	offsets [MaxBindGroups][]uint32
+	issued  [MaxBindGroups]bool
 }
 
-// reset clears all binder state. Called when a new pipeline is set.
+// reset clears all binder state for a new pass. The offset lists keep
+// their room.
 func (b *binder) reset() {
 	b.assigned = [MaxBindGroups]*BindGroupLayout{}
 	b.expected = [MaxBindGroups]*BindGroupLayout{}
 	b.maxSlots = 0
 	for i := range b.payloads {
 		b.payloads[i].reset()
+		b.offsets[i] = b.offsets[i][:0]
 	}
+	b.groups = [MaxBindGroups]*BindGroup{}
+	b.issued = [MaxBindGroups]bool{}
 }
 
 // updateExpectations sets the expected layouts from a pipeline's bind group layouts.
 // Called from SetPipeline. Previously assigned bind groups are preserved so that
 // bind groups set before the pipeline remain valid (matching WebGPU spec behavior).
+// The backend keeps the groups below the first slot whose layout changed;
+// the others go to it again under the new layout.
 func (b *binder) updateExpectations(layouts []*BindGroupLayout) {
+	n := min(uint32(len(layouts)), MaxBindGroups) //nolint:gosec // layout count fits uint32
+	changed := n
+	for i := range n {
+		if i >= b.maxSlots || !compatibleLayouts(b.expected[i], layouts[i]) {
+			changed = i
+			break
+		}
+	}
+	for i := changed; i < MaxBindGroups; i++ {
+		b.issued[i] = false
+	}
+
 	// Clear old expectations.
 	b.expected = [MaxBindGroups]*BindGroupLayout{}
-
-	n := uint32(len(layouts)) //nolint:gosec // layout count fits uint32
-	if n > MaxBindGroups {
-		n = MaxBindGroups
-	}
 	b.maxSlots = n
 
 	for i := uint32(0); i < n; i++ {
 		b.expected[i] = layouts[i]
 	}
+}
+
+func compatibleLayouts(a, b *BindGroupLayout) bool {
+	return a != nil && b != nil && a.isCompatibleWith(b)
+}
+
+// setGroup records group with a copy of its dynamic offsets at index.
+func (b *binder) setGroup(index uint32, group *BindGroup, offsets []uint32) {
+	b.groups[index] = group
+	b.offsets[index] = append(b.offsets[index][:0], offsets...)
+	b.issued[index] = false
+}
+
+// issue hands bind the groups the backend doesn't have yet that the current
+// pipeline's layout takes at their slots.
+func (b *binder) issue(bind func(index uint32, group hal.BindGroup, offsets []uint32)) {
+	for i := range b.maxSlots {
+		g := b.groups[i]
+		if g == nil || g.hal == nil || b.issued[i] || !compatibleLayouts(b.assigned[i], b.expected[i]) {
+			continue
+		}
+		bind(i, g.hal, b.offsets[i])
+		b.issued[i] = true
+	}
+}
+
+// reissue hands bind every group the current pipeline's layout takes, for
+// a backend pass that has none of them.
+func (b *binder) reissue(bind func(index uint32, group hal.BindGroup, offsets []uint32)) {
+	b.issued = [MaxBindGroups]bool{}
+	b.issue(bind)
 }
 
 // updateLateBufferBindingsFromPipeline fills ShaderExpectSize on each payload
@@ -160,19 +216,19 @@ func (b *binder) assign(index uint32, layout *BindGroupLayout) {
 // to keep the binding in its buffer.
 //
 // Reference: wgpu-core binding_model.rs BindGroup::validate_dynamic_bindings
-func validateSetBindGroup(passName string, index uint32, group *BindGroup, offsets []uint32, pipelineBGCount uint32, limits *gputypes.Limits) error {
+func validateSetBindGroup(passName string, index uint32, group *BindGroup, offsets []uint32, limits *gputypes.Limits) error {
 	if group == nil {
 		return fmt.Errorf("wgpu: %s.SetBindGroup: bind group is nil", passName)
 	}
 	if group.released != nil && group.released.Load() {
 		return fmt.Errorf("wgpu: %s.SetBindGroup: bind group is released: %w", passName, ErrReleased)
 	}
-	if index >= MaxBindGroups {
-		return fmt.Errorf("wgpu: %s.SetBindGroup: index %d >= MaxBindGroups (%d)", passName, index, MaxBindGroups)
+	maxGroups := uint32(MaxBindGroups)
+	if l := limits.MaxBindGroups; l > 0 {
+		maxGroups = min(l, maxGroups)
 	}
-	if pipelineBGCount > 0 && index >= pipelineBGCount {
-		return fmt.Errorf("wgpu: %s.SetBindGroup: group index %d exceeds pipeline layout bind group count %d",
-			passName, index, pipelineBGCount)
+	if index >= maxGroups {
+		return fmt.Errorf("wgpu: %s.SetBindGroup: index %d >= maxBindGroups (%d)", passName, index, maxGroups)
 	}
 	if len(offsets) != len(group.dynamicBindings) {
 		return fmt.Errorf("wgpu: %s.SetBindGroup: %d dynamic offsets for group %d, which has %d dynamic bindings",
