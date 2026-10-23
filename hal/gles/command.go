@@ -1795,9 +1795,26 @@ func (c *CopyTextureToBufferCommand) Execute(ctx *gl.Context) {
 	}
 
 	// Rows come out in the transfer pair of the aspect copied, sized by
-	// what glReadPixels writes for it.
+	// what glReadPixels writes for it; on ES in a pair ES reads every
+	// driver, repacked into the texture's texels.
 	format, dataType := tex.copyPair(r.TextureBase.Aspect)
-	rowBytes := uint32(width) * pixelSize(format, dataType)
+	var repack func(dst, src []byte)
+	if ctx.IsGLES() && !tex.format.IsDepthStencil() {
+		rb, ok := esReadbackFor(tex.format)
+		if !ok {
+			esReadbackOnce.Do(func() {
+				hal.Logger().Error("gles: CopyTextureToBuffer from this format is not supported on ES", "format", tex.format)
+			})
+			return
+		}
+		format, dataType, repack = rb.format, rb.typ, rb.repack
+	}
+	readSize := pixelSize(format, dataType)
+	texelSize := readSize
+	if repack != nil {
+		texelSize = tex.format.BlockCopySize()
+	}
+	rowBytes := uint32(width) * texelSize
 	pitch := uint64(rowBytes)
 	if r.BufferLayout.BytesPerRow != 0 {
 		pitch = uint64(r.BufferLayout.BytesPerRow) // usually wider: copies align rows to 256 bytes
@@ -1809,7 +1826,12 @@ func (c *CopyTextureToBufferCommand) Execute(ctx *gl.Context) {
 
 	// Set tight pixel packing (no row alignment padding).
 	ctx.PixelStorei(gl.PACK_ALIGNMENT, 1)
-	tmpBuf := make([]byte, uint64(rowBytes)*uint64(height))
+	readRow := uint64(width) * uint64(readSize)
+	tmpBuf := make([]byte, readRow*uint64(height))
+	var row []byte
+	if repack != nil {
+		row = make([]byte, rowBytes)
+	}
 	ctx.BindBuffer(gl.COPY_WRITE_BUFFER, c.dstBuffer.id)
 	for layer := range max(1, r.Size.DepthOrArrayLayers) {
 		c.fbs.bindRead(ctx, fbAttachment{tex: tex, mip: r.TextureBase.MipLevel, layer: r.TextureBase.Origin.Z + layer})
@@ -1820,8 +1842,15 @@ func (c *CopyTextureToBufferCommand) Execute(ctx *gl.Context) {
 		// first: textures here are stored top-down like WebGPU's, and only
 		// the blit to the window flips.
 		image := r.BufferLayout.Offset + uint64(layer)*rows*pitch
-		for row := uint64(0); row < uint64(height); row++ {
-			ctx.BufferSubData(gl.COPY_WRITE_BUFFER, int(image+row*pitch), int(rowBytes), unsafe.Pointer(&tmpBuf[row*uint64(rowBytes)]))
+		for y := uint64(0); y < uint64(height); y++ {
+			src := tmpBuf[y*readRow : (y+1)*readRow]
+			if repack != nil {
+				for x := range uint64(width) {
+					repack(row[x*uint64(texelSize):], src[x*uint64(readSize):])
+				}
+				src = row
+			}
+			ctx.BufferSubData(gl.COPY_WRITE_BUFFER, int(image+y*pitch), int(rowBytes), unsafe.Pointer(&src[0]))
 		}
 	}
 	ctx.BindBuffer(gl.COPY_WRITE_BUFFER, 0)
@@ -1950,9 +1979,9 @@ func (c *CopyBufferToTextureCommand) uploadBlocks(ctx *gl.Context) {
 	}
 }
 
-// compressedReadbackOnce guards the one error a readback of a compressed
-// texture logs.
-var compressedReadbackOnce sync.Once
+// compressedReadbackOnce and esReadbackOnce guard the one error a readback
+// of a compressed texture, or of a format ES can't read, logs.
+var compressedReadbackOnce, esReadbackOnce sync.Once
 
 // CopyTextureToTextureCommand copies pixels between textures: the source
 // level and layer attached to the read framebuffer, glCopyTexSubImage into

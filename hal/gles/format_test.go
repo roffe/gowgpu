@@ -6,6 +6,9 @@
 package gles
 
 import (
+	"bytes"
+	"encoding/binary"
+	"math"
 	"testing"
 
 	"github.com/roffe/gowgpu/gputypes"
@@ -104,5 +107,73 @@ func TestGLFormatCompressed(t *testing.T) {
 		if _, ok := (formatCaps{}).glFormat(format); ok {
 			t.Errorf("%s made without glTexStorage2D", format)
 		}
+	}
+}
+
+func TestFloat16(t *testing.T) {
+	for _, tc := range []struct {
+		f    float32
+		want uint16
+	}{
+		{0, 0}, {1, 0x3c00}, {-2, 0xc000}, {0.5, 0x3800}, {65504, 0x7bff}, {1e6, 0x7c00},
+		{float32(math.Inf(-1)), 0xfc00}, {6.1035156e-05, 0x0400}, {5.9604645e-08, 0x0001},
+		{1.0009765625, 0x3c01}, {1.00048828125, 0x3c00}, // a tie rounds to even
+	} {
+		if got := float16(tc.f); got != tc.want {
+			t.Errorf("float16(%v) = %#04x, want %#04x", tc.f, got, tc.want)
+		}
+	}
+	if got := float16(float32(math.NaN())); got&0x7c00 != 0x7c00 || got&0x3ff == 0 {
+		t.Errorf("float16(NaN) = %#04x, not a NaN", got)
+	}
+}
+
+// ES reads every colour format with a pair it guarantees and repacks the
+// texels into the format's own.
+func TestESReadbackRepacks(t *testing.T) {
+	u32 := func(vs ...uint32) []byte {
+		b := make([]byte, 4*len(vs))
+		for i, v := range vs {
+			binary.LittleEndian.PutUint32(b[i*4:], v)
+		}
+		return b
+	}
+	f32 := func(vs ...float32) []byte {
+		b := make([]byte, 4*len(vs))
+		for i, v := range vs {
+			binary.LittleEndian.PutUint32(b[i*4:], math.Float32bits(v))
+		}
+		return b
+	}
+	for _, tc := range []struct {
+		format gputypes.TextureFormat
+		read   []byte // one texel as ES reads it
+		want   []byte
+	}{
+		{gputypes.TextureFormatR8Unorm, []byte{9, 8, 7, 6}, []byte{9}},
+		{gputypes.TextureFormatBGRA8Unorm, []byte{1, 2, 3, 4}, []byte{3, 2, 1, 4}},
+		{gputypes.TextureFormatRG8Uint, u32(200, 7, 0, 1), []byte{200, 7}},
+		{gputypes.TextureFormatR16Sint, u32(0xfffffffe, 0, 0, 1), []byte{0xfe, 0xff}},
+		{gputypes.TextureFormatRG32Float, f32(1.5, -2, 0, 1), f32(1.5, -2)},
+		{gputypes.TextureFormatRGBA16Float, f32(1, 0.5, -2, 0), []byte{0x00, 0x3c, 0x00, 0x38, 0x00, 0xc0, 0x00, 0x00}},
+		{gputypes.TextureFormatRGB10A2Uint, u32(1023, 1, 512, 3), u32(1023 | 1<<10 | 512<<20 | 3<<30)},
+	} {
+		rb, ok := esReadbackFor(tc.format)
+		if !ok {
+			t.Errorf("%s: no ES readback", tc.format)
+			continue
+		}
+		if got := pixelSize(rb.format, rb.typ); got != uint32(len(tc.read)) {
+			t.Errorf("%s: reads %d bytes a texel, the test gives %d", tc.format, got, len(tc.read))
+			continue
+		}
+		got := make([]byte, tc.format.BlockCopySize())
+		rb.repack(got, tc.read)
+		if !bytes.Equal(got, tc.want) {
+			t.Errorf("%s: repacked % x, want % x", tc.format, got, tc.want)
+		}
+	}
+	if rb, _ := esReadbackFor(gputypes.TextureFormatRGBA8Unorm); rb.repack != nil || rb.format != gl.RGBA || rb.typ != gl.UNSIGNED_BYTE {
+		t.Error("RGBA8Unorm is read as it is, RGBA/UNSIGNED_BYTE")
 	}
 }

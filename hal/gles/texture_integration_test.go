@@ -6,6 +6,7 @@
 package gles
 
 import (
+	"bytes"
 	"testing"
 	"unsafe"
 
@@ -226,4 +227,113 @@ func TestSRGBPresentBlitOnES(t *testing.T) {
 	if d := int(presented[0]) - int(stored[0]); d < -1 || d > 1 {
 		t.Errorf("the swapchain held %v and the surface got %v", stored, presented)
 	}
+}
+
+// Textures are read back on ES in pairs every ES driver reads and repacked
+// into their own texels: R8, RG8, BGRA8 and the half float formats were
+// read in their upload pairs, which ES lets a driver refuse.
+func TestTextureReadbackOnES(t *testing.T) {
+	ctx := newTestESAdapterContext(t)
+	t.Cleanup(ctx.Destroy)
+	dev := openTestDevice(t, ctx)
+	t.Cleanup(dev.Destroy)
+	q := &Queue{ctx: ctx}
+	glCtx := ctx.Lock()
+	floats := queryAdapterCapabilities(glCtx).Extensions["GL_EXT_color_buffer_float"]
+	ctx.Unlock()
+	half := func(hs ...uint16) []byte {
+		b := make([]byte, 2*len(hs))
+		for i, h := range hs {
+			b[2*i], b[2*i+1] = byte(h), byte(h>>8)
+		}
+		return b
+	}
+	for _, tc := range []struct {
+		format gputypes.TextureFormat
+		texels []byte // 2x2
+		float  bool
+	}{
+		{gputypes.TextureFormatRGBA8Unorm, seq(16), false},
+		{gputypes.TextureFormatR8Unorm, seq(4), false},
+		{gputypes.TextureFormatRG8Unorm, seq(8), false},
+		{gputypes.TextureFormatBGRA8Unorm, seq(16), false},
+		{gputypes.TextureFormatRGB10A2Unorm, seq(16), false},
+		{gputypes.TextureFormatR16Unorm, seq(8), false},
+		{gputypes.TextureFormatR8Uint, seq(4), false},
+		{gputypes.TextureFormatRG16Sint, append(seq(14), 0xff, 0xff), false},
+		{gputypes.TextureFormatRGBA32Uint, seq(64), false},
+		{gputypes.TextureFormatRGB10A2Uint, seq(16), false},
+		{gputypes.TextureFormatR16Float, half(0x3c00, 0xc000, 0x0001, 0x7bff), true},
+		{gputypes.TextureFormatRGBA16Float, half(0x3c00, 0x3555, 0x8000, 0xfbff, 0x0400, 0x03ff, 0x4248, 0x0000,
+			0x7bff, 0xbc00, 0x2e66, 0x5640, 0x0001, 0x8001, 0x3800, 0xc500), true},
+		{gputypes.TextureFormatRG32Float, half(0, 0x3f80, 0, 0xc000, 0x1234, 0x3eaa, 0, 0x4780, 0, 0x7f7f, 0, 0x8000, 0, 0x3f00, 0, 0x4f00), true},
+	} {
+		if _, ok := dev.formats.glFormat(tc.format); !ok || tc.float && !floats {
+			t.Logf("%s: not renderable here", tc.format)
+			continue
+		}
+		tex, err := dev.CreateTexture(&hal.TextureDescriptor{
+			Size: hal.Extent3D{Width: 2, Height: 2, DepthOrArrayLayers: 1}, MipLevelCount: 1, SampleCount: 1,
+			Dimension: gputypes.TextureDimension2D, Format: tc.format,
+			Usage: gputypes.TextureUsageCopySrc | gputypes.TextureUsageCopyDst | gputypes.TextureUsageRenderAttachment,
+		})
+		if err != nil {
+			t.Errorf("%s: %v", tc.format, err)
+			continue
+		}
+		row := len(tc.texels) / 2
+		size := hal.Extent3D{Width: 2, Height: 2, DepthOrArrayLayers: 1}
+		if err := q.WriteTexture(&hal.ImageCopyTexture{Texture: tex}, tc.texels, &hal.ImageDataLayout{BytesPerRow: uint32(row)}, &size); err != nil {
+			t.Fatalf("%s: WriteTexture: %v", tc.format, err)
+		}
+		buf, err := dev.CreateBuffer(&hal.BufferDescriptor{Size: 512, Usage: gputypes.BufferUsageMapRead | gputypes.BufferUsageCopyDst})
+		if err != nil {
+			t.Fatalf("CreateBuffer: %v", err)
+		}
+		enc, err := dev.CreateCommandEncoder(nil)
+		if err != nil {
+			t.Fatalf("CreateCommandEncoder: %v", err)
+		}
+		_ = enc.BeginEncoding("readback")
+		enc.CopyTextureToBuffer(tex, buf, []hal.BufferTextureCopy{{
+			BufferLayout: hal.ImageDataLayout{BytesPerRow: 256, RowsPerImage: 2}, TextureBase: hal.ImageCopyTexture{Texture: tex}, Size: size,
+		}})
+		cb, err := enc.EndEncoding()
+		if err != nil {
+			t.Fatalf("EndEncoding: %v", err)
+		}
+		if _, err := q.Submit([]hal.CommandBuffer{cb}); err != nil {
+			t.Fatalf("Submit: %v", err)
+		}
+
+		glCtx := ctx.Lock()
+		if glErr := glCtx.GetError(); glErr != 0 {
+			t.Errorf("%s: GL error %#x", tc.format, glErr)
+		}
+		glCtx.BindBuffer(gl.COPY_READ_BUFFER, buf.(*Buffer).id)
+		if p := glCtx.MapBufferRange(gl.COPY_READ_BUFFER, 0, 512, gl.MAP_READ_BIT); p != 0 {
+			got := unsafe.Slice(*(**byte)(unsafe.Pointer(&p)), 512)
+			for y := range 2 {
+				if g, w := got[y*256:y*256+row], tc.texels[y*row:(y+1)*row]; !bytes.Equal(g, w) {
+					t.Errorf("%s: row %d read % x, want % x", tc.format, y, g, w)
+				}
+			}
+			glCtx.UnmapBuffer(gl.COPY_READ_BUFFER)
+		} else {
+			t.Errorf("%s: glMapBufferRange failed", tc.format)
+		}
+		glCtx.BindBuffer(gl.COPY_READ_BUFFER, 0)
+		ctx.Unlock()
+		dev.DestroyBuffer(buf)
+		dev.DestroyTexture(tex)
+	}
+}
+
+// seq is the bytes 1, 2, ... n.
+func seq(n int) []byte {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = byte(i + 1)
+	}
+	return b
 }

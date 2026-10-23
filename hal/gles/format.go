@@ -6,6 +6,9 @@
 package gles
 
 import (
+	"encoding/binary"
+	"math"
+
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal/gles/gl"
 )
@@ -218,4 +221,115 @@ func pixelSize(format, typ uint32) uint32 {
 		return 2 * n
 	}
 	return 4 * n
+}
+
+// esReadback is how an ES context reads a colour format back: glReadPixels
+// on ES takes only RGBA with UNSIGNED_BYTE for normalized formats, FLOAT for
+// float ones and INT or UNSIGNED_INT for integer ones (UNSIGNED_SHORT for the
+// 16-bit norm formats of EXT_texture_norm16), besides an implementation pair
+// that varies by driver. The texels read with format and typ are repacked
+// into the format's own; repack is nil when the pair is the format's own.
+type esReadback struct {
+	format, typ uint32
+	repack      func(dst, src []byte) // one texel
+}
+
+// esReadbackFor returns how ES reads f back, false for a format ES can't
+// read with glReadPixels.
+func esReadbackFor(f gputypes.TextureFormat) (esReadback, bool) {
+	channels := func(order ...int) func(dst, src []byte) {
+		return func(dst, src []byte) {
+			for i, c := range order {
+				dst[i] = src[c]
+			}
+		}
+	}
+	wide := func(n, size int) func(dst, src []byte) {
+		return func(dst, src []byte) {
+			for c := range n {
+				copy(dst[c*size:(c+1)*size], src[c*4:c*4+size])
+			}
+		}
+	}
+	switch f {
+	case gputypes.TextureFormatRGBA8Unorm, gputypes.TextureFormatRGBA8UnormSrgb:
+		return esReadback{gl.RGBA, gl.UNSIGNED_BYTE, nil}, true
+	case gputypes.TextureFormatR8Unorm:
+		return esReadback{gl.RGBA, gl.UNSIGNED_BYTE, channels(0)}, true
+	case gputypes.TextureFormatRG8Unorm:
+		return esReadback{gl.RGBA, gl.UNSIGNED_BYTE, channels(0, 1)}, true
+	case gputypes.TextureFormatBGRA8Unorm, gputypes.TextureFormatBGRA8UnormSrgb:
+		return esReadback{gl.RGBA, gl.UNSIGNED_BYTE, channels(2, 1, 0, 3)}, true
+	case gputypes.TextureFormatRGB10A2Unorm:
+		return esReadback{gl.RGBA, gl.UNSIGNED_INT_2_10_10_10_REV, nil}, true
+	case gputypes.TextureFormatR16Unorm:
+		return esReadback{gl.RGBA, gl.UNSIGNED_SHORT, channels(0, 1)}, true
+	case gputypes.TextureFormatRG16Unorm:
+		return esReadback{gl.RGBA, gl.UNSIGNED_SHORT, channels(0, 1, 2, 3)}, true
+	case gputypes.TextureFormatRGBA16Unorm:
+		return esReadback{gl.RGBA, gl.UNSIGNED_SHORT, nil}, true
+	case gputypes.TextureFormatR32Float, gputypes.TextureFormatRG32Float:
+		return esReadback{gl.RGBA, gl.FLOAT, wide(int(f.BlockCopySize()/4), 4)}, true
+	case gputypes.TextureFormatRGBA32Float:
+		return esReadback{gl.RGBA, gl.FLOAT, nil}, true
+	case gputypes.TextureFormatR16Float, gputypes.TextureFormatRG16Float, gputypes.TextureFormatRGBA16Float:
+		n := int(f.BlockCopySize() / 2)
+		return esReadback{gl.RGBA, gl.FLOAT, func(dst, src []byte) {
+			for c := range n {
+				binary.LittleEndian.PutUint16(dst[c*2:], float16(math.Float32frombits(binary.LittleEndian.Uint32(src[c*4:]))))
+			}
+		}}, true
+	case gputypes.TextureFormatRGBA32Uint, gputypes.TextureFormatRGBA32Sint:
+		return esReadback{gl.RGBA_INTEGER, integerReadType(f), nil}, true
+	case gputypes.TextureFormatRGB10A2Uint:
+		return esReadback{gl.RGBA_INTEGER, gl.UNSIGNED_INT, func(dst, src []byte) {
+			r, g, b, a := binary.LittleEndian.Uint32(src), binary.LittleEndian.Uint32(src[4:]), binary.LittleEndian.Uint32(src[8:]), binary.LittleEndian.Uint32(src[12:])
+			binary.LittleEndian.PutUint32(dst, r&0x3ff|(g&0x3ff)<<10|(b&0x3ff)<<20|(a&3)<<30)
+		}}, true
+	}
+	if g, ok := glFormats[f]; ok && (g.format == gl.RED_INTEGER || g.format == gl.RG_INTEGER || g.format == gl.RGBA_INTEGER) {
+		// Integer formats read as four 32-bit integers a texel, of which
+		// the low bytes of the format's channels are its texel.
+		size := int(pixelSize(g.format, g.typ) / pixelSize(g.format, gl.UNSIGNED_BYTE))
+		return esReadback{gl.RGBA_INTEGER, integerReadType(f), wide(int(pixelSize(g.format, gl.UNSIGNED_BYTE)), size)}, true
+	}
+	return esReadback{}, false
+}
+
+// integerReadType is the type ES reads an integer format back with.
+func integerReadType(f gputypes.TextureFormat) uint32 {
+	if g := glFormats[f]; g.typ == gl.BYTE || g.typ == gl.SHORT || g.typ == gl.INT {
+		return gl.INT
+	}
+	return gl.UNSIGNED_INT
+}
+
+// float16 rounds a float32 to the nearest IEEE half float.
+func float16(f float32) uint16 {
+	b := math.Float32bits(f)
+	sign := uint16(b>>16) & 0x8000
+	exp := int32(b>>23&0xff) - 127 + 15
+	mant := b & 0x7fffff
+	switch {
+	case b&0x7fffffff > 0x7f800000: // NaN
+		return sign | 0x7e00
+	case exp >= 0x1f: // too big, or infinite
+		return sign | 0x7c00
+	case exp <= 0: // subnormal, or too small
+		if exp < -10 {
+			return sign
+		}
+		mant |= 0x800000
+		shift := uint32(14 - exp)
+		half := mant >> shift
+		if rem := mant & (1<<shift - 1); rem > 1<<(shift-1) || rem == 1<<(shift-1) && half&1 != 0 {
+			half++
+		}
+		return sign | uint16(half)
+	}
+	half := uint32(exp)<<10 | mant>>13
+	if rem := mant & 0x1fff; rem > 0x1000 || rem == 0x1000 && half&1 != 0 {
+		half++ // a carry into the exponent is right, up to infinity
+	}
+	return sign | uint16(half)
 }
