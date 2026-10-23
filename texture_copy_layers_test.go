@@ -150,3 +150,33 @@ func TestCopyTextureToTextureBetween2DArrayAnd3D(t *testing.T) {
 		}
 	}
 }
+
+// TestWriteTextureOfLayersNeedsRowsPerImage: a write of more than one layer
+// names the rows of an image, as WebGPU and the encoder's copies require.
+func TestWriteTextureOfLayersNeedsRowsPerImage(t *testing.T) {
+	_, _, device := newTestDevice(t)
+	defer device.Release()
+
+	tex, err := device.CreateTexture(&TextureDescriptor{
+		Size:          Extent3D{Width: 4, Height: 4, DepthOrArrayLayers: 2},
+		MipLevelCount: 1,
+		SampleCount:   1,
+		Dimension:     TextureDimension2D,
+		Format:        TextureFormatRGBA8Unorm,
+		Usage:         TextureUsageCopyDst,
+	})
+	if err != nil {
+		t.Fatalf("CreateTexture: %v", err)
+	}
+	defer tex.Release()
+
+	layout := &ImageDataLayout{BytesPerRow: 16}
+	if err := device.Queue().WriteTexture(&ImageCopyTexture{Texture: tex}, make([]byte, 128), layout,
+		&Extent3D{Width: 4, Height: 4, DepthOrArrayLayers: 2}); err == nil {
+		t.Fatal("WriteTexture of two layers without RowsPerImage succeeded")
+	}
+	if err := device.Queue().WriteTexture(&ImageCopyTexture{Texture: tex}, make([]byte, 64), layout,
+		&Extent3D{Width: 4, Height: 4, DepthOrArrayLayers: 1}); err != nil {
+		t.Fatalf("WriteTexture of one layer without RowsPerImage: %v", err)
+	}
+}
