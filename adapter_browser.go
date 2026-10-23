@@ -44,6 +44,9 @@ func (a *Adapter) DownlevelCapabilities() gputypes.DownlevelCapabilities {
 // RequestDevice creates a logical device from this adapter.
 // If desc is nil, no features are enabled. Without RequiredLimits, a nil desc
 // included, the device gets the adapter's limits, as natively.
+//
+// It waits for the adapter's requestDevice promise, so call it from main or
+// another goroutine, not from a JavaScript callback, where it deadlocks.
 func (a *Adapter) RequestDevice(desc *DeviceDescriptor) (*Device, error) {
 	if a.released {
 		return nil, ErrReleased

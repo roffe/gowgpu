@@ -11,8 +11,9 @@ import (
 //
 // On WASM, Go goroutines are cooperative (single-threaded). This function uses
 // Promise.then with a channel to yield the goroutine until the JS event
-// loop resolves the promise. The caller MUST be on a goroutine (not the main
-// goroutine) or the program will deadlock.
+// loop resolves the promise. That works on main and on goroutines the
+// program starts, but not in a js.FuncOf callback: the event loop cannot
+// settle the promise until the callback returns, so the program deadlocks.
 //
 // Pattern matches Rust wgpu's wasm_bindgen_futures::JsFuture::from(promise).
 func AwaitPromise(promise js.Value) (js.Value, error) {

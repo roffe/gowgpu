@@ -98,7 +98,11 @@ func mapModeToJS(mode MapMode) uint32 {
 //	data := rng.Bytes()
 //
 // On the browser, Map waits for the GPUBuffer.mapAsync promise. The ctx
-// parameter allows cancellation.
+// parameter allows cancellation. Map blocks, which is fine on main and on
+// goroutines the program starts, but not in a JavaScript callback such as
+// a requestAnimationFrame one: the browser settles the promise only after
+// the callback returns, so the program deadlocks. In a callback, use
+// MapAsync and check MapPending.Status in a later one.
 func (b *Buffer) Map(ctx context.Context, mode MapMode, offset, size uint64) error {
 	if b == nil || b.browser == nil {
 		return ErrReleased
@@ -129,7 +133,9 @@ func (b *Buffer) Map(ctx context.Context, mode MapMode, offset, size uint64) err
 //
 // Returns a *MapPending handle that resolves once the browser's
 // GPUBuffer.mapAsync Promise settles. The caller can poll with
-// Status() or block with Wait(ctx).
+// Status() or block with Wait(ctx). The promise settles once control is
+// back in the browser's event loop, so code running in JavaScript
+// callbacks checks Status in a later callback rather than calling Wait.
 //
 // Validation errors (alignment, usage mismatch, range overflow,
 // already-mapped state) surface synchronously.

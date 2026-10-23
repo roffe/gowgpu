@@ -49,6 +49,9 @@ func (p *MapPending) Status() (ready bool, err error) {
 // If ctx is canceled before the JS Promise resolves, Wait returns
 // ctx.Err(). The mapping remains Pending -- the caller should normally
 // follow up with Buffer.Unmap to cancel it.
+//
+// Like Buffer.Map, Wait must not be called from a JavaScript callback:
+// the promise cannot settle until the callback returns.
 func (p *MapPending) Wait(ctx context.Context) error {
 	if p == nil || p.done == nil {
 		return ErrMapCanceled

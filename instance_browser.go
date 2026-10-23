@@ -37,6 +37,9 @@ func CreateInstance(desc *InstanceDescriptor) (*Instance, error) {
 
 // RequestAdapter requests a GPU adapter matching the options.
 // If opts is nil, the best available adapter is returned.
+//
+// It waits for navigator.gpu.requestAdapter's promise, so call it from main
+// or another goroutine, not from a JavaScript callback, where it deadlocks.
 func (i *Instance) RequestAdapter(opts *RequestAdapterOptions) (*Adapter, error) {
 	if i.released {
 		return nil, ErrReleased
