@@ -275,6 +275,15 @@ func (d *Device) CreateSampler(desc *SamplerDescriptor) (*Sampler, error) {
 	if err := core.ValidateSamplerDescriptor(halDesc, d.core.Features); err != nil {
 		return nil, err
 	}
+	// The anisotropy is clamped to what the platform samples with, as
+	// WebGPU says: 16 at most, which every backend takes, and 1 without
+	// anisotropic filtering. wgpu-core clamps it the same way.
+	switch {
+	case !d.core.DownlevelCapabilitiesRef().Flags.Contains(gputypes.DownlevelFlagsAnisotropicFiltering):
+		halDesc.Anisotropy = min(halDesc.Anisotropy, 1)
+	case halDesc.Anisotropy > 16:
+		halDesc.Anisotropy = 16
+	}
 
 	halSampler, err := halDevice.CreateSampler(halDesc)
 	if err != nil {
