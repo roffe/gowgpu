@@ -387,6 +387,31 @@ func (c *ID3D12GraphicsCommandList4) CopyRaytracingAccelerationStructure(
 	)
 }
 
+// BeginRenderPass begins a render pass on the render targets and depth
+// stencil, which take every value by pointer.
+func (c *ID3D12GraphicsCommandList4) BeginRenderPass(
+	numRenderTargets uint32,
+	renderTargets *D3D12_RENDER_PASS_RENDER_TARGET_DESC,
+	depthStencil *D3D12_RENDER_PASS_DEPTH_STENCIL_DESC,
+	flags D3D12_RENDER_PASS_FLAGS,
+) {
+	_, _, _ = syscall.Syscall6(
+		c.vtbl.BeginRenderPass,
+		5,
+		uintptr(unsafe.Pointer(c)),
+		uintptr(numRenderTargets),
+		uintptr(unsafe.Pointer(renderTargets)),
+		uintptr(unsafe.Pointer(depthStencil)),
+		uintptr(flags),
+		0,
+	)
+}
+
+// EndRenderPass ends the render pass BeginRenderPass began.
+func (c *ID3D12GraphicsCommandList4) EndRenderPass() {
+	_, _, _ = syscall.Syscall(c.vtbl.EndRenderPass, 1, uintptr(unsafe.Pointer(c)), 0, 0)
+}
+
 // Release decrements the reference count of the command list interface.
 // Must be called after QueryCommandList4 to avoid a COM leak.
 func (c *ID3D12GraphicsCommandList4) Release() uint32 {

@@ -8,6 +8,7 @@ package dx12
 import (
 	"fmt"
 	"math/bits"
+	"unsafe"
 
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
@@ -1509,16 +1510,38 @@ func (e *CommandEncoder) setupDepthStencilAttachment(dsa *hal.RenderPassDepthSte
 	// Clear if needed. Use the same DSV variant as the pass so an unexposed or
 	// explicitly read-only companion plane stays protected during the clear.
 	if clearFlags != 0 {
-		e.cmdList.ClearDepthStencilView(
-			*dsvHandle,
-			clearFlags,
-			dsa.DepthClearValue,
-			uint8(dsa.StencilClearValue),
-			0, nil,
-		)
+		e.clearDepthStencil(*dsvHandle, textureFormatToD3D12(view.format), clearFlags, dsa.DepthClearValue, uint8(dsa.StencilClearValue))
 	}
 
 	return dsvHandle
+}
+
+// clearDepthStencilByRenderPass clears the planes clearFlags names through
+// a render pass of nothing else, the D3D12 call that takes the clear values
+// by pointer, and leaves the other plane alone.
+func (e *CommandEncoder) clearDepthStencilByRenderPass(dsv d3d12.D3D12_CPU_DESCRIPTOR_HANDLE, format d3d12.DXGI_FORMAT, clearFlags d3d12.D3D12_CLEAR_FLAGS, depth float32, stencil uint8) error {
+	list4 := e.cmdList.QueryCommandList4()
+	if list4 == nil {
+		return fmt.Errorf("dx12: a depth/stencil clear needs ID3D12GraphicsCommandList4 on this architecture")
+	}
+	defer list4.Release()
+	value := d3d12.D3D12_CLEAR_VALUE{Format: format}
+	value.SetDepthStencil(depth, stencil)
+	access := func(clear bool) (d3d12.D3D12_RENDER_PASS_BEGINNING_ACCESS, d3d12.D3D12_RENDER_PASS_ENDING_ACCESS) {
+		if !clear {
+			return d3d12.D3D12_RENDER_PASS_BEGINNING_ACCESS{Type: d3d12.D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_NO_ACCESS},
+				d3d12.D3D12_RENDER_PASS_ENDING_ACCESS{Type: d3d12.D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_NO_ACCESS}
+		}
+		begin := d3d12.D3D12_RENDER_PASS_BEGINNING_ACCESS{Type: d3d12.D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR}
+		*(*d3d12.D3D12_CLEAR_VALUE)(unsafe.Pointer(&begin.Union[0])) = value
+		return begin, d3d12.D3D12_RENDER_PASS_ENDING_ACCESS{Type: d3d12.D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE}
+	}
+	desc := d3d12.D3D12_RENDER_PASS_DEPTH_STENCIL_DESC{CPUDescriptor: dsv}
+	desc.DepthBeginningAccess, desc.DepthEndingAccess = access(clearFlags&d3d12.D3D12_CLEAR_FLAG_DEPTH != 0)
+	desc.StencilBeginningAccess, desc.StencilEndingAccess = access(clearFlags&d3d12.D3D12_CLEAR_FLAG_STENCIL != 0)
+	list4.BeginRenderPass(0, nil, &desc, d3d12.D3D12_RENDER_PASS_FLAG_NONE)
+	list4.EndRenderPass()
+	return nil
 }
 
 // bufferUsageToD3D12State converts buffer usage to D3D12 resource state.
