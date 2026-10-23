@@ -7,10 +7,10 @@ import (
 	"github.com/roffe/gowgpu/gputypes"
 )
 
-// SetTestRequiredVertexBuffers sets the requiredVertexBuffers field for testing.
-// This method is only available in test builds.
+// SetTestRequiredVertexBuffers makes the pipeline read count vertex buffers,
+// at slots 0 to count-1 (testing only).
 func (p *RenderPipeline) SetTestRequiredVertexBuffers(count uint32) {
-	p.requiredVertexBuffers = count
+	p.vertexSteps = make([]vertexStep, count)
 }
 
 // TestRef returns the ResourceRef for a RenderPipeline (testing only).

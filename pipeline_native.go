@@ -68,10 +68,9 @@ type RenderPipeline struct {
 	// bindGroupLayouts stores the layouts from the pipeline layout.
 	// Used by the binder for draw-time compatibility validation.
 	bindGroupLayouts []*BindGroupLayout
-	// requiredVertexBuffers is the number of vertex buffer layouts declared
-	// in the pipeline's vertex state. Draw calls validate that at least this
-	// many vertex buffers have been set via SetVertexBuffer.
-	requiredVertexBuffers uint32
+	// vertexSteps is how the pipeline reads each vertex buffer, which draws
+	// need bound and large enough for the vertices and instances they read.
+	vertexSteps []vertexStep
 	// stripIndexFormat is the index format required by strip topologies.
 	// Nil for non-strip topologies. When non-nil, DrawIndexed/DrawIndexedIndirect
 	// validate that the bound index buffer format matches this value.
@@ -97,6 +96,26 @@ type RenderPipeline struct {
 	passContext                core.RenderPassContext
 	writesDepth, writesStencil bool
 	label                      string
+}
+
+// vertexStep is how a render pipeline reads one vertex buffer: the stride,
+// how far into an element its attributes reach and the step mode.
+//
+// Reference: wgpu-core pipeline.rs VertexStep
+type vertexStep struct {
+	stride, lastStride uint64
+	mode               gputypes.VertexStepMode
+}
+
+func vertexStepsOf(buffers []gputypes.VertexBufferLayout) []vertexStep {
+	steps := make([]vertexStep, len(buffers))
+	for i, b := range buffers {
+		steps[i] = vertexStep{stride: b.ArrayStride, mode: b.StepMode}
+		for _, a := range b.Attributes {
+			steps[i].lastStride = max(steps[i].lastStride, a.Offset+a.Format.Size())
+		}
+	}
+	return steps
 }
 
 // GetBindGroupLayout returns the bind group layout at index of the pipeline's

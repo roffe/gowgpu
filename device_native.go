@@ -853,7 +853,7 @@ func (d *Device) CreateRenderPipeline(desc *RenderPipelineDescriptor) (*RenderPi
 		device:                d,
 		bindGroupCount:        bgCount,
 		bindGroupLayouts:      bgLayouts,
-		requiredVertexBuffers: uint32(len(desc.Vertex.Buffers)), //nolint:gosec // buffer count fits uint32
+		vertexSteps:           vertexStepsOf(desc.Vertex.Buffers),
 		blendConstantRequired: needsBlendConstant,
 		stripIndexFormat:      desc.Primitive.StripIndexFormat,
 		lateSizedBufferGroups: lateGroups,

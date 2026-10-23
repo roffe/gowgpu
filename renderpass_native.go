@@ -30,12 +30,10 @@ type RenderPassEncoder struct {
 	// binder tracks bind group assignments and validates compatibility
 	// at draw time, matching Rust wgpu-core's Binder pattern.
 	binder binder
-	// vertexBufferCount tracks the highest vertex buffer slot set + 1.
-	// Updated by SetVertexBuffer; validated against pipeline requirements at draw time.
-	vertexBufferCount uint32
-	// requiredVertexBuffers is the number of vertex buffers required by the
-	// current pipeline. Set by SetPipeline from RenderPipeline.requiredVertexBuffers.
-	requiredVertexBuffers uint32
+	// vertexSteps is how the current pipeline reads each vertex buffer, and
+	// vertexBuffers what SetVertexBuffer bound at each slot.
+	vertexSteps   []vertexStep
+	vertexBuffers []boundVertexBuffer
 	// indexBufferSet tracks whether SetIndexBuffer has been called.
 	// DrawIndexed and DrawIndexedIndirect require an index buffer.
 	indexBufferSet bool
@@ -43,6 +41,8 @@ type RenderPassEncoder struct {
 	// Used to validate against the pipeline's StripIndexFormat at DrawIndexed/DrawIndexedIndirect time.
 	// Matches Rust wgpu-core State.index.buffer_format (render.rs:568-582).
 	indexBufferFormat gputypes.IndexFormat
+	// indexCount is how many indices the index buffer holds past its offset.
+	indexCount uint64
 	// currentStripIndexFormat stores the pipeline's StripIndexFormat for draw-time validation.
 	// Set by SetPipeline from RenderPipeline.stripIndexFormat.
 	currentStripIndexFormat *gputypes.IndexFormat
@@ -59,7 +59,7 @@ type RenderPassEncoder struct {
 // lists keep their room.
 func (p *RenderPassEncoder) reset(corePass *core.CoreRenderPassEncoder, enc *CommandEncoder) {
 	b := p.binder
-	*p = RenderPassEncoder{core: corePass, encoder: enc}
+	*p = RenderPassEncoder{core: corePass, encoder: enc, vertexBuffers: p.vertexBuffers[:0]}
 	b.reset()
 	p.binder = b
 }
@@ -84,7 +84,7 @@ func (p *RenderPassEncoder) SetPipeline(pipeline *RenderPipeline) {
 	}
 	p.currentPipelineBindGroupCount = pipeline.bindGroupCount
 	p.pipelineSet = true
-	p.requiredVertexBuffers = pipeline.requiredVertexBuffers
+	p.vertexSteps = pipeline.vertexSteps
 	p.currentStripIndexFormat = pipeline.stripIndexFormat
 	if pipeline.blendConstantRequired {
 		p.blendConstantRequired = true
@@ -117,27 +117,71 @@ func (p *RenderPassEncoder) SetBindGroup(index uint32, group *BindGroup, offsets
 	}
 }
 
+// boundVertexBuffer is the vertex buffer bound at a slot: the bytes past its
+// offset.
+type boundVertexBuffer struct {
+	set  bool
+	size uint64
+}
+
 // SetVertexBuffer sets a vertex buffer for the given slot.
+//
+// Reference: Dawn RenderEncoderBase::APISetVertexBuffer
 func (p *RenderPassEncoder) SetVertexBuffer(slot uint32, buffer *Buffer, offset uint64) {
 	if buffer == nil {
 		p.encoder.setError(fmt.Errorf("wgpu: RenderPass.SetVertexBuffer: buffer is nil"))
 		return
 	}
-	if slot+1 > p.vertexBufferCount {
-		p.vertexBufferCount = slot + 1
+	var err error
+	switch limit := p.encoder.limits().MaxVertexBuffers; {
+	case limit > 0 && slot >= limit:
+		err = fmt.Errorf("slot %d is not below the limit of %d vertex buffers", slot, limit)
+	case buffer.Usage()&BufferUsageVertex == 0:
+		err = fmt.Errorf("buffer %q lacks BufferUsageVertex", buffer.Label())
+	case offset%4 != 0:
+		err = fmt.Errorf("offset %d is not a multiple of 4", offset)
+	case offset > buffer.Size():
+		err = fmt.Errorf("offset %d is past the end of buffer %q (%d bytes)", offset, buffer.Label(), buffer.Size())
 	}
+	if err != nil {
+		p.encoder.setError(fmt.Errorf("wgpu: RenderPass.SetVertexBuffer: %w", err))
+		return
+	}
+	for uint32(len(p.vertexBuffers)) <= slot { //nolint:gosec // slot count bounded by MaxVertexBuffers
+		p.vertexBuffers = append(p.vertexBuffers, boundVertexBuffer{})
+	}
+	p.vertexBuffers[slot] = boundVertexBuffer{set: true, size: buffer.Size() - offset}
 	p.encoder.trackBuffer(buffer)
 	p.core.SetVertexBuffer(slot, buffer.coreBuffer(), offset)
 }
 
 // SetIndexBuffer sets the index buffer.
+//
+// Reference: Dawn RenderEncoderBase::APISetIndexBuffer
 func (p *RenderPassEncoder) SetIndexBuffer(buffer *Buffer, format gputypes.IndexFormat, offset uint64) {
 	if buffer == nil {
 		p.encoder.setError(fmt.Errorf("wgpu: RenderPass.SetIndexBuffer: buffer is nil"))
 		return
 	}
+	var err error
+	indexSize := uint64(format.Size())
+	switch {
+	case buffer.Usage()&BufferUsageIndex == 0:
+		err = fmt.Errorf("buffer %q lacks BufferUsageIndex", buffer.Label())
+	case indexSize == 0:
+		err = fmt.Errorf("index format %v is not Uint16 or Uint32", format)
+	case offset%indexSize != 0:
+		err = fmt.Errorf("offset %d is not a multiple of the %v index size", offset, format)
+	case offset > buffer.Size():
+		err = fmt.Errorf("offset %d is past the end of buffer %q (%d bytes)", offset, buffer.Label(), buffer.Size())
+	}
+	if err != nil {
+		p.encoder.setError(fmt.Errorf("wgpu: RenderPass.SetIndexBuffer: %w", err))
+		return
+	}
 	p.indexBufferSet = true
 	p.indexBufferFormat = format
+	p.indexCount = (buffer.Size() - offset) / indexSize
 	p.encoder.trackBuffer(buffer)
 	p.core.SetIndexBuffer(buffer.coreBuffer(), format, offset)
 }
@@ -187,13 +231,12 @@ func (p *RenderPassEncoder) validateDrawState(method string) bool {
 		p.encoder.setError(fmt.Errorf("wgpu: RenderPass.%s: %w: %w", method, sentinel, err))
 		return false
 	}
-	if p.vertexBufferCount < p.requiredVertexBuffers {
-		p.encoder.setError(fmt.Errorf(
-			"wgpu: RenderPass.%s: pipeline requires %d vertex buffer(s) but only %d set: %w",
-			method, p.requiredVertexBuffers, p.vertexBufferCount,
-			ErrDrawMissingVertexBuffer,
-		))
-		return false
+	for slot, step := range p.vertexSteps {
+		if step.mode != gputypes.VertexStepModeVertexBufferNotUsed && (slot >= len(p.vertexBuffers) || !p.vertexBuffers[slot].set) {
+			p.encoder.setError(fmt.Errorf("wgpu: RenderPass.%s: the pipeline reads vertex buffer slot %d, which has none: %w",
+				method, slot, ErrDrawMissingVertexBuffer))
+			return false
+		}
 	}
 	if p.blendConstantRequired && !p.blendConstantSet {
 		p.encoder.setError(fmt.Errorf(
@@ -212,11 +255,44 @@ func (p *RenderPassEncoder) validateDrawState(method string) bool {
 	return true
 }
 
+// checkVertexRanges checks that the vertex buffers hold the elements a draw
+// reads: up to lastVertex for the per-vertex ones and up to lastInstance for
+// the per-instance ones. An indexed draw passes a lastVertex of 0, the
+// vertices it reads depend on the indices.
+//
+// Reference: wgpu-core command/draw.rs VertexLimits
+func (p *RenderPassEncoder) checkVertexRanges(method string, lastVertex, lastInstance uint64) bool {
+	for slot, step := range p.vertexSteps {
+		last, what := lastVertex, "vertex"
+		switch step.mode {
+		case gputypes.VertexStepModeVertexBufferNotUsed:
+			continue
+		case gputypes.VertexStepModeInstance:
+			last, what = lastInstance, "instance"
+		}
+		size := p.vertexBuffers[slot].size
+		if last == 0 || step.stride == 0 && size >= step.lastStride {
+			continue
+		}
+		var limit uint64
+		if size >= step.lastStride {
+			limit = (size-step.lastStride)/step.stride + 1
+		}
+		if last > limit {
+			p.encoder.setError(fmt.Errorf("wgpu: RenderPass.%s: draws up to %s %d, the vertex buffer at slot %d holds %d",
+				method, what, last, slot, limit))
+			return false
+		}
+	}
+	return true
+}
+
 // Draw draws primitives. A non-zero FirstInstance needs no feature: WebGPU
 // only gates it for indirect draws (indirect-first-instance), and every
 // registered backend passes it to the native draw.
 func (p *RenderPassEncoder) Draw(args gputypes.DrawArgs) {
-	if !p.validateDrawState("Draw") {
+	if !p.validateDrawState("Draw") ||
+		!p.checkVertexRanges("Draw", uint64(args.FirstVertex)+uint64(args.VertexCount), uint64(args.FirstInstance)+uint64(args.InstanceCount)) {
 		return
 	}
 	p.core.Draw(args)
@@ -238,6 +314,13 @@ func (p *RenderPassEncoder) DrawIndexed(args gputypes.DrawIndexedArgs) {
 		p.encoder.setError(fmt.Errorf(
 			"wgpu: RenderPass.DrawIndexed: index buffer format %v does not match pipeline strip index format %v: %w",
 			p.indexBufferFormat, *p.currentStripIndexFormat, ErrDrawIndexFormatMismatch))
+		return
+	}
+	if last := uint64(args.FirstIndex) + uint64(args.IndexCount); last > p.indexCount {
+		p.encoder.setError(fmt.Errorf("wgpu: RenderPass.DrawIndexed: draws up to index %d, the index buffer holds %d", last, p.indexCount))
+		return
+	}
+	if !p.checkVertexRanges("DrawIndexed", 0, uint64(args.FirstInstance)+uint64(args.InstanceCount)) {
 		return
 	}
 	p.core.DrawIndexed(args)

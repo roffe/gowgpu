@@ -2437,7 +2437,7 @@ func TestRenderPassDrawIndexedWithIndexBuffer(t *testing.T) {
 	}
 	defer idxBuf.Release()
 
-	pass.SetIndexBuffer(idxBuf, 0, 0)
+	pass.SetIndexBuffer(idxBuf, gputypes.IndexFormatUint16, 0)
 	pass.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: 3, InstanceCount: 1}) // index buffer is set
 	_ = pass.End()
 
