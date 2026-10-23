@@ -198,6 +198,33 @@ func TestMapWaiter_ConcurrentWait(t *testing.T) {
 	}
 }
 
+// Done is closed by the request's Signal, whether it was asked for before or
+// after it, and a new request gets a channel of its own.
+func TestMapWaiter_Done(t *testing.T) {
+	closed := func(ch <-chan struct{}) bool {
+		select {
+		case <-ch:
+			return true
+		default:
+			return false
+		}
+	}
+	w := newMapWaiter()
+	before := w.Done()
+	if closed(before) {
+		t.Fatal("Done is closed before Signal")
+	}
+	w.Signal(nil)
+	w.Signal(&BufferMapError{Kind: BufferMapErrKindCancelled})
+	if !closed(before) || !closed(w.Done()) {
+		t.Fatal("Done is not closed after Signal")
+	}
+	w.Reset()
+	if closed(w.Done()) {
+		t.Fatal("Done of the next request is closed before its Signal")
+	}
+}
+
 func TestMapWaiter_Reset(t *testing.T) {
 	w := newMapWaiter()
 

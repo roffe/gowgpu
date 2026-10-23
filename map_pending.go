@@ -100,19 +100,12 @@ func (p *MapPending) Wait(ctx context.Context) error {
 		p.err = coreErrToTyped(cErr)
 		return p.err
 	}
-	// Start a goroutine to observe waiter.Wait() and post the result via
-	// a buffered channel; select on ctx.Done. The channel is the only
-	// per-Wait allocation; MapAsync's zero-alloc guarantee applies to
-	// the hot path that polls Status() directly.
-	doneCh := make(chan *core.BufferMapError, 1)
-	// The goroutine gets its own copy of the waiter: after a canceled ctx
-	// the caller may Release p, which clears p.waiter or hands p to the
-	// next MapAsync.
-	w := p.waiter
-	go func() { doneCh <- w.Wait() }()
-
+	// The waiter's channel is the only per-Wait allocation; MapAsync's
+	// zero-alloc guarantee applies to the hot path that polls Status()
+	// directly.
 	select {
-	case cErr := <-doneCh:
+	case <-p.waiter.Done():
+		_, cErr := p.waiter.Status()
 		p.resolved = true
 		p.err = coreErrToTyped(cErr)
 		return p.err

@@ -4,6 +4,7 @@ package wgpu
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"runtime"
 	"sync/atomic"
@@ -112,6 +113,9 @@ func (b *Buffer) MapState() MapState {
 //
 // Map drives Device.Poll internally; callers do not need to schedule
 // polling themselves. If you need non-blocking behavior use MapAsync.
+//
+// If ctx is done before the map resolves, Map cancels the request and
+// returns ctx.Err(), leaving the buffer unmapped.
 func (b *Buffer) Map(ctx context.Context, mode MapMode, offset, size uint64) error {
 	if b == nil || b.core == nil {
 		return ErrReleased
@@ -151,6 +155,9 @@ func (b *Buffer) Map(ctx context.Context, mode MapMode, offset, size uint64) err
 	}
 	werr := pending.Wait(ctx)
 	pending.Release()
+	if ctx.Err() != nil && errors.Is(werr, ctx.Err()) {
+		_ = b.Unmap()
+	}
 	return werr
 }
 

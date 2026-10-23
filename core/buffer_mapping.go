@@ -138,6 +138,8 @@ type MapWaiter struct {
 	cond *sync.Cond
 	done bool
 	err  *BufferMapError
+	// ch is closed by Signal, made by the first Done of a request.
+	ch chan struct{}
 }
 
 func newMapWaiter() *MapWaiter {
@@ -152,6 +154,7 @@ func (w *MapWaiter) Reset() {
 	w.mu.Lock()
 	w.done = false
 	w.err = nil
+	w.ch = nil
 	w.mu.Unlock()
 }
 
@@ -159,10 +162,27 @@ func (w *MapWaiter) Reset() {
 // nil on success.
 func (w *MapWaiter) Signal(err *BufferMapError) {
 	w.mu.Lock()
+	if w.ch != nil && !w.done {
+		close(w.ch)
+	}
 	w.done = true
 	w.err = err
 	w.cond.Broadcast()
 	w.mu.Unlock()
+}
+
+// Done returns a channel that is closed once the waiter is signaled, for a
+// select that waits for the map alongside something else.
+func (w *MapWaiter) Done() <-chan struct{} {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.ch == nil {
+		w.ch = make(chan struct{})
+		if w.done {
+			close(w.ch)
+		}
+	}
+	return w.ch
 }
 
 // Wait blocks until signaled. Returns the recorded error (nil on
