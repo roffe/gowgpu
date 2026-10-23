@@ -302,9 +302,7 @@ func TestCopyBetweenMipsOfOneTexture(t *testing.T) {
 // the same texture.
 func TestLayersUsedDifferentlyInOnePass(t *testing.T) {
 	device, h := newValidatedDevice(t)
-	if h.backend == gputypes.BackendGL {
-		t.Skip("the GL backend samples a 2D view of one layer of an array texture as the whole array, and reads zeros")
-	}
+	skipWithoutGLTextureViews(t, device, h)
 	tex := subresTexture(t, device, 1, 3, 0)
 	r := newSubresRig(t, device, sameLayerFS)
 
@@ -336,9 +334,7 @@ func TestLayersUsedDifferentlyInOnePass(t *testing.T) {
 // texture, then samples level 1 in a pass that draws into level 2.
 func TestMipGenerationByDispatch(t *testing.T) {
 	device, h := newValidatedDevice(t)
-	if h.backend == gputypes.BackendGL {
-		t.Skip("the GL backend views a mip level by setting the texture's base and max level, and a storage image of another level of it is outside them, so its stores are dropped")
-	}
+	skipWithoutGLTextureViews(t, device, h)
 	tex := subresTexture(t, device, 3, 1, TextureUsageStorageBinding)
 	r := newSubresRig(t, device, halveFS)
 
