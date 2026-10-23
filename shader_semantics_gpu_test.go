@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/binary"
 	"math"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -628,5 +629,64 @@ struct U {
 			t.Errorf("out[%d] = %v, want %v, the value at byte %d", i, v, want, off)
 		}
 	}
+	assertNoValidation(t, h)
+}
+
+// TestStorageLayoutCopies copies values whose scalars have padding between
+// them through a storage buffer, a struct of two vec3s and a mat3x3, and
+// picks an element of a let array by a run-time index. Each padding word
+// holds a marker the copies must leave alone. naga's DXIL wrote the
+// scalars one after the other into the padding, and took element 0 of the
+// let array whatever the index.
+func TestStorageLayoutCopies(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	const pad, mark = 99, 77
+	t.Run("vec3 struct", func(t *testing.T) {
+		got := runU32Compute(t, device, `
+struct P { pos: vec3<u32>, vel: vec3<u32> }
+@group(0) @binding(0) var<storage, read_write> ps: array<P>;
+@compute @workgroup_size(1) fn cs_main() {
+	let p = ps[0];
+	ps[1] = P(p.vel, p.pos);
+}
+`, nil, []uint32{1, 2, 3, pad, 4, 5, 6, pad, 0, 0, 0, mark, 0, 0, 0, mark})
+		if want := []uint32{1, 2, 3, pad, 4, 5, 6, pad, 4, 5, 6, mark, 1, 2, 3, mark}; !slices.Equal(got, want) {
+			t.Errorf("buffer %v, want %v", got, want)
+		}
+	})
+	t.Run("mat3x3", func(t *testing.T) {
+		in := make([]uint32, 24)
+		want := make([]uint32, 24)
+		for c := 0; c < 3; c++ {
+			for r := 0; r < 3; r++ {
+				in[c*4+r] = math.Float32bits(float32(c*3 + r + 1))
+				want[c*4+r], want[12+c*4+r] = in[c*4+r], in[c*4+r]
+			}
+			in[c*4+3], want[c*4+3] = pad, pad
+			in[12+c*4+3], want[12+c*4+3] = mark, mark
+		}
+		got := runU32Compute(t, device, `
+struct M { a: mat3x3<f32>, b: mat3x3<f32> }
+@group(0) @binding(0) var<storage, read_write> m: M;
+@compute @workgroup_size(1) fn cs_main() {
+	m.b = m.a;
+}
+`, nil, in)
+		if !slices.Equal(got, want) {
+			t.Errorf("buffer %v, want %v", got, want)
+		}
+	})
+	t.Run("let array", func(t *testing.T) {
+		got := runU32Compute(t, device, `
+@group(0) @binding(0) var<storage, read_write> data: array<u32>;
+@compute @workgroup_size(1) fn cs_main() {
+	let lut = array<u32, 4>(10u, 20u, 30u, 40u);
+	data[1] = lut[data[0]];
+}
+`, nil, []uint32{2, 0})
+		if got[1] != 30 {
+			t.Errorf("lut[2] = %d, want 30", got[1])
+		}
+	})
 	assertNoValidation(t, h)
 }
