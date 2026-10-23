@@ -128,6 +128,13 @@ type Device struct {
 	// initAllocator.
 	bufferImageGranularity uint64
 
+	// samplers holds one VkSampler per create info, shared by every sampler
+	// made with it, so that identical samplers count once against
+	// maxSamplers, VkPhysicalDeviceLimits.maxSamplerAllocationCount.
+	samplers    map[vk.SamplerCreateInfo]*sharedSampler
+	samplersMu  sync.Mutex
+	maxSamplers uint32
+
 	// mappedMemory tracks persistently mapped VkDeviceMemory objects.
 	// Vulkan only allows one active vkMapMemory per VkDeviceMemory;
 	// with suballocation multiple buffers share the same VkDeviceMemory,
@@ -322,6 +329,7 @@ func (d *Device) queryNonCoherentAtomSize() {
 		d.timestampPeriod = 1.0
 	}
 	d.bufferImageGranularity = uint64(props.Limits.BufferImageGranularity)
+	d.maxSamplers = props.Limits.MaxSamplerAllocationCount
 
 	hal.Logger().Debug("vulkan: device limits queried",
 		"nonCoherentAtomSize", atomSize,
@@ -1001,23 +1009,37 @@ func (d *Device) CreateSampler(desc *hal.SamplerDescriptor) (hal.Sampler, error)
 		UnnormalizedCoordinates: vk.Bool32(vk.False),
 	}
 
-	var sampler vk.Sampler
-	result := vkCreateSampler(d.cmds, d.handle, &createInfo, nil, &sampler)
-	if result != vk.Success {
-		return nil, fmt.Errorf("vulkan: vkCreateSampler failed: %d", result)
+	d.samplersMu.Lock()
+	defer d.samplersMu.Unlock()
+	shared := d.samplers[createInfo]
+	if shared == nil {
+		if uint32(len(d.samplers)) >= d.maxSamplers {
+			return nil, fmt.Errorf("vulkan: the device takes at most %d different samplers", d.maxSamplers)
+		}
+		var sampler vk.Sampler
+		if result := vkCreateSampler(d.cmds, d.handle, &createInfo, nil, &sampler); result != vk.Success {
+			return nil, fmt.Errorf("vulkan: vkCreateSampler failed: %d", result)
+		}
+		if d.samplers == nil {
+			d.samplers = make(map[vk.SamplerCreateInfo]*sharedSampler)
+		}
+		shared = &sharedSampler{handle: sampler}
+		d.samplers[createInfo] = shared
+		d.live.samplers.add(sampler)
 	}
-
-	s := &Sampler{
-		handle: sampler,
-		device: d,
-	}
-	d.live.samplers.add(sampler)
+	shared.refs++
 	if desc.Label != "" {
-		d.setObjectName(vk.ObjectTypeSampler, uint64(sampler), desc.Label)
+		d.setObjectName(vk.ObjectTypeSampler, uint64(shared.handle), desc.Label)
 	} else {
-		d.setObjectName(vk.ObjectTypeSampler, uint64(sampler), "Sampler")
+		d.setObjectName(vk.ObjectTypeSampler, uint64(shared.handle), "Sampler")
 	}
-	return s, nil
+	return &Sampler{handle: shared.handle, device: d, info: createInfo}, nil
+}
+
+// sharedSampler is a VkSampler and how many samplers use it.
+type sharedSampler struct {
+	handle vk.Sampler
+	refs   int
 }
 
 // DestroySampler destroys a sampler.
@@ -1028,8 +1050,15 @@ func (d *Device) DestroySampler(sampler hal.Sampler) {
 	}
 
 	if vkSampler.handle != 0 {
-		d.live.samplers.remove(vkSampler.handle)
-		vkDestroySampler(d.cmds, d.handle, vkSampler.handle, nil)
+		d.samplersMu.Lock()
+		if shared := d.samplers[vkSampler.info]; shared != nil && shared.handle == vkSampler.handle {
+			if shared.refs--; shared.refs == 0 {
+				delete(d.samplers, vkSampler.info)
+				d.live.samplers.remove(shared.handle)
+				vkDestroySampler(d.cmds, d.handle, shared.handle, nil)
+			}
+		}
+		d.samplersMu.Unlock()
 		vkSampler.handle = 0
 	}
 

@@ -124,6 +124,7 @@ func (v *TextureView) NativeHandle() uintptr {
 type Sampler struct {
 	handle vk.Sampler
 	device *Device
+	info   vk.SamplerCreateInfo
 }
 
 // Destroy releases the sampler.
