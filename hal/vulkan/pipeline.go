@@ -57,7 +57,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		entryPointVertex = defaultEntryPoint
 	}
 	vertexEntryBytes := append([]byte(entryPointVertex), 0)
-	vertexHandle, temporary, err := d.stageModule(vertexModule, ir.StageVertex, entryPointVertex, nil)
+	vertexHandle, temporary, err := d.stageModule(vertexModule, ir.StageVertex, entryPointVertex, nil, vkLayout.clampsFragDepth)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +84,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 			entryPointFragment = defaultEntryPoint
 		}
 		fragmentEntryBytes = append([]byte(entryPointFragment), 0)
-		fragmentHandle, temporary, err := d.stageModule(fragmentModule, ir.StageFragment, entryPointFragment, nil)
+		fragmentHandle, temporary, err := d.stageModule(fragmentModule, ir.StageFragment, entryPointFragment, nil, vkLayout.clampsFragDepth)
 		if err != nil {
 			return nil, err
 		}
@@ -427,7 +427,7 @@ func (d *Device) CreateComputePipeline(desc *hal.ComputePipelineDescriptor) (hal
 		entryPoint = defaultEntryPoint
 	}
 	entryPointBytes := append([]byte(entryPoint), 0)
-	computeHandle, temporary, err := d.stageModule(computeModule, ir.StageCompute, entryPoint, desc.Compute.Constants)
+	computeHandle, temporary, err := d.stageModule(computeModule, ir.StageCompute, entryPoint, desc.Compute.Constants, vkLayout.clampsFragDepth)
 	if err != nil {
 		return nil, err
 	}

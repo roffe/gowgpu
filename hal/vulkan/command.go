@@ -1686,9 +1686,9 @@ func (e *RenderPassEncoder) SetPipeline(pipeline hal.RenderPipeline) {
 }
 
 // pushDepthRange pushes the viewport's depth range to the fragment shaders
-// of the pipeline set.
+// of the pipeline set, when its layout has the range for them.
 func (e *RenderPassEncoder) pushDepthRange() {
-	if e.pipeline == nil {
+	if e.pipeline == nil || !e.pipeline.layout.clampsFragDepth {
 		return
 	}
 	e.encoder.device.cmds.CmdPushConstants(e.encoder.active, e.pipeline.layout.handle,

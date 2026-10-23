@@ -154,6 +154,9 @@ type ShaderModule struct {
 	handle vk.ShaderModule
 	module *ir.Module // the WGSL's, nil for SPIR-V
 	device *Device
+	// clampsFragDepth is set when handle clamps frag_depth, which a
+	// pipeline layout without the clamp's push constant range can't take.
+	clampsFragDepth bool
 }
 
 // Destroy releases the shader module.
@@ -225,6 +228,10 @@ type bindingLayout struct {
 	handle        vk.PipelineLayout
 	sets          []vk.DescriptorSetLayout
 	pushConstants []vk.PushConstantRange
+	// clampsFragDepth is set when pushConstants is the frag_depth clamp's
+	// range alone, which a layout with push constants of its own goes
+	// without.
+	clampsFragDepth bool
 }
 
 // compatibleSets is how many of the first sets bound with l a pipeline of

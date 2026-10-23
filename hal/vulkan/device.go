@@ -8,6 +8,7 @@ package vulkan
 import (
 	"encoding/binary"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 	"unsafe"
@@ -1327,11 +1328,14 @@ func (d *Device) CreatePipelineLayout(desc *hal.PipelineLayoutDescriptor) (hal.P
 			Size:       pcr.Range.End - pcr.Range.Start,
 		})
 	}
-	pushConstantRanges = append(pushConstantRanges, vk.PushConstantRange{
-		StageFlags: vk.ShaderStageFlags(vk.ShaderStageFragmentBit),
-		Offset:     fragDepthRangeOffset,
-		Size:       8,
-	})
+	clampsFragDepth := len(pushConstantRanges) == 0
+	if clampsFragDepth {
+		pushConstantRanges = append(pushConstantRanges, vk.PushConstantRange{
+			StageFlags: vk.ShaderStageFlags(vk.ShaderStageFragmentBit),
+			Offset:     fragDepthRangeOffset,
+			Size:       8,
+		})
+	}
 
 	createInfo := vk.PipelineLayoutCreateInfo{
 		SType:          vk.StructureTypePipelineLayoutCreateInfo,
@@ -1354,7 +1358,7 @@ func (d *Device) CreatePipelineLayout(desc *hal.PipelineLayoutDescriptor) (hal.P
 	}
 
 	pl := &PipelineLayout{
-		bindingLayout: bindingLayout{handle: layout, sets: setLayouts, pushConstants: pushConstantRanges},
+		bindingLayout: bindingLayout{handle: layout, sets: setLayouts, pushConstants: pushConstantRanges, clampsFragDepth: clampsFragDepth},
 		device:        d,
 	}
 	d.live.pipelineLayouts.add(layout)
@@ -1408,9 +1412,10 @@ func (d *Device) CreateShaderModule(desc *hal.ShaderModuleDescriptor) (hal.Shade
 		if len(module.Overrides) > 0 {
 			return sm, nil
 		}
-		if spirvCode, err = d.compileWGSL(module, naga.OverrideOptions{}); err != nil {
+		if spirvCode, err = d.compileWGSL(module, naga.OverrideOptions{}, true); err != nil {
 			return nil, fmt.Errorf("vulkan: naga WGSL compilation failed: %w", err)
 		}
+		sm.clampsFragDepth = !usesPushConstants(module)
 	case len(desc.Source.SPIRV) > 0:
 		spirvCode = desc.Source.SPIRV
 	default:
@@ -1459,13 +1464,19 @@ func parseWGSL(source string) (*ir.Module, error) {
 	return module, nil
 }
 
-// compileWGSL compiles module to SPIR-V with its overrides as opts says.
-func (d *Device) compileWGSL(module *ir.Module, opts naga.OverrideOptions) ([]uint32, error) {
+// compileWGSL compiles module to SPIR-V with its overrides as opts says,
+// clamping frag_depth when clampFragDepth is set and the module has no push
+// constants of its own.
+func (d *Device) compileWGSL(module *ir.Module, opts naga.OverrideOptions, clampFragDepth bool) ([]uint32, error) {
 	module, err := naga.ProcessOverrides(module, opts)
 	if err != nil {
 		return nil, fmt.Errorf("pipeline constants: %w", err)
 	}
-	code, err := naga.GenerateSPIRV(module, d.shaderOptions)
+	options := d.shaderOptions
+	if !clampFragDepth || usesPushConstants(module) {
+		options.ClampFragDepth = nil
+	}
+	code, err := naga.GenerateSPIRV(module, options)
 	if err != nil {
 		return nil, err
 	}
@@ -1487,7 +1498,7 @@ func (d *Device) compileWGSL(module *ir.Module, opts naga.OverrideOptions) ([]ui
 // of 1, which a point list pipeline needs written. As in Dawn, a fragment
 // shader clamps the depth it writes to the viewport's depth range, which
 // the render pass pushes at fragDepthRangeOffset: WebGPU clamps it, Vulkan
-// doesn't.
+// doesn't. compileWGSL leaves the clamp out where push constants are taken.
 func shaderOptions(apiVersion uint32) spirv.Options {
 	version := spirv.Version1_3
 	if apiVersion < vkMakeVersion(1, 1, 0) {
@@ -1507,10 +1518,45 @@ func shaderOptions(apiVersion uint32) spirv.Options {
 }
 
 // fragDepthRangeOffset is where the push constants hold the depth range of
-// the frag_depth clamp, two floats in every pipeline layout.
-// ponytail: offset 0, since the device offers no push constants of its own
-// (FeaturePushConstants); with them, it goes after the layout's ranges.
+// the frag_depth clamp, two floats in every pipeline layout without push
+// constants of its own. An entry point has one push constant block, so a
+// pipeline with push constants of its own writes frag_depth unclamped.
 const fragDepthRangeOffset = 0
+
+// usesPushConstants reports whether module has push constants, which leave
+// its entry points no block for the frag_depth clamp. After ProcessOverrides
+// selected an entry point, they are that entry point's.
+func usesPushConstants(module *ir.Module) bool {
+	return slices.ContainsFunc(module.GlobalVariables, func(g ir.GlobalVariable) bool {
+		return g.Space == ir.SpacePushConstant || g.Space == ir.SpaceImmediate
+	})
+}
+
+// writesFragDepth reports whether entry, an entry point of module for stage,
+// writes frag_depth.
+func writesFragDepth(module *ir.Module, stage ir.ShaderStage, entry string) bool {
+	if module == nil || stage != ir.StageFragment {
+		return false
+	}
+	fragDepth := func(b *ir.Binding) bool {
+		if b == nil {
+			return false
+		}
+		bb, ok := (*b).(ir.BuiltinBinding)
+		return ok && bb.Builtin == ir.BuiltinFragDepth
+	}
+	for _, ep := range module.EntryPoints {
+		r := ep.Function.Result
+		if ep.Stage != stage || ep.Name != entry || r == nil {
+			continue
+		}
+		if st, ok := module.Types[r.Type].Inner.(ir.StructType); ok {
+			return slices.ContainsFunc(st.Members, func(m ir.StructMember) bool { return fragDepth(m.Binding) })
+		}
+		return fragDepth(r.Binding)
+	}
+	return false
+}
 
 func (d *Device) createVkShaderModule(code []uint32) (vk.ShaderModule, error) {
 	createInfo := vk.ShaderModuleCreateInfo{
@@ -1527,11 +1573,14 @@ func (d *Device) createVkShaderModule(code []uint32) (vk.ShaderModule, error) {
 }
 
 // stageModule is the VkShaderModule of a pipeline stage of sm at entry
-// point entry with constants: the module's own when it has one and there
-// are no constants, else one compiled for the stage, which the caller
-// destroys once the pipeline is made (temporary).
-func (d *Device) stageModule(sm *ShaderModule, stage ir.ShaderStage, entry string, constants map[string]float64) (handle vk.ShaderModule, temporary bool, err error) {
-	if sm.handle != 0 && len(constants) == 0 {
+// point entry with constants, for a pipeline layout that has the frag_depth
+// clamp's range or not (clampFragDepth): the module's own when it has one,
+// there are no constants and it clamps frag_depth as the layout needs, else
+// one compiled for the stage, which the caller destroys once the pipeline is
+// made (temporary).
+func (d *Device) stageModule(sm *ShaderModule, stage ir.ShaderStage, entry string, constants map[string]float64, clampFragDepth bool) (handle vk.ShaderModule, temporary bool, err error) {
+	if sm.handle != 0 && len(constants) == 0 &&
+		(sm.module == nil || sm.clampsFragDepth == clampFragDepth || !writesFragDepth(sm.module, stage, entry)) {
 		return sm.handle, false, nil
 	}
 	if sm.module == nil {
@@ -1540,7 +1589,7 @@ func (d *Device) stageModule(sm *ShaderModule, stage ir.ShaderStage, entry strin
 	code, err := d.compileWGSL(sm.module, naga.OverrideOptions{
 		Constants:  constants,
 		EntryPoint: &naga.EntryPointSelector{Stage: stage, Name: entry},
-	})
+	}, clampFragDepth)
 	if err != nil {
 		return 0, false, fmt.Errorf("vulkan: naga WGSL compilation failed: %w", err)
 	}
