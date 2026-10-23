@@ -142,28 +142,20 @@ func TestDepth32FloatStencil8TestsDepth(t *testing.T) {
 	expectDepthTested(t, device, gputypes.TextureFormatDepth32FloatStencil8)
 }
 
-// skipStencil8OnVulkan skips a test drawing against a Stencil8 attachment
-// on Vulkan, where NVIDIA's driver loses the device now and then doing so
-// with gowgpu's S8_UINT attachment.
-func skipStencil8OnVulkan(t *testing.T, h *captureHandler) {
-	t.Helper()
-	if h.backend == gputypes.BackendVulkan {
-		t.Skip("drawing against an S8_UINT attachment loses the Vulkan device on NVIDIA now and then")
-	}
-}
-
 // TestStencil8Attachment draws against a Stencil8 attachment, which GL made
 // as RGBA8 and attached to the stencil attachment point, an incomplete
-// framebuffer that drew nothing.
+// framebuffer that drew nothing. Under the validation layer it also fails
+// on an image destroyed while a submission still used it: a barrier sent to
+// the released S8_UINT image of the first draw lost the device on NVIDIA.
 func TestStencil8Attachment(t *testing.T) {
 	device, h := newValidatedDevice(t)
-	skipStencil8OnVulkan(t, h)
 	equal := DepthStencilState{DepthCompare: gputypes.CompareFunctionAlways,
 		StencilFront:    StencilFaceState{Compare: gputypes.CompareFunctionEqual},
 		StencilBack:     StencilFaceState{Compare: gputypes.CompareFunctionEqual},
 		StencilReadMask: 0xff, StencilWriteMask: 0xff}
 	expectPixels(t, "stencil equal to the reference", drawGreenAgainst(t, device, dsDraw{format: gputypes.TextureFormatStencil8, state: equal}), 0, 255, 0, 255)
 	expectPixels(t, "stencil not equal to the reference", drawGreenAgainst(t, device, dsDraw{format: gputypes.TextureFormatStencil8, state: equal, ref: 1}), 255, 0, 0, 255)
+	assertNoValidation(t, h)
 }
 
 // TestStencilClearValue clears stencil to 1 and tests against references 1
@@ -176,11 +168,9 @@ func TestStencilClearValue(t *testing.T) {
 		StencilReadMask: 0xff, StencilWriteMask: 0xff}
 	for _, format := range []gputypes.TextureFormat{gputypes.TextureFormatStencil8, gputypes.TextureFormatDepth24PlusStencil8} {
 		t.Run(format.String(), func(t *testing.T) {
-			if format == gputypes.TextureFormatStencil8 {
-				skipStencil8OnVulkan(t, h)
-			}
 			expectPixels(t, "reference 1", drawGreenAgainst(t, device, dsDraw{format: format, state: equal, depthClear: 1, stencil: 1, ref: 1}), 0, 255, 0, 255)
 			expectPixels(t, "reference 0", drawGreenAgainst(t, device, dsDraw{format: format, state: equal, depthClear: 1, stencil: 1}), 255, 0, 0, 255)
+			assertNoValidation(t, h)
 		})
 	}
 }
