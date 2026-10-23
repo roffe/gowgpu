@@ -30,20 +30,29 @@ func checkStageBindings(module *ShaderModule, entryPoint string, stage ir.Shader
 	}
 	uses := globalUses{used: make([]bool, len(mod.GlobalVariables)), sampled: make([]bool, len(mod.GlobalVariables))}
 	uses.walk(mod, &ep.Function, nil)
+	// entryOf returns the layout entry of a global and whether its layout is
+	// one derived from the shaders.
+	entryOf := func(gv *ir.GlobalVariable) (*gputypes.BindGroupLayoutEntry, bool) {
+		rb := *gv.Binding
+		if int(rb.Group) >= len(layouts) || layouts[rb.Group] == nil {
+			return nil, false
+		}
+		entries := layouts[rb.Group].entries
+		if i := slices.IndexFunc(entries, func(e gputypes.BindGroupLayoutEntry) bool { return e.Binding == rb.Binding }); i >= 0 {
+			return &entries[i], layouts[rb.Group].auto
+		}
+		return nil, false
+	}
+	name := func(gv *ir.GlobalVariable) string {
+		return fmt.Sprintf("%s (@group(%d) @binding(%d))", gv.Name, gv.Binding.Group, gv.Binding.Binding)
+	}
 	for h, used := range uses.used {
 		gv := &mod.GlobalVariables[h]
 		if !used || gv.Binding == nil {
 			continue
 		}
-		rb := *gv.Binding
-		var entry *gputypes.BindGroupLayoutEntry
-		if int(rb.Group) < len(layouts) && layouts[rb.Group] != nil {
-			entries := layouts[rb.Group].entries
-			if i := slices.IndexFunc(entries, func(e gputypes.BindGroupLayoutEntry) bool { return e.Binding == rb.Binding }); i >= 0 {
-				entry = &entries[i]
-			}
-		}
-		where := fmt.Sprintf("%s (@group(%d) @binding(%d))", gv.Name, rb.Group, rb.Binding)
+		entry, _ := entryOf(gv)
+		where := name(gv)
 		switch {
 		case entry == nil:
 			return fmt.Errorf("%s is not in the pipeline layout", where)
@@ -56,6 +65,29 @@ func checkStageBindings(module *ShaderModule, entryPoint string, stage ir.Shader
 		}
 		if reason := bindingMismatch(entry, &shader); reason != "" {
 			return fmt.Errorf("%s: %s", where, reason)
+		}
+	}
+	// A filtering sampler can't sample a texture whose layout entry says it
+	// doesn't filter. Layouts derived from the shaders agree by making.
+	//
+	// Reference: wgpu-core validation.rs check_stage (sampling_pairs,
+	// FilteringError)
+	for _, pair := range uses.pairs {
+		tex, smp := &mod.GlobalVariables[pair[0]], &mod.GlobalVariables[pair[1]]
+		if tex.Binding == nil || smp.Binding == nil {
+			continue
+		}
+		texEntry, auto := entryOf(tex)
+		smpEntry, _ := entryOf(smp)
+		if auto || texEntry == nil || smpEntry == nil || texEntry.Texture == nil || smpEntry.Sampler == nil {
+			continue
+		}
+		if t := smpEntry.Sampler.Type; t != gputypes.SamplerBindingTypeFiltering && t != gputypes.SamplerBindingTypeUndefined {
+			continue
+		}
+		switch st := texEntry.Texture.SampleType; st {
+		case gputypes.TextureSampleTypeUnfilterableFloat, gputypes.TextureSampleTypeSint, gputypes.TextureSampleTypeUint:
+			return fmt.Errorf("%s is sampled with the filtering sampler %s, though its sample type %v doesn't filter", name(tex), name(smp), st)
 		}
 	}
 	return nil

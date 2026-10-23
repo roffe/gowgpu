@@ -295,6 +295,8 @@ var storageTextureFormats = [...]gputypes.TextureFormat{
 // how naga's GLSL and MSL backends pick an entry point's resources.
 type globalUses struct {
 	used, sampled []bool
+	// pairs are the textures sampled with each sampler, as globals.
+	pairs [][2]int
 }
 
 // walk adds fn's uses. args holds the global the caller passed for each of
@@ -319,6 +321,9 @@ func (u *globalUses) walk(mod *ir.Module, fn *ir.Function, args []int) {
 		case ir.ExprImageSample:
 			if g := global(e.Image); g >= 0 {
 				u.sampled[g] = true
+				if s := global(e.Sampler); s >= 0 {
+					u.pairs = append(u.pairs, [2]int{g, s})
+				}
 			}
 		}
 	}

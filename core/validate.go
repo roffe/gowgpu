@@ -836,12 +836,7 @@ func ValidateBindGroupDescriptor(
 
 	// BG4-BG9: Buffer binding validation.
 	// Rust: wgpu-core device/resource.rs:2747-2834
-	if err := validateBindGroupBufferEntries(desc.Label, layoutByBinding, bufferInfos, limits); err != nil {
-		return err
-	}
-
-	// VAL-C21: Float32 filterable textures at bind time.
-	return validateFloat32FilterableBindings(layoutEntries, samplerInfos, textureInfos, features)
+	return validateBindGroupBufferEntries(desc.Label, layoutByBinding, bufferInfos, limits)
 }
 
 // validateBindGroupBufferEntries validates each buffer binding entry against its

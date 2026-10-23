@@ -9,66 +9,42 @@ import (
 	"github.com/roffe/gowgpu/hal"
 )
 
-func TestValidateFloat32FilterableBindings_TextureSampleTypeFloat(t *testing.T) {
-	t.Parallel()
-	layout := []gputypes.BindGroupLayoutEntry{
-		{
-			Binding: 0,
-			Texture: &gputypes.TextureBindingLayout{SampleType: gputypes.TextureSampleTypeFloat},
-		},
+// float32Bindings checks a texture of format bound at binding 0 of
+// sample type st, with a filtering sampler at binding 1.
+func float32Bindings(format gputypes.TextureFormat, st gputypes.TextureSampleType, features gputypes.Features) error {
+	layout := map[uint32]*gputypes.BindGroupLayoutEntry{
+		0: {Binding: 0, Texture: &gputypes.TextureBindingLayout{SampleType: st}},
+		1: {Binding: 1, Sampler: &gputypes.SamplerBindingLayout{Type: gputypes.SamplerBindingTypeFiltering}},
 	}
-	textures := []BindGroupTextureInfo{{Binding: 0, Format: gputypes.TextureFormatR32Float}}
-	err := validateFloat32FilterableBindings(layout, nil, textures, gputypes.Features(0))
-	if !IsFeatureError(err) {
-		t.Fatalf("expected feature error, got %T: %v", err, err)
-	}
+	samplers := []BindGroupSamplerInfo{{Binding: 1, Desc: &hal.SamplerDescriptor{MagFilter: gputypes.FilterModeLinear}}}
+	textures := []BindGroupTextureInfo{{Binding: 0, Format: format, Usage: gputypes.TextureUsageTextureBinding, SampleCount: 1}}
+	return validateBindGroupResources("float32", layout, nil, samplers, textures, features)
 }
 
-func TestValidateFloat32FilterableBindings_FilteringSamplerWithUnfilterableFloat(t *testing.T) {
+func TestFloat32TextureAtAFilterableBindingNeedsTheFeature(t *testing.T) {
 	t.Parallel()
-	layout := []gputypes.BindGroupLayoutEntry{
-		{Binding: 0, Texture: &gputypes.TextureBindingLayout{SampleType: gputypes.TextureSampleTypeUnfilterableFloat}},
-		{Binding: 1, Sampler: &gputypes.SamplerBindingLayout{}},
-	}
-	samplers := []BindGroupSamplerInfo{
-		{Binding: 1, Desc: &hal.SamplerDescriptor{MagFilter: gputypes.FilterModeLinear}},
-	}
-	textures := []BindGroupTextureInfo{{Binding: 0, Format: gputypes.TextureFormatR32Float}}
-	err := validateFloat32FilterableBindings(layout, samplers, textures, gputypes.Features(0))
-	if !IsFeatureError(err) {
+	if err := float32Bindings(gputypes.TextureFormatR32Float, gputypes.TextureSampleTypeFloat, 0); !IsFeatureError(err) {
 		t.Fatalf("expected feature error, got %T: %v", err, err)
 	}
-}
-
-func TestValidateFloat32FilterableBindings_WithFeature(t *testing.T) {
-	t.Parallel()
-	layout := []gputypes.BindGroupLayoutEntry{
-		{
-			Binding: 0,
-			Texture: &gputypes.TextureBindingLayout{SampleType: gputypes.TextureSampleTypeFloat},
-		},
-	}
-	textures := []BindGroupTextureInfo{{Binding: 0, Format: gputypes.TextureFormatR32Float}}
 	features := gputypes.Features(gputypes.FeatureFloat32Filterable)
-	if err := validateFloat32FilterableBindings(layout, nil, textures, features); err != nil {
+	if err := float32Bindings(gputypes.TextureFormatR32Float, gputypes.TextureSampleTypeFloat, features); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestValidateFloat32FilterableBindings_EmptyTextures(t *testing.T) {
+// A bind group doesn't pair its textures with its samplers: a 32-bit float
+// texture at an unfilterable binding next to a filtering sampler is fine,
+// the pipelines that sample them together are checked when they are made.
+func TestFloat32TextureAtAnUnfilterableBindingNeedsNoFeature(t *testing.T) {
 	t.Parallel()
-	if err := validateFloat32FilterableBindings(nil, nil, nil, gputypes.Features(0)); err != nil {
+	if err := float32Bindings(gputypes.TextureFormatR32Float, gputypes.TextureSampleTypeUnfilterableFloat, 0); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestValidateFloat32FilterableBindings_NonFloatFormatSkipped(t *testing.T) {
+func TestFilterableFormatNeedsNoFeature(t *testing.T) {
 	t.Parallel()
-	layout := []gputypes.BindGroupLayoutEntry{
-		{Binding: 0, Texture: &gputypes.TextureBindingLayout{SampleType: gputypes.TextureSampleTypeFloat}},
-	}
-	textures := []BindGroupTextureInfo{{Binding: 0, Format: gputypes.TextureFormatRGBA8Unorm}}
-	if err := validateFloat32FilterableBindings(layout, nil, textures, gputypes.Features(0)); err != nil {
+	if err := float32Bindings(gputypes.TextureFormatRGBA8Unorm, gputypes.TextureSampleTypeFloat, 0); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

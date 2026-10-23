@@ -109,3 +109,76 @@ func TestCreateRenderPipelineChecksTheShaderInterface(t *testing.T) {
 	}
 	assertNoValidation(t, h)
 }
+
+const samplingShader = `
+@group(0) @binding(0) var t: texture_2d<f32>;
+@group(0) @binding(1) var s: sampler;
+
+@vertex
+fn vs_main(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
+    return vec4<f32>(0.0, 0.0, 0.5, 1.0);
+}
+
+@fragment
+fn fs_main() -> @location(0) vec4<f32> {
+    return textureSample(t, s, vec2<f32>(0.5));
+}
+`
+
+// A filtering sampler can't sample a texture whose layout entry is
+// unfilterable: CreateRenderPipeline checks the pairs the shader samples
+// with, which the bind group can't.
+func TestCreateRenderPipelineChecksSamplingPairs(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	shader, err := device.CreateShaderModule(&ShaderModuleDescriptor{WGSL: samplingShader})
+	if err != nil {
+		t.Fatalf("CreateShaderModule: %v", err)
+	}
+	defer shader.Release()
+	for _, tc := range []struct {
+		texture gputypes.TextureSampleType
+		sampler gputypes.SamplerBindingType
+		wantErr bool
+	}{
+		{gputypes.TextureSampleTypeFloat, gputypes.SamplerBindingTypeFiltering, false},
+		{gputypes.TextureSampleTypeUnfilterableFloat, gputypes.SamplerBindingTypeNonFiltering, false},
+		{gputypes.TextureSampleTypeUnfilterableFloat, gputypes.SamplerBindingTypeFiltering, true},
+	} {
+		t.Run(tc.texture.String()+" with "+tc.sampler.String(), func(t *testing.T) {
+			bgl, err := device.CreateBindGroupLayout(&BindGroupLayoutDescriptor{Entries: []gputypes.BindGroupLayoutEntry{
+				{Binding: 0, Visibility: gputypes.ShaderStageFragment, Texture: &gputypes.TextureBindingLayout{
+					SampleType: tc.texture, ViewDimension: gputypes.TextureViewDimension2D,
+				}},
+				{Binding: 1, Visibility: gputypes.ShaderStageFragment, Sampler: &gputypes.SamplerBindingLayout{Type: tc.sampler}},
+			}})
+			if err != nil {
+				t.Fatalf("CreateBindGroupLayout: %v", err)
+			}
+			defer bgl.Release()
+			layout, err := device.CreatePipelineLayout(&PipelineLayoutDescriptor{BindGroupLayouts: []*BindGroupLayout{bgl}})
+			if err != nil {
+				t.Fatalf("CreatePipelineLayout: %v", err)
+			}
+			defer layout.Release()
+			pipeline, err := device.CreateRenderPipeline(&RenderPipelineDescriptor{
+				Layout: layout,
+				Vertex: VertexState{Module: shader, EntryPoint: "vs_main"},
+				Fragment: &FragmentState{Module: shader, EntryPoint: "fs_main", Targets: []gputypes.ColorTargetState{
+					{Format: TextureFormatRGBA8Unorm, WriteMask: gputypes.ColorWriteMaskAll},
+				}},
+				Primitive:   gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList},
+				Multisample: gputypes.MultisampleState{Count: 1, Mask: 0xFFFFFFFF},
+			})
+			if pipeline != nil {
+				pipeline.Release()
+			}
+			switch {
+			case !tc.wantErr && err != nil:
+				t.Errorf("CreateRenderPipeline: %v", err)
+			case tc.wantErr && (err == nil || !strings.Contains(err.Error(), "doesn't filter")):
+				t.Errorf("CreateRenderPipeline: %v, want an error about the unfilterable texture", err)
+			}
+		})
+	}
+	assertNoValidation(t, h)
+}
