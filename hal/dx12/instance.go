@@ -47,6 +47,9 @@ func (Backend) Variant() gputypes.Backend {
 
 // CreateInstance creates a new DirectX 12 instance.
 func (Backend) CreateInstance(desc *hal.InstanceDescriptor) (hal.Instance, error) {
+	if unsafe.Sizeof(uintptr(0)) < 8 {
+		return nil, fmt.Errorf("dx12: needs a 64-bit build: its COM calls pass 64-bit values in one uintptr")
+	}
 	instance := &Instance{}
 
 	// Load DXGI library first
