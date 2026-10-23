@@ -114,6 +114,9 @@ const oobShader = `
 // compiled WGSL without bounds checks, and NVIDIA read 4000.
 func TestOutOfBoundsIndexStaysInBounds(t *testing.T) {
 	device, h := newValidatedDevice(t)
+	if h.backend == gputypes.BackendGL {
+		t.Skip("GL compiles compute shaders as GLSL 3.30, see the README's known issues")
+	}
 	if got := runU32Compute(t, device, oobShader, nil, []uint32{1000, 1})[1]; got != 99 && got != 0 {
 		t.Errorf("a[1000] of a four-element array of 99 read %d, want 99 or 0", got)
 	}
