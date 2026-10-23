@@ -755,28 +755,6 @@ func TestTextureAspectToVk(t *testing.T) {
 	}
 }
 
-// TestTextureAspectToVkSimple tests texture aspect conversions without format context.
-func TestTextureAspectToVkSimple(t *testing.T) {
-	tests := []struct {
-		name   string
-		aspect gputypes.TextureAspect
-		expect vk.ImageAspectFlags
-	}{
-		{"DepthOnly", gputypes.TextureAspectDepthOnly, vk.ImageAspectFlags(vk.ImageAspectDepthBit)},
-		{"StencilOnly", gputypes.TextureAspectStencilOnly, vk.ImageAspectFlags(vk.ImageAspectStencilBit)},
-		{"All defaults to Color", gputypes.TextureAspectAll, vk.ImageAspectFlags(vk.ImageAspectColorBit)},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := textureAspectToVkSimple(tt.aspect)
-			if got != tt.expect {
-				t.Errorf("textureAspectToVkSimple() = %v, want %v", got, tt.expect)
-			}
-		})
-	}
-}
-
 // TestIsDepthStencilFormat tests depth-stencil format detection.
 func TestIsDepthStencilFormat(t *testing.T) {
 	tests := []struct {

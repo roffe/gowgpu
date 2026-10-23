@@ -672,6 +672,18 @@ func (e *CommandEncoder) TransitionBuffers(barriers []hal.BufferBarrier) {
 	)
 }
 
+// barrierAspects are the aspects a barrier on an image of format covers:
+// every aspect of a depth/stencil image, whose aspects share their layout
+// and are tracked together (without separateDepthStencilLayouts a barrier
+// has to name both, VUID-VkImageMemoryBarrier-image-03320), and the given
+// one of anything else.
+func barrierAspects(aspect gputypes.TextureAspect, format gputypes.TextureFormat) vk.ImageAspectFlags {
+	if isDepthStencilFormat(format) {
+		aspect = gputypes.TextureAspectAll
+	}
+	return textureAspectToVk(aspect, format)
+}
+
 // barrierDstStages is the destination stage mask of a barrier whose new
 // usages ran in stages: nothing known (TOP_OF_PIPE alone, from a zero usage)
 // means every later command has to wait.
@@ -722,7 +734,7 @@ func (e *CommandEncoder) TransitionTextures(barriers []hal.TextureBarrier) {
 			DstQueueFamilyIndex: vk.QueueFamilyIgnored,
 			Image:               tex.handle,
 			SubresourceRange: vk.ImageSubresourceRange{
-				AspectMask:     textureAspectToVk(b.Range.Aspect, tex.format),
+				AspectMask:     barrierAspects(b.Range.Aspect, tex.format),
 				BaseMipLevel:   b.Range.BaseMipLevel,
 				LevelCount:     mipLevelCountOrRemaining(b.Range.MipLevelCount),
 				BaseArrayLayer: b.Range.BaseArrayLayer,
@@ -803,12 +815,10 @@ func convertBufferImageCopyRegions(dst []vk.BufferImageCopy, regions []hal.Buffe
 		vkRegions = make([]vk.BufferImageCopy, 0, len(regions))
 	}
 	vkRegions = vkRegions[:len(regions)]
-	blockSize := format.BlockCopySize()
-	if blockSize == 0 {
-		blockSize = 4
-	}
 	blockWidth, _ := format.BlockDimensions()
 	for i, r := range regions {
+		aspect := textureAspectToVk(r.TextureBase.Aspect, format)
+		blockSize := copyBlockSize(format, aspect)
 		// Vulkan bufferRowLength is in TEXELS, not bytes.
 		// Convert from WebGPU's BytesPerRow (bytes) to Vulkan's bufferRowLength (texels)
 		// using the format's known block size — NOT inference from BytesPerRow/Width,
@@ -837,7 +847,7 @@ func convertBufferImageCopyRegions(dst []vk.BufferImageCopy, regions []hal.Buffe
 			BufferRowLength:   bufferRowLength,
 			BufferImageHeight: r.BufferLayout.RowsPerImage,
 			ImageSubresource: vk.ImageSubresourceLayers{
-				AspectMask:     textureAspectToVkSimple(r.TextureBase.Aspect),
+				AspectMask:     aspect,
 				MipLevel:       r.TextureBase.MipLevel,
 				BaseArrayLayer: baseArrayLayer,
 				LayerCount:     layerCount,
@@ -855,6 +865,22 @@ func convertBufferImageCopyRegions(dst []vk.BufferImageCopy, regions []hal.Buffe
 		}
 	}
 	return vkRegions
+}
+
+// copyBlockSize is how many bytes a texel block of the aspect of format
+// takes in a buffer copy: a stencil aspect one, a depth aspect its depth's,
+// which a 24-bit depth copies in four.
+func copyBlockSize(format gputypes.TextureFormat, aspect vk.ImageAspectFlags) uint32 {
+	switch aspect {
+	case vk.ImageAspectFlags(vk.ImageAspectStencilBit):
+		return 1
+	case vk.ImageAspectFlags(vk.ImageAspectDepthBit):
+		if format == gputypes.TextureFormatDepth16Unorm {
+			return 2
+		}
+		return 4
+	}
+	return max(format.BlockCopySize(), 1)
 }
 
 // CopyBufferToTexture copies data from a buffer to a texture.

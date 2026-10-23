@@ -601,19 +601,6 @@ func textureAspectToVk(aspect gputypes.TextureAspect, format gputypes.TextureFor
 	}
 }
 
-// textureAspectToVkSimple converts texture aspect without format context.
-// Used when texture format is not available (e.g., in buffer-texture copy regions).
-func textureAspectToVkSimple(aspect gputypes.TextureAspect) vk.ImageAspectFlags {
-	switch aspect {
-	case gputypes.TextureAspectDepthOnly:
-		return vk.ImageAspectFlags(vk.ImageAspectDepthBit)
-	case gputypes.TextureAspectStencilOnly:
-		return vk.ImageAspectFlags(vk.ImageAspectStencilBit)
-	default:
-		return vk.ImageAspectFlags(vk.ImageAspectColorBit)
-	}
-}
-
 // isDepthStencilFormat returns true if the format is a depth or depth-stencil format.
 func isDepthStencilFormat(format gputypes.TextureFormat) bool {
 	switch format {
