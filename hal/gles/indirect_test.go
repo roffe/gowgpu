@@ -7,6 +7,7 @@ import (
 
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/gowgpu/hal/gles/gl"
 )
 
 // Indirect draws record a command for each record, 16 bytes apart for a
@@ -45,5 +46,22 @@ func TestRenderPassEncoderIndirectDraws(t *testing.T) {
 		if c.indexed != nil && (c.indexed.indexOffset != 16 || c.indexed.indexFormat != gputypes.IndexFormatUint32) {
 			t.Errorf("command %d: index buffer at %d as %v", i, c.indexed.indexOffset, c.indexed.indexFormat)
 		}
+	}
+}
+
+// A buffer a shader wrote is copied to a texture through
+// GL_PIXEL_UNPACK_BUFFER, which only PIXEL_BUFFER_BARRIER_BIT orders after
+// the writes.
+func TestStorageBufferBarrierCoversPixelBuffers(t *testing.T) {
+	enc := &CommandEncoder{}
+	enc.TransitionBuffers([]hal.BufferBarrier{{
+		Buffer: &Buffer{id: 1},
+		Usage:  hal.BufferUsageTransition{OldUsage: gputypes.BufferUsageStorage, NewUsage: gputypes.BufferUsageCopySrc},
+	}})
+	if len(enc.commands) != 1 {
+		t.Fatalf("commands = %d, want one barrier", len(enc.commands))
+	}
+	if b := enc.commands[0].(*MemoryBarrierCommand).barriers; b&gl.PIXEL_BUFFER_BARRIER_BIT == 0 {
+		t.Errorf("barrier bits %#x lack PIXEL_BUFFER_BARRIER_BIT", b)
 	}
 }

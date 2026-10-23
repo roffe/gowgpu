@@ -105,7 +105,7 @@ func (e *CommandEncoder) TransitionBuffers(barriers []hal.BufferBarrier) {
 		if bar.Usage.OldUsage&gputypes.BufferUsageStorage != 0 {
 			bits |= gl.SHADER_STORAGE_BARRIER_BIT | gl.BUFFER_UPDATE_BARRIER_BIT |
 				gl.VERTEX_ATTRIB_ARRAY_BARRIER_BIT | gl.ELEMENT_ARRAY_BARRIER_BIT |
-				gl.UNIFORM_BARRIER_BIT | gl.COMMAND_BARRIER_BIT
+				gl.UNIFORM_BARRIER_BIT | gl.COMMAND_BARRIER_BIT | gl.PIXEL_BUFFER_BARRIER_BIT
 		}
 	}
 	if bits != 0 {
@@ -1820,7 +1820,7 @@ func (c *DispatchCommand) Execute(ctx *gl.Context) {
 	// VERTEX_ATTRIB_ARRAY_BARRIER_BIT is required when compute writes an SSBO that
 	// is later read as a vertex buffer (e.g. particles ping-pong). Without it,
 	// vertex fetch reads stale pre-compute data. Found by @lkmavi (PR #215).
-	ctx.MemoryBarrier(gl.SHADER_STORAGE_BARRIER_BIT | gl.VERTEX_ATTRIB_ARRAY_BARRIER_BIT | gl.BUFFER_UPDATE_BARRIER_BIT)
+	ctx.MemoryBarrier(gl.SHADER_STORAGE_BARRIER_BIT | gl.VERTEX_ATTRIB_ARRAY_BARRIER_BIT | gl.BUFFER_UPDATE_BARRIER_BIT | gl.PIXEL_BUFFER_BARRIER_BIT)
 }
 
 // DispatchIndirectCommand dispatches compute work with GPU-generated parameters.
@@ -1837,7 +1837,7 @@ func (c *DispatchIndirectCommand) Execute(ctx *gl.Context) {
 	ctx.DispatchComputeIndirect(uintptr(c.offset))
 	// Unbind the indirect buffer
 	ctx.BindBuffer(gl.DISPATCH_INDIRECT_BUFFER, 0)
-	ctx.MemoryBarrier(gl.SHADER_STORAGE_BARRIER_BIT | gl.VERTEX_ATTRIB_ARRAY_BARRIER_BIT | gl.BUFFER_UPDATE_BARRIER_BIT)
+	ctx.MemoryBarrier(gl.SHADER_STORAGE_BARRIER_BIT | gl.VERTEX_ATTRIB_ARRAY_BARRIER_BIT | gl.BUFFER_UPDATE_BARRIER_BIT | gl.PIXEL_BUFFER_BARRIER_BIT)
 }
 
 // CopyTextureToBufferCommand reads pixels from a texture level into a
