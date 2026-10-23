@@ -20,7 +20,7 @@ func TestConvertBufferImageCopyRegionsUsesArrayLayersFor2DTextures(t *testing.T)
 		Size: hal.Extent3D{Width: 8, Height: 4, DepthOrArrayLayers: 2},
 	}}
 
-	converted := convertBufferImageCopyRegions(nil, regions, gputypes.TextureFormatRGBA8Unorm, gputypes.TextureDimension2D)
+	converted := convertBufferImageCopyRegions(nil, regions, copyImage{format: gputypes.TextureFormatRGBA8Unorm, dimension: gputypes.TextureDimension2D, size: Extent3D{Width: 64, Height: 64, Depth: 1}})
 	got := converted[0]
 	if got.ImageSubresource.BaseArrayLayer != 1 || got.ImageSubresource.LayerCount != 2 {
 		t.Fatalf("array range = %d+%d, want 1+2", got.ImageSubresource.BaseArrayLayer, got.ImageSubresource.LayerCount)
@@ -39,7 +39,7 @@ func TestConvertBufferImageCopyRegionsUsesDepthFor3DTextures(t *testing.T) {
 		Size: hal.Extent3D{Width: 8, Height: 4, DepthOrArrayLayers: 2},
 	}}
 
-	converted := convertBufferImageCopyRegions(nil, regions, gputypes.TextureFormatRGBA8Unorm, gputypes.TextureDimension3D)
+	converted := convertBufferImageCopyRegions(nil, regions, copyImage{format: gputypes.TextureFormatRGBA8Unorm, dimension: gputypes.TextureDimension3D, size: Extent3D{Width: 64, Height: 64, Depth: 4}})
 	got := converted[0]
 	if got.ImageSubresource.BaseArrayLayer != 0 || got.ImageSubresource.LayerCount != 1 {
 		t.Fatalf("array range = %d+%d, want 0+1", got.ImageSubresource.BaseArrayLayer, got.ImageSubresource.LayerCount)
@@ -66,7 +66,7 @@ func TestConvertBufferImageCopyRegionsCompressedRowLength(t *testing.T) {
 		{gputypes.TextureFormatBC7RGBAUnorm, 64},
 		{gputypes.TextureFormatASTC10x8Unorm, 160},
 	} {
-		got := convertBufferImageCopyRegions(nil, regions, tc.format, gputypes.TextureDimension2D)[0].BufferRowLength
+		got := convertBufferImageCopyRegions(nil, regions, copyImage{format: tc.format, dimension: gputypes.TextureDimension2D, size: Extent3D{Width: 256, Height: 256, Depth: 1}})[0].BufferRowLength
 		if got != tc.want {
 			t.Errorf("%s: bufferRowLength = %d, want %d", tc.format, got, tc.want)
 		}
@@ -97,7 +97,7 @@ func TestConvertBufferImageCopyRegionsDepthStencilAspects(t *testing.T) {
 			TextureBase:  hal.ImageCopyTexture{Aspect: tc.aspect},
 			Size:         hal.Extent3D{Width: 4, Height: 4, DepthOrArrayLayers: 1},
 		}}
-		got := convertBufferImageCopyRegions(nil, regions, tc.format, gputypes.TextureDimension2D)[0]
+		got := convertBufferImageCopyRegions(nil, regions, copyImage{format: tc.format, dimension: gputypes.TextureDimension2D, size: Extent3D{Width: 256, Height: 256, Depth: 1}})[0]
 		if got.ImageSubresource.AspectMask != tc.wantAspect || got.BufferRowLength != tc.wantRow {
 			t.Errorf("%s aspect %v: aspect %#x, row %d; want %#x, %d", tc.format, tc.aspect,
 				got.ImageSubresource.AspectMask, got.BufferRowLength, tc.wantAspect, tc.wantRow)
@@ -117,5 +117,33 @@ func TestBarrierAspects(t *testing.T) {
 	}
 	if got := barrierAspects(gputypes.TextureAspectAll, gputypes.TextureFormatRGBA8Unorm); got != vk.ImageAspectFlags(vk.ImageAspectColorBit) {
 		t.Errorf("colour barrier = %#x", got)
+	}
+}
+
+// A compressed copy is whole blocks: one of 4x4 into the 2x2 mip 2 of an
+// 8x8 BC1 texture covers the mip, and its rowsPerImage counts rows of
+// blocks, which bufferImageHeight takes in texels.
+func TestConvertBufferImageCopyRegionsCompressedMip(t *testing.T) {
+	img := copyImage{format: gputypes.TextureFormatBC1RGBAUnorm, dimension: gputypes.TextureDimension2D, size: Extent3D{Width: 8, Height: 8, Depth: 1}}
+	regions := []hal.BufferTextureCopy{{
+		BufferLayout: hal.ImageDataLayout{BytesPerRow: 256, RowsPerImage: 2},
+		TextureBase:  hal.ImageCopyTexture{MipLevel: 2},
+		Size:         hal.Extent3D{Width: 4, Height: 4, DepthOrArrayLayers: 2},
+	}}
+	got := convertBufferImageCopyRegions(nil, regions, img)[0]
+	if got.ImageExtent.Width != 2 || got.ImageExtent.Height != 2 {
+		t.Errorf("extent %dx%d, want the 2x2 of the mip", got.ImageExtent.Width, got.ImageExtent.Height)
+	}
+	if got.BufferImageHeight != 8 {
+		t.Errorf("bufferImageHeight %d, want 8 texels for 2 rows of blocks", got.BufferImageHeight)
+	}
+}
+
+// A texture copy is clamped to the mip of each side from its origin.
+func TestClampExtent(t *testing.T) {
+	img := copyImage{dimension: gputypes.TextureDimension3D, size: Extent3D{Width: 16, Height: 8, Depth: 8}}
+	got := img.clampExtent(hal.ImageCopyTexture{MipLevel: 1, Origin: hal.Origin3D{X: 4, Y: 2, Z: 1}}, hal.Extent3D{Width: 8, Height: 8, DepthOrArrayLayers: 8})
+	if want := (hal.Extent3D{Width: 4, Height: 2, DepthOrArrayLayers: 3}); got != want {
+		t.Errorf("clampExtent = %+v, want %+v", got, want)
 	}
 }

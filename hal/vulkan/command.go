@@ -398,21 +398,51 @@ func (e *CommandEncoder) injectReverseBarrier(sc *Swapchain, idx uint32, oldLayo
 	sc.SetImageLayout(idx, vk.ImageLayoutColorAttachmentOptimal)
 }
 
-// imageOf is the VkImage a copy works on, with its format and dimension: a
-// texture of this device, or a swapchain image, which is 2D. ok is false for
-// anything else and for a destroyed texture.
-func imageOf(t hal.Texture) (image vk.Image, format gputypes.TextureFormat, dimension gputypes.TextureDimension, ok bool) {
+// copyImage is the image a copy works on: a texture of this device, or a
+// swapchain image, which is 2D.
+type copyImage struct {
+	handle    vk.Image
+	format    gputypes.TextureFormat
+	dimension gputypes.TextureDimension
+	size      Extent3D // of mip level 0, one deep but for 3D
+}
+
+// imageOf is the image a copy of t works on. ok is false for anything else
+// than a texture of this device or a swapchain image, and for a destroyed
+// texture.
+func imageOf(t hal.Texture) (img copyImage, ok bool) {
 	switch t := t.(type) {
 	case *Texture:
 		if t != nil && t.handle != 0 {
-			return t.handle, t.format, t.dimension, true
+			return copyImage{t.handle, t.format, t.dimension, t.size}, true
 		}
 	case *SwapchainTexture:
 		if t != nil && t.handle != 0 {
-			return t.handle, t.format, gputypes.TextureDimension2D, true
+			return copyImage{t.handle, t.format, gputypes.TextureDimension2D, t.size}, true
 		}
 	}
-	return 0, 0, 0, false
+	return copyImage{}, false
+}
+
+// clampExtent is size clamped to the mip level of base, from its origin: a
+// WebGPU copy of a compressed format is whole blocks, which go past a mip
+// level smaller than a block, and Vulkan allows a partial block only up to
+// the mip level's edge. The depth is clamped for a 3D image, whose slices
+// it counts.
+func (img copyImage) clampExtent(base hal.ImageCopyTexture, size hal.Extent3D) hal.Extent3D {
+	room := func(full, origin uint32) uint32 {
+		mip := max(full>>base.MipLevel, 1)
+		if origin >= mip {
+			return 0
+		}
+		return mip - origin
+	}
+	size.Width = min(size.Width, room(img.size.Width, base.Origin.X))
+	size.Height = min(size.Height, room(img.size.Height, base.Origin.Y))
+	if img.dimension == gputypes.TextureDimension3D {
+		size.DepthOrArrayLayers = min(size.DepthOrArrayLayers, room(img.size.Depth, base.Origin.Z))
+	}
+	return size
 }
 
 // transitionSwapchainUsage is a barrier on a swapchain image into usage, from
@@ -818,18 +848,21 @@ func (e *CommandEncoder) CopyBufferToBuffer(src, dst hal.Buffer, regions []hal.B
 	vkCmdCopyBuffer(e.device.cmds, e.active, srcBuf.handle, dstBuf.handle, uint32(len(vkRegions)), &vkRegions[0])
 }
 
-// convertBufferImageCopyRegions converts HAL BufferTextureCopy regions to Vulkan
-// BufferImageCopy, into dst. The format parameter is the texture format, used
-// to determine block copy size for correct bytes-to-texels conversion of
-// bufferRowLength.
-func convertBufferImageCopyRegions(dst []vk.BufferImageCopy, regions []hal.BufferTextureCopy, format gputypes.TextureFormat, dimension gputypes.TextureDimension) []vk.BufferImageCopy {
+// convertBufferImageCopyRegions converts HAL BufferTextureCopy regions of
+// img to Vulkan BufferImageCopy, into dst. The image's format gives the
+// block copy size for correct bytes-to-texels conversion of bufferRowLength,
+// and its block height bufferImageHeight's: WebGPU's rowsPerImage counts
+// rows of blocks, Vulkan's bufferImageHeight texels.
+func convertBufferImageCopyRegions(dst []vk.BufferImageCopy, regions []hal.BufferTextureCopy, img copyImage) []vk.BufferImageCopy {
 	vkRegions := dst[:0]
 	if cap(vkRegions) < len(regions) {
 		vkRegions = make([]vk.BufferImageCopy, 0, len(regions))
 	}
 	vkRegions = vkRegions[:len(regions)]
-	blockWidth, _ := format.BlockDimensions()
+	format, dimension := img.format, img.dimension
+	blockWidth, blockHeight := format.BlockDimensions()
 	for i, r := range regions {
+		size := img.clampExtent(r.TextureBase, r.Size)
 		aspect := textureAspectToVk(r.TextureBase.Aspect, format)
 		blockSize := copyBlockSize(format, aspect)
 		// Vulkan bufferRowLength is in TEXELS, not bytes.
@@ -844,10 +877,10 @@ func convertBufferImageCopyRegions(dst []vk.BufferImageCopy, regions []hal.Buffe
 		baseArrayLayer := uint32(0)
 		layerCount := uint32(1)
 		imageOffsetZ := int32(r.TextureBase.Origin.Z)
-		imageExtentDepth := r.Size.DepthOrArrayLayers
+		imageExtentDepth := size.DepthOrArrayLayers
 		if dimension != gputypes.TextureDimension3D {
 			baseArrayLayer = r.TextureBase.Origin.Z
-			layerCount = r.Size.DepthOrArrayLayers
+			layerCount = size.DepthOrArrayLayers
 			if layerCount == 0 {
 				layerCount = 1
 			}
@@ -858,7 +891,7 @@ func convertBufferImageCopyRegions(dst []vk.BufferImageCopy, regions []hal.Buffe
 		vkRegions[i] = vk.BufferImageCopy{
 			BufferOffset:      vk.DeviceSize(r.BufferLayout.Offset),
 			BufferRowLength:   bufferRowLength,
-			BufferImageHeight: r.BufferLayout.RowsPerImage,
+			BufferImageHeight: r.BufferLayout.RowsPerImage * blockHeight,
 			ImageSubresource: vk.ImageSubresourceLayers{
 				AspectMask:     aspect,
 				MipLevel:       r.TextureBase.MipLevel,
@@ -871,8 +904,8 @@ func convertBufferImageCopyRegions(dst []vk.BufferImageCopy, regions []hal.Buffe
 				Z: imageOffsetZ,
 			},
 			ImageExtent: vk.Extent3D{
-				Width:  r.Size.Width,
-				Height: r.Size.Height,
+				Width:  size.Width,
+				Height: size.Height,
 				Depth:  imageExtentDepth,
 			},
 		}
@@ -903,7 +936,7 @@ func (e *CommandEncoder) CopyBufferToTexture(src hal.Buffer, dst hal.Texture, re
 	}
 
 	srcBuf, srcOk := src.(*Buffer)
-	dstImage, dstFormat, dstDimension, dstOk := imageOf(dst)
+	dstImage, dstOk := imageOf(dst)
 	if !srcOk || !dstOk || len(regions) == 0 {
 		return
 	}
@@ -912,12 +945,12 @@ func (e *CommandEncoder) CopyBufferToTexture(src hal.Buffer, dst hal.Texture, re
 	// The regions stay on the stack for the usual one-region copy: the
 	// command does not keep them.
 	var stack [4]vk.BufferImageCopy
-	vkRegions := convertBufferImageCopyRegions(stack[:0], regions, dstFormat, dstDimension)
+	vkRegions := convertBufferImageCopyRegions(stack[:0], regions, dstImage)
 	vkCmdCopyBufferToImage(
 		e.device.cmds,
 		e.active,
 		srcBuf.handle,
-		dstImage,
+		dstImage.handle,
 		vk.ImageLayoutTransferDstOptimal,
 		uint32(len(vkRegions)),
 		&vkRegions[0],
@@ -930,7 +963,7 @@ func (e *CommandEncoder) CopyTextureToBuffer(src hal.Texture, dst hal.Buffer, re
 		return
 	}
 
-	srcImage, srcFormat, srcDimension, srcOk := imageOf(src)
+	srcImage, srcOk := imageOf(src)
 	dstBuf, dstOk := dst.(*Buffer)
 	if !srcOk || !dstOk || len(regions) == 0 {
 		return
@@ -938,11 +971,11 @@ func (e *CommandEncoder) CopyTextureToBuffer(src hal.Texture, dst hal.Buffer, re
 	e.ensureSwapchainLayout(src, vk.ImageLayoutTransferSrcOptimal)
 
 	var stack [4]vk.BufferImageCopy
-	vkRegions := convertBufferImageCopyRegions(stack[:0], regions, srcFormat, srcDimension)
+	vkRegions := convertBufferImageCopyRegions(stack[:0], regions, srcImage)
 	vkCmdCopyImageToBuffer(
 		e.device.cmds,
 		e.active,
-		srcImage,
+		srcImage.handle,
 		vk.ImageLayoutTransferSrcOptimal,
 		dstBuf.handle,
 		uint32(len(vkRegions)),
@@ -973,8 +1006,8 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst hal.Texture, regions []ha
 		return
 	}
 
-	srcImage, srcFormat, srcDimension, srcOk := imageOf(src)
-	dstImage, dstFormat, dstDimension, dstOk := imageOf(dst)
+	srcImage, srcOk := imageOf(src)
+	dstImage, dstOk := imageOf(dst)
 	if !srcOk || !dstOk || len(regions) == 0 {
 		return
 	}
@@ -988,10 +1021,11 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst hal.Texture, regions []ha
 	}
 	vkRegions = vkRegions[:len(regions)]
 	for i, r := range regions {
-		depth := max(r.Size.DepthOrArrayLayers, 1)
-		srcLayers, srcZ := imageCopyLayers(r.SrcBase, srcFormat, srcDimension, depth)
-		dstLayers, dstZ := imageCopyLayers(r.DstBase, dstFormat, dstDimension, depth)
-		if srcDimension != gputypes.TextureDimension3D && dstDimension != gputypes.TextureDimension3D {
+		size := dstImage.clampExtent(r.DstBase, srcImage.clampExtent(r.SrcBase, r.Size))
+		depth := max(size.DepthOrArrayLayers, 1)
+		srcLayers, srcZ := imageCopyLayers(r.SrcBase, srcImage.format, srcImage.dimension, depth)
+		dstLayers, dstZ := imageCopyLayers(r.DstBase, dstImage.format, dstImage.dimension, depth)
+		if srcImage.dimension != gputypes.TextureDimension3D && dstImage.dimension != gputypes.TextureDimension3D {
 			depth = 1
 		}
 		vkRegions[i] = vk.ImageCopy{
@@ -1008,8 +1042,8 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst hal.Texture, regions []ha
 				Z: dstZ,
 			},
 			Extent: vk.Extent3D{
-				Width:  r.Size.Width,
-				Height: r.Size.Height,
+				Width:  size.Width,
+				Height: size.Height,
 				Depth:  depth,
 			},
 		}
@@ -1018,9 +1052,9 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst hal.Texture, regions []ha
 	vkCmdCopyImage(
 		e.device.cmds,
 		e.active,
-		srcImage,
+		srcImage.handle,
 		vk.ImageLayoutTransferSrcOptimal,
-		dstImage,
+		dstImage.handle,
 		vk.ImageLayoutTransferDstOptimal,
 		uint32(len(vkRegions)),
 		&vkRegions[0],
