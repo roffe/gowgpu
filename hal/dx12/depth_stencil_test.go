@@ -53,3 +53,30 @@ func TestBuildDepthStencilDescStencilDefaults(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildDepthStencilDescDepthDefaults(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		compare gputypes.CompareFunction
+		write   bool
+		enabled bool
+		fn      d3d12.D3D12_COMPARISON_FUNC
+	}{
+		{"unset compare without writes", gputypes.CompareFunctionUndefined, false, false, d3d12.D3D12_COMPARISON_FUNC_ALWAYS},
+		{"unset compare with writes", gputypes.CompareFunctionUndefined, true, true, d3d12.D3D12_COMPARISON_FUNC_ALWAYS},
+		{"always without writes", gputypes.CompareFunctionAlways, false, false, d3d12.D3D12_COMPARISON_FUNC_ALWAYS},
+		{"less", gputypes.CompareFunctionLess, false, true, d3d12.D3D12_COMPARISON_FUNC_LESS},
+		{"never", gputypes.CompareFunctionNever, false, true, d3d12.D3D12_COMPARISON_FUNC_NEVER},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			desc := buildDepthStencilDesc(&hal.DepthStencilState{
+				Format:            gputypes.TextureFormatDepth24PlusStencil8,
+				DepthCompare:      tc.compare,
+				DepthWriteEnabled: tc.write,
+			})
+			if got := desc.DepthEnable != 0; got != tc.enabled || desc.DepthFunc != tc.fn {
+				t.Fatalf("DepthEnable, DepthFunc = %v, %d, want %v, %d", got, desc.DepthFunc, tc.enabled, tc.fn)
+			}
+		})
+	}
+}

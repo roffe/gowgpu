@@ -854,10 +854,11 @@ func overrideBytecode(bytecode []byte, overrideEnv string) ([]byte, error) {
 
 // buildDepthStencilDesc builds a D3D12_DEPTH_STENCIL_DESC from a depth/stencil state.
 func buildDepthStencilDesc(ds *hal.DepthStencilState) d3d12.D3D12_DEPTH_STENCIL_DESC {
+	depthCompare := orAlways(ds.DepthCompare)
 	desc := d3d12.D3D12_DEPTH_STENCIL_DESC{
 		DepthEnable:      1, // TRUE - enable depth testing
 		DepthWriteMask:   d3d12.D3D12_DEPTH_WRITE_MASK_ZERO,
-		DepthFunc:        compareFunctionToD3D12(ds.DepthCompare),
+		DepthFunc:        compareFunctionToD3D12(depthCompare),
 		StencilEnable:    0,
 		StencilReadMask:  uint8(ds.StencilReadMask),
 		StencilWriteMask: uint8(ds.StencilWriteMask),
@@ -869,7 +870,7 @@ func buildDepthStencilDesc(ds *hal.DepthStencilState) d3d12.D3D12_DEPTH_STENCIL_
 	}
 
 	// Disable depth test if compare is Always and no write
-	if ds.DepthCompare == gputypes.CompareFunctionAlways && !ds.DepthWriteEnabled {
+	if depthCompare == gputypes.CompareFunctionAlways && !ds.DepthWriteEnabled {
 		desc.DepthEnable = 0
 	}
 
@@ -899,21 +900,25 @@ func stencilFaceIgnored(face hal.StencilFaceState) bool {
 	keeps := func(op gputypes.StencilOperation) bool {
 		return op == gputypes.StencilOperationUndefined || op == hal.StencilOperationKeep
 	}
-	return (face.Compare == gputypes.CompareFunctionUndefined || face.Compare == gputypes.CompareFunctionAlways) &&
+	return orAlways(face.Compare) == gputypes.CompareFunctionAlways &&
 		keeps(face.FailOp) && keeps(face.DepthFailOp) && keeps(face.PassOp)
 }
 
 func stencilFaceToD3D12(face hal.StencilFaceState) d3d12.D3D12_DEPTH_STENCILOP_DESC {
-	compare := face.Compare
-	if compare == gputypes.CompareFunctionUndefined {
-		compare = gputypes.CompareFunctionAlways
-	}
 	return d3d12.D3D12_DEPTH_STENCILOP_DESC{
 		StencilFailOp:      stencilOpToD3D12(face.FailOp),
 		StencilDepthFailOp: stencilOpToD3D12(face.DepthFailOp),
 		StencilPassOp:      stencilOpToD3D12(face.PassOp),
-		StencilFunc:        compareFunctionToD3D12(compare),
+		StencilFunc:        compareFunctionToD3D12(orAlways(face.Compare)),
 	}
+}
+
+// orAlways is fn, or Always where WebGPU left it unset.
+func orAlways(fn gputypes.CompareFunction) gputypes.CompareFunction {
+	if fn == gputypes.CompareFunctionUndefined {
+		return gputypes.CompareFunctionAlways
+	}
+	return fn
 }
 
 // buildRenderTargetBlendDesc builds a D3D12_RENDER_TARGET_BLEND_DESC from a color target state.
