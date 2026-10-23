@@ -11,6 +11,7 @@ import (
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/gles/egl"
+	"github.com/roffe/gowgpu/hal/gles/gl"
 )
 
 // Surface implements hal.Surface for OpenGL on Linux.
@@ -236,8 +237,9 @@ func (s *Surface) createX11EGLSurface(attribs []egl.EGLInt) error {
 // surface and wl_egl_window (on Wayland).
 func (s *Surface) Unconfigure(_ hal.Device) {
 	if s.ctx != nil {
-		glCtx := s.ctx.Lock()
-		destroySwapchainFBO(glCtx, s.swapchainFBO, s.colorRenderbuffer)
+		s.ctx.Lock()
+		fbo, rbo := s.swapchainFBO, s.colorRenderbuffer
+		s.ctx.OnMain(func(glCtx *gl.Context) { destroySwapchainFBO(glCtx, fbo, rbo) })
 		s.ctx.ReleaseSurface(s.eglSurface)
 		s.ctx.Unlock()
 	}
@@ -288,8 +290,9 @@ func (s *Surface) ActualExtent() (width, height uint32) {
 func (s *Surface) Destroy() {
 	// Release swapchain FBO before tearing down the GL context.
 	if s.ctx != nil {
-		glCtx := s.ctx.Lock()
-		destroySwapchainFBO(glCtx, s.swapchainFBO, s.colorRenderbuffer)
+		s.ctx.Lock()
+		fbo, rbo := s.swapchainFBO, s.colorRenderbuffer
+		s.ctx.OnMain(func(glCtx *gl.Context) { destroySwapchainFBO(glCtx, fbo, rbo) })
 		s.ctx.ReleaseSurface(s.eglSurface)
 		s.ctx.Unlock()
 	}

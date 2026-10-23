@@ -475,16 +475,18 @@ func (d *Device) Destroy() {
 	if d.ctx == nil || (d.vao == 0 && d.fbs == nil) {
 		return
 	}
-	glCtx := d.ctx.Lock()
+	d.ctx.Lock()
 	defer d.ctx.Unlock()
-	if d.vao != 0 {
-		glCtx.DeleteVertexArrays(d.vao)
-		d.vao = 0
-	}
-	if d.fbs != nil {
-		d.fbs.destroy(glCtx)
-		d.fbs = nil
-	}
+	vao, fbs := d.vao, d.fbs
+	d.vao, d.fbs = 0, nil
+	d.ctx.OnMain(func(glCtx *gl.Context) {
+		if vao != 0 {
+			glCtx.DeleteVertexArrays(vao)
+		}
+		if fbs != nil {
+			fbs.destroy(glCtx)
+		}
+	})
 }
 
 // Type aliases for hal descriptors
