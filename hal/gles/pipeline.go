@@ -132,6 +132,7 @@ func (d *Device) createRenderPipeline(glCtx *gl.Context, desc *RenderPipelineDes
 		unclippedDepth:    desc.Primitive.UnclippedDepth,
 		multisample:       desc.Multisample,
 		sampleMask:        sampleMaskFor(d.sampleMask, desc.Multisample.Mask),
+		attribs:           attribLocations(desc.Vertex.Buffers),
 		colorTargets:      colorTargets,
 		perTargetBlend:    perTarget,
 		vertexBuffers:     desc.Vertex.Buffers,
@@ -228,6 +229,18 @@ func (d *Device) createComputePipeline(glCtx *gl.Context, desc *ComputePipelineD
 		glCtx:          glCtx,
 		samplerBindMap: samplerBindMapFor(layout, computeTranslationInfo),
 	}, nil
+}
+
+// attribLocations is the set of shader locations buffers feed.
+func attribLocations(buffers []gputypes.VertexBufferLayout) (m uint32) {
+	for _, b := range buffers {
+		for _, a := range b.Attributes {
+			if a.ShaderLocation < 32 {
+				m |= 1 << a.ShaderLocation
+			}
+		}
+	}
+	return m
 }
 
 // sampleMaskFor is the GL sample mask of a pipeline's mask, all samples for

@@ -58,6 +58,7 @@ type cmdArena struct {
 	drawBuffers    slab[SetDrawColorBuffersCommand]
 	clears         slab[ClearColorBufferCommand]
 	dispatches     slab[DispatchCommand]
+	attribs        slab[DisableVertexAttribsCommand]
 }
 
 func (a *cmdArena) reset() {
@@ -71,6 +72,7 @@ func (a *cmdArena) reset() {
 	a.viewports.reset()
 	a.scissors.reset()
 	a.vaos.reset()
+	a.attribs.reset()
 	a.framebuffers.reset()
 	a.surfaceFBOs.reset()
 	a.renderTargets.reset()

@@ -509,6 +509,7 @@ func (e *RenderPassEncoder) End() {
 	for i := range e.resolves {
 		e.encoder.commands = append(e.encoder.commands, &e.resolves[i])
 	}
+	e.encoder.commands = append(e.encoder.commands, e.encoder.store().attribs.put(DisableVertexAttribsCommand{}))
 
 	// Emit end-of-pass timestamp if requested.
 	if e.endTimestampIndex != nil {
@@ -545,6 +546,7 @@ func (e *RenderPassEncoder) SetPipeline(pipeline hal.RenderPipeline) {
 			alphaToCoverage: p.multisample.AlphaToCoverageEnabled,
 			sampleMask:      p.sampleMask,
 		}),
+		st.attribs.put(DisableVertexAttribsCommand{keep: p.attribs}),
 	)
 	// The vertex attributes are set from the pipeline's layout when a vertex
 	// buffer is bound, and WebGPU keeps vertex buffers bound across pipeline
@@ -1557,6 +1559,25 @@ func (c *SetVertexBufferCommand) Execute(ctx *gl.Context) {
 		ctx.VertexAttribDivisor(loc, divisor)
 		if loc < gl.MaxShadowAttribs {
 			sh.Attribs[loc] = want
+		}
+	}
+}
+
+// DisableVertexAttribsCommand disables the vertex attribute arrays the
+// shadow has enabled but for the locations in keep, as wgpu-hal unsets
+// the attributes at a pipeline switch and at the end of a pass: an array
+// left enabled reads a buffer the next pipeline doesn't bind, or a deleted
+// one, which a driver that checks every enabled array refuses.
+type DisableVertexAttribsCommand struct {
+	keep uint32
+}
+
+func (c *DisableVertexAttribsCommand) Execute(ctx *gl.Context) {
+	sh := &ctx.Shadow
+	for loc := range uint32(gl.MaxShadowAttribs) {
+		if sh.Attribs[loc].Set && c.keep&(1<<loc) == 0 {
+			ctx.DisableVertexAttribArray(loc)
+			sh.Attribs[loc] = gl.ShadowAttrib{}
 		}
 	}
 }

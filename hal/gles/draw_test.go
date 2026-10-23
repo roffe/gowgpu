@@ -45,3 +45,28 @@ func TestDrawFromInstanceWithoutBaseInstance(t *testing.T) {
 		t.Errorf("third command %#v, want slot 1 bound back at 64", cmds[2])
 	}
 }
+
+// A pipeline switch disables the attribute arrays the new pipeline doesn't
+// feed, and the end of the pass all of them: nothing disabled them, so a
+// pipeline drew with the last one's arrays enabled, bound to buffers it
+// doesn't bind or that were deleted.
+func TestUnusedVertexAttribsAreDisabled(t *testing.T) {
+	enc := &CommandEncoder{glCtx: &gl.Context{}}
+	if err := enc.BeginEncoding("attribs"); err != nil {
+		t.Fatal(err)
+	}
+	pass := enc.BeginRenderPass(&hal.RenderPassDescriptor{})
+	pass.SetPipeline(&RenderPipeline{firstInstanceLoc: -1, attribs: attribLocations([]gputypes.VertexBufferLayout{
+		{ArrayStride: 8, Attributes: []gputypes.VertexAttribute{{ShaderLocation: 0}, {ShaderLocation: 3}}},
+	})})
+	pass.End()
+	var keeps []uint32
+	for _, c := range enc.commands {
+		if d, ok := c.(*DisableVertexAttribsCommand); ok {
+			keeps = append(keeps, d.keep)
+		}
+	}
+	if len(keeps) != 2 || keeps[0] != 1|1<<3 || keeps[1] != 0 {
+		t.Errorf("attribute arrays kept %b, want 1001 at the pipeline and none at the end", keeps)
+	}
+}

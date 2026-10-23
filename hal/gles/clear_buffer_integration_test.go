@@ -87,3 +87,29 @@ func TestReadMappingIsNotWrittenBack(t *testing.T) {
 	mapped(64, 0)
 	_ = dev.UnmapBuffer(buf)
 }
+
+// DisableVertexAttribsCommand disables what the shadow has enabled outside
+// the locations it keeps, without a GL error.
+func TestDisableVertexAttribs(t *testing.T) {
+	ctx := newTestAdapterContext(t)
+	t.Cleanup(ctx.Destroy)
+	glCtx := ctx.Lock()
+	defer ctx.Unlock()
+	vao := glCtx.GenVertexArrays(1)
+	defer glCtx.DeleteVertexArrays(vao)
+	(&BindVAOCommand{vao: vao}).Execute(glCtx)
+	id := glCtx.GenBuffers(1)
+	defer glCtx.DeleteBuffers(id)
+	glCtx.BindBuffer(gl.ARRAY_BUFFER, id)
+	glCtx.BufferData(gl.ARRAY_BUFFER, 64, 0, gl.STATIC_DRAW)
+	(&SetVertexBufferCommand{buffer: &Buffer{id: id}, layout: &gputypes.VertexBufferLayout{ArrayStride: 8, Attributes: []gputypes.VertexAttribute{
+		{Format: gputypes.VertexFormatFloat32, ShaderLocation: 0}, {Format: gputypes.VertexFormatFloat32, Offset: 4, ShaderLocation: 2},
+	}}}).Execute(glCtx)
+	(&DisableVertexAttribsCommand{keep: 1}).Execute(glCtx)
+	if sh := &glCtx.Shadow; !sh.Attribs[0].Set || sh.Attribs[2].Set {
+		t.Errorf("location 0 enabled %v, location 2 %v: want 0 kept and 2 disabled", sh.Attribs[0].Set, sh.Attribs[2].Set)
+	}
+	if e := glCtx.GetError(); e != 0 {
+		t.Errorf("GL error %#x", e)
+	}
+}
