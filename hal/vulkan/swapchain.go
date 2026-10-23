@@ -849,7 +849,7 @@ func (sc *Swapchain) releaseSyncResources() error {
 	if sc == nil || sc.device == nil {
 		return nil
 	}
-	if result := vkDeviceWaitIdle(sc.device); result != vk.Success {
+	if result := vkDeviceWaitIdle(sc.device); !drained(result) {
 		return fmt.Errorf("vulkan: vkDeviceWaitIdle before releasing swapchain synchronization failed: %d", result)
 	}
 	sc.releaseSyncResourcesAfterIdle()
@@ -1551,6 +1551,14 @@ func vkCreateSemaphore(d *Device, createInfo *vk.SemaphoreCreateInfo, _ *vk.Allo
 
 func vkDestroySemaphore(d *Device, semaphore vk.Semaphore, _ *vk.AllocationCallbacks) {
 	d.cmds.DestroySemaphore(d.handle, semaphore, nil)
+}
+
+// drained reports whether the device has no work left using its objects
+// after an idle wait with result: a lost device counts, its objects are
+// still there and still have to be destroyed before it (Vulkan's Lost
+// Device rules).
+func drained(result vk.Result) bool {
+	return result == vk.Success || result == vk.ErrorDeviceLost
 }
 
 // vkDeviceWaitIdle waits for the device's work to finish, or with a video

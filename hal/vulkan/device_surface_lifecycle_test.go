@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/gowgpu/hal/vulkan/vk"
 )
 
 func TestDeviceOwnsConfiguredSurfacesUntilDestroyBegins(t *testing.T) {
@@ -42,7 +43,18 @@ func TestDeviceOwnsConfiguredSurfacesUntilDestroyBegins(t *testing.T) {
 	}
 }
 
-func TestSurfaceAbandonsSwapchainHandlesAfterDeviceLoss(t *testing.T) {
+// A lost device is drained: its objects are still there and have to be
+// destroyed before it, swapchains too, or the window stays bound to one.
+func TestLostDeviceIsDrained(t *testing.T) {
+	if !drained(vk.ErrorDeviceLost) || !drained(vk.Success) {
+		t.Error("a lost or idle device is not drained")
+	}
+	if drained(vk.ErrorOutOfHostMemory) {
+		t.Error("a device whose idle wait ran out of memory is drained")
+	}
+}
+
+func TestSurfaceAbandonsSwapchainHandlesWhenDeviceNotDrained(t *testing.T) {
 	device := &Device{handle: 1}
 	surface := &Surface{device: device}
 	texture := &SwapchainTexture{handle: 2, view: 3}
@@ -61,7 +73,7 @@ func TestSurfaceAbandonsSwapchainHandlesAfterDeviceLoss(t *testing.T) {
 		t.Fatal("surface retained device-owned swapchain state")
 	}
 	if swapchain.device != nil || swapchain.surface != nil || swapchain.handle != 0 {
-		t.Fatal("swapchain retained native ownership after device loss")
+		t.Fatal("swapchain retained native ownership after a failed drain")
 	}
 	if texture.handle != 0 || texture.view != 0 || texture.swapchain != nil {
 		t.Fatal("retained texture exposed abandoned swapchain handles")

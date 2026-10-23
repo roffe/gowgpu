@@ -1755,11 +1755,12 @@ func (d *Device) Destroy() {
 		return
 	}
 
-	// One device-wide drain covers every configured swapchain. On device loss,
-	// abandon child handles and let vkDestroyDevice reclaim native storage.
-	drained := vkDeviceWaitIdle(d) == vk.Success
+	// One device-wide drain covers every configured swapchain. When the
+	// device could not be drained the child handles are abandoned to
+	// vkDestroyDevice; a lost device is drained, see drained.
+	idle := drained(vkDeviceWaitIdle(d))
 	for _, surface := range surfaces {
-		surface.releaseConfiguredDevice(d, drained)
+		surface.releaseConfiguredDevice(d, idle)
 	}
 
 	// Destroy unified fence (timeline semaphore or fencePool).
@@ -1789,7 +1790,7 @@ func (d *Device) Destroy() {
 
 	d.destroyPipelineCache()
 
-	if drained {
+	if idle {
 		d.sweepLive()
 	}
 
