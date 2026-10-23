@@ -96,7 +96,7 @@ type SurfaceCapabilities struct {
 //   - Formats: rgba8unorm, bgra8unorm, rgba16float (preferred format first),
 //     rgba16float only where a device has shown the browser takes it
 //   - PresentModes: Fifo only (browser controls VSync)
-//   - AlphaModes: Opaque only (browser default)
+//   - AlphaModes: Opaque and Premultiplied
 //
 // The preferred format is obtained from navigator.gpu.getPreferredCanvasFormat()
 // and placed first in the formats list.
@@ -128,7 +128,7 @@ func (a *Adapter) GetSurfaceCapabilities(surface *Surface) *SurfaceCapabilities 
 	return &SurfaceCapabilities{
 		Formats:      formats,
 		PresentModes: []gputypes.PresentMode{gputypes.PresentModeFifo},
-		AlphaModes:   []gputypes.CompositeAlphaMode{gputypes.CompositeAlphaModeOpaque},
+		AlphaModes:   []gputypes.CompositeAlphaMode{gputypes.CompositeAlphaModeOpaque, gputypes.CompositeAlphaModePremultiplied},
 	}
 }
 

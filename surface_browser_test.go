@@ -4,6 +4,7 @@ package wgpu
 
 import (
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/roffe/gowgpu/gputypes"
@@ -42,5 +43,13 @@ func TestBrowserConfigureReturnsTheBrowsersException(t *testing.T) {
 	}
 	if _, _, err := s.GetCurrentTexture(); !errors.Is(err, ErrSurfaceLost) {
 		t.Fatalf("GetCurrentTexture = %v, want ErrSurfaceLost for a throwing getCurrentTexture", err)
+	}
+}
+
+func TestBrowserSurfaceCapabilitiesOfferPremultipliedAlpha(t *testing.T) {
+	caps := (&Adapter{}).GetSurfaceCapabilities(nil)
+	want := []gputypes.CompositeAlphaMode{gputypes.CompositeAlphaModeOpaque, gputypes.CompositeAlphaModePremultiplied}
+	if !slices.Equal(caps.AlphaModes, want) {
+		t.Fatalf("AlphaModes = %v, want %v", caps.AlphaModes, want)
 	}
 }
