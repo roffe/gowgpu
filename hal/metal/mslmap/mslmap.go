@@ -276,3 +276,73 @@ func typeNeedsArrayLength(module *ir.Module, handle ir.TypeHandle) bool {
 		return false
 	}
 }
+
+// VertexBuffers returns the vertex buffer mappings of naga's vertex pulling
+// transform for a render pipeline's vertex buffers, buffer i at buffer slot
+// top-i, where the encoder binds it. A buffer the pipeline doesn't read has
+// no mapping. A vertex stage that pulls its vertices reads the bound size of
+// each mapped buffer from `_buffer_sizes`, after the fields RuntimeArrayBindings
+// lists, in mapping order.
+//
+// Reference: Rust wgpu-hal metal/device.rs create_render_pipeline.
+func VertexBuffers(buffers []gputypes.VertexBufferLayout, top uint32) ([]msl.VertexBufferMapping, error) {
+	var mappings []msl.VertexBufferMapping
+	for i, buf := range buffers {
+		if buf.StepMode == gputypes.VertexStepModeVertexBufferNotUsed || len(buf.Attributes) == 0 {
+			continue
+		}
+		m := msl.VertexBufferMapping{ID: top - uint32(i), Stride: uint32(buf.ArrayStride), StepMode: msl.VertexStepModeByVertex}
+		switch {
+		case buf.ArrayStride == 0:
+			m.StepMode = msl.VertexStepModeConstant
+		case buf.StepMode == gputypes.VertexStepModeInstance:
+			m.StepMode = msl.VertexStepModeByInstance
+		}
+		for _, a := range buf.Attributes {
+			format, ok := vertexFormats[a.Format]
+			if !ok {
+				return nil, fmt.Errorf("mslmap: vertex format %v", a.Format)
+			}
+			m.Attributes = append(m.Attributes, msl.AttributeMapping{ShaderLocation: a.ShaderLocation, Offset: uint32(a.Offset), Format: format})
+			if buf.ArrayStride == 0 {
+				m.Stride = max(m.Stride, uint32(a.Offset+a.Format.Size()))
+			}
+		}
+		mappings = append(mappings, m)
+	}
+	return mappings, nil
+}
+
+var vertexFormats = map[gputypes.VertexFormat]msl.VertexFormat{
+	gputypes.VertexFormatUint8x2:      msl.VertexFormatUint8x2,
+	gputypes.VertexFormatUint8x4:      msl.VertexFormatUint8x4,
+	gputypes.VertexFormatSint8x2:      msl.VertexFormatSint8x2,
+	gputypes.VertexFormatSint8x4:      msl.VertexFormatSint8x4,
+	gputypes.VertexFormatUnorm8x2:     msl.VertexFormatUnorm8x2,
+	gputypes.VertexFormatUnorm8x4:     msl.VertexFormatUnorm8x4,
+	gputypes.VertexFormatSnorm8x2:     msl.VertexFormatSnorm8x2,
+	gputypes.VertexFormatSnorm8x4:     msl.VertexFormatSnorm8x4,
+	gputypes.VertexFormatUint16x2:     msl.VertexFormatUint16x2,
+	gputypes.VertexFormatUint16x4:     msl.VertexFormatUint16x4,
+	gputypes.VertexFormatSint16x2:     msl.VertexFormatSint16x2,
+	gputypes.VertexFormatSint16x4:     msl.VertexFormatSint16x4,
+	gputypes.VertexFormatUnorm16x2:    msl.VertexFormatUnorm16x2,
+	gputypes.VertexFormatUnorm16x4:    msl.VertexFormatUnorm16x4,
+	gputypes.VertexFormatSnorm16x2:    msl.VertexFormatSnorm16x2,
+	gputypes.VertexFormatSnorm16x4:    msl.VertexFormatSnorm16x4,
+	gputypes.VertexFormatFloat16x2:    msl.VertexFormatFloat16x2,
+	gputypes.VertexFormatFloat16x4:    msl.VertexFormatFloat16x4,
+	gputypes.VertexFormatFloat32:      msl.VertexFormatFloat32,
+	gputypes.VertexFormatFloat32x2:    msl.VertexFormatFloat32x2,
+	gputypes.VertexFormatFloat32x3:    msl.VertexFormatFloat32x3,
+	gputypes.VertexFormatFloat32x4:    msl.VertexFormatFloat32x4,
+	gputypes.VertexFormatUint32:       msl.VertexFormatUint32,
+	gputypes.VertexFormatUint32x2:     msl.VertexFormatUint32x2,
+	gputypes.VertexFormatUint32x3:     msl.VertexFormatUint32x3,
+	gputypes.VertexFormatUint32x4:     msl.VertexFormatUint32x4,
+	gputypes.VertexFormatSint32:       msl.VertexFormatSint32,
+	gputypes.VertexFormatSint32x2:     msl.VertexFormatSint32x2,
+	gputypes.VertexFormatSint32x3:     msl.VertexFormatSint32x3,
+	gputypes.VertexFormatSint32x4:     msl.VertexFormatSint32x4,
+	gputypes.VertexFormatUnorm1010102: msl.VertexFormatUnorm10_10_10_2,
+}

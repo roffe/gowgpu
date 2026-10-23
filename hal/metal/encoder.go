@@ -947,6 +947,7 @@ func (e *RenderPassEncoder) SetVertexBuffer(slot uint32, buffer hal.Buffer, offs
 		state.offset = offset
 		state.set = true
 	}
+	e.sizesStale = true
 	if e.raw == 0 {
 		return
 	}
@@ -1044,22 +1045,23 @@ func (e *RenderPassEncoder) beginDraw() bool {
 	}
 	if e.sizesStale && e.pipeline != nil {
 		e.sizesStale = false
-		e.bindBufferSizes(Sel("setVertexBytes:length:atIndex:"), e.pipeline.vertexSizes)
-		e.bindBufferSizes(Sel("setFragmentBytes:length:atIndex:"), e.pipeline.fragmentSizes)
+		e.bindBufferSizes(Sel("setVertexBytes:length:atIndex:"), e.pipeline.vertexSizes, e.pipeline.pulledBuffers)
+		e.bindBufferSizes(Sel("setFragmentBytes:length:atIndex:"), e.pipeline.fragmentSizes, nil)
 	}
 	return true
 }
 
 // bindBufferSizes sets a stage's `_buffer_sizes` argument, the byte sizes of
-// the buffers bound at bindings, with the setBytes method sel. See
+// the buffers bound at bindings and then of the vertex buffers bound at the
+// slots pulled, with the setBytes method sel. See
 // ComputePassEncoder.bindBufferSizes.
 //
 // Reference: Rust wgpu-hal metal/command.rs make_sizes_buffer_update.
-func (e *RenderPassEncoder) bindBufferSizes(sel SEL, bindings []ir.ResourceBinding) {
-	if len(bindings) == 0 || e.pending == nil {
+func (e *RenderPassEncoder) bindBufferSizes(sel SEL, bindings []ir.ResourceBinding, pulled []uint32) {
+	if len(bindings)+len(pulled) == 0 || e.pending == nil {
 		return
 	}
-	sizes := make([]uint32, len(bindings))
+	sizes := make([]uint32, len(bindings), len(bindings)+len(pulled))
 	for i, rb := range bindings {
 		if rb.Group >= maxRenderBindGroups || !e.pending.bindGroups[rb.Group].set {
 			continue
@@ -1069,6 +1071,13 @@ func (e *RenderPassEncoder) bindBufferSizes(sel SEL, bindings []ir.ResourceBindi
 				sizes[i] = sizeField(bufferBindingSize(res))
 			}
 		}
+	}
+	for _, slot := range pulled {
+		var size uint64
+		if vb := e.pending.vertexBuffers[slot]; vb.set && vb.buffer.size > vb.offset {
+			size = vb.buffer.size - vb.offset
+		}
+		sizes = append(sizes, sizeField(size))
 	}
 	_ = msgSendSetBytes(e.raw, sel, unsafe.Pointer(&sizes[0]), NSUInteger(4*len(sizes)), NSUInteger(e.pipeline.sizesSlot))
 	runtime.KeepAlive(sizes)

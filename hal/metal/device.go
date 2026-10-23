@@ -631,7 +631,8 @@ type compiledLibrary struct {
 	// sizesBindings lists the bindings whose byte size the entry point reads
 	// from naga's `_buffer_sizes` argument, in field order, which is bound at
 	// buffer slot sizesSlot. It is empty if the entry point has no
-	// runtime-sized array.
+	// runtime-sized array. The sizes of the vertex buffers a vertex stage
+	// pulls follow them.
 	sizesBindings []ir.ResourceBinding
 	sizesSlot     int
 }
@@ -644,10 +645,13 @@ func (c *compiledLibrary) release() {
 // compileLibrary writes the MSL of the entry point name of stage in module,
 // its resources at the slots layout gives them, and builds it. A vertex
 // stage of a point-list pipeline writes [[point_size]] 1: Metal leaves the
-// size of a point it doesn't write undefined.
+// size of a point it doesn't write undefined. A vertex stage with vertex
+// buffers reads its attributes from them itself, bounds checked, as naga's
+// vertex pulling writes it: Metal's vertex fetch neither checks bounds nor
+// takes attribute offsets that aren't a multiple of 4.
 //
 // Reference: Rust wgpu-hal metal/device.rs load_shader.
-func (d *Device) compileLibrary(module *ShaderModule, layout *PipelineLayout, stage ir.ShaderStage, name string, points bool) (*compiledLibrary, error) {
+func (d *Device) compileLibrary(module *ShaderModule, layout *PipelineLayout, stage ir.ShaderStage, name string, points bool, vertexBuffers []msl.VertexBufferMapping) (*compiledLibrary, error) {
 	if module == nil || module.irModule == nil {
 		return nil, fmt.Errorf("metal: shader module has no WGSL source")
 	}
@@ -665,6 +669,11 @@ func (d *Device) compileLibrary(module *ShaderModule, layout *PipelineLayout, st
 	}
 	options.AllowAndForcePointSize = points
 	sizesBindings, err := mslmap.SizesBindings(module.irModule, stage, name)
+	if err == nil && len(vertexBuffers) > 0 {
+		options.VertexPullingTransform = true
+		options.VertexBufferMappings = vertexBuffers
+		sizesBindings, err = mslmap.RuntimeArrayBindings(module.irModule)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("metal: %w", err)
 	}
@@ -679,7 +688,7 @@ func (d *Device) compileLibrary(module *ShaderModule, layout *PipelineLayout, st
 		"entryPoint", name,
 		"elapsed", time.Since(start),
 		"mslBytes", len(mslSource),
-		"sizesBuffer", len(sizesBindings) > 0,
+		"sizesBuffer", len(sizesBindings)+len(vertexBuffers) > 0,
 	)
 
 	mslString := NSString(mslSource)
@@ -776,7 +785,11 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		return nil, fmt.Errorf("metal: invalid vertex shader module")
 	}
 	points := desc.Primitive.Topology == gputypes.PrimitiveTopologyPointList
-	vertex, err := d.compileLibrary(vertexModule, pipeLayout, ir.StageVertex, desc.Vertex.EntryPoint, points)
+	vertexBuffers, err := mslmap.VertexBuffers(desc.Vertex.Buffers, maxVertexBuffers-1)
+	if err != nil {
+		return nil, fmt.Errorf("metal: %w", err)
+	}
+	vertex, err := d.compileLibrary(vertexModule, pipeLayout, ir.StageVertex, desc.Vertex.EntryPoint, points, vertexBuffers)
 	if err != nil {
 		return nil, err
 	}
@@ -788,7 +801,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		if !ok || fragmentModule == nil {
 			return nil, fmt.Errorf("metal: invalid fragment shader module")
 		}
-		fragment, err = d.compileLibrary(fragmentModule, pipeLayout, ir.StageFragment, desc.Fragment.EntryPoint, false)
+		fragment, err = d.compileLibrary(fragmentModule, pipeLayout, ir.StageFragment, desc.Fragment.EntryPoint, false, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -810,15 +823,6 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 	}
 
 	_ = MsgSend(pipelineDesc, Sel("setVertexFunction:"), uintptr(vertex.function))
-
-	// Configure vertex descriptor from vertex buffer layouts
-	if len(desc.Vertex.Buffers) > 0 {
-		if vd, err := d.buildVertexDescriptor(desc.Vertex.Buffers); err != nil {
-			return nil, err
-		} else if vd != 0 {
-			_ = MsgSend(pipelineDesc, Sel("setVertexDescriptor:"), uintptr(vd))
-		}
-	}
 
 	if fragment != nil {
 		_ = MsgSend(pipelineDesc, Sel("setFragmentFunction:"), uintptr(fragment.function))
@@ -968,6 +972,9 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		sizesSlot:     vertex.sizesSlot,
 		vertexBuffers: uint32(len(desc.Vertex.Buffers)),
 	}
+	for _, m := range vertexBuffers {
+		pipeline.pulledBuffers = append(pipeline.pulledBuffers, maxVertexBuffers-1-m.ID)
+	}
 	if fragment != nil {
 		pipeline.fragmentSizes = fragment.sizesBindings
 	}
@@ -986,39 +993,6 @@ func newStencilFaceDescriptor(face hal.StencilFaceState, readMask, writeMask uin
 	MsgSend(sd, Sel("setReadMask:"), uintptr(readMask))
 	MsgSend(sd, Sel("setWriteMask:"), uintptr(writeMask))
 	return sd
-}
-
-// buildVertexDescriptor creates an MTLVertexDescriptor from WebGPU vertex buffer layouts.
-func (d *Device) buildVertexDescriptor(buffers []gputypes.VertexBufferLayout) (ID, error) {
-	vertexDesc := MsgSend(ID(GetClass("MTLVertexDescriptor")), Sel("vertexDescriptor"))
-	if vertexDesc == 0 {
-		return 0, fmt.Errorf("metal: failed to create vertex descriptor")
-	}
-
-	attributes := MsgSend(vertexDesc, Sel("attributes"))
-	layouts := MsgSend(vertexDesc, Sel("layouts"))
-
-	for slot, buf := range buffers {
-		bufIdx := maxVertexBuffers - 1 - slot
-		for _, attr := range buf.Attributes {
-			attrDesc := MsgSend(attributes, Sel("objectAtIndexedSubscript:"), uintptr(attr.ShaderLocation))
-			if attrDesc == 0 {
-				continue
-			}
-			_ = MsgSend(attrDesc, Sel("setFormat:"), uintptr(vertexFormatToMTL(attr.Format)))
-			_ = MsgSend(attrDesc, Sel("setOffset:"), uintptr(attr.Offset))
-			_ = MsgSend(attrDesc, Sel("setBufferIndex:"), uintptr(bufIdx))
-		}
-
-		layoutDesc := MsgSend(layouts, Sel("objectAtIndexedSubscript:"), uintptr(bufIdx))
-		if layoutDesc != 0 {
-			_ = MsgSend(layoutDesc, Sel("setStride:"), uintptr(buf.ArrayStride))
-			_ = MsgSend(layoutDesc, Sel("setStepFunction:"), uintptr(vertexStepModeToMTL(buf.StepMode)))
-			_ = MsgSend(layoutDesc, Sel("setStepRate:"), uintptr(1))
-		}
-	}
-
-	return vertexDesc, nil
 }
 
 // DestroyRenderPipeline destroys a render pipeline.
@@ -1065,7 +1039,7 @@ func (d *Device) CreateComputePipeline(desc *hal.ComputePipelineDescriptor) (hal
 		return nil, fmt.Errorf("metal: invalid compute shader module")
 	}
 
-	lib, err := d.compileLibrary(computeModule, pipeLayout, ir.StageCompute, desc.Compute.EntryPoint, false)
+	lib, err := d.compileLibrary(computeModule, pipeLayout, ir.StageCompute, desc.Compute.EntryPoint, false, nil)
 	if err != nil {
 		return nil, err
 	}

@@ -273,6 +273,9 @@ type RenderPipeline struct {
 
 	// vertexBuffers is how many vertex buffer slots the pipeline reads.
 	vertexBuffers uint32
+	// pulledBuffers are the vertex buffer slots whose bound sizes follow
+	// vertexSizes in the vertex stage's `_buffer_sizes`.
+	pulledBuffers []uint32
 }
 
 // Destroy releases the render pipeline.

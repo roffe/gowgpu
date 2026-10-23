@@ -13,8 +13,9 @@ import (
 const renderTestSide, renderTestPitch = 4, 256
 
 // renderTestPipeline makes a pipeline drawing vs_main and fs_main of wgsl
-// into an RGBA8 target, with layout, or an empty one when it is nil.
-func renderTestPipeline(t *testing.T, device *Device, wgsl string, layout *PipelineLayout, primitive gputypes.PrimitiveState) *RenderPipeline {
+// into an RGBA8 target, with layout, or an empty one when it is nil, and
+// vertex buffers.
+func renderTestPipeline(t *testing.T, device *Device, wgsl string, layout *PipelineLayout, primitive gputypes.PrimitiveState, buffers ...gputypes.VertexBufferLayout) *RenderPipeline {
 	t.Helper()
 	if layout == nil {
 		raw, err := device.CreatePipelineLayout(&hal.PipelineLayoutDescriptor{})
@@ -30,7 +31,7 @@ func renderTestPipeline(t *testing.T, device *Device, wgsl string, layout *Pipel
 	defer module.Destroy()
 	raw, err := device.CreateRenderPipeline(&hal.RenderPipelineDescriptor{
 		Layout:    layout,
-		Vertex:    hal.VertexState{Module: module, EntryPoint: "vs_main"},
+		Vertex:    hal.VertexState{Module: module, EntryPoint: "vs_main", Buffers: buffers},
 		Primitive: primitive,
 		Fragment: &hal.FragmentState{Module: module, EntryPoint: "fs_main",
 			Targets: []gputypes.ColorTargetState{{Format: gputypes.TextureFormatRGBA8Unorm, WriteMask: gputypes.ColorWriteMaskAll}}},
@@ -115,6 +116,43 @@ func TestPointListDrawsOnePixel(t *testing.T) {
 		}
 		if got := pixels[i : i+4]; string(got) != string(want) {
 			t.Errorf("pixel %d = %v, want %v", i/4, got, want)
+		}
+	}
+}
+
+// TestVertexPulling draws one point per pixel of the top row, its color from
+// an attribute at offset 2, which Metal's vertex fetch doesn't take, in a
+// vertex buffer bound at an offset that leaves room for two vertices: the
+// points past them read zero, as WebGPU's robust vertex access allows.
+func TestVertexPulling(t *testing.T) {
+	device, queue := newMetalTextureCopyTestDevice(t)
+	pipeline := renderTestPipeline(t, device, `
+struct Out { @builtin(position) pos: vec4<f32>, @location(0) color: vec2<f32> }
+@vertex fn vs_main(@builtin(vertex_index) vi: u32, @location(0) color: vec2<f32>) -> Out {
+	return Out(vec4<f32>(f32(vi) * 0.5 - 0.75, 0.75, 0.0, 1.0), color);
+}
+@fragment fn fs_main(@location(0) color: vec2<f32>) -> @location(0) vec4<f32> { return vec4<f32>(color, 1.0, 1.0); }
+`, nil, gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyPointList}, gputypes.VertexBufferLayout{
+		ArrayStride: 4,
+		StepMode:    gputypes.VertexStepModeVertex,
+		Attributes:  []gputypes.VertexAttribute{{Format: gputypes.VertexFormatUnorm8x2, Offset: 2, ShaderLocation: 0}},
+	})
+	vertices := []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0, 0, 0xff, 0, 0, 0, 0, 0xff}
+	buffer := createMetalTextureCopyTestUpload(t, device, 0, vertices)
+	defer buffer.Destroy()
+	pixels := renderTestDraw(t, device, queue, func(pass *RenderPassEncoder) {
+		pass.SetPipeline(pipeline)
+		pass.SetVertexBuffer(0, buffer, 12)
+		pass.Draw(gputypes.DrawArgs{VertexCount: 4, InstanceCount: 1})
+	})
+	want := [][]byte{{255, 0, 255, 255}, {0, 255, 255, 255}, {0, 0, 255, 255}, {0, 0, 255, 255}}
+	for i := 0; i < len(pixels); i += 4 {
+		w := []byte{0, 0, 0, 255}
+		if i/4 < len(want) {
+			w = want[i/4]
+		}
+		if got := pixels[i : i+4]; string(got) != string(w) {
+			t.Errorf("pixel %d = %v, want %v", i/4, got, w)
 		}
 	}
 }

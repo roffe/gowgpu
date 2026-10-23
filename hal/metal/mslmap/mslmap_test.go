@@ -4,6 +4,7 @@
 package mslmap_test
 
 import (
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -249,5 +250,101 @@ func TestOptionsRejectsOutOfRangeSlot(t *testing.T) {
 	module := lower(t, wgslRuntimeArray)
 	if _, err := mslmap.Options(module, ir.StageCompute, "main", resources(t, runtimeArrayLayout), 256); err == nil {
 		t.Error("mslmap.Options with sizes slot 256 = nil error; want an out-of-range error")
+	}
+}
+
+// TestVertexBuffersPullVertices maps a pipeline's vertex buffers for naga's
+// vertex pulling, and checks the MSL takes them at the slots the encoder
+// binds them at, and that `_buffer_sizes` holds the module's runtime array
+// sizes and then the buffers' sizes, in the order the encoder writes them.
+func TestVertexBuffersPullVertices(t *testing.T) {
+	t.Parallel()
+
+	buffers := []gputypes.VertexBufferLayout{
+		{ArrayStride: 8, StepMode: gputypes.VertexStepModeVertex, Attributes: []gputypes.VertexAttribute{
+			{Format: gputypes.VertexFormatFloat32x2, ShaderLocation: 0},
+		}},
+		{StepMode: gputypes.VertexStepModeVertexBufferNotUsed},
+		{StepMode: gputypes.VertexStepModeInstance, Attributes: []gputypes.VertexAttribute{
+			{Format: gputypes.VertexFormatUnorm8x4, ShaderLocation: 1},
+			{Format: gputypes.VertexFormatFloat32x2, Offset: 4, ShaderLocation: 2},
+		}},
+		{ArrayStride: 4, StepMode: gputypes.VertexStepModeInstance, Attributes: []gputypes.VertexAttribute{
+			{Format: gputypes.VertexFormatUnorm8x2, Offset: 2, ShaderLocation: 3},
+		}},
+	}
+	mappings, err := mslmap.VertexBuffers(buffers, 30)
+	if err != nil {
+		t.Fatalf("mslmap.VertexBuffers: %v", err)
+	}
+	want := []msl.VertexBufferMapping{
+		{ID: 30, Stride: 8, StepMode: msl.VertexStepModeByVertex, Attributes: []msl.AttributeMapping{
+			{ShaderLocation: 0, Format: msl.VertexFormatFloat32x2},
+		}},
+		{ID: 28, Stride: 12, StepMode: msl.VertexStepModeConstant, Attributes: []msl.AttributeMapping{
+			{ShaderLocation: 1, Format: msl.VertexFormatUnorm8x4},
+			{ShaderLocation: 2, Offset: 4, Format: msl.VertexFormatFloat32x2},
+		}},
+		{ID: 27, Stride: 4, StepMode: msl.VertexStepModeByInstance, Attributes: []msl.AttributeMapping{
+			{ShaderLocation: 3, Offset: 2, Format: msl.VertexFormatUnorm8x2},
+		}},
+	}
+	if !reflect.DeepEqual(mappings, want) {
+		t.Fatalf("mappings = %+v\nwant %+v", mappings, want)
+	}
+
+	module := lower(t, `
+@group(0) @binding(0) var<storage, read> data: array<u32>;
+@group(0) @binding(1) var<uniform> tint: vec4<f32>;
+@vertex fn vs(@location(0) pos: vec2<f32>, @location(1) color: vec4<f32>, @location(2) offset: vec2<f32>, @location(3) uv: vec2<f32>) -> @builtin(position) vec4<f32> {
+	return vec4<f32>(pos + offset + uv, 0.0, 1.0) * color * tint;
+}
+@compute @workgroup_size(1) fn cs() { _ = arrayLength(&data); }
+`)
+	layout := [][]gputypes.BindGroupLayoutEntry{{
+		{Binding: 0, Buffer: &gputypes.BufferBindingLayout{Type: gputypes.BufferBindingTypeReadOnlyStorage}},
+		{Binding: 1, Buffer: &gputypes.BufferBindingLayout{Type: gputypes.BufferBindingTypeUniform}},
+	}}
+	opts, err := mslmap.Options(module, ir.StageVertex, "vs", resources(t, layout), 2)
+	if err != nil {
+		t.Fatalf("mslmap.Options: %v", err)
+	}
+	opts.VertexPullingTransform = true
+	opts.VertexBufferMappings = mappings
+	source, _, err := msl.CompileWithPipeline(module, opts, msl.PipelineOptions{EntryPoint: &msl.EntryPointSelector{Stage: ir.StageVertex, Name: "vs"}})
+	if err != nil {
+		t.Fatalf("msl.CompileWithPipeline: %v", err)
+	}
+	got := slots(source)
+	for name, slot := range map[string]string{"tint": "buffer(1)", "vb_30_in": "buffer(30)", "vb_28_in": "buffer(28)", "vb_27_in": "buffer(27)", "_buffer_sizes": "buffer(2)"} {
+		if got[name] != slot {
+			t.Errorf("%s at %q, want %s", name, got[name], slot)
+		}
+	}
+	if strings.Contains(source, "stage_in") {
+		t.Error("the vertex stage still takes its attributes as stage_in")
+	}
+	sizes := regexp.MustCompile(`struct _mslBufferSizes \{\s*([^}]*)\}`).FindStringSubmatch(source)
+	runtime, err := mslmap.RuntimeArrayBindings(module)
+	if err != nil {
+		t.Fatalf("mslmap.RuntimeArrayBindings: %v", err)
+	}
+	if sizes == nil || len(runtime) != 1 || strings.Join(strings.Fields(sizes[1]), " ") != "uint size0; uint buffer_size30; uint buffer_size28; uint buffer_size27;" {
+		t.Errorf("_mslBufferSizes holds %q, want the size of data, then of vertex buffers 0, 2 and 3", sizes)
+	}
+	for _, name := range []string{"pos", "color", "offset", "uv"} {
+		if !strings.Contains(source, " "+name+" = {};") {
+			t.Errorf("attribute %s is not pulled into a local of its name, which the body reads", name)
+		}
+	}
+	if t.Failed() {
+		t.Logf("MSL:\n%s", source)
+	}
+
+	for f := range gputypes.VertexFormatUnorm1010102 + 1 {
+		_, err := mslmap.VertexBuffers([]gputypes.VertexBufferLayout{{ArrayStride: 16, Attributes: []gputypes.VertexAttribute{{Format: f}}}}, 30)
+		if (err == nil) != (f.Size() > 0) {
+			t.Errorf("vertex format %v: err = %v", f, err)
+		}
 	}
 }
