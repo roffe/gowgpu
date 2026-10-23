@@ -845,3 +845,38 @@ func TestSubmitDuplicateCommandBuffer(t *testing.T) {
 		t.Fatalf("Submit(cb) after the refused one: %v", err)
 	}
 }
+
+// TestSubmitSpentCommandBuffer verifies that a command buffer whose
+// submission the GPU has finished, and whose encoder went back to the pool,
+// still fails to submit again, also once a new encoder may have reused it.
+func TestSubmitSpentCommandBuffer(t *testing.T) {
+	_, _, device := newDevice(t)
+	defer device.Release()
+	requireHAL(t, device)
+
+	enc, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	cmdBuf, err := enc.Finish()
+	if err != nil {
+		t.Fatalf("Finish: %v", err)
+	}
+	if _, err := device.Queue().Submit(cmdBuf); err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	if err := device.WaitIdle(); err != nil {
+		t.Fatalf("WaitIdle: %v", err)
+	}
+	if _, err := device.Queue().Submit(cmdBuf); !errors.Is(err, wgpu.ErrSubmitCommandBufferInvalid) {
+		t.Errorf("Submit of a spent command buffer = %v, want ErrSubmitCommandBufferInvalid", err)
+	}
+	next, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	defer next.DiscardEncoding()
+	if _, err := device.Queue().Submit(cmdBuf); !errors.Is(err, wgpu.ErrSubmitCommandBufferInvalid) {
+		t.Errorf("Submit of a spent command buffer after a new encoder = %v, want ErrSubmitCommandBufferInvalid", err)
+	}
+}

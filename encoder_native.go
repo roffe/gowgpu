@@ -117,7 +117,9 @@ func (e *CommandEncoder) recycle() {
 	e.clearsFirst = nil
 	clear(e.discards)
 	e.passSerial = 0
-	e.cb = CommandBuffer{}
+	// The command buffer handed out reads as spent, and as stale once the
+	// object is reused, until the next Finish.
+	e.cb = CommandBuffer{enc: e, serial: e.cb.serial, submitted: true}
 	cmdEncoderObjPool.Put(e)
 }
 
@@ -1603,6 +1605,10 @@ func coreTextureViewFrom(v *TextureView) core.TextureView {
 
 // CommandBuffer holds recorded GPU commands ready for submission.
 // Created by CommandEncoder.Finish().
+//
+// It is submitted once. After Submit or Release it is spent and a Submit of
+// it fails, but don't keep it: the memory behind it is reused for the command
+// buffer of a later encoder.
 type CommandBuffer struct {
 	core   *core.CoreCommandBuffer
 	device *Device
