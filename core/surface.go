@@ -58,6 +58,7 @@ func (s *Surface) SetPrepareFrame(fn PrepareFrameFunc) {
 func (s *Surface) Configure(device *Device, config *hal.SurfaceConfiguration) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.waitAcquire()
 
 	if device == nil {
 		return ErrSurfaceNilDevice
@@ -99,6 +100,7 @@ func (s *Surface) Configure(device *Device, config *hal.SurfaceConfiguration) er
 func (s *Surface) Unconfigure() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.waitAcquire()
 
 	if s.state == SurfaceStateUnconfigured {
 		return
@@ -137,23 +139,48 @@ func (s *Surface) AcquireTexture(fence hal.Fence) (*hal.AcquiredSurfaceTexture, 
 // AcquireTextureWithLease acquires a texture and returns its opaque lifetime
 // lease. Call AcquisitionValid before converting a retained public wrapper to
 // HAL; the lease expires on present, discard, unconfigure, or destruction.
+//
+// The PrepareFrame hook and the backend's acquire, which can wait for the
+// next image, run without the surface's lock, so the hook may call back into
+// the surface and other goroutines can read it meanwhile. A Configure,
+// Unconfigure or Destroy waits for the acquire.
 func (s *Surface) AcquireTextureWithLease(fence hal.Fence) (*hal.AcquiredSurfaceTexture, uint64, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.state == SurfaceStateAcquired {
-		return nil, 0, ErrSurfaceAlreadyAcquired
-	}
-	if s.state != SurfaceStateConfigured {
-		return nil, 0, ErrSurfaceNotConfigured
-	}
-
-	// Call PrepareFrame hook if registered
-	if err := s.applyPrepareFrame(); err != nil {
+	if err := s.acquireStateErr(); err != nil {
+		s.mu.Unlock()
 		return nil, 0, err
 	}
+	hook := s.prepareFrame
+	s.mu.Unlock()
 
-	result, err := s.raw.AcquireTexture(fence)
+	var width, height uint32
+	var changed bool
+	if hook != nil {
+		width, height, changed = hook()
+	}
+
+	s.mu.Lock()
+	s.waitAcquire()
+	if err := s.acquireStateErr(); err != nil {
+		s.mu.Unlock()
+		return nil, 0, err
+	}
+	if changed {
+		if err := s.resizeLocked(width, height); err != nil {
+			s.mu.Unlock()
+			return nil, 0, err
+		}
+	}
+	raw := s.raw
+	s.acquiring = true
+	s.mu.Unlock()
+
+	result, err := raw.AcquireTexture(fence)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.acquiring = false
+	s.acquired.Broadcast()
 	if err != nil {
 		return nil, 0, err
 	}
@@ -246,6 +273,7 @@ func (s *Surface) RetireDevice(device *Device) {
 		return
 	}
 	s.mu.Lock()
+	s.waitAcquire()
 	if s.device != device {
 		s.mu.Unlock()
 		return
@@ -266,6 +294,7 @@ func (s *Surface) Destroy() {
 		return
 	}
 	s.mu.Lock()
+	s.waitAcquire()
 	raw := s.raw
 	if raw == nil {
 		s.mu.Unlock()
@@ -315,15 +344,33 @@ func (s *Surface) Config() *hal.SurfaceConfiguration {
 	return &configCopy
 }
 
-// applyPrepareFrame calls the PrepareFrame hook and reconfigures if dimensions changed.
-// Must be called with s.mu held.
-func (s *Surface) applyPrepareFrame() error {
-	if s.prepareFrame == nil {
-		return nil
+// acquireStateErr is the error of an acquire in the surface's state, nil
+// when it can acquire. s.mu is held.
+func (s *Surface) acquireStateErr() error {
+	switch {
+	case s.state == SurfaceStateAcquired:
+		return ErrSurfaceAlreadyAcquired
+	case s.state != SurfaceStateConfigured:
+		return ErrSurfaceNotConfigured
 	}
+	return nil
+}
 
-	width, height, changed := s.prepareFrame()
-	if !changed || s.config == nil {
+// waitAcquire waits until no acquire is waiting in the backend. s.mu is
+// held.
+func (s *Surface) waitAcquire() {
+	for s.acquiring {
+		if s.acquired.L == nil {
+			s.acquired.L = &s.mu
+		}
+		s.acquired.Wait()
+	}
+}
+
+// resizeLocked reconfigures the surface to the size the PrepareFrame hook
+// reported. s.mu is held.
+func (s *Surface) resizeLocked(width, height uint32) error {
+	if s.config == nil {
 		return nil
 	}
 	if s.raw == nil {

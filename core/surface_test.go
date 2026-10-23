@@ -7,6 +7,7 @@ import (
 	"image"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
@@ -961,5 +962,93 @@ func TestPresent_DamageWithNilQueue(t *testing.T) {
 		// If it didn't panic, that's also acceptable — it means the implementation
 		// handles nil queue gracefully. Either way, the test documents the behavior.
 		t.Log("PresentWithDamage(nil queue) did not panic — nil queue handled gracefully")
+	}
+}
+
+// A PrepareFrame hook that calls back into the surface runs without the
+// surface's lock, which it would otherwise wait on forever.
+func TestSurfacePrepareFrameCallsBackIntoSurface(t *testing.T) {
+	surface, device, _ := newTestSurface(t)
+	if err := surface.Configure(device, testSurfaceConfig()); err != nil {
+		t.Fatalf("Configure: %v", err)
+	}
+	surface.SetPrepareFrame(func() (uint32, uint32, bool) {
+		if surface.RawSurface() == nil || surface.Config() == nil {
+			t.Error("the surface lost its configuration in the hook")
+		}
+		return 1024, 768, true
+	})
+	acquired := make(chan error, 1)
+	go func() {
+		_, err := surface.AcquireTexture(nil)
+		acquired <- err
+	}()
+	select {
+	case err := <-acquired:
+		if err != nil {
+			t.Fatalf("AcquireTexture: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("AcquireTexture with a hook that reads the surface did not return")
+	}
+	if c := surface.Config(); c.Width != 1024 || c.Height != 768 {
+		t.Errorf("config after the hook = %dx%d, want 1024x768", c.Width, c.Height)
+	}
+}
+
+// blockingAcquireSurface is a HAL surface whose AcquireTexture says it has
+// started on entered and waits for release.
+type blockingAcquireSurface struct {
+	hal.Surface
+	entered, release chan struct{}
+}
+
+func (s *blockingAcquireSurface) AcquireTexture(fence hal.Fence) (*hal.AcquiredSurfaceTexture, error) {
+	close(s.entered)
+	<-s.release
+	return s.Surface.AcquireTexture(fence)
+}
+
+// While the backend's acquire waits for an image, the surface can be read
+// from other goroutines, and a Configure waits for the acquire to finish.
+func TestSurfaceAcquireWaitsWithoutTheLock(t *testing.T) {
+	surface, device, _ := newTestSurface(t)
+	raw := &blockingAcquireSurface{Surface: surface.RawSurface(), entered: make(chan struct{}), release: make(chan struct{})}
+	surface.SetRawSurface(raw)
+	if err := surface.Configure(device, testSurfaceConfig()); err != nil {
+		t.Fatalf("Configure: %v", err)
+	}
+	acquired := make(chan error, 1)
+	go func() {
+		_, err := surface.AcquireTexture(nil)
+		acquired <- err
+	}()
+	<-raw.entered
+
+	read := make(chan struct{})
+	go func() {
+		_ = surface.RawSurface()
+		_ = surface.AcquisitionValid(1)
+		close(read)
+	}()
+	select {
+	case <-read:
+	case <-time.After(2 * time.Second):
+		t.Fatal("reading the surface waited for the backend's acquire")
+	}
+
+	configured := make(chan error, 1)
+	go func() { configured <- surface.Configure(device, testSurfaceConfig()) }()
+	select {
+	case err := <-configured:
+		t.Fatalf("Configure returned during the acquire: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(raw.release)
+	if err := <-acquired; err != nil {
+		t.Fatalf("AcquireTexture: %v", err)
+	}
+	if err := <-configured; !errors.Is(err, ErrSurfaceConfigureWhileAcquired) {
+		t.Errorf("Configure after the acquire = %v, want ErrSurfaceConfigureWhileAcquired", err)
 	}
 }

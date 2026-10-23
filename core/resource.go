@@ -1824,6 +1824,11 @@ type Surface struct {
 
 	// mu protects state transitions.
 	mu sync.Mutex
+
+	// acquiring is set while an acquire waits in the backend without mu;
+	// what changes the configuration waits on acquired for it to clear.
+	acquiring bool
+	acquired  sync.Cond
 }
 
 // NewSurface creates a core Surface wrapping a HAL surface.
@@ -1864,6 +1869,7 @@ func (s *Surface) RawSurface() hal.Surface {
 func (s *Surface) SetRawSurface(raw hal.Surface) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.waitAcquire()
 	s.raw = raw
 	s.acquiredTex = nil
 	s.invalidateAcquisitionLocked()
