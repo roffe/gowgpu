@@ -386,3 +386,62 @@ func TestStencilViewReadsStencilInRed(t *testing.T) {
 	expectPixels(t, "stencil read through a stencil-only view", readback(t, staging), 0x5A, 0, 0, 255)
 	assertNoValidation(t, h)
 }
+
+const locationOneShader = `
+@vertex fn vs_main(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
+	return vec4<f32>(f32(i32(vi & 1u) * 4 - 1), f32(i32(vi >> 1u) * 4 - 1), 0.5, 1.0);
+}
+@fragment fn fs_main() -> @location(1) vec4<f32> {
+	return vec4<f32>(0.0, 1.0, 0.0, 1.0);
+}
+`
+
+// TestSparseColorAttachment draws into colour attachment 1 with nothing
+// at attachment 0, the default viewport and scissor included.
+func TestSparseColorAttachment(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	if h.backend == gputypes.BackendGL {
+		t.Skip("the GL backend moves the attachments after a hole down a slot")
+	}
+	module, err := device.CreateShaderModule(&ShaderModuleDescriptor{Label: "location-one", WGSL: locationOneShader})
+	if err != nil {
+		t.Fatalf("CreateShaderModule: %v", err)
+	}
+	defer module.Release()
+	pipe, err := device.CreateRenderPipeline(&RenderPipelineDescriptor{
+		Label:     "location-one",
+		Vertex:    VertexState{Module: module, EntryPoint: "vs_main"},
+		Primitive: gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList},
+		Fragment: &FragmentState{Module: module, EntryPoint: "fs_main", Targets: []gputypes.ColorTargetState{
+			{Format: gputypes.TextureFormatUndefined},
+			{Format: gputypes.TextureFormatRGBA8Unorm, WriteMask: gputypes.ColorWriteMaskAll},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("CreateRenderPipeline: %v", err)
+	}
+	defer pipe.Release()
+	tex, view := pixTexture(t, device, "attachment-one", TextureUsageRenderAttachment|TextureUsageCopySrc)
+	defer releaseTextureView(tex, view)
+	staging := readbackBuffer(t, device, "attachment-one")
+	enc, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	pass, err := enc.BeginRenderPass(&RenderPassDescriptor{ColorAttachments: []RenderPassColorAttachment{
+		{},
+		{View: view, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore, ClearValue: black},
+	}})
+	if err != nil {
+		t.Fatalf("BeginRenderPass: %v", err)
+	}
+	pass.SetPipeline(pipe)
+	pass.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1})
+	if err := pass.End(); err != nil {
+		t.Fatalf("End: %v", err)
+	}
+	copyOut(enc, tex, staging)
+	finishAndSubmit(t, device, enc)
+	expectPixels(t, "attachment 1", readback(t, staging), 0, 255, 0, 255)
+	assertNoValidation(t, h)
+}

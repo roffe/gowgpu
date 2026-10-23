@@ -563,14 +563,22 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 	}
 	e.emitStateBarrierPlans(attachmentPlans)
 
-	// Set render targets
+	// Attachment i goes in slot i, the PSO's RTVFormats[i]: a hole in the
+	// attachments gets a null RTV, as in Rust's wgpu-hal and Dawn.
 	rtvHandles := make([]d3d12.D3D12_CPU_DESCRIPTOR_HANDLE, 0, len(desc.ColorAttachments))
-	for _, ca := range desc.ColorAttachments {
+	usedSlots := 0
+	for i, ca := range desc.ColorAttachments {
 		view, ok := ca.View.(*TextureView)
-		if !ok || !view.hasRTV {
+		if !ok || view == nil || !view.hasRTV {
+			null, err := e.device.nullRTV()
+			if err != nil {
+				e.fail(err)
+			}
+			rtvHandles = append(rtvHandles, null)
 			continue
 		}
 		rtvHandles = append(rtvHandles, view.rtvHandle)
+		usedSlots = i + 1
 
 		// Clear if needed
 		if ca.LoadOp == gputypes.LoadOpClear {
@@ -583,6 +591,8 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 			e.cmdList.ClearRenderTargetView(view.rtvHandle, &clearColor, 0, nil)
 		}
 	}
+
+	rtvHandles = rtvHandles[:usedSlots]
 
 	// Handle depth/stencil attachment using helper method to reduce nesting
 	dsvHandle := e.setupDepthStencilAttachment(desc.DepthStencilAttachment)
@@ -601,12 +611,14 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 
 	// Set default viewport and scissor based on first color attachment or depth attachment
 	var width, height uint32
-	if len(desc.ColorAttachments) > 0 {
-		if view, ok := desc.ColorAttachments[0].View.(*TextureView); ok {
+	for _, ca := range desc.ColorAttachments {
+		if view, ok := ca.View.(*TextureView); ok && view != nil {
 			width, height = view.mipExtent()
+			break
 		}
-	} else if desc.DepthStencilAttachment != nil {
-		if view, ok := desc.DepthStencilAttachment.View.(*TextureView); ok {
+	}
+	if width == 0 && desc.DepthStencilAttachment != nil {
+		if view, ok := desc.DepthStencilAttachment.View.(*TextureView); ok && view != nil {
 			width, height = view.mipExtent()
 		}
 	}

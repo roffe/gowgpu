@@ -73,6 +73,12 @@ type Device struct {
 	// from (Microsoft docs: ID3D12Device::CopyDescriptorsSimple).
 	stagingViewHeap *cpuDescriptorPool
 
+	// nullRTVHandle is a render target view of no resource, which the holes
+	// of a render pass's colour attachments are bound to, made on first use.
+	nullRTVHandle d3d12.D3D12_CPU_DESCRIPTOR_HANDLE
+	nullRTVOnce   sync.Once
+	nullRTVErr    error
+
 	// samplers are the samplers in samplerHeap by their description, each
 	// made once and shared by the samplers that describe it alike, as in
 	// Rust's wgpu-hal: the heap holds 2048 of them.
@@ -1083,6 +1089,21 @@ func (h *DescriptorHeap) allocateSlot() (d3d12.D3D12_CPU_DESCRIPTOR_HANDLE, uint
 	idx := h.nextFree
 	h.nextFree++
 	return h.cpuStart.Offset(int(idx), h.incrementSize), idx, true
+}
+
+func (d *Device) nullRTV() (d3d12.D3D12_CPU_DESCRIPTOR_HANDLE, error) {
+	d.nullRTVOnce.Do(func() {
+		handle, _, err := d.rtvHeap.allocate()
+		if err != nil {
+			d.nullRTVErr = fmt.Errorf("dx12: null RTV: %w", err)
+			return
+		}
+		desc := d3d12.D3D12_RENDER_TARGET_VIEW_DESC{Format: d3d12.DXGI_FORMAT_R8G8B8A8_UNORM, ViewDimension: d3d12.D3D12_RTV_DIMENSION_TEXTURE2D}
+		desc.SetTexture2D(0, 0)
+		d.raw.CreateRenderTargetView(nil, &desc, handle)
+		d.nullRTVHandle = handle
+	})
+	return d.nullRTVHandle, d.nullRTVErr
 }
 
 // samplerSlot is a sampler of the shader-visible sampler heap and the
