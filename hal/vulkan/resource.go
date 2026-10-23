@@ -59,6 +59,9 @@ type Texture struct {
 	dimension   gputypes.TextureDimension
 	device      *Device
 	isExternal  bool // True if memory is not owned by us (swapchain images)
+	// written is whether Queue.WriteTexture has left the texture in the
+	// Resource state.
+	written bool
 }
 
 // Extent3D represents 3D dimensions.

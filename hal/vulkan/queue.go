@@ -546,7 +546,9 @@ func (q *Queue) WriteBuffer(buffer hal.Buffer, offset uint64, data []byte) error
 	return nil
 }
 
-// WriteTexture writes data to a texture immediately.
+// WriteTexture writes data to a texture immediately and leaves the texture
+// in the Resource state, which a later WriteTexture takes it from, keeping
+// what it does not overwrite. The first takes the texture as uninitialized.
 // Returns an error if any step fails (VK-003: no more silent error swallowing).
 func (q *Queue) WriteTexture(dst *hal.ImageCopyTexture, data []byte, layout *hal.ImageDataLayout, size *hal.Extent3D) error {
 	if dst == nil || dst.Texture == nil || len(data) == 0 || size == nil {
@@ -571,12 +573,9 @@ func (q *Queue) WriteTexture(dst *hal.ImageCopyTexture, data []byte, layout *hal
 	}
 	defer q.device.DestroyBuffer(stagingBuffer)
 
-	// Copy data to staging buffer
-	vkStaging, ok := stagingBuffer.(*Buffer)
-	if !ok || vkStaging.memory == nil || vkStaging.memory.MappedPtr == 0 {
-		return fmt.Errorf("vulkan: WriteTexture: staging buffer not mapped")
+	if err := q.WriteBuffer(stagingBuffer, 0, data); err != nil {
+		return fmt.Errorf("vulkan: WriteTexture: %w", err)
 	}
-	copyToMappedMemory(vkStaging.memory.MappedPtr, 0, data)
 
 	// Create one-shot command buffer
 	cmdEncoder, err := q.device.CreateCommandEncoder(&hal.CommandEncoderDescriptor{
@@ -596,14 +595,17 @@ func (q *Queue) WriteTexture(dst *hal.ImageCopyTexture, data []byte, layout *hal
 		return fmt.Errorf("vulkan: WriteTexture: BeginEncoding failed: %w", err)
 	}
 
-	// Transition texture to transfer destination layout
+	old, oldUsage := hal.TextureUsesUninitialized, gputypes.TextureUsage(0)
+	if vkTexture.written {
+		old, oldUsage = hal.TextureUsesResource, gputypes.TextureUsageTextureBinding
+	}
 	encoder.TransitionTextures([]hal.TextureBarrier{
 		{
 			Texture: dst.Texture,
 			Usage: hal.TextureUsageTransition{
-				OldUsage: 0,
+				OldUsage: oldUsage,
 				NewUsage: gputypes.TextureUsageCopyDst,
-				Old:      hal.TextureUsesUninitialized,
+				Old:      old,
 				New:      hal.TextureUsesCopyDst,
 			},
 		},
@@ -688,6 +690,7 @@ func (q *Queue) WriteTexture(dst *hal.ImageCopyTexture, data []byte, layout *hal
 	if err != nil {
 		return fmt.Errorf("vulkan: WriteTexture: Submit failed: %w", err)
 	}
+	vkTexture.written = true
 
 	// Wait for the submission to complete (60 second timeout).
 	timeoutNs := uint64(60 * time.Second)
