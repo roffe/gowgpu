@@ -88,6 +88,10 @@ type Device struct {
 	// compositor about which surface regions changed (damage rects).
 	supportsIncrementalPresent bool
 
+	// swapchainMutableFormat is whether VK_KHR_swapchain_mutable_format is
+	// enabled, which a surface's views in other formats need.
+	swapchainMutableFormat bool
+
 	// shaderOptions are what WGSL is compiled with, see shaderOptions.
 	shaderOptions spirv.Options
 

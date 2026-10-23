@@ -51,24 +51,17 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 	}
 
 	// Query supported device extensions to enable optional features.
-	available := map[string]bool{}
-	{
-		var extCount uint32
-		a.instance.cmds.EnumerateDeviceExtensionProperties(a.physicalDevice, nil, &extCount, nil)
-		if extCount > 0 {
-			extProps := make([]vk.ExtensionProperties, extCount)
-			a.instance.cmds.EnumerateDeviceExtensionProperties(a.physicalDevice, nil, &extCount, &extProps[0])
-			for i := range extProps[:extCount] {
-				available[cStringToGo(extProps[i].ExtensionName[:])] = true
-			}
-		}
-	}
+	available := deviceExtensions(&a.instance.cmds, a.physicalDevice)
 	hasIncrementalPresent := available["VK_KHR_incremental_present"]
 
 	// VK_KHR_swapchain where the device has it: one without can still compute.
 	var extensions []string
 	if available["VK_KHR_swapchain"] {
 		extensions = append(extensions, "VK_KHR_swapchain\x00")
+	}
+	mutableFormat := swapchainMutableFormat(a.apiVersion(), available)
+	if mutableFormat {
+		extensions = append(extensions, "VK_KHR_swapchain_mutable_format\x00")
 	}
 	// Optional: VK_KHR_incremental_present for damage-aware presentation.
 	// Allows chaining VkPresentRegionsKHR into VkPresentInfoKHR.PNext
@@ -212,6 +205,7 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 		supportsDrawIndirectCount:  has12.DrawIndirectCount != 0,
 		maxDrawIndirectCount:       a.properties.Limits.MaxDrawIndirectCount,
 		supportsIncrementalPresent: hasIncrementalPresent,
+		swapchainMutableFormat:     mutableFormat,
 		storeOpNone:                storeOpNone,
 		alignedFills:               a.properties.VendorID == 0x10DE,
 		shaderOptions:              shaderOptions(a.apiVersion()),
@@ -303,6 +297,29 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 		Device: dev,
 		Queue:  q,
 	}, nil
+}
+
+// deviceExtensions returns the names of the extensions physicalDevice has.
+func deviceExtensions(cmds *vk.Commands, physicalDevice vk.PhysicalDevice) map[string]bool {
+	available := map[string]bool{}
+	var extCount uint32
+	cmds.EnumerateDeviceExtensionProperties(physicalDevice, nil, &extCount, nil)
+	if extCount > 0 {
+		extProps := make([]vk.ExtensionProperties, extCount)
+		cmds.EnumerateDeviceExtensionProperties(physicalDevice, nil, &extCount, &extProps[0])
+		for i := range extProps[:extCount] {
+			available[cStringToGo(extProps[i].ExtensionName[:])] = true
+		}
+	}
+	return available
+}
+
+// swapchainMutableFormat reports whether a device of Vulkan version
+// apiVersion with the extensions available makes swapchains whose images
+// are viewed in other formats: VK_KHR_swapchain_mutable_format, whose
+// VK_KHR_maintenance2 and VK_KHR_image_format_list are Vulkan 1.2 core.
+func swapchainMutableFormat(apiVersion uint32, available map[string]bool) bool {
+	return apiVersion >= vkMakeVersion(1, 2, 0) && available["VK_KHR_swapchain"] && available["VK_KHR_swapchain_mutable_format"]
 }
 
 // apiVersion is the Vulkan version of a device of the adapter: the lower of

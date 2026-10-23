@@ -317,7 +317,8 @@ func (i *Instance) EnumerateAdapters(surfaceHint hal.Surface) []hal.ExposedAdapt
 					BufferCopyOffset: 4,
 					BufferCopyPitch:  256,
 				},
-				DownlevelCapabilities: downlevelCapabilitiesFromFeatures(&features),
+				DownlevelCapabilities: downlevelCapabilitiesFromFeatures(&features,
+					swapchainMutableFormat(min(props.ApiVersion, i.apiVersion), deviceExtensions(&i.cmds, device))),
 			},
 		})
 	}
@@ -641,16 +642,10 @@ func featuresFromPhysicalDevice(features *vk.PhysicalDeviceFeatures, drawIndirec
 //
 // Vulkan unconditionally supports 17 downlevel flags (compute, base vertex,
 // depth copies, etc.). Eight flags depend on actual physical device features
-// and are set conditionally from VkPhysicalDeviceFeatures fields.
-//
-// Note: SURFACE_VIEW_FORMATS depends on VK_KHR_swapchain_mutable_format
-// extension support. We currently don't enumerate device extensions at adapter
-// discovery time (only during Device creation in Open). Since all Vulkan
-// implementations that lack the extension still support swapchains, and wgpu
-// Rust sets the flag to true when the swapchain extension is absent, we default
-// to true here. This matches Rust: the flag is only false when the driver has
-// VK_KHR_swapchain but NOT VK_KHR_swapchain_mutable_format, which is rare.
-func downlevelCapabilitiesFromFeatures(features *vk.PhysicalDeviceFeatures) gputypes.DownlevelCapabilities {
+// and are set conditionally from VkPhysicalDeviceFeatures fields, and
+// SurfaceViewFormats on swapchainMutableFormat, whether the device makes
+// swapchains whose images are viewed in other formats.
+func downlevelCapabilitiesFromFeatures(features *vk.PhysicalDeviceFeatures, swapchainMutableFormat bool) gputypes.DownlevelCapabilities {
 	// Start with the 17 unconditional flags (Rust adapter.rs:684-700).
 	flags := gputypes.DownlevelFlagsComputeShaders |
 		gputypes.DownlevelFlagsBaseVertex |
@@ -670,9 +665,9 @@ func downlevelCapabilitiesFromFeatures(features *vk.PhysicalDeviceFeatures) gput
 		gputypes.DownlevelFlagsMSL21 |
 		gputypes.DownlevelFlagsLinearInterpolation
 
-	// SURFACE_VIEW_FORMATS: true unless driver has VK_KHR_swapchain but not
-	// VK_KHR_swapchain_mutable_format. We default to true (see comment above).
-	flags |= gputypes.DownlevelFlagsSurfaceViewFormats
+	if swapchainMutableFormat {
+		flags |= gputypes.DownlevelFlagsSurfaceViewFormats
+	}
 
 	// 8 conditional flags from VkPhysicalDeviceFeatures (Rust adapter.rs:702-719).
 	if features.ImageCubeArray != 0 {

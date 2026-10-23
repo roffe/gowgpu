@@ -608,8 +608,7 @@ func TestFeaturesFromPhysicalDevice(t *testing.T) {
 // TestDownlevelCapabilitiesFromFeatures verifies conditional flag queries
 // from VkPhysicalDeviceFeatures (Rust adapter.rs:662-719 parity).
 func TestDownlevelCapabilitiesFromFeatures(t *testing.T) {
-	// unconditionalFlags are the 18 flags always set for Vulkan adapters
-	// (17 from Rust + SURFACE_VIEW_FORMATS default-true).
+	// unconditionalFlags are the 17 flags always set for Vulkan adapters.
 	unconditionalFlags := gputypes.DownlevelFlagsComputeShaders |
 		gputypes.DownlevelFlagsBaseVertex |
 		gputypes.DownlevelFlagsReadOnlyDepthStencil |
@@ -623,21 +622,26 @@ func TestDownlevelCapabilitiesFromFeatures(t *testing.T) {
 		gputypes.DownlevelFlagsIndirectExecution |
 		gputypes.DownlevelFlagsViewFormats |
 		gputypes.DownlevelFlagsUnrestrictedExternalTextureCopies |
-		gputypes.DownlevelFlagsSurfaceViewFormats |
 		gputypes.DownlevelFlagsNonblockingQueryResolve |
 		gputypes.DownlevelFlagsShaderF16InF32 |
 		gputypes.DownlevelFlagsMSL21 |
 		gputypes.DownlevelFlagsLinearInterpolation
 
 	tests := []struct {
-		name      string
-		features  vk.PhysicalDeviceFeatures
-		wantFlags gputypes.DownlevelFlags
+		name          string
+		features      vk.PhysicalDeviceFeatures
+		mutableFormat bool
+		wantFlags     gputypes.DownlevelFlags
 	}{
 		{
 			name:      "no features — only unconditional flags",
 			features:  vk.PhysicalDeviceFeatures{},
 			wantFlags: unconditionalFlags,
+		},
+		{
+			name:          "swapchains of mutable format",
+			mutableFormat: true,
+			wantFlags:     unconditionalFlags | gputypes.DownlevelFlagsSurfaceViewFormats,
 		},
 		{
 			name: "cube array textures",
@@ -736,7 +740,7 @@ func TestDownlevelCapabilitiesFromFeatures(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			caps := downlevelCapabilitiesFromFeatures(&tt.features)
+			caps := downlevelCapabilitiesFromFeatures(&tt.features, tt.mutableFormat)
 			if caps.Flags != tt.wantFlags {
 				t.Errorf("downlevelCapabilitiesFromFeatures().Flags = %#x, want %#x",
 					uint32(caps.Flags), uint32(tt.wantFlags))
