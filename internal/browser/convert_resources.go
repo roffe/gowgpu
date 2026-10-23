@@ -914,6 +914,7 @@ func BuildComputePipelineDescriptor(
 	layoutRef js.Value,
 	moduleRef js.Value,
 	entryPoint string,
+	constants map[string]float64,
 ) js.Value {
 	desc := newJSObject()
 	if label != "" {
@@ -930,6 +931,13 @@ func BuildComputePipelineDescriptor(
 	compute.Set("module", moduleRef)
 	if entryPoint != "" {
 		compute.Set("entryPoint", entryPoint)
+	}
+	if len(constants) > 0 {
+		values := newJSObject()
+		for name, value := range constants {
+			values.Set(name, value)
+		}
+		compute.Set("constants", values)
 	}
 	desc.Set("compute", compute)
 

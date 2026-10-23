@@ -89,3 +89,16 @@ func TestBuildRenderPassDescriptorDepthStencilOpsFollowTheFormat(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildComputePipelineDescriptorConstants(t *testing.T) {
+	desc := BuildComputePipelineDescriptor("", js.Undefined(), js.Undefined(), "main", map[string]float64{"scale": 2.5, "1000": 7})
+	constants := desc.Get("compute").Get("constants")
+	if constants.IsUndefined() || constants.Get("scale").Float() != 2.5 || constants.Get("1000").Float() != 7 {
+		t.Fatalf("compute.constants = %v, want {scale: 2.5, 1000: 7}", js.Global().Get("JSON").Call("stringify", constants))
+	}
+
+	desc = BuildComputePipelineDescriptor("", js.Undefined(), js.Undefined(), "main", nil)
+	if v := desc.Get("compute").Get("constants"); !v.IsUndefined() {
+		t.Fatalf("compute.constants = %v without constants, want it left out", v)
+	}
+}

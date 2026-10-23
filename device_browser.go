@@ -279,7 +279,7 @@ func (d *Device) CreateComputePipeline(desc *ComputePipelineDescriptor) (*Comput
 		moduleRef = js.Undefined()
 	}
 	jsDesc := browser.BuildComputePipelineDescriptor(
-		desc.Label, layoutRef, moduleRef, desc.EntryPoint,
+		desc.Label, layoutRef, moduleRef, desc.EntryPoint, desc.Constants,
 	)
 	bp := d.browser.CreateComputePipelineFromDesc(jsDesc)
 	return &ComputePipeline{
