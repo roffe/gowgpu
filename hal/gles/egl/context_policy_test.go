@@ -89,7 +89,7 @@ func TestRobustContextRequests(t *testing.T) {
 		{false, false, []robustness{robustNone}, None},
 	}
 	for _, test := range tests {
-		reqs := contextRequests(es, test.egl15, test.ext)
+		reqs := contextRequests(es, test.egl15, false, test.ext)
 		var got []robustness
 		for _, r := range reqs {
 			got = append(got, r.robust)
@@ -105,6 +105,49 @@ func TestRobustContextRequests(t *testing.T) {
 			if slices.Contains(attribs, a) != (a == test.attrib) {
 				t.Errorf("EGL 1.5 %v, EXT %v: attributes %#x, want robust access %#x", test.egl15, test.ext, attribs, test.attrib)
 			}
+		}
+	}
+}
+
+// A desktop context is asked for from OpenGL 4.6 down to the version its
+// config names, where EGL takes a version; ES takes the version it names,
+// the newest the driver has being backward compatible with it.
+func TestContextRequestVersions(t *testing.T) {
+	versions := func(reqs []contextRequest) [][2]int {
+		var vs [][2]int
+		for _, r := range reqs {
+			v := [2]int{r.cfg.GLVersionMajor, r.cfg.GLVersionMinor}
+			if len(vs) == 0 || vs[len(vs)-1] != v {
+				vs = append(vs, v)
+			}
+		}
+		return vs
+	}
+	desktop := DefaultContextConfig()
+	es := ContextConfig{GLVersionMajor: 3, GLES: true}
+	tests := []struct {
+		name       string
+		cfg        ContextConfig
+		egl15, khr bool
+		want       [][2]int
+	}{
+		{"desktop on EGL 1.5", desktop, true, false, [][2]int{{4, 6}, {4, 5}, {4, 4}, {4, 3}, {3, 3}}},
+		{"desktop with KHR_create_context", desktop, false, true, [][2]int{{4, 6}, {4, 5}, {4, 4}, {4, 3}, {3, 3}}},
+		{"desktop on EGL 1.4", desktop, false, false, [][2]int{{3, 3}}},
+		{"desktop 4.5", ContextConfig{GLVersionMajor: 4, GLVersionMinor: 5, CoreProfile: true}, true, false, [][2]int{{4, 6}, {4, 5}}},
+		{"ES on EGL 1.5", es, true, false, [][2]int{{3, 0}}},
+	}
+	for _, test := range tests {
+		reqs := contextRequests(test.cfg, test.egl15, test.khr, true)
+		if got := versions(reqs); !slices.Equal(got, test.want) {
+			t.Errorf("%s: versions %v, want %v", test.name, got, test.want)
+		}
+		perVersion := 2 // robust with EXT's attribute, then not
+		if test.egl15 {
+			perVersion = 3 // with 1.5's first
+		}
+		if got, want := len(reqs), len(test.want)*perVersion; got != want {
+			t.Errorf("%s: %d requests, want %d, every version robust as it can be", test.name, got, want)
 		}
 	}
 }

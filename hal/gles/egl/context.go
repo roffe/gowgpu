@@ -114,7 +114,7 @@ func NewContext(config ContextConfig) (*Context, error) {
 	}
 
 	egl15, khr := is15(major, minor), hasExtension(displayExts, "EGL_KHR_create_context")
-	reqs := contextRequests(config, egl15, hasExtension(displayExts, "EGL_EXT_create_context_robustness"))
+	reqs := contextRequests(config, egl15, khr, hasExtension(displayExts, "EGL_EXT_create_context_robustness"))
 	eglContext, req, err := createEGLContext(display, eglConfig, NoContext, reqs, egl15, khr)
 	if err != nil {
 		return fail(err)
@@ -315,19 +315,41 @@ type contextRequest struct {
 	robust robustness
 }
 
+// desktopVersions are the desktop OpenGL versions a context is asked for
+// before the one its config names, newest first: NVIDIA makes the version
+// asked for, not the newest it has, and compute shaders need 4.3.
+var desktopVersions = [][2]int{{4, 6}, {4, 5}, {4, 4}, {4, 3}}
+
 // contextRequests are the requests to make a context for cfg with, in
-// turn, on a display of EGL 1.5 (egl15), with
-// EGL_EXT_create_context_robustness (extRobust), or neither: robust with
-// 1.5's attribute, then with EXT's, then not robust, as wgpu-hal asks.
-func contextRequests(cfg ContextConfig, egl15, extRobust bool) []contextRequest {
-	reqs := make([]contextRequest, 0, 3)
-	if egl15 {
-		reqs = append(reqs, contextRequest{cfg, robustCore})
+// turn, on a display of EGL 1.5 (egl15), with EGL_KHR_create_context
+// (khr), with EGL_EXT_create_context_robustness (extRobust): desktop
+// OpenGL of each of desktopVersions newer than cfg's, where EGL takes a
+// version, then of cfg's, and each robust with 1.5's attribute, then with
+// EXT's, then not robust, as wgpu-hal asks.
+func contextRequests(cfg ContextConfig, egl15, khr, extRobust bool) []contextRequest {
+	cfgs := []ContextConfig{cfg}
+	if !cfg.GLES && (egl15 || khr) {
+		cfgs = nil
+		for _, v := range desktopVersions {
+			if v[0] > cfg.GLVersionMajor || v[0] == cfg.GLVersionMajor && v[1] > cfg.GLVersionMinor {
+				newer := cfg
+				newer.GLVersionMajor, newer.GLVersionMinor = v[0], v[1]
+				cfgs = append(cfgs, newer)
+			}
+		}
+		cfgs = append(cfgs, cfg)
 	}
-	if extRobust {
-		reqs = append(reqs, contextRequest{cfg, robustExt})
+	var reqs []contextRequest
+	for _, c := range cfgs {
+		if egl15 {
+			reqs = append(reqs, contextRequest{c, robustCore})
+		}
+		if extRobust {
+			reqs = append(reqs, contextRequest{c, robustExt})
+		}
+		reqs = append(reqs, contextRequest{c, robustNone})
 	}
-	return append(reqs, contextRequest{cfg, robustNone})
+	return reqs
 }
 
 // createEGLContext makes the context of the first of reqs that EGL makes,
