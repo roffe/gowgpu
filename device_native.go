@@ -50,6 +50,8 @@ type Device struct {
 	// usedLists recycles the submit-time validation lists of spent command
 	// buffers.
 	usedLists usedListPool
+
+	uncapturedErrorHandler atomic.Pointer[func(*GPUError)]
 }
 
 // Queue returns the device's command queue.
@@ -1353,7 +1355,28 @@ func (d *Device) reportError(err *error) {
 // uncapturedError gets the errors of d that no error scope captured. The
 // calls that made them return them as well.
 func (d *Device) uncapturedError(gpuErr *GPUError) {
+	if handler := d.uncapturedErrorHandler.Load(); handler != nil {
+		(*handler)(gpuErr)
+		return
+	}
 	hal.Logger().Debug("wgpu: uncaptured error", "type", gpuErr.Type, "message", gpuErr.Message)
+}
+
+// SetUncapturedErrorHandler sets the function that gets every GPU error no
+// error scope captured: validation, out-of-memory and internal errors, each
+// with its Type and message. A newer call replaces the older handler, and
+// nil removes it and restores the default handling of uncaptured errors.
+//
+// In a native build the handler runs on the goroutine whose call made the
+// error, before that call returns the error as well, so calls on several
+// goroutines can run it at the same time. Without a handler an uncaptured
+// error goes to the logger SetLogger sets, at debug level.
+func (d *Device) SetUncapturedErrorHandler(handler func(*GPUError)) {
+	if handler == nil {
+		d.uncapturedErrorHandler.Store(nil)
+		return
+	}
+	d.uncapturedErrorHandler.Store(&handler)
 }
 
 // foreign reports whether owner, the device an object was made on, is
