@@ -101,50 +101,6 @@ func TestDeviceTracker_MergeTextureScope_NoTransition(t *testing.T) {
 	}
 }
 
-func TestDeviceTracker_TrackPresentTexture(t *testing.T) {
-	t.Parallel()
-
-	dt := NewDeviceTracker()
-	idx := track.TrackerIndex(0)
-
-	// Start with color target (simulates render pass output)
-	dt.InsertTexture(idx, track.TextureUsesColorTarget)
-
-	// Track present transition
-	trans := dt.TrackPresentTexture(idx)
-
-	if trans == nil {
-		t.Fatal("Expected a transition for present")
-	}
-	if trans.Usage.From != track.TextureUsesColorTarget {
-		t.Errorf("From = %d, want ColorTarget", trans.Usage.From)
-	}
-	if trans.Usage.To != track.TextureUsesPresent {
-		t.Errorf("To = %d, want Present", trans.Usage.To)
-	}
-
-	// Device tracker should now be in Present state
-	if dt.Textures().GetUsage(idx) != track.TextureUsesPresent {
-		t.Error("Device tracker should be in Present state after TrackPresentTexture")
-	}
-}
-
-func TestDeviceTracker_TrackPresentTexture_AlreadyPresent(t *testing.T) {
-	t.Parallel()
-
-	dt := NewDeviceTracker()
-	idx := track.TrackerIndex(0)
-
-	// Already in present state (unordered, so barrier is still needed)
-	dt.InsertTexture(idx, track.TextureUsesPresent)
-	trans := dt.TrackPresentTexture(idx)
-
-	// Present is unordered, so same-to-same still produces a barrier
-	if trans == nil {
-		t.Fatal("Expected a transition for same unordered state")
-	}
-}
-
 func TestDeviceTracker_MultipleTextures(t *testing.T) {
 	t.Parallel()
 
@@ -244,48 +200,6 @@ func TestDeviceTracker_BarrierCBFromTransitions_EmptyAfterFiltering(t *testing.T
 	}
 	if encoder.transitionCount != 0 {
 		t.Errorf("TransitionTextures should not be called when all textures are nil, got %d", encoder.transitionCount)
-	}
-}
-
-// TestDeviceTracker_PresentTransitionFlow simulates the full ADR-060 flow:
-// 1. Texture starts as ColorTarget (render pass output)
-// 2. Command buffer scope records ColorTarget usage
-// 3. MergeTextureScope produces no transition (same state)
-// 4. TrackPresentTexture produces ColorTarget->Present transition
-func TestDeviceTracker_PresentTransitionFlow(t *testing.T) {
-	t.Parallel()
-
-	dt := NewDeviceTracker()
-	idx := track.TrackerIndex(0)
-
-	// Step 1: Texture acquired from swapchain, starts as ColorTarget
-	dt.InsertTexture(idx, track.TextureUsesColorTarget)
-
-	// Step 2: Command buffer records ColorTarget usage
-	scope := track.NewEncoderTextureTracker()
-	scope.SetSingle(idx, track.TextureUsesColorTarget)
-
-	// Step 3: Merge — same ordered state, no barrier needed
-	transitions := dt.MergeTextureScope(scope)
-	if len(transitions) != 0 {
-		t.Fatalf("Step 3: Expected 0 transitions for same ColorTarget, got %d", len(transitions))
-	}
-
-	// Step 4: Track present transition
-	trans := dt.TrackPresentTexture(idx)
-	if trans == nil {
-		t.Fatal("Step 4: Expected ColorTarget->Present transition")
-	}
-	if trans.Usage.From != track.TextureUsesColorTarget {
-		t.Errorf("Step 4: From = %d, want ColorTarget", trans.Usage.From)
-	}
-	if trans.Usage.To != track.TextureUsesPresent {
-		t.Errorf("Step 4: To = %d, want Present", trans.Usage.To)
-	}
-
-	// Device tracker should now be in Present state
-	if dt.Textures().GetUsage(idx) != track.TextureUsesPresent {
-		t.Error("Device tracker should be in Present state after TrackPresentTexture")
 	}
 }
 

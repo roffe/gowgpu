@@ -129,26 +129,6 @@ func (dt *DeviceTracker) RemoveBuffer(index track.TrackerIndex) {
 	dt.buffers.Remove(index)
 }
 
-// TrackPresentTexture records a swapchain texture's transition to Present
-// state. This is called after all user command buffers are processed, to
-// generate the final COLOR_ATTACHMENT_OPTIMAL -> PRESENT_SRC barrier.
-//
-// The trackerIndex must be a valid index for this texture in the device
-// tracker. If the texture is not yet tracked, it will be added.
-//
-// Returns the barrier (from -> Present) or nil if no barrier is needed.
-func (dt *DeviceTracker) TrackPresentTexture(trackerIndex track.TrackerIndex) *track.TexturePendingTransition {
-	dt.mu.Lock()
-	defer dt.mu.Unlock()
-	scope := track.NewTextureUsageScope()
-	_ = scope.SetUsage(trackerIndex, track.TextureUsesPresent)
-	transitions := dt.textures.Merge(scope)
-	if len(transitions) == 0 {
-		return nil
-	}
-	return &transitions[0]
-}
-
 // TextureUsage returns the usage the device tracker last left a texture in,
 // or TextureUsesNone for one it does not track.
 func (dt *DeviceTracker) TextureUsage(index track.TrackerIndex) track.TextureUses {
