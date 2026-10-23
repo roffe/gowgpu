@@ -910,7 +910,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		depthClipMode = MTLDepthClipModeClamp
 	}
 
-	return &RenderPipeline{
+	pipeline := &RenderPipeline{
 		raw:           pipelineState,
 		device:        d,
 		layout:        pipeLayout,
@@ -924,7 +924,14 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		depthBias:       depthBias,
 		depthSlopeScale: depthSlopeScale,
 		depthClamp:      depthClamp,
-	}, nil
+
+		vertexSizes: vertex.sizesBindings,
+		sizesSlot:   vertex.sizesSlot,
+	}
+	if fragment != nil {
+		pipeline.fragmentSizes = fragment.sizesBindings
+	}
+	return pipeline, nil
 }
 
 // newStencilFaceDescriptor builds an MTLStencilDescriptor for one face. The

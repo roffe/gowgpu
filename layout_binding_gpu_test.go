@@ -212,3 +212,52 @@ func TestShaderSkipsLayoutEntries(t *testing.T) {
 		assertNoValidation(t, h)
 	})
 }
+
+// TestArrayLengthInRenderStages reads arrayLength of a storage array bound
+// to the vertex and fragment stages. Metal compiled naga's `_buffer_sizes`
+// argument into render stages but never bound it.
+func TestArrayLengthInRenderStages(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	if h.backend == gputypes.BackendGL {
+		t.Skip("desktop GL declares storage buffers as uniform blocks (README known issues)")
+	}
+	r := layoutRig{t, device}
+	bgl := r.bgl(gputypes.BindGroupLayoutEntry{Binding: 0, Visibility: ShaderStageVertex | ShaderStageFragment,
+		Buffer: &gputypes.BufferBindingLayout{Type: gputypes.BufferBindingTypeReadOnlyStorage}})
+	m := r.module(`
+@group(0) @binding(0) var<storage, read> data: array<vec4<f32>>;
+struct VOut { @builtin(position) pos: vec4<f32>, @location(0) @interpolate(flat) n: u32 };
+@vertex fn vs_main(@builtin(vertex_index) vi: u32) -> VOut {
+	var out: VOut;
+	out.pos = vec4<f32>(f32(i32(vi & 1u) * 4 - 1), f32(i32(vi >> 1u) * 4 - 1), 0.0, 1.0);
+	out.n = arrayLength(&data);
+	return out;
+}
+@fragment fn fs_main(in: VOut) -> @location(0) vec4<f32> {
+	return vec4<f32>(f32(in.n) / 255.0, f32(arrayLength(&data)) / 255.0, data[3].z, 1.0);
+}
+`)
+	pipe, err := device.CreateRenderPipeline(&RenderPipelineDescriptor{
+		Layout:    r.layout(bgl),
+		Vertex:    VertexState{Module: m, EntryPoint: "vs_main"},
+		Primitive: gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList},
+		Fragment: &FragmentState{Module: m, EntryPoint: "fs_main",
+			Targets: []gputypes.ColorTargetState{{Format: gputypes.TextureFormatRGBA8Unorm, WriteMask: gputypes.ColorWriteMaskAll}}},
+	})
+	if err != nil {
+		t.Fatalf("CreateRenderPipeline: %v", err)
+	}
+	defer pipe.Release()
+	data := r.buffer(BufferUsageStorage, [4]float32{})
+	if err := device.Queue().WriteBuffer(data, 48, unsafe.Slice((*byte)(unsafe.Pointer(&[4]float32{0, 0, 1, 0})), 16)); err != nil {
+		t.Fatalf("WriteBuffer: %v", err)
+	}
+	group := r.group(bgl, BindGroupEntry{Binding: 0, Buffer: data, Size: 64})
+	pix := r.draw(func(p *RenderPassEncoder) {
+		p.SetPipeline(pipe)
+		p.SetBindGroup(0, group, nil)
+		p.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1})
+	})
+	expectPixels(t, "arrayLength in the vertex and fragment stage", pix, 4, 4, 255, 255)
+	assertNoValidation(t, h)
+}

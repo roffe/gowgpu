@@ -231,6 +231,12 @@ type RenderPipeline struct {
 	depthBias       float32
 	depthSlopeScale float32
 	depthClamp      float32
+
+	// vertexSizes and fragmentSizes list the bindings whose byte sizes each
+	// stage reads from naga's `_buffer_sizes` argument, which the stages
+	// take at buffer slot sizesSlot, as ComputePipeline's sizesBindings.
+	vertexSizes, fragmentSizes []ir.ResourceBinding
+	sizesSlot                  int
 }
 
 // Destroy releases the render pipeline.

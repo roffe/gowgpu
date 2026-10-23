@@ -12,6 +12,7 @@ import (
 	"sync"
 	"unsafe"
 
+	"github.com/gogpu/naga/ir"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/internal/indirect"
@@ -562,6 +563,9 @@ type RenderPassEncoder struct {
 	indexFormat    gputypes.IndexFormat
 	indexOffset    uint64
 	pending        *renderPassPendingState
+	// sizesStale is set when the pipeline or a bind group changed since the
+	// stages' `_buffer_sizes` were last set.
+	sizesStale bool
 }
 
 const (
@@ -687,6 +691,7 @@ func (e *RenderPassEncoder) SetPipeline(pipeline hal.RenderPipeline) {
 	prev := e.pipeline
 	e.pipeline = p
 	e.currentLayout = p.layout // store for SetBindGroup slot offset lookup
+	e.sizesStale = true
 	if e.raw == 0 {
 		return
 	}
@@ -752,6 +757,7 @@ func (e *RenderPassEncoder) SetBindGroup(index uint32, group hal.BindGroup, offs
 	if !ok || bg == nil {
 		return
 	}
+	e.sizesStale = true
 	if e.pending != nil && index < maxRenderBindGroups && len(offsets) <= maxRenderDynamicOffsets {
 		state := &e.pending.bindGroups[index]
 		state.group = bg
@@ -911,6 +917,44 @@ func (e *RenderPassEncoder) SetStencilReference(ref uint32) {
 	_ = MsgSend(e.raw, Sel("setStencilReferenceValue:"), uintptr(ref))
 }
 
+// beginDraw makes the native encoder and brings the state a draw reads up
+// to date.
+func (e *RenderPassEncoder) beginDraw() bool {
+	if !e.beginNative() {
+		return false
+	}
+	if e.sizesStale && e.pipeline != nil {
+		e.sizesStale = false
+		e.bindBufferSizes(Sel("setVertexBytes:length:atIndex:"), e.pipeline.vertexSizes)
+		e.bindBufferSizes(Sel("setFragmentBytes:length:atIndex:"), e.pipeline.fragmentSizes)
+	}
+	return true
+}
+
+// bindBufferSizes sets a stage's `_buffer_sizes` argument, the byte sizes of
+// the buffers bound at bindings, with the setBytes method sel. See
+// ComputePassEncoder.bindBufferSizes.
+//
+// Reference: Rust wgpu-hal metal/command.rs make_sizes_buffer_update.
+func (e *RenderPassEncoder) bindBufferSizes(sel SEL, bindings []ir.ResourceBinding) {
+	if len(bindings) == 0 || e.pending == nil {
+		return
+	}
+	sizes := make([]uint32, len(bindings))
+	for i, rb := range bindings {
+		if rb.Group >= maxRenderBindGroups || !e.pending.bindGroups[rb.Group].set {
+			continue
+		}
+		for _, entry := range e.pending.bindGroups[rb.Group].group.entries {
+			if res, ok := entry.Resource.(gputypes.BufferBinding); ok && entry.Binding == rb.Binding {
+				sizes[i] = sizeField(bufferBindingSize(res))
+			}
+		}
+	}
+	_ = msgSendSetBytes(e.raw, sel, unsafe.Pointer(&sizes[0]), NSUInteger(4*len(sizes)), NSUInteger(e.pipeline.sizesSlot))
+	runtime.KeepAlive(sizes)
+}
+
 // primitive is what the current pipeline's topology assembles.
 func (e *RenderPassEncoder) primitive() MTLPrimitiveType {
 	if e.pipeline == nil {
@@ -921,7 +965,7 @@ func (e *RenderPassEncoder) primitive() MTLPrimitiveType {
 
 // Draw draws primitives.
 func (e *RenderPassEncoder) Draw(args gputypes.DrawArgs) {
-	if !e.beginNative() {
+	if !e.beginDraw() {
 		return
 	}
 	_ = MsgSend(e.raw, Sel("drawPrimitives:vertexStart:vertexCount:instanceCount:baseInstance:"),
@@ -930,7 +974,7 @@ func (e *RenderPassEncoder) Draw(args gputypes.DrawArgs) {
 
 // DrawIndexed draws indexed primitives.
 func (e *RenderPassEncoder) DrawIndexed(args gputypes.DrawIndexedArgs) {
-	if e.indexBuffer == nil || !e.beginNative() {
+	if e.indexBuffer == nil || !e.beginDraw() {
 		return
 	}
 	indexType := indexFormatToMTL(e.indexFormat)
@@ -956,7 +1000,7 @@ func (e *RenderPassEncoder) DrawIndirect(buffer hal.Buffer, offset uint64, drawC
 	if _, ok := indirect.RecordOffset(offset, 16, drawCount-1); !ok {
 		return
 	}
-	if !e.beginNative() {
+	if !e.beginDraw() {
 		return
 	}
 	for i := uint32(0); i < drawCount; i++ {
@@ -983,7 +1027,7 @@ func (e *RenderPassEncoder) DrawIndexedIndirect(buffer hal.Buffer, offset uint64
 	if e.tryFirstIndexedICB(buf, offset, drawCount) {
 		return
 	}
-	if !e.beginNative() {
+	if !e.beginDraw() {
 		return
 	}
 	indexType := indexFormatToMTL(e.indexFormat)
@@ -1020,7 +1064,7 @@ func (e *RenderPassEncoder) tryFirstIndexedICB(buffer *Buffer, offset uint64, co
 	if !ok {
 		return false
 	}
-	if !e.beginNative() {
+	if !e.beginDraw() {
 		return true
 	}
 	return e.executeIndexedICB(commands, buffer)
@@ -1129,18 +1173,10 @@ func (e *ComputePassEncoder) applyBindGroup(index uint32, bg *BindGroup, offsets
 			_ = MsgSend(e.raw, Sel("setBuffer:offset:atIndex:"), res.Buffer, offset, bufferSlot)
 			bufferSlot++
 
-			// Save the usable byte size for `_buffer_sizes`. A zero
-			// entry size means the rest of the buffer.
-			size := res.Size
-			if size == 0 {
-				if l := uint64(MsgSend(ID(res.Buffer), Sel("length"))); l > res.Offset {
-					size = l - res.Offset
-				}
-			}
 			if e.bindingSizes == nil {
 				e.bindingSizes = make(map[[2]uint32]uint64)
 			}
-			e.bindingSizes[[2]uint32{index, entry.Binding}] = size
+			e.bindingSizes[[2]uint32{index, entry.Binding}] = bufferBindingSize(res)
 
 		case gputypes.TextureViewBinding:
 			_ = MsgSend(e.raw, Sel("setTexture:atIndex:"), res.TextureView, textureSlot)
@@ -1173,17 +1209,29 @@ func (e *ComputePassEncoder) bindBufferSizes() {
 	}
 	sizes := make([]uint32, len(p.sizesBindings))
 	for i, rb := range p.sizesBindings {
-		// The fields are 32-bit, so a binding above 4 GiB reports the
-		// largest value that fits.
-		size := e.bindingSizes[[2]uint32{rb.Group, rb.Binding}]
-		if size > math.MaxUint32 {
-			size = math.MaxUint32
-		}
-		sizes[i] = uint32(size)
+		sizes[i] = sizeField(e.bindingSizes[[2]uint32{rb.Group, rb.Binding}])
 	}
 	_ = msgSendSetBytes(e.raw, Sel("setBytes:length:atIndex:"),
 		unsafe.Pointer(&sizes[0]), NSUInteger(4*len(sizes)), NSUInteger(p.sizesSlot))
 	runtime.KeepAlive(sizes)
+}
+
+// bufferBindingSize is the byte size of a buffer binding as the shader sees
+// it. A zero entry size means the rest of the buffer.
+func bufferBindingSize(res gputypes.BufferBinding) uint64 {
+	if res.Size != 0 {
+		return res.Size
+	}
+	if l := uint64(MsgSend(ID(res.Buffer), Sel("length"))); l > res.Offset {
+		return l - res.Offset
+	}
+	return 0
+}
+
+// sizeField is size as a `_buffer_sizes` field. The fields are 32-bit, so a
+// binding above 4 GiB reports the largest value that fits.
+func sizeField(size uint64) uint32 {
+	return uint32(min(size, math.MaxUint32))
 }
 
 // Dispatch dispatches compute workgroups.
