@@ -235,8 +235,9 @@ func (d *Device) newIndexedICBArena(translator indexedICBTranslator, count uint3
 		return nil, fmt.Errorf("metal: failed to create ICB argument encoder")
 	}
 	defer Release(argumentEncoder)
+	// The argument encoder writes the buffer from the CPU.
 	encodedLength := MsgSendUint(argumentEncoder, Sel("encodedLength"))
-	argumentBuffer := MsgSend(d.raw, Sel("newBufferWithLength:options:"), uintptr(encodedLength), uintptr(MTLResourceStorageModePrivate))
+	argumentBuffer := MsgSend(d.raw, Sel("newBufferWithLength:options:"), uintptr(encodedLength), uintptr(MTLResourceStorageModeShared))
 	if argumentBuffer == 0 {
 		Release(icb)
 		return nil, fmt.Errorf("metal: failed to create ICB argument buffer")
