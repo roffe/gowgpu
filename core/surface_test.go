@@ -1052,3 +1052,66 @@ func TestSurfaceAcquireWaitsWithoutTheLock(t *testing.T) {
 		t.Errorf("Configure after the acquire = %v, want ErrSurfaceConfigureWhileAcquired", err)
 	}
 }
+
+// namedDevice is a noop HAL device with an identity: noop's own are empty
+// structs, which may all share one address.
+type namedDevice struct {
+	noop.Device
+	name string
+}
+
+// oneDeviceSurface is a HAL surface that, like Vulkan's, refuses to replace a
+// configuration with one of another device until it is unconfigured, and
+// records the devices it is unconfigured with.
+type oneDeviceSurface struct {
+	hal.Surface
+	device       hal.Device
+	unconfigured []hal.Device
+}
+
+func (s *oneDeviceSurface) Configure(device hal.Device, config *hal.SurfaceConfiguration) error {
+	if s.device != nil && s.device != device {
+		return errors.New("cannot reconfigure a surface with a different device")
+	}
+	s.device = device
+	return s.Surface.Configure(device, config)
+}
+
+func (s *oneDeviceSurface) Unconfigure(device hal.Device) {
+	s.unconfigured = append(s.unconfigured, device)
+	s.device = nil
+	s.Surface.Unconfigure(device)
+}
+
+// A surface configured on one device and then on another lets the first go
+// before it configures the second, as wgpu-core does, and ends up on the
+// second.
+func TestSurfaceConfigureOntoAnotherDevice(t *testing.T) {
+	surface, _, _ := newTestSurface(t)
+	first := NewDevice(&namedDevice{name: "first"}, nil, 0, gputypes.DefaultLimits(), "first")
+	second := NewDevice(&namedDevice{name: "second"}, nil, 0, gputypes.DefaultLimits(), "second")
+	raw := &oneDeviceSurface{Surface: surface.RawSurface()}
+	surface.SetRawSurface(raw)
+	if err := surface.Configure(first, testSurfaceConfig()); err != nil {
+		t.Fatalf("Configure(first): %v", err)
+	}
+	if err := surface.Configure(second, testSurfaceConfig()); err != nil {
+		t.Fatalf("Configure(second): %v", err)
+	}
+	firstHAL, secondHAL := surface.getHALDevice(first), surface.getHALDevice(second)
+	if len(raw.unconfigured) != 1 || raw.unconfigured[0] != firstHAL {
+		t.Errorf("unconfigured on %v, want once on the first device", raw.unconfigured)
+	}
+	if raw.device != secondHAL {
+		t.Error("the backend is not configured on the second device")
+	}
+	if _, err := surface.AcquireTexture(nil); err != nil {
+		t.Fatalf("AcquireTexture: %v", err)
+	}
+	surface.mu.Lock()
+	onSecond := surface.device == second
+	surface.mu.Unlock()
+	if !onSecond {
+		t.Error("the surface's device is not the second device")
+	}
+}

@@ -50,7 +50,9 @@ func (s *Surface) SetPrepareFrame(fn PrepareFrameFunc) {
 // Configure configures the surface with the given device and settings.
 //
 // The surface must not have an acquired texture. If the surface is already
-// configured, it will be reconfigured with the new settings.
+// configured, it will be reconfigured with the new settings. One configured
+// with another device is unconfigured on that device first, and stays
+// unconfigured if the new configuration fails.
 //
 // After Configure, the surface enters the Configured state and is ready
 // to acquire textures. The configuration is copied; the surface does not
@@ -76,6 +78,18 @@ func (s *Surface) Configure(device *Device, config *hal.SurfaceConfiguration) er
 	halDevice := s.getHALDevice(device)
 	if halDevice == nil {
 		return ErrDeviceDestroyed
+	}
+
+	// A surface configured on another device lets that device's swapchain
+	// go first, as wgpu-core unconfigures before it configures: a backend
+	// cannot replace a swapchain with one of another device.
+	if s.device != nil && s.device != device {
+		if old := s.getHALDevice(s.device); old != nil {
+			s.raw.Unconfigure(old)
+		}
+		s.invalidateAcquisitionLocked()
+		s.device, s.config = nil, nil
+		s.state = SurfaceStateUnconfigured
 	}
 
 	// Keep the caller's configuration private to the surface. Backends may

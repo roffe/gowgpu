@@ -309,8 +309,14 @@ func (s *Surface) Configure(device *Device, config *SurfaceConfiguration) (err e
 	// will be lazily created on the next GetCurrentTexture().
 	s.destroySwapchainTexture()
 
+	if err := s.core.Configure(device.core, halConfig); err != nil {
+		if s.core.State() == core.SurfaceStateUnconfigured {
+			s.device = nil
+		}
+		return err
+	}
 	s.device = device
-	return s.core.Configure(device.core, halConfig)
+	return nil
 }
 
 // Unconfigure removes the surface configuration.
