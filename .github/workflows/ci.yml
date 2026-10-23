@@ -34,7 +34,7 @@ jobs:
         include:
           - { name: android, goos: android, goarch: arm64, cgo: "1", packages: ./... }
           - { name: windows without cgo, goos: windows, goarch: amd64, cgo: "0", packages: ./hal/dx12/... ./hal/gles/... }
-          - { name: the browser, goos: js, goarch: wasm, cgo: "0", packages: . }
+          - { name: the browser, goos: js, goarch: wasm, cgo: "0", packages: . ./examples/browser-compute ./examples/browser-test }
     steps:
       - uses: actions/checkout@v5
         with:
