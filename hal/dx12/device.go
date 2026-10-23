@@ -1709,6 +1709,11 @@ func (d *Device) CreateSampler(desc *hal.SamplerDescriptor) (hal.Sampler, error)
 		MinLOD:         desc.LodMinClamp,
 		MaxLOD:         desc.LodMaxClamp,
 	}
+	// A LodMaxClamp left at 0 is WebGPU's default, 32, as the other HALs
+	// take it: D3D12 would clamp every lookup to the base level.
+	if samplerDesc.MaxLOD == 0 {
+		samplerDesc.MaxLOD = 32
+	}
 
 	// Clamp anisotropy
 	if samplerDesc.MaxAnisotropy == 0 {

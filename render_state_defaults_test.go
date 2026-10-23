@@ -172,3 +172,108 @@ func TestStencilReferenceStartsAtZeroEachPass(t *testing.T) {
 	expectPixels(t, "draw with the reference a new pass starts with", readback(t, staging), 0, 255, 0, 255)
 	assertNoValidation(t, h)
 }
+
+const sampleLevelOneShader = `
+@group(0) @binding(0) var t: texture_2d<f32>;
+@group(0) @binding(1) var s: sampler;
+@vertex fn vs_main(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
+	return vec4<f32>(f32(i32(vi & 1u) * 4 - 1), f32(i32(vi >> 1u) * 4 - 1), 0.5, 1.0);
+}
+@fragment fn fs_main() -> @location(0) vec4<f32> {
+	return textureSampleLevel(t, s, vec2<f32>(0.5, 0.5), 1.0);
+}
+`
+
+// TestSamplerZeroLodMaxClampDoesNotClamp samples level 1 of a red-over-green
+// texture through a sampler with LodMaxClamp left at 0, WebGPU's default
+// of 32 in Go, which reaches level 1.
+func TestSamplerZeroLodMaxClampDoesNotClamp(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	tex, err := device.CreateTexture(&TextureDescriptor{
+		Label:         "two-levels",
+		Size:          Extent3D{Width: 4, Height: 4, DepthOrArrayLayers: 1},
+		MipLevelCount: 2,
+		SampleCount:   1,
+		Dimension:     TextureDimension2D,
+		Format:        TextureFormatRGBA8Unorm,
+		Usage:         TextureUsageTextureBinding | TextureUsageCopyDst,
+	})
+	if err != nil {
+		t.Fatalf("CreateTexture: %v", err)
+	}
+	defer tex.Release()
+	for level, c := range [][4]byte{{255, 0, 0, 255}, {0, 255, 0, 255}} {
+		side := uint32(4 >> level)
+		data := make([]byte, 0, side*side*4)
+		for range side * side {
+			data = append(data, c[:]...)
+		}
+		if err := device.Queue().WriteTexture(&ImageCopyTexture{Texture: tex, MipLevel: uint32(level)}, data,
+			&ImageDataLayout{BytesPerRow: side * 4, RowsPerImage: side}, &Extent3D{Width: side, Height: side, DepthOrArrayLayers: 1}); err != nil {
+			t.Fatalf("WriteTexture level %d: %v", level, err)
+		}
+	}
+	view, err := device.CreateTextureView(tex, nil)
+	if err != nil {
+		t.Fatalf("CreateTextureView: %v", err)
+	}
+	defer view.Release()
+	sampler, err := device.CreateSampler(&SamplerDescriptor{})
+	if err != nil {
+		t.Fatalf("CreateSampler: %v", err)
+	}
+	defer sampler.Release()
+
+	layout, err := device.CreateBindGroupLayout(&BindGroupLayoutDescriptor{Entries: []gputypes.BindGroupLayoutEntry{
+		{Binding: 0, Visibility: ShaderStageFragment, Texture: &gputypes.TextureBindingLayout{SampleType: gputypes.TextureSampleTypeFloat, ViewDimension: gputypes.TextureViewDimension2D}},
+		{Binding: 1, Visibility: ShaderStageFragment, Sampler: &gputypes.SamplerBindingLayout{Type: gputypes.SamplerBindingTypeFiltering}},
+	}})
+	if err != nil {
+		t.Fatalf("CreateBindGroupLayout: %v", err)
+	}
+	defer layout.Release()
+	pl, err := device.CreatePipelineLayout(&PipelineLayoutDescriptor{BindGroupLayouts: []*BindGroupLayout{layout}})
+	if err != nil {
+		t.Fatalf("CreatePipelineLayout: %v", err)
+	}
+	defer pl.Release()
+	module, err := device.CreateShaderModule(&ShaderModuleDescriptor{Label: "sample-level-one", WGSL: sampleLevelOneShader})
+	if err != nil {
+		t.Fatalf("CreateShaderModule: %v", err)
+	}
+	defer module.Release()
+	pipe, err := device.CreateRenderPipeline(&RenderPipelineDescriptor{
+		Label:     "sample-level-one",
+		Layout:    pl,
+		Vertex:    VertexState{Module: module, EntryPoint: "vs_main"},
+		Primitive: gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList},
+		Fragment: &FragmentState{Module: module, EntryPoint: "fs_main",
+			Targets: []gputypes.ColorTargetState{{Format: gputypes.TextureFormatRGBA8Unorm, WriteMask: gputypes.ColorWriteMaskAll}}},
+	})
+	if err != nil {
+		t.Fatalf("CreateRenderPipeline: %v", err)
+	}
+	defer pipe.Release()
+	group, err := device.CreateBindGroup(&BindGroupDescriptor{Layout: layout, Entries: []BindGroupEntry{{Binding: 0, TextureView: view}, {Binding: 1, Sampler: sampler}}})
+	if err != nil {
+		t.Fatalf("CreateBindGroup: %v", err)
+	}
+	defer group.Release()
+
+	target, targetView := pixTexture(t, device, "sample-level-one", TextureUsageRenderAttachment|TextureUsageCopySrc)
+	defer releaseTextureView(target, targetView)
+	staging := readbackBuffer(t, device, "sample-level-one")
+	enc, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	clearPass(t, enc, targetView, gputypes.LoadOpClear, black, func(pass *RenderPassEncoder) {
+		pass.SetPipeline(pipe)
+		pass.SetBindGroup(0, group, nil)
+		pass.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1})
+	})
+	copyOut(enc, target, staging)
+	finishAndSubmit(t, device, enc)
+	expectPixels(t, "level 1", readback(t, staging), 0, 255, 0, 255)
+	assertNoValidation(t, h)
+}
