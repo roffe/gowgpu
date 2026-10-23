@@ -4,6 +4,7 @@ package wgpu
 
 import (
 	"errors"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -166,22 +167,28 @@ func TestRenderBundleEncoderDescriptorToHAL(t *testing.T) {
 }
 
 func TestBeginRenderPassTimestampWrites(t *testing.T) {
-	begin, end := uint32(2), uint32(3)
+	begin, end, past := uint32(2), uint32(3), uint32(4)
 	resource := &testHALResource{}
 	h := &captureDevice{Device: &noop.Device{}}
 	device := newCaptureDevice(h)
 	active := newTestQuerySet(resource, device)
 	released := newTestQuerySet(resource, device)
 	released.released = true
+	occlusion := &QuerySet{core: core.NewQuerySet(resource, device.core, hal.QueryTypeOcclusion, 4, "occlusion"), device: device}
 
 	tests := []struct {
 		name    string
 		writes  *RenderPassTimestampWrites
 		wantNil bool
+		wantErr bool
 	}{
 		{name: "absent", writes: nil, wantNil: true},
-		{name: "nil query set", writes: &RenderPassTimestampWrites{}, wantNil: true},
-		{name: "released query set", writes: &RenderPassTimestampWrites{QuerySet: released}, wantNil: true},
+		{name: "nil query set", writes: &RenderPassTimestampWrites{BeginningOfPassWriteIndex: &begin}, wantErr: true},
+		{name: "released query set", writes: &RenderPassTimestampWrites{QuerySet: released, BeginningOfPassWriteIndex: &begin}, wantErr: true},
+		{name: "occlusion query set", writes: &RenderPassTimestampWrites{QuerySet: occlusion, BeginningOfPassWriteIndex: &begin}, wantErr: true},
+		{name: "no index", writes: &RenderPassTimestampWrites{QuerySet: active}, wantErr: true},
+		{name: "index past the set", writes: &RenderPassTimestampWrites{QuerySet: active, EndOfPassWriteIndex: &past}, wantErr: true},
+		{name: "one index twice", writes: &RenderPassTimestampWrites{QuerySet: active, BeginningOfPassWriteIndex: &begin, EndOfPassWriteIndex: &begin}, wantErr: true},
 		{
 			name: "active query set",
 			writes: &RenderPassTimestampWrites{
@@ -204,6 +211,15 @@ func TestBeginRenderPassTimestampWrites(t *testing.T) {
 				t.Fatal(err)
 			}
 			pass, err := encoder.BeginRenderPass(&RenderPassDescriptor{ColorAttachments: captureAttachments(t, device), TimestampWrites: tt.writes})
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("BeginRenderPass succeeded, want an error")
+				}
+				if command.renderPassDesc != nil {
+					t.Fatal("HAL BeginRenderPass was called")
+				}
+				return
+			}
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -390,7 +406,7 @@ func TestResolveQuerySetTracksItsResources(t *testing.T) {
 	command := &captureCommandEncoder{CommandEncoder: &noop.CommandEncoder{}}
 	device := newCaptureDevice(&captureDevice{Device: &noop.Device{}, commandEncoder: command})
 
-	buffer, err := device.CreateBuffer(&BufferDescriptor{Size: 256, Usage: BufferUsageQueryResolve | BufferUsageCopySrc})
+	buffer, err := device.CreateBuffer(&BufferDescriptor{Size: 512, Usage: BufferUsageQueryResolve | BufferUsageCopySrc})
 	if err != nil {
 		t.Fatalf("CreateBuffer() error = %v", err)
 	}
@@ -400,7 +416,7 @@ func TestResolveQuerySetTracksItsResources(t *testing.T) {
 	}
 	querySet := newTestQuerySet(resource, device)
 	encoder.ResolveQuerySet(querySet, 0, 1, buffer, 0)
-	encoder.ResolveQuerySet(querySet, 1, 1, buffer, 8)
+	encoder.ResolveQuerySet(querySet, 1, 1, buffer, 256)
 	cb, err := encoder.Finish()
 	if err != nil {
 		t.Fatalf("Finish() error = %v", err)
@@ -515,6 +531,53 @@ func TestResolveQuerySetRecordsErrors(t *testing.T) {
 			}
 			if _, err := encoder.Finish(); err == nil {
 				t.Fatal("Finish() error = nil, want deferred ResolveQuerySet error")
+			}
+		})
+	}
+}
+
+// ResolveQuerySet refuses a range outside the query set, a destination
+// without QueryResolve, an offset that is not a multiple of 256 and results
+// past the end of the destination, before the backend sees them.
+func TestResolveQuerySetChecksItsArguments(t *testing.T) {
+	resource := &testHALResource{}
+	for _, tt := range []struct {
+		name         string
+		first, count uint32
+		usage        gputypes.BufferUsage
+		size, offset uint64
+		wantErr      string
+	}{
+		{name: "whole set", count: 4, usage: BufferUsageQueryResolve, size: 32},
+		{name: "last query at an offset", first: 3, count: 1, usage: BufferUsageQueryResolve, size: 264, offset: 256},
+		{name: "first query past the set", first: 4, usage: BufferUsageQueryResolve, size: 32, wantErr: "among the 4"},
+		{name: "range past the set", first: 2, count: 3, usage: BufferUsageQueryResolve, size: 32, wantErr: "among the 4"},
+		{name: "destination without QueryResolve", count: 4, usage: BufferUsageCopyDst, size: 32, wantErr: "QueryResolve"},
+		{name: "offset not a multiple of 256", count: 1, usage: BufferUsageQueryResolve, size: 512, offset: 8, wantErr: "multiple of 256"},
+		{name: "results past the end", count: 2, usage: BufferUsageQueryResolve, size: 264, offset: 256, wantErr: "exceed"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			command := &captureCommandEncoder{CommandEncoder: &noop.CommandEncoder{}}
+			device := newCaptureDevice(&captureDevice{Device: &noop.Device{}, commandEncoder: command})
+			dst, err := device.CreateBuffer(&BufferDescriptor{Size: tt.size, Usage: tt.usage})
+			if err != nil {
+				t.Fatalf("CreateBuffer() error = %v", err)
+			}
+			defer dst.Release()
+			encoder, err := device.CreateCommandEncoder(nil)
+			if err != nil {
+				t.Fatalf("CreateCommandEncoder() error = %v", err)
+			}
+			encoder.ResolveQuerySet(newTestQuerySet(resource, device), tt.first, tt.count, dst, tt.offset)
+			_, err = encoder.Finish()
+			if tt.wantErr == "" {
+				if err != nil || command.resolved != 1 {
+					t.Fatalf("Finish() = %v with %d HAL resolves, want no error and 1", err, command.resolved)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) || command.resolved != 0 {
+				t.Fatalf("Finish() = %v with %d HAL resolves, want an error about %q and none", err, command.resolved, tt.wantErr)
 			}
 		})
 	}

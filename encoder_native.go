@@ -567,6 +567,12 @@ func (e *CommandEncoder) BeginRenderPass(desc *RenderPassDescriptor) (*RenderPas
 	if err := validateRenderPassTextureViews(desc); err != nil {
 		return nil, err
 	}
+	if desc != nil {
+		if err := validateTimestampWrites(desc.TimestampWrites); err != nil {
+			e.setError(err)
+			return nil, err
+		}
+	}
 	trackRenderPassTextureViews(e, desc)
 
 	// Core reads the descriptor and keeps none of it, so it comes from a pool
@@ -1019,6 +1025,38 @@ func validateRenderPassTextureViews(desc *RenderPassDescriptor) error {
 	return nil
 }
 
+// validateTimestampWrites checks a render pass's timestamp writes: a live
+// timestamp query set, at least one index, each inside the set, and not the
+// same one twice.
+//
+// Reference: Dawn CommandEncoder.cpp ValidatePassTimestampWrites
+func validateTimestampWrites(w *RenderPassTimestampWrites) error {
+	if w == nil {
+		return nil
+	}
+	begin, end := w.BeginningOfPassWriteIndex, w.EndOfPassWriteIndex
+	outside := func(i *uint32) bool { return i != nil && *i >= w.QuerySet.Count() }
+	var err error
+	switch {
+	case w.QuerySet == nil:
+		err = fmt.Errorf("no query set")
+	case w.QuerySet.halQuerySet() == nil:
+		err = fmt.Errorf("query set is released: %w", ErrReleased)
+	case w.QuerySet.Type() != QueryTypeTimestamp:
+		err = fmt.Errorf("the query set is not a timestamp query set")
+	case begin == nil && end == nil:
+		err = fmt.Errorf("neither a beginning nor an end of pass index")
+	case outside(begin) || outside(end):
+		err = fmt.Errorf("an index past the %d queries of the set", w.QuerySet.Count())
+	case begin != nil && end != nil && *begin == *end:
+		err = fmt.Errorf("query %d for both the beginning and the end of the pass", *begin)
+	}
+	if err != nil {
+		return fmt.Errorf("wgpu: BeginRenderPass: timestamp writes: %w", err)
+	}
+	return nil
+}
+
 func trackRenderPassTextureViews(e *CommandEncoder, desc *RenderPassDescriptor) {
 	if e == nil || desc == nil {
 		return
@@ -1108,6 +1146,23 @@ func (e *CommandEncoder) ResolveQuerySet(querySet *QuerySet, firstQuery, queryCo
 	halQuerySet := querySet.halQuerySet()
 	if halQuerySet == nil {
 		e.setError(fmt.Errorf("wgpu: CommandEncoder.ResolveQuerySet: query set is released: %w", ErrReleased))
+		return
+	}
+	// WebGPU's resolveQuerySet checks, as Dawn's ValidateQuerySetResolve
+	// makes them.
+	var err error
+	switch count := querySet.Count(); {
+	case firstQuery >= count || queryCount > count-firstQuery:
+		err = fmt.Errorf("queries %d to %d are not all among the %d of the set", firstQuery, uint64(firstQuery)+uint64(queryCount), count)
+	case dst.Usage()&BufferUsageQueryResolve == 0:
+		err = fmt.Errorf("destination buffer missing QueryResolve usage")
+	case dstOffset%256 != 0:
+		err = fmt.Errorf("destination offset %d is not a multiple of 256", dstOffset)
+	case dstOffset > dst.Size() || uint64(queryCount)*8 > dst.Size()-dstOffset:
+		err = fmt.Errorf("%d results at offset %d exceed the destination buffer's %d bytes", queryCount, dstOffset, dst.Size())
+	}
+	if err != nil {
+		e.setError(fmt.Errorf("wgpu: CommandEncoder.ResolveQuerySet: %w", err))
 		return
 	}
 
