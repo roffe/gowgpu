@@ -206,3 +206,34 @@ func TestLimitsFromPropsClamps(t *testing.T) {
 		t.Errorf("MaxStorageBufferBindingSize = %d, want 2^31-1", l.MaxStorageBufferBindingSize)
 	}
 }
+
+// A surface reports as its usages the ones its swapchains take: a snapshot
+// has the usages of the driver's supportedUsageFlags, and swapchainImageUsage
+// takes each of them and refuses every other.
+func TestSurfaceUsagesAreWhatSwapchainsTake(t *testing.T) {
+	color := vk.ImageUsageFlags(vk.ImageUsageColorAttachmentBit)
+	for _, supported := range []vk.ImageUsageFlags{
+		color,
+		color | vk.ImageUsageFlags(vk.ImageUsageTransferSrcBit|vk.ImageUsageTransferDstBit),
+		color | vk.ImageUsageFlags(vk.ImageUsageSampledBit|vk.ImageUsageStorageBit|vk.ImageUsageInputAttachmentBit),
+	} {
+		snapshot, err := makeSurfaceSnapshot(
+			vk.SurfaceCapabilitiesKHR{SupportedUsageFlags: supported, SupportedCompositeAlpha: vk.CompositeAlphaFlagsKHR(vk.CompositeAlphaOpaqueBitKhr)},
+			[]vk.SurfaceFormatKHR{{Format: vk.FormatB8g8r8a8Unorm, ColorSpace: vk.ColorSpaceSrgbNonlinearKhr}},
+			[]vk.PresentModeKHR{vk.PresentModeFifoKhr},
+		)
+		if err != nil {
+			t.Fatalf("makeSurfaceSnapshot: %v", err)
+		}
+		usages := snapshot.public.Usage
+		if got := cloneSurfaceCapabilities(snapshot.public).Usage; got != usages {
+			t.Errorf("cloned capabilities have usages %#x, want %#x", got, usages)
+		}
+		for _, u := range []gputypes.TextureUsage{gputypes.TextureUsageCopySrc, gputypes.TextureUsageCopyDst,
+			gputypes.TextureUsageTextureBinding, gputypes.TextureUsageStorageBinding, gputypes.TextureUsageRenderAttachment} {
+			if _, err := swapchainImageUsage(u, supported); usages.Contains(u) != (err == nil) {
+				t.Errorf("supported flags %#x: usages %#x, swapchainImageUsage(%#x) = %v", supported, usages, u, err)
+			}
+		}
+	}
+}

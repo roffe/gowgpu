@@ -65,6 +65,24 @@ func textureUsageToVk(usage gputypes.TextureUsage) vk.ImageUsageFlags {
 	return flags
 }
 
+// vkImageUsageToTexture is the WebGPU usages of an image with Vulkan usage
+// flags, the inverse of textureUsageToVk.
+func vkImageUsageToTexture(flags vk.ImageUsageFlags) gputypes.TextureUsage {
+	var usage gputypes.TextureUsage
+	for _, u := range []gputypes.TextureUsage{
+		gputypes.TextureUsageCopySrc,
+		gputypes.TextureUsageCopyDst,
+		gputypes.TextureUsageTextureBinding,
+		gputypes.TextureUsageStorageBinding,
+		gputypes.TextureUsageRenderAttachment,
+	} {
+		if bits := textureUsageToVk(u); flags&bits == bits {
+			usage |= u
+		}
+	}
+	return usage
+}
+
 // textureDimensionToVkImageType converts WebGPU texture dimension to Vulkan image type.
 func textureDimensionToVkImageType(dim gputypes.TextureDimension) vk.ImageType {
 	switch dim {

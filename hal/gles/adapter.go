@@ -118,6 +118,7 @@ func (a *Adapter) SurfaceCapabilities(_ hal.Surface) *hal.SurfaceCapabilities {
 			hal.PresentModeImmediate, // VSync off (if supported)
 		},
 		AlphaModes: []gputypes.CompositeAlphaMode{hal.CompositeAlphaModeOpaque},
+		Usage:      surfaceUsage,
 	}
 }
 

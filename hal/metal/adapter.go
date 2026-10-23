@@ -130,6 +130,11 @@ func (a *Adapter) SurfaceCapabilities(surface hal.Surface) *hal.SurfaceCapabilit
 			hal.CompositeAlphaModeOpaque,
 			hal.CompositeAlphaModePremultiplied,
 		},
+		// A layer whose drawables are not framebufferOnly, which Configure
+		// makes for any usage but RenderAttachment, has drawables that
+		// shaders sample and blits copy, as in Dawn.
+		Usage: gputypes.TextureUsageRenderAttachment | gputypes.TextureUsageTextureBinding |
+			gputypes.TextureUsageCopySrc | gputypes.TextureUsageCopyDst,
 	}
 }
 

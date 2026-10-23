@@ -645,6 +645,7 @@ func makeSurfaceSnapshot(capabilities vk.SurfaceCapabilitiesKHR, formats []vk.Su
 		Formats:      make([]gputypes.TextureFormat, 0, len(formats)),
 		PresentModes: make([]gputypes.PresentMode, 0, len(presentModes)),
 		AlphaModes:   alphaModes,
+		Usage:        vkImageUsageToTexture(capabilities.SupportedUsageFlags),
 	}
 	for _, format := range formats {
 		if textureFormat := textureFormatForSurfacePair(format); textureFormat != gputypes.TextureFormatUndefined {
@@ -708,6 +709,7 @@ func cloneSurfaceCapabilities(capabilities hal.SurfaceCapabilities) *hal.Surface
 		Formats:      append([]gputypes.TextureFormat(nil), capabilities.Formats...),
 		PresentModes: append([]gputypes.PresentMode(nil), capabilities.PresentModes...),
 		AlphaModes:   append([]gputypes.CompositeAlphaMode(nil), capabilities.AlphaModes...),
+		Usage:        capabilities.Usage,
 	}
 }
 

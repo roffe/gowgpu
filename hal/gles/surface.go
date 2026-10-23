@@ -13,6 +13,11 @@ import (
 	"github.com/roffe/gowgpu/hal/gles/gl"
 )
 
+// surfaceUsage is all a surface texture can be, as in wgpu-hal: the
+// renderbuffer of the swapchain framebuffer, which present blits to the
+// window, takes no copies, samples or shader writes.
+const surfaceUsage = gputypes.TextureUsageRenderAttachment
+
 // allocateSwapchainFBO creates a persistent swapchain framebuffer.
 // Must be called with the GL context current (caller holds AdapterContext lock).
 func allocateSwapchainFBO(glCtx *gl.Context, format gputypes.TextureFormat, width, height uint32) (fbo, colorRbo uint32, err error) {

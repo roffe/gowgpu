@@ -51,6 +51,8 @@ func (a *Adapter) SurfaceCapabilities(_ hal.Surface) *hal.SurfaceCapabilities {
 			hal.CompositeAlphaModeUnpremultiplied,
 			hal.CompositeAlphaModeInherit,
 		},
+		Usage: gputypes.TextureUsageCopySrc | gputypes.TextureUsageCopyDst | gputypes.TextureUsageTextureBinding |
+			gputypes.TextureUsageStorageBinding | gputypes.TextureUsageRenderAttachment,
 	}
 }
 

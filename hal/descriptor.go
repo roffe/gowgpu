@@ -97,6 +97,10 @@ type SurfaceCapabilities struct {
 
 	// AlphaModes are the supported alpha modes.
 	AlphaModes []gputypes.CompositeAlphaMode
+
+	// Usage is the usages the surface's textures can have, RenderAttachment
+	// among them: what a configuration may ask for.
+	Usage gputypes.TextureUsage
 }
 
 // PresentMode constants re-exported for convenience.

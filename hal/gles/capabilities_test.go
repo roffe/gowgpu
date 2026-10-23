@@ -234,3 +234,11 @@ func TestAdapterCapabilitiesSupported(t *testing.T) {
 		}
 	}
 }
+
+// A GL surface texture is a renderbuffer present blits to the window: a
+// render attachment and nothing else, as in wgpu-hal.
+func TestSurfaceCapabilitiesOfferOnlyRenderAttachment(t *testing.T) {
+	if got := (&Adapter{}).SurfaceCapabilities(nil).Usage; got != gputypes.TextureUsageRenderAttachment {
+		t.Fatalf("surface usages %#x, want RenderAttachment only", got)
+	}
+}

@@ -386,6 +386,12 @@ func (a *Adapter) TextureFormatCapabilities(format gputypes.TextureFormat) hal.T
 	}
 }
 
+// surfaceUsage is the usages of the buffers of a flip model swap chain:
+// render target, copy source and copy destination, as in wgpu-hal. They are
+// made without DXGI_USAGE_SHADER_INPUT, and a view of one has a render
+// target view only.
+const surfaceUsage = gputypes.TextureUsageRenderAttachment | gputypes.TextureUsageCopySrc | gputypes.TextureUsageCopyDst
+
 // SurfaceCapabilities returns surface capabilities.
 func (a *Adapter) SurfaceCapabilities(surface hal.Surface) *hal.SurfaceCapabilities {
 	// Opaque is always supported via CreateSwapChainForHwnd.
@@ -410,6 +416,7 @@ func (a *Adapter) SurfaceCapabilities(surface hal.Surface) *hal.SurfaceCapabilit
 		},
 		PresentModes: a.presentModes(),
 		AlphaModes:   alphaModes,
+		Usage:        surfaceUsage,
 	}
 }
 
@@ -703,6 +710,7 @@ func (a *AdapterLegacy) SurfaceCapabilities(surface hal.Surface) *hal.SurfaceCap
 		},
 		PresentModes: []gputypes.PresentMode{hal.PresentModeFifo},
 		AlphaModes:   alphaModes,
+		Usage:        surfaceUsage,
 	}
 }
 
