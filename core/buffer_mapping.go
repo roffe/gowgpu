@@ -561,11 +561,12 @@ func (b *Buffer) TryRegisterMappedRange(offset, size uint64) *BufferMapError {
 }
 
 // CurrentMapState returns the current state for diagnostics. This uses
-// the mapData mutex if available so callers see a coherent snapshot.
+// the mapData mutex so callers see a coherent snapshot; a buffer without
+// map data has never been mapped.
 func (b *Buffer) CurrentMapState() BufferMapState {
 	md := b.loadMapData()
 	if md == nil {
-		return b.mapState
+		return BufferMapStateIdle
 	}
 	md.mu.Lock()
 	s := b.mapState

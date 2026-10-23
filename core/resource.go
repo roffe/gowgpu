@@ -818,9 +818,11 @@ func (b *Buffer) MapState() BufferMapState {
 }
 
 // SetMapState updates the mapping state of the buffer.
-// Caller must hold appropriate synchronization (device snatch lock).
 func (b *Buffer) SetMapState(state BufferMapState) {
+	md := b.ensureMapData()
+	md.mu.Lock()
 	b.mapState = state
+	md.mu.Unlock()
 }
 
 // TrackingData returns the tracking data for this buffer.

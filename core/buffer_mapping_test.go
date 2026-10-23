@@ -198,6 +198,25 @@ func TestMapWaiter_ConcurrentWait(t *testing.T) {
 	}
 }
 
+// A buffer's map state read while its first map begins on another
+// goroutine is read under the map lock.
+func TestCurrentMapState_FirstMapConcurrent(t *testing.T) {
+	device := NewDevice(&mockHALDevice{}, &Adapter{}, gputypes.Features(0), gputypes.DefaultLimits(), "MapState")
+	buf := NewBuffer(mockBuffer{}, device, gputypes.BufferUsageMapRead, 256, "buf")
+	var begun sync.WaitGroup
+	begun.Go(func() {
+		if err := buf.BeginMap(MapModeInternalRead, 0, 256); err != nil {
+			t.Errorf("BeginMap: %v", err)
+		}
+	})
+	for range 100 {
+		if s := buf.CurrentMapState(); s != BufferMapStateIdle && s != BufferMapStatePending {
+			t.Fatalf("state = %v, want idle or pending", s)
+		}
+	}
+	begun.Wait()
+}
+
 // Done is closed by the request's Signal, whether it was asked for before or
 // after it, and a new request gets a channel of its own.
 func TestMapWaiter_Done(t *testing.T) {
