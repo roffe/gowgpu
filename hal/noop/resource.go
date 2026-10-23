@@ -18,7 +18,7 @@ type Resource struct{}
 func (r *Resource) Destroy() {}
 
 // NativeHandle returns 0 for noop resources (no real handle).
-func (r *Resource) NativeHandle() uintptr { return 0 }
+func (r *Resource) NativeHandle() uint64 { return 0 }
 
 // Buffer implements hal.Buffer with in-memory data storage.
 type Buffer struct {
@@ -28,7 +28,7 @@ type Buffer struct {
 }
 
 // NativeHandle returns 0 for noop buffers.
-func (b *Buffer) NativeHandle() uintptr { return 0 }
+func (b *Buffer) NativeHandle() uint64 { return 0 }
 
 // Texture implements hal.Texture.
 type Texture struct {
@@ -41,7 +41,7 @@ func (t *Texture) AddPendingRef()                      {}
 func (t *Texture) DecPendingRef()                      {}
 
 // NativeHandle returns 0 for noop textures.
-func (t *Texture) NativeHandle() uintptr { return 0 }
+func (t *Texture) NativeHandle() uint64 { return 0 }
 
 // Surface implements hal.Surface for the noop backend.
 type Surface struct {

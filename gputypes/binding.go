@@ -100,7 +100,7 @@ type BindGroupDescriptor struct {
 	// Label is an optional debug label.
 	Label string
 	// Layout is a handle to the bind group layout (implementation-specific).
-	Layout uintptr
+	Layout uint64
 	// Entries are the bind group entries.
 	Entries []BindGroupEntry
 }
@@ -127,7 +127,7 @@ type BindingResource interface {
 // BufferBinding binds a buffer range to a binding slot.
 type BufferBinding struct {
 	// Buffer is a handle to the buffer (implementation-specific).
-	Buffer uintptr
+	Buffer uint64
 	// Offset is the byte offset into the buffer.
 	Offset uint64
 	// Size is the byte size of the binding (0 for entire buffer from offset).
@@ -140,7 +140,7 @@ func (BufferBinding) bindingResource() {}
 // SamplerBinding binds a sampler to a binding slot.
 type SamplerBinding struct {
 	// Sampler is a handle to the sampler (implementation-specific).
-	Sampler uintptr
+	Sampler uint64
 }
 
 // bindingResource implements BindingResource.
@@ -149,7 +149,7 @@ func (SamplerBinding) bindingResource() {}
 // TextureViewBinding binds a texture view to a binding slot.
 type TextureViewBinding struct {
 	// TextureView is a handle to the texture view (implementation-specific).
-	TextureView uintptr
+	TextureView uint64
 	// Format is the format of the texture the view is of, when known. A
 	// backend that keeps a depth texture in another layout than a color one
 	// (Vulkan) writes the descriptor from it.
@@ -164,7 +164,7 @@ type PipelineLayoutDescriptor struct {
 	// Label is an optional debug label.
 	Label string
 	// BindGroupLayouts are handles to bind group layouts (implementation-specific).
-	BindGroupLayouts []uintptr
+	BindGroupLayouts []uint64
 	// PushConstantRanges describe push constant ranges (non-standard extension).
 	PushConstantRanges []PushConstantRange
 }

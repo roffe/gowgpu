@@ -381,9 +381,9 @@ func (st *SurfaceTexture) releaseAcquired() {
 }
 
 // NativeHandle returns the raw MTLTexture handle.
-func (st *SurfaceTexture) NativeHandle() uintptr {
+func (st *SurfaceTexture) NativeHandle() uint64 {
 	if st.texture != nil {
-		return uintptr(st.texture.raw)
+		return uint64(st.texture.raw)
 	}
 	return 0
 }

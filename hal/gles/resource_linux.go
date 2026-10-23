@@ -332,4 +332,4 @@ func (t *SurfaceTexture) DecPendingRef()                      {}
 func (t *SurfaceTexture) Destroy() {}
 
 // NativeHandle returns 0 (OpenGL default framebuffer has no handle).
-func (t *SurfaceTexture) NativeHandle() uintptr { return 0 }
+func (t *SurfaceTexture) NativeHandle() uint64 { return 0 }

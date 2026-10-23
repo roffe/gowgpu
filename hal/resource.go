@@ -18,10 +18,11 @@ type Resource interface {
 // NativeHandle provides access to the underlying API handle.
 // Used for advanced interop scenarios like bind group creation.
 type NativeHandle interface {
-	// NativeHandle returns the raw API handle as uintptr.
+	// NativeHandle returns the raw API handle in 64 bits on every
+	// platform, which a Vulkan handle takes on 32-bit ones too.
 	// For Vulkan: VkBuffer, VkImage, VkSampler, etc.
 	// For Metal: MTLBuffer, MTLTexture, etc.
-	NativeHandle() uintptr
+	NativeHandle() uint64
 }
 
 // Buffer represents a GPU buffer.

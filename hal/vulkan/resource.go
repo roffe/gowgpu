@@ -35,9 +35,9 @@ func (b *Buffer) Handle() vk.Buffer {
 	return b.handle
 }
 
-// NativeHandle returns the raw VkBuffer handle as uintptr.
-func (b *Buffer) NativeHandle() uintptr {
-	return uintptr(b.handle)
+// NativeHandle returns the raw VkBuffer handle.
+func (b *Buffer) NativeHandle() uint64 {
+	return uint64(b.handle)
 }
 
 // Size returns the buffer size in bytes.
@@ -88,9 +88,9 @@ func (t *Texture) Handle() vk.Image {
 	return t.handle
 }
 
-// NativeHandle returns the raw VkImage handle as uintptr.
-func (t *Texture) NativeHandle() uintptr {
-	return uintptr(t.handle)
+// NativeHandle returns the raw VkImage handle.
+func (t *Texture) NativeHandle() uint64 {
+	return uint64(t.handle)
 }
 
 // TextureView implements hal.TextureView for Vulkan.
@@ -118,9 +118,9 @@ func (v *TextureView) Handle() vk.ImageView {
 	return v.handle
 }
 
-// NativeHandle returns the raw VkImageView handle as uintptr.
-func (v *TextureView) NativeHandle() uintptr {
-	return uintptr(v.handle)
+// NativeHandle returns the raw VkImageView handle.
+func (v *TextureView) NativeHandle() uint64 {
+	return uint64(v.handle)
 }
 
 // Sampler implements hal.Sampler for Vulkan.
@@ -142,9 +142,9 @@ func (s *Sampler) Handle() vk.Sampler {
 	return s.handle
 }
 
-// NativeHandle returns the raw VkSampler handle as uintptr.
-func (s *Sampler) NativeHandle() uintptr {
-	return uintptr(s.handle)
+// NativeHandle returns the raw VkSampler handle.
+func (s *Sampler) NativeHandle() uint64 {
+	return uint64(s.handle)
 }
 
 // ShaderModule implements hal.ShaderModule for Vulkan.

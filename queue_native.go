@@ -508,10 +508,10 @@ func (q *Queue) WriteTexture(dst *ImageCopyTexture, data []byte, layout *ImageDa
 // on Metal an IOSurfaceRef, such as a VideoToolbox CVPixelBuffer's, and an
 // id<MTLSharedEvent>, Layout and Slice unused.
 type ExternalImage struct {
-	Image     uintptr
+	Image     uint64
 	Layout    uint32
 	Slice     uint32
-	Semaphore uintptr
+	Semaphore uint64
 	Value     uint64
 }
 
@@ -553,7 +553,7 @@ func (q *Queue) CopyExternalPlanes(src ExternalImage, dsts ...*Texture) (uint32,
 // sharing the device.
 type externalSyncer interface {
 	ExternalSyncFull() bool
-	AddExternalSync(timeline uintptr, wait, signal uint64) error
+	AddExternalSync(timeline, wait, signal uint64) error
 }
 
 var errExternalSyncFull = errors.New("wgpu: the next submit waits for as many external timelines as it can, submit first")
@@ -565,9 +565,9 @@ var errExternalSyncFull = errors.New("wgpu: the next submit waits for as many ex
 // where BytesPerRow must be a multiple of 256, an id<MTLBuffer> and an
 // id<MTLSharedEvent> on Metal.
 type ExternalBuffer struct {
-	Buffer      uintptr
+	Buffer      uint64
 	BytesPerRow uint32
-	Semaphore   uintptr
+	Semaphore   uint64
 	Value       uint64
 }
 

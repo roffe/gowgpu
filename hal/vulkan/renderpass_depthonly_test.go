@@ -17,8 +17,8 @@ import (
 // standing in for a view handed over from another HAL.
 type foreignView struct{}
 
-func (foreignView) Destroy()              {}
-func (foreignView) NativeHandle() uintptr { return 0 }
+func (foreignView) Destroy()             {}
+func (foreignView) NativeHandle() uint64 { return 0 }
 
 // attachmentView builds a TextureView standing in for a render target. Only
 // the fields the render-area helpers read are populated.

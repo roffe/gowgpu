@@ -158,7 +158,7 @@ type RequestAdapterOptions struct {
 	// ForceFallbackAdapter forces the use of a fallback (software) adapter.
 	ForceFallbackAdapter bool
 	// CompatibleSurface is a handle to a surface the adapter must support (0 if none).
-	CompatibleSurface uintptr
+	CompatibleSurface uint64
 }
 
 // MemoryHints provides memory allocation hints for device creation.

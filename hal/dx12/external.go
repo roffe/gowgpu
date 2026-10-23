@@ -31,7 +31,7 @@ func (q *Queue) ExternalSyncFull() bool {
 // AddExternalSync has the next Submit wait for fence, an ID3D12Fence of code
 // sharing the device such as a video decoder's, to reach wait before its
 // command lists run, and signal signal once they complete.
-func (q *Queue) AddExternalSync(fence uintptr, wait, signal uint64) error {
+func (q *Queue) AddExternalSync(fence, wait, signal uint64) error {
 	if err := q.lockOpen(); err != nil {
 		return err
 	}
@@ -69,7 +69,7 @@ func (q *Queue) signalExternal() error {
 // dst whole, its rows bytesPerRow apart, a multiple of 256. The buffer is left
 // in the COMMON state, which the copy promotes it from and it decays back to.
 // A fence the submit waits for orders the copy after the filling.
-func (e *CommandEncoder) CopyExternalBuffer(src uintptr, bytesPerRow uint32, dst hal.Texture) {
+func (e *CommandEncoder) CopyExternalBuffer(src uint64, bytesPerRow uint32, dst hal.Texture) {
 	t, ok := textureOf(dst)
 	if !e.isRecording || src == 0 || !ok {
 		return
@@ -97,7 +97,7 @@ func (e *CommandEncoder) CopyExternalBuffer(src uintptr, bytesPerRow uint32, dst
 // left in the state it is in, layout, which is COMMON for the copy to promote
 // it from and for it to decay back to. A fence the submit waits for orders
 // the copy after the work that made src.
-func (e *CommandEncoder) CopyExternalPlanes(src uintptr, layout, slice uint32, dsts []hal.Texture) uint32 {
+func (e *CommandEncoder) CopyExternalPlanes(src uint64, layout, slice uint32, dsts []hal.Texture) uint32 {
 	if !e.isRecording || src == 0 || len(dsts) > 3 {
 		return layout
 	}

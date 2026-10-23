@@ -227,7 +227,7 @@ func TestQueueWriteTexture(t *testing.T) {
 	}
 
 	validDst := &gputypes.ImageCopyTexture{
-		Texture:  uintptr(textureID.Raw()),
+		Texture:  uint64(textureID.Raw()),
 		MipLevel: 0,
 		Origin:   gputypes.Origin3D{X: 0, Y: 0, Z: 0},
 		Aspect:   gputypes.TextureAspectAll,

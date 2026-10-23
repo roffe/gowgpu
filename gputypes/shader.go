@@ -115,7 +115,7 @@ func (ShaderSourceGLSL) shaderSource() {}
 // ProgrammableStage describes a programmable shader stage in a pipeline.
 type ProgrammableStage struct {
 	// Module is a handle to the shader module (implementation-specific).
-	Module uintptr
+	Module uint64
 	// EntryPoint is the entry point function name.
 	EntryPoint string
 	// Constants are pipeline-overridable constants.

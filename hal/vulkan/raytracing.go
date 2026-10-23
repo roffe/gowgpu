@@ -32,7 +32,7 @@ type AccelerationStructure struct {
 }
 
 // NativeHandle returns the VkAccelerationStructureKHR handle.
-func (a *AccelerationStructure) NativeHandle() uintptr { return uintptr(a.raw) }
+func (a *AccelerationStructure) NativeHandle() uint64 { return uint64(a.raw) }
 
 // Destroy is a no-op — destruction is managed by Device.DestroyAccelerationStructure.
 func (a *AccelerationStructure) Destroy() {}

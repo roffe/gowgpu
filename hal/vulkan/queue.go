@@ -180,7 +180,7 @@ func (q *Queue) ExternalSyncFull() bool {
 // AddExternalSync has the next Submit wait for semaphore, a timeline
 // semaphore of code sharing the device such as a video decoder's, to reach
 // wait before its transfers, and signal signal once it completes.
-func (q *Queue) AddExternalSync(semaphore uintptr, wait, signal uint64) error {
+func (q *Queue) AddExternalSync(semaphore, wait, signal uint64) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	if !q.device.timelineFence.isTimeline {

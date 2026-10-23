@@ -212,7 +212,7 @@ func TestVertexBufferSlotsKeepOffBindGroups(t *testing.T) {
 	groupEntries := make([]gputypes.BindGroupEntry, buffers)
 	for i := range groupEntries {
 		groupEntries[i] = gputypes.BindGroupEntry{Binding: uint32(i),
-			Resource: gputypes.BufferBinding{Buffer: uintptr(color.raw), Size: 16}}
+			Resource: gputypes.BufferBinding{Buffer: color.NativeHandle(), Size: 16}}
 	}
 	group, err := device.CreateBindGroup(&hal.BindGroupDescriptor{Layout: bgl, Entries: groupEntries})
 	if err != nil {

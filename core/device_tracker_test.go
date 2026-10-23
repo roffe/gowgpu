@@ -530,7 +530,7 @@ func (c *noopCB) Destroy() {}
 // noopTexture implements hal.Texture for testing.
 type noopTexture struct{}
 
-func (t *noopTexture) NativeHandle() uintptr               { return 0 }
+func (t *noopTexture) NativeHandle() uint64                { return 0 }
 func (t *noopTexture) Destroy()                            {}
 func (t *noopTexture) CurrentUsage() gputypes.TextureUsage { return 0 }
 func (t *noopTexture) AddPendingRef()                      {}
@@ -539,8 +539,8 @@ func (t *noopTexture) DecPendingRef()                      {}
 // noopHALBuffer implements hal.Buffer for testing.
 type noopHALBuffer struct{}
 
-func (b *noopHALBuffer) NativeHandle() uintptr { return 0 }
-func (b *noopHALBuffer) Destroy()              {}
+func (b *noopHALBuffer) NativeHandle() uint64 { return 0 }
+func (b *noopHALBuffer) Destroy()             {}
 
 // =============================================================================
 // Task #13: Buffer Tracker Integration Tests

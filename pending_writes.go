@@ -831,13 +831,13 @@ func (pw *pendingWrites) endTextureWrite(enc hal.CommandEncoder, owner *Texture,
 // outside gowgpu in layout, layer slice of it, into dsts, plane i into dsts[i]
 // whole, between the barriers a write has, and returns the layout the copy
 // leaves src in. pw.mu is held and usesBatching is set.
-func (pw *pendingWrites) copyExternalLocked(src uintptr, layout, slice uint32, owners []*Texture) (uint32, error) {
+func (pw *pendingWrites) copyExternalLocked(src uint64, layout, slice uint32, owners []*Texture) (uint32, error) {
 	enc, err := pw.activate()
 	if err != nil {
 		return layout, fmt.Errorf("wgpu: pending writes: activate encoder: %w", err)
 	}
 	copier, ok := enc.(interface {
-		CopyExternalPlanes(src uintptr, layout, slice uint32, dsts []hal.Texture) uint32
+		CopyExternalPlanes(src uint64, layout, slice uint32, dsts []hal.Texture) uint32
 	})
 	if !ok {
 		return layout, fmt.Errorf("wgpu: copying from external images is not supported on this backend")
@@ -871,13 +871,13 @@ func (pw *pendingWrites) copyExternalLocked(src uintptr, layout, slice uint32, o
 // copyExternalBufferLocked records a copy of src, a buffer made outside
 // gowgpu with rows bytesPerRow apart, into owner whole, between the barriers
 // a write has. pw.mu is held and usesBatching is set.
-func (pw *pendingWrites) copyExternalBufferLocked(src uintptr, bytesPerRow uint32, owner *Texture) error {
+func (pw *pendingWrites) copyExternalBufferLocked(src uint64, bytesPerRow uint32, owner *Texture) error {
 	enc, err := pw.activate()
 	if err != nil {
 		return fmt.Errorf("wgpu: pending writes: activate encoder: %w", err)
 	}
 	copier, ok := enc.(interface {
-		CopyExternalBuffer(src uintptr, bytesPerRow uint32, dst hal.Texture)
+		CopyExternalBuffer(src uint64, bytesPerRow uint32, dst hal.Texture)
 	})
 	if !ok {
 		return fmt.Errorf("wgpu: copying from external buffers is not supported on this backend")

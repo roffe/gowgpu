@@ -918,18 +918,18 @@ func (e *RenderPassEncoder) applyBindGroup(index uint32, bg *BindGroup, offsets 
 					}
 				}
 			}
-			_ = MsgSend(e.raw, Sel("setVertexBuffer:offset:atIndex:"), res.Buffer, offset, bufferSlot)
-			_ = MsgSend(e.raw, Sel("setFragmentBuffer:offset:atIndex:"), res.Buffer, offset, bufferSlot)
+			_ = MsgSend(e.raw, Sel("setVertexBuffer:offset:atIndex:"), uintptr(res.Buffer), offset, bufferSlot)
+			_ = MsgSend(e.raw, Sel("setFragmentBuffer:offset:atIndex:"), uintptr(res.Buffer), offset, bufferSlot)
 			bufferSlot++
 
 		case gputypes.TextureViewBinding:
-			_ = MsgSend(e.raw, Sel("setVertexTexture:atIndex:"), res.TextureView, textureSlot)
-			_ = MsgSend(e.raw, Sel("setFragmentTexture:atIndex:"), res.TextureView, textureSlot)
+			_ = MsgSend(e.raw, Sel("setVertexTexture:atIndex:"), uintptr(res.TextureView), textureSlot)
+			_ = MsgSend(e.raw, Sel("setFragmentTexture:atIndex:"), uintptr(res.TextureView), textureSlot)
 			textureSlot++
 
 		case gputypes.SamplerBinding:
-			_ = MsgSend(e.raw, Sel("setVertexSamplerState:atIndex:"), res.Sampler, samplerSlot)
-			_ = MsgSend(e.raw, Sel("setFragmentSamplerState:atIndex:"), res.Sampler, samplerSlot)
+			_ = MsgSend(e.raw, Sel("setVertexSamplerState:atIndex:"), uintptr(res.Sampler), samplerSlot)
+			_ = MsgSend(e.raw, Sel("setFragmentSamplerState:atIndex:"), uintptr(res.Sampler), samplerSlot)
 			samplerSlot++
 		}
 	}
@@ -1306,7 +1306,7 @@ func (e *ComputePassEncoder) applyBindGroup(index uint32, bg *BindGroup, offsets
 					}
 				}
 			}
-			_ = MsgSend(e.raw, Sel("setBuffer:offset:atIndex:"), res.Buffer, offset, bufferSlot)
+			_ = MsgSend(e.raw, Sel("setBuffer:offset:atIndex:"), uintptr(res.Buffer), offset, bufferSlot)
 			bufferSlot++
 
 			if e.bindingSizes == nil {
@@ -1315,11 +1315,11 @@ func (e *ComputePassEncoder) applyBindGroup(index uint32, bg *BindGroup, offsets
 			e.bindingSizes[[2]uint32{index, entry.Binding}] = bufferBindingSize(res)
 
 		case gputypes.TextureViewBinding:
-			_ = MsgSend(e.raw, Sel("setTexture:atIndex:"), res.TextureView, textureSlot)
+			_ = MsgSend(e.raw, Sel("setTexture:atIndex:"), uintptr(res.TextureView), textureSlot)
 			textureSlot++
 
 		case gputypes.SamplerBinding:
-			_ = MsgSend(e.raw, Sel("setSamplerState:atIndex:"), res.Sampler, samplerSlot)
+			_ = MsgSend(e.raw, Sel("setSamplerState:atIndex:"), uintptr(res.Sampler), samplerSlot)
 			samplerSlot++
 		}
 	}

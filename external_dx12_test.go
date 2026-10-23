@@ -65,7 +65,7 @@ func TestCopyExternalBufferDX12(t *testing.T) {
 	}
 	t.Cleanup(staging.Release)
 
-	src1 := wgpu.ExternalBuffer{Buffer: uintptr(unsafe.Pointer(src)), BytesPerRow: pitch, Semaphore: uintptr(unsafe.Pointer(fence)), Value: 1}
+	src1 := wgpu.ExternalBuffer{Buffer: uint64(uintptr(unsafe.Pointer(src))), BytesPerRow: pitch, Semaphore: uint64(uintptr(unsafe.Pointer(fence))), Value: 1}
 	if err := device.Queue().CopyExternalBuffer(src1, tex); err != nil {
 		t.Fatalf("CopyExternalBuffer: %v", err)
 	}
@@ -204,7 +204,7 @@ func TestCopyExternalPlanesDX12(t *testing.T) {
 		return tex
 	}
 	luma, chroma := newTex(w, h, gputypes.TextureFormatR8Unorm), newTex(w/2, h/2, gputypes.TextureFormatRG8Unorm)
-	src := wgpu.ExternalImage{Image: uintptr(unsafe.Pointer(nv12)), Semaphore: uintptr(unsafe.Pointer(fence)), Value: 1}
+	src := wgpu.ExternalImage{Image: uint64(uintptr(unsafe.Pointer(nv12))), Semaphore: uint64(uintptr(unsafe.Pointer(fence))), Value: 1}
 	if _, err := device.Queue().CopyExternalPlanes(src, luma, chroma); err != nil {
 		t.Fatalf("CopyExternalPlanes: %v", err)
 	}

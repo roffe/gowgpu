@@ -1242,7 +1242,7 @@ func TestPendingWrites_MaxStagingBufferSizerDefaultWhenNotImplemented(t *testing
 type stubTexture struct{ _ int }
 
 func (*stubTexture) Destroy()                            {}
-func (*stubTexture) NativeHandle() uintptr               { return 0 }
+func (*stubTexture) NativeHandle() uint64                { return 0 }
 func (*stubTexture) CurrentUsage() gputypes.TextureUsage { return 0 }
 func (*stubTexture) AddPendingRef()                      {}
 func (*stubTexture) DecPendingRef()                      {}

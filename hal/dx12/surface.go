@@ -670,9 +670,9 @@ func (t *SurfaceTexture) GetHeight() uint32 {
 }
 
 // NativeHandle returns the raw ID3D12Resource pointer.
-func (t *SurfaceTexture) NativeHandle() uintptr {
+func (t *SurfaceTexture) NativeHandle() uint64 {
 	if t.resource != nil {
-		return uintptr(unsafe.Pointer(t.resource))
+		return uint64(uintptr(unsafe.Pointer(t.resource)))
 	}
 	return 0
 }

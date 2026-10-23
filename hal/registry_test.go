@@ -53,7 +53,7 @@ func (m *mockSurface) Destroy()                            {}
 type mockSurfaceTexture struct{}
 
 func (m *mockSurfaceTexture) Destroy()                            {}
-func (m *mockSurfaceTexture) NativeHandle() uintptr               { return 0 }
+func (m *mockSurfaceTexture) NativeHandle() uint64                { return 0 }
 func (m *mockSurfaceTexture) CurrentUsage() gputypes.TextureUsage { return 0 }
 func (m *mockSurfaceTexture) AddPendingRef()                      {}
 func (m *mockSurfaceTexture) DecPendingRef()                      {}

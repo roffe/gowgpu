@@ -220,7 +220,7 @@ type VertexBufferLayout struct {
 // VertexState describes the vertex stage of a render pipeline.
 type VertexState struct {
 	// Module is a handle to the shader module (implementation-specific).
-	Module uintptr
+	Module uint64
 	// EntryPoint is the vertex shader entry point function name.
 	EntryPoint string
 	// Constants are pipeline-overridable constants.
@@ -232,7 +232,7 @@ type VertexState struct {
 // FragmentState describes the fragment stage of a render pipeline.
 type FragmentState struct {
 	// Module is a handle to the shader module (implementation-specific).
-	Module uintptr
+	Module uint64
 	// EntryPoint is the fragment shader entry point function name.
 	EntryPoint string
 	// Constants are pipeline-overridable constants.

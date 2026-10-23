@@ -18,7 +18,7 @@ type testHALResource struct{}
 
 func (*testHALResource) Destroy() {}
 
-func (*testHALResource) NativeHandle() uintptr { return 0 }
+func (*testHALResource) NativeHandle() uint64 { return 0 }
 
 type captureRenderPass struct {
 	*noop.RenderPassEncoder

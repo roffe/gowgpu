@@ -919,7 +919,7 @@ func (t TextureSampleType) String() string {
 // ImageCopyTexture describes a texture copy source or destination.
 type ImageCopyTexture struct {
 	// Texture is a handle to the texture (implementation-specific).
-	Texture uintptr
+	Texture uint64
 	// MipLevel is the mip level to copy.
 	MipLevel uint32
 	// Origin is the origin of the copy region in the texture.

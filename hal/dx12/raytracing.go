@@ -39,8 +39,8 @@ type AccelerationStructure struct {
 }
 
 // NativeHandle returns the underlying ID3D12Resource pointer.
-func (a *AccelerationStructure) NativeHandle() uintptr {
-	return uintptr(unsafe.Pointer(a.resource))
+func (a *AccelerationStructure) NativeHandle() uint64 {
+	return uint64(uintptr(unsafe.Pointer(a.resource)))
 }
 
 // Destroy releases the committed resource.

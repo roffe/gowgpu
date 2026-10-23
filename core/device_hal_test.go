@@ -48,10 +48,10 @@ func (mockCommandBuffer) Destroy()   {}
 func (mockFence) Destroy()           {}
 
 // NativeHandle interface implementations
-func (mockBuffer) NativeHandle() uintptr      { return 0 }
-func (mockTexture) NativeHandle() uintptr     { return 0 }
-func (mockTextureView) NativeHandle() uintptr { return 0 }
-func (mockSampler) NativeHandle() uintptr     { return 0 }
+func (mockBuffer) NativeHandle() uint64      { return 0 }
+func (mockTexture) NativeHandle() uint64     { return 0 }
+func (mockTextureView) NativeHandle() uint64 { return 0 }
+func (mockSampler) NativeHandle() uint64     { return 0 }
 
 // CurrentUsage for mock texture (no state tracking)
 func (mockTexture) CurrentUsage() gputypes.TextureUsage { return 0 }

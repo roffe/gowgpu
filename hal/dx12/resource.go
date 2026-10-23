@@ -135,8 +135,8 @@ func (b *Buffer) Raw() *d3d12.ID3D12Resource {
 
 // NativeHandle returns an opaque handle to this Buffer struct.
 // DX12 bind groups need the full Go struct to access GPU virtual address and size.
-func (b *Buffer) NativeHandle() uintptr {
-	return uintptr(unsafe.Pointer(b))
+func (b *Buffer) NativeHandle() uint64 {
+	return uint64(uintptr(unsafe.Pointer(b)))
 }
 
 // GPUVirtualAddress returns the GPU virtual address for this buffer.
@@ -332,9 +332,9 @@ func (t *Texture) Raw() *d3d12.ID3D12Resource {
 }
 
 // NativeHandle returns the raw ID3D12Resource pointer.
-func (t *Texture) NativeHandle() uintptr {
+func (t *Texture) NativeHandle() uint64 {
 	if t.raw != nil {
-		return uintptr(unsafe.Pointer(t.raw))
+		return uint64(uintptr(unsafe.Pointer(t.raw)))
 	}
 	return 0
 }
@@ -421,8 +421,8 @@ func (v *TextureView) Texture() *Texture {
 
 // NativeHandle returns an opaque handle to this TextureView struct.
 // DX12 bind groups need the full Go struct to access SRV descriptor handles.
-func (v *TextureView) NativeHandle() uintptr {
-	return uintptr(unsafe.Pointer(v))
+func (v *TextureView) NativeHandle() uint64 {
+	return uint64(uintptr(unsafe.Pointer(v)))
 }
 
 // RTVHandle returns the render target view descriptor handle.
@@ -493,7 +493,7 @@ func (s *Sampler) Handle() d3d12.D3D12_CPU_DESCRIPTOR_HANDLE {
 
 // NativeHandle returns an opaque handle to this Sampler struct.
 // DX12 bind groups need the full Go struct to access the sampler descriptor handle.
-func (s *Sampler) NativeHandle() uintptr { return uintptr(unsafe.Pointer(s)) }
+func (s *Sampler) NativeHandle() uint64 { return uint64(uintptr(unsafe.Pointer(s))) }
 
 // -----------------------------------------------------------------------------
 // Compile-time interface assertions

@@ -38,7 +38,7 @@ type externalCopy struct {
 // the plane's bytes per element. An IOSurface has one layer and no layout, so
 // slice is ignored and layout returned as it is. The copy runs in the next
 // Submit, after the events AddExternalSync was given reach their values.
-func (e *CommandEncoder) CopyExternalPlanes(src uintptr, layout, _ uint32, dsts []hal.Texture) uint32 {
+func (e *CommandEncoder) CopyExternalPlanes(src uint64, layout, _ uint32, dsts []hal.Texture) uint32 {
 	if e.cmdBuffer == 0 || src == 0 || len(dsts) > 3 {
 		return layout
 	}
@@ -53,7 +53,7 @@ func (e *CommandEncoder) CopyExternalPlanes(src uintptr, layout, _ uint32, dsts 
 // CopyExternalBuffer copies src, an id<MTLBuffer> made outside gowgpu that
 // another API fills, into dst whole, its rows bytesPerRow apart. Like
 // CopyExternalPlanes it runs in the next Submit, after the events.
-func (e *CommandEncoder) CopyExternalBuffer(src uintptr, bytesPerRow uint32, dst hal.Texture) {
+func (e *CommandEncoder) CopyExternalBuffer(src uint64, bytesPerRow uint32, dst hal.Texture) {
 	t := metalTexture(dst)
 	if e.cmdBuffer == 0 || src == 0 || bytesPerRow == 0 || t == nil {
 		return
@@ -71,7 +71,7 @@ func (q *Queue) ExternalSyncFull() bool {
 // an id<MTLSharedEvent> of code sharing the device, to reach wait, and signal
 // signal once they are done. The command buffers reading what they copied
 // run after them, as Metal tracks the textures they write.
-func (q *Queue) AddExternalSync(event uintptr, wait, signal uint64) error {
+func (q *Queue) AddExternalSync(event, wait, signal uint64) error {
 	if event == 0 {
 		return fmt.Errorf("metal: AddExternalSync: no event")
 	}

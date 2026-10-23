@@ -36,11 +36,11 @@ func (as *AccelerationStructure) Destroy() {
 }
 
 // NativeHandle returns the raw MTLAccelerationStructure handle.
-func (as *AccelerationStructure) NativeHandle() uintptr {
+func (as *AccelerationStructure) NativeHandle() uint64 {
 	if as == nil {
 		return 0
 	}
-	return uintptr(as.raw)
+	return uint64(as.raw)
 }
 
 // --------------------------------------------------------------------------

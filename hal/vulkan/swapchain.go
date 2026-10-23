@@ -135,9 +135,9 @@ func (t *SwapchainTexture) Destroy() {
 	// Swapchain textures are owned by the swapchain, not destroyed individually
 }
 
-// NativeHandle returns the raw VkImage handle as uintptr.
-func (t *SwapchainTexture) NativeHandle() uintptr {
-	return uintptr(t.handle)
+// NativeHandle returns the raw VkImage handle.
+func (t *SwapchainTexture) NativeHandle() uint64 {
+	return uint64(t.handle)
 }
 
 // swapchainView returns the view of t that desc asks for, of its one mip

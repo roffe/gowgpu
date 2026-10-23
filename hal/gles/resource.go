@@ -49,7 +49,7 @@ func (b *Buffer) Destroy() {
 }
 
 // NativeHandle returns the GL buffer object ID.
-func (b *Buffer) NativeHandle() uintptr { return uintptr(b.id) }
+func (b *Buffer) NativeHandle() uint64 { return uint64(b.id) }
 
 // MapBuffer maps a range of a buffer through its CPU shadow, which a
 // MapRead buffer's mapping reads from GL.
@@ -160,7 +160,7 @@ func (t *Texture) Destroy() {
 }
 
 // NativeHandle returns the GL texture object ID.
-func (t *Texture) NativeHandle() uintptr { return uintptr(t.id) }
+func (t *Texture) NativeHandle() uint64 { return uint64(t.id) }
 
 // TextureView implements hal.TextureView for OpenGL. GL has no view
 // objects: the view's mip range and aspect are set on the texture when it is
@@ -173,15 +173,15 @@ type TextureView struct {
 	mipCount   uint32
 	baseLayer  uint32
 	layerCount uint32
-	handle     uintptr         // NativeHandle, which bind group entries find the view by
+	handle     uint64          // NativeHandle, which bind group entries find the view by
 	isSurface  bool            // true for default framebuffer (surface texture)
 	surfaceTex *SurfaceTexture // non-nil only when isSurface is true
 }
 
 // views are the texture views by their handles.
 var (
-	views       sync.Map // uintptr -> *TextureView
-	lastViewKey atomic.Uintptr
+	views       sync.Map // uint64 -> *TextureView
+	lastViewKey atomic.Uint64
 )
 
 // Destroy forgets the view's handle.
@@ -193,10 +193,10 @@ func (v *TextureView) Destroy() {
 
 // NativeHandle returns the handle that stands for the view in a bind group
 // entry, 0 for a surface view.
-func (v *TextureView) NativeHandle() uintptr { return v.handle }
+func (v *TextureView) NativeHandle() uint64 { return v.handle }
 
 // viewByHandle returns the view a bind group entry names, nil for none.
-func viewByHandle(handle uintptr) *TextureView {
+func viewByHandle(handle uint64) *TextureView {
 	v, _ := views.Load(handle)
 	view, _ := v.(*TextureView)
 	return view
@@ -217,7 +217,7 @@ func (s *Sampler) Destroy() {
 }
 
 // NativeHandle returns the GL sampler object ID.
-func (s *Sampler) NativeHandle() uintptr { return uintptr(s.id) }
+func (s *Sampler) NativeHandle() uint64 { return uint64(s.id) }
 
 // ShaderModule implements hal.ShaderModule for OpenGL.
 type ShaderModule struct {
@@ -713,4 +713,4 @@ func (d *Device) DestroyQuerySet(qs hal.QuerySet) {
 }
 
 // NativeHandle returns 0 (no single native handle for a query set).
-func (q *QuerySet) NativeHandle() uintptr { return 0 }
+func (q *QuerySet) NativeHandle() uint64 { return 0 }

@@ -1077,7 +1077,7 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst hal.Texture, regions []ha
 // which it returns. A semaphore the submit waits for at the transfer stage
 // orders the copy after the work that made src.
 // src is a VkImage, layer slice of it, layout a VkImageLayout.
-func (e *CommandEncoder) CopyExternalPlanes(src uintptr, layout, slice uint32, dsts []hal.Texture) uint32 {
+func (e *CommandEncoder) CopyExternalPlanes(src uint64, layout, slice uint32, dsts []hal.Texture) uint32 {
 	if e.active == 0 || src == 0 || len(dsts) > 3 {
 		return layout
 	}
@@ -1121,7 +1121,7 @@ func (e *CommandEncoder) CopyExternalPlanes(src uintptr, layout, slice uint32, d
 // takes src from the external queue family and hands it back. A semaphore
 // the submit waits for at the transfer stage orders it after the filling.
 // src is a VkBuffer.
-func (e *CommandEncoder) CopyExternalBuffer(src uintptr, bytesPerRow uint32, dst hal.Texture) {
+func (e *CommandEncoder) CopyExternalBuffer(src uint64, bytesPerRow uint32, dst hal.Texture) {
 	t, ok := dst.(*Texture)
 	if e.active == 0 || src == 0 || !ok || t.handle == 0 {
 		return

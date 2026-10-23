@@ -37,7 +37,7 @@ func TestCopyExternalBufferMetal(t *testing.T) {
 	event := newSharedEvent(t, mtl)
 
 	tex := newTexture(t, device, w, h, gputypes.TextureFormatRGBA8Unorm)
-	src := wgpu.ExternalBuffer{Buffer: uintptr(buf), BytesPerRow: pitch, Semaphore: uintptr(event), Value: 1}
+	src := wgpu.ExternalBuffer{Buffer: uint64(buf), BytesPerRow: pitch, Semaphore: uint64(event), Value: 1}
 	if err := device.Queue().CopyExternalBuffer(src, tex); err != nil {
 		t.Fatalf("CopyExternalBuffer: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestCopyExternalPlanesMetal(t *testing.T) {
 
 	luma := newTexture(t, device, w, h, gputypes.TextureFormatR8Unorm)
 	chroma := newTexture(t, device, w/2, h/2, gputypes.TextureFormatRG8Unorm)
-	src := wgpu.ExternalImage{Image: uintptr(surface), Semaphore: uintptr(event), Value: 1}
+	src := wgpu.ExternalImage{Image: uint64(surface), Semaphore: uint64(event), Value: 1}
 	if _, err := device.Queue().CopyExternalPlanes(src, luma, chroma); err != nil {
 		t.Fatalf("CopyExternalPlanes: %v", err)
 	}

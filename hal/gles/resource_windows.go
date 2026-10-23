@@ -153,4 +153,4 @@ func (t *SurfaceTexture) CurrentUsage() gputypes.TextureUsage { return 0 }
 func (t *SurfaceTexture) AddPendingRef()                      {}
 func (t *SurfaceTexture) DecPendingRef()                      {}
 func (t *SurfaceTexture) Destroy()                            {}
-func (t *SurfaceTexture) NativeHandle() uintptr               { return 0 }
+func (t *SurfaceTexture) NativeHandle() uint64                { return 0 }

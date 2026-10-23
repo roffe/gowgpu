@@ -528,9 +528,9 @@ func DefaultDepthStencilState(format TextureFormat) DepthStencilState {
 // RenderPassColorAttachment describes a color attachment for a render pass.
 type RenderPassColorAttachment struct {
 	// View is the texture view to render to (implementation-specific handle).
-	View uintptr
+	View uint64
 	// ResolveTarget is the texture view for multisample resolve (0 if none).
-	ResolveTarget uintptr
+	ResolveTarget uint64
 	// LoadOp describes how to load the attachment.
 	LoadOp LoadOp
 	// StoreOp describes how to store the attachment.
@@ -542,7 +542,7 @@ type RenderPassColorAttachment struct {
 // RenderPassDepthStencilAttachment describes a depth-stencil attachment.
 type RenderPassDepthStencilAttachment struct {
 	// View is the texture view (implementation-specific handle).
-	View uintptr
+	View uint64
 	// DepthLoadOp describes how to load depth.
 	DepthLoadOp LoadOp
 	// DepthStoreOp describes how to store depth.

@@ -9,7 +9,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"unsafe"
 
 	"github.com/roffe/gowgpu/gputypes"
 )
@@ -17,7 +16,7 @@ import (
 func bufferEntry(binding uint32, buf *Buffer) gputypes.BindGroupEntry {
 	return gputypes.BindGroupEntry{
 		Binding:  binding,
-		Resource: gputypes.BufferBinding{Buffer: uintptr(unsafe.Pointer(buf)), Size: buf.size},
+		Resource: gputypes.BufferBinding{Buffer: buf.NativeHandle(), Size: buf.size},
 	}
 }
 
@@ -39,11 +38,11 @@ func TestOrderBindGroupEntries_LayoutOrder(t *testing.T) {
 	}}
 	// Deliberately shuffled.
 	entries := []gputypes.BindGroupEntry{
-		{Binding: 5, Resource: gputypes.SamplerBinding{Sampler: uintptr(unsafe.Pointer(s1))}},
+		{Binding: 5, Resource: gputypes.SamplerBinding{Sampler: s1.NativeHandle()}},
 		bufferEntry(2, ub),
-		{Binding: 4, Resource: gputypes.TextureViewBinding{TextureView: uintptr(unsafe.Pointer(tex))}},
+		{Binding: 4, Resource: gputypes.TextureViewBinding{TextureView: tex.NativeHandle()}},
 		bufferEntry(1, rw),
-		{Binding: 3, Resource: gputypes.SamplerBinding{Sampler: uintptr(unsafe.Pointer(s0))}},
+		{Binding: 3, Resource: gputypes.SamplerBinding{Sampler: s0.NativeHandle()}},
 		bufferEntry(0, ro),
 	}
 
@@ -99,7 +98,7 @@ func TestOrderBindGroupEntries_Errors(t *testing.T) {
 			name:   "texture for buffer slot",
 			layout: []BindGroupLayoutEntry{{Binding: 0, Type: BindingTypeStorageBuffer}},
 			entries: []gputypes.BindGroupEntry{
-				{Binding: 0, Resource: gputypes.TextureViewBinding{TextureView: uintptr(unsafe.Pointer(tex))}},
+				{Binding: 0, Resource: gputypes.TextureViewBinding{TextureView: tex.NativeHandle()}},
 			},
 			want: "expects a buffer",
 		},
