@@ -132,6 +132,10 @@ type pendingWrites struct {
 	destroys, flushedDestroys []heldDestroy
 	refs, flushedRefs         []*core.ResourceRef
 
+	// undo is what the batch changed outside itself, which a batch that does
+	// not run puts back. Submit forgets it once the batch is submitted.
+	undo batchUndo
+
 	// Scratch reused under pw.mu, so a steady stream of flushes allocates
 	// nothing: flush's barrier list, maintain's one element command buffer
 	// list for ResetAll, and the destination lists of completed inflight
@@ -199,6 +203,97 @@ type inflightSubmission struct {
 	// views are the views of the passes that zeroed textures, see
 	// pendingWrites.views.
 	views []hal.TextureView
+}
+
+// batchUndo is what a batch of writes changed outside itself: the device
+// tracker's state of each texture and buffer it moved, from before the
+// batch, and the textures and buffers it took off the lists to zero.
+type batchUndo struct {
+	textures map[track.TrackerIndex]trackedTexture
+	buffers  map[track.TrackerIndex]trackedBuffer
+	zero     []*Texture
+	zeroBufs []*Buffer
+}
+
+type trackedTexture struct {
+	owner   *Texture
+	uses    track.TextureUses
+	tracked bool
+}
+
+type trackedBuffer struct {
+	owner   *Buffer
+	uses    track.BufferUses
+	tracked bool
+}
+
+// saveTexture keeps the device tracker's state of owner, at index idx, from
+// before the batch first changes it. pw.mu is held.
+func (pw *pendingWrites) saveTexture(owner *Texture, idx track.TrackerIndex) {
+	if _, saved := pw.undo.textures[idx]; saved {
+		return
+	}
+	if pw.undo.textures == nil {
+		pw.undo.textures = make(map[track.TrackerIndex]trackedTexture)
+	}
+	uses, tracked := pw.tracker.TextureState(idx)
+	pw.undo.textures[idx] = trackedTexture{owner: owner, uses: uses, tracked: tracked}
+}
+
+// saveBuffer is saveTexture for a buffer.
+func (pw *pendingWrites) saveBuffer(owner *Buffer, idx track.TrackerIndex) {
+	if _, saved := pw.undo.buffers[idx]; saved {
+		return
+	}
+	if pw.undo.buffers == nil {
+		pw.undo.buffers = make(map[track.TrackerIndex]trackedBuffer)
+	}
+	uses, tracked := pw.tracker.BufferState(idx)
+	pw.undo.buffers[idx] = trackedBuffer{owner: owner, uses: uses, tracked: tracked}
+}
+
+// rollback puts back what a batch that does not run changed outside itself:
+// the tracker states of the textures and buffers that still have their
+// index, and the zeroing of the ones not released since. pw.mu is held.
+func (pw *pendingWrites) rollback() {
+	for idx, t := range pw.undo.textures {
+		if cur, ok := pw.trackedIndex(t.owner); ok && cur == idx {
+			pw.tracker.RestoreTexture(idx, t.uses, t.tracked)
+		}
+	}
+	for idx, b := range pw.undo.buffers {
+		if cur, ok := pw.trackedBufferIndex(b.owner); ok && cur == idx {
+			pw.tracker.RestoreBuffer(idx, b.uses, b.tracked)
+		}
+	}
+	for _, t := range pw.undo.zero {
+		if !t.released.Load() {
+			if pw.zero == nil {
+				pw.zero = make(map[*Texture]struct{})
+			}
+			pw.zero[t] = struct{}{}
+		}
+	}
+	for _, b := range pw.undo.zeroBufs {
+		if b.released != nil && !b.released.Load() {
+			if pw.zeroBufs == nil {
+				pw.zeroBufs = make(map[*Buffer]struct{})
+			}
+			pw.zeroBufs[b] = struct{}{}
+		}
+	}
+	pw.forgetUndo()
+}
+
+// forgetUndo drops the undo record of a batch that was submitted. pw.mu is
+// held.
+func (pw *pendingWrites) forgetUndo() {
+	clear(pw.undo.textures)
+	clear(pw.undo.buffers)
+	clear(pw.undo.zero)
+	pw.undo.zero = pw.undo.zero[:0]
+	clear(pw.undo.zeroBufs)
+	pw.undo.zeroBufs = pw.undo.zeroBufs[:0]
 }
 
 // heldDestroy is a texture's HAL destroy held back while the batch being
@@ -302,6 +397,7 @@ func (pw *pendingWrites) writeBufferFor(owner *Buffer, buffer hal.Buffer, usage 
 	}
 	if _, ok := pw.zeroBufs[owner]; ok {
 		delete(pw.zeroBufs, owner)
+		pw.undo.zeroBufs = append(pw.undo.zeroBufs, owner)
 		if offset != 0 || dataLen < owner.Size() {
 			if err := pw.zeroBufferLocked(owner); err != nil {
 				return err
@@ -328,6 +424,7 @@ func (pw *pendingWrites) writeBufferFor(owner *Buffer, buffer hal.Buffer, usage 
 	// earlier submits nor races an earlier write, and the next submit's
 	// barriers start from it.
 	if idx, ok := pw.trackedBufferIndex(owner); ok {
+		pw.saveBuffer(owner, idx)
 		if transition, needed := pw.tracker.SetBufferUsage(idx, track.BufferUsesCopyDst); needed {
 			pw.bufBarrier[0] = transition.IntoHAL(buffer)
 			enc.TransitionBuffers(pw.bufBarrier[:])
@@ -431,6 +528,7 @@ func (pw *pendingWrites) zeroBufferLocked(b *Buffer) error {
 	// Nothing has used the buffer: the clear needs no barrier, and the
 	// barriers of the writes and submits after it start from it.
 	if idx, ok := pw.trackedBufferIndex(b); ok {
+		pw.saveBuffer(b, idx)
 		pw.tracker.InsertBuffer(idx, track.BufferUsesCopyDst)
 	}
 	enc.ClearBuffer(raw, 0, halBufferSize(b))
@@ -492,6 +590,7 @@ func (pw *pendingWrites) writeTextureFor(
 
 	if _, ok := pw.zero[owner]; ok {
 		delete(pw.zero, owner)
+		pw.undo.zero = append(pw.undo.zero, owner)
 		if !coversTexture(owner, dst, size) {
 			if err := pw.zeroTextureLocked(owner); err != nil {
 				return err
@@ -693,6 +792,9 @@ func (pw *pendingWrites) endTextureWrite(enc hal.CommandEncoder, owner *Texture,
 	// it from there: a barrier into TextureBinding names a sampled layout
 	// the image has no usage for (VUID-VkImageMemoryBarrier-oldLayout-01211
 	// on Vulkan).
+	if w.tracked {
+		pw.saveTexture(owner, w.idx)
+	}
 	if owner.textureUsage()&gputypes.TextureUsageTextureBinding == 0 {
 		if w.tracked {
 			pw.tracker.InsertTexture(w.idx, track.TextureUsesCopyDst)
@@ -752,7 +854,10 @@ func (pw *pendingWrites) copyExternalLocked(src uintptr, layout, slice uint32, o
 		}
 	}
 	for i, owner := range owners {
-		delete(pw.zero, owner) // the copy fills it, where zeroing at flush would clear it after
+		if _, ok := pw.zero[owner]; ok {
+			delete(pw.zero, owner) // the copy fills it, where zeroing at flush would clear it after
+			pw.undo.zero = append(pw.undo.zero, owner)
+		}
 		dsts[i] = hal.ImageCopyTexture{Texture: raws[i]}
 		writes[i] = pw.beginTextureWrite(enc, owner, &dsts[i])
 	}
@@ -781,7 +886,10 @@ func (pw *pendingWrites) copyExternalBufferLocked(src uintptr, bytesPerRow uint3
 	if raw == nil || owner.coreTexture == nil {
 		return ErrReleased
 	}
-	delete(pw.zero, owner) // the copy fills it, where zeroing at flush would clear it after
+	if _, ok := pw.zero[owner]; ok {
+		delete(pw.zero, owner) // the copy fills it, where zeroing at flush would clear it after
+		pw.undo.zero = append(pw.undo.zero, owner)
+	}
 	dst := hal.ImageCopyTexture{Texture: raw}
 	write := pw.beginTextureWrite(enc, owner, &dst)
 	copier.CopyExternalBuffer(src, bytesPerRow, raw)
@@ -1041,6 +1149,7 @@ func (pw *pendingWrites) zeroTextureLocked(t *Texture) error {
 			// the copies' barriers take the whole texture, so each later one
 			// starts from what the one before left.
 			if idx, ok := pw.trackedIndex(t); ok && !cpu && mip == 0 && z == 0 {
+				pw.saveTexture(t, idx)
 				pw.tracker.InsertTexture(idx, track.TextureUsesUninitialized)
 			}
 			for r := uint32(0); r < blockRows; r += rows {
@@ -1118,6 +1227,7 @@ func (pw *pendingWrites) clearTextureLocked(t *Texture, raw hal.Texture) error {
 		if f.IsDepthStencil() {
 			uses = track.TextureUsesDepthStencilWrite
 		}
+		pw.saveTexture(t, idx)
 		pw.tracker.InsertTexture(idx, uses)
 	}
 	pw.trackDst(t, raw)
@@ -1294,12 +1404,14 @@ func (pw *pendingWrites) flush() (hal.CommandBuffer, hal.CommandEncoder, []hal.T
 	// Textures nothing wrote since they were made are zeroed now, in the
 	// batch that runs ahead of the command buffers that could read them.
 	for t := range pw.zero {
+		pw.undo.zero = append(pw.undo.zero, t)
 		if err := pw.zeroTextureLocked(t); err != nil {
 			Logger().Warn("wgpu: texture keeps its old memory", "err", err)
 		}
 	}
 	clear(pw.zero)
 	for b := range pw.zeroBufs {
+		pw.undo.zeroBufs = append(pw.undo.zeroBufs, b)
 		if err := pw.zeroBufferLocked(b); err != nil {
 			Logger().Warn("wgpu: buffer keeps its old memory", "label", b.Label(), "err", err)
 		}
@@ -1349,6 +1461,7 @@ func (pw *pendingWrites) flush() (hal.CommandBuffer, hal.CommandEncoder, []hal.T
 				})
 				// The device tracker follows the buffer into the read state.
 				if idx, ok := pw.trackedBufferIndex(dst.owner); ok {
+					pw.saveBuffer(dst.owner, idx)
 					pw.tracker.InsertBuffer(idx, bufferReadUses(readUsage))
 				}
 			}
@@ -1446,6 +1559,7 @@ func (pw *pendingWrites) discardRecording() {
 	clear(pw.dstBuffers)
 	clear(pw.dstTextures)
 	pw.clearOwners()
+	pw.rollback()
 }
 
 // cancelFlush releases a batch that was closed but rejected by HAL Submit.
@@ -1471,6 +1585,7 @@ func (pw *pendingWrites) cancelFlush(cmdBuf hal.CommandBuffer, encoder hal.Comma
 	pw.flushedViews = nil
 	dropHeld(pw.flushedDestroys, pw.flushedRefs)
 	pw.flushedDestroys, pw.flushedRefs = nil, nil
+	pw.rollback()
 }
 
 // maintain frees staging buffers and returns encoders to the pool from

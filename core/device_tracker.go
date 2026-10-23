@@ -173,6 +173,44 @@ func (dt *DeviceTracker) RemoveTexture(index track.TrackerIndex) {
 	dt.textures.Remove(index)
 }
 
+// TextureState returns the usage the device tracker holds for a texture and
+// whether it tracks it, for RestoreTexture.
+func (dt *DeviceTracker) TextureState(index track.TrackerIndex) (track.TextureUses, bool) {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	return dt.textures.GetUsage(index), dt.textures.IsTracked(index)
+}
+
+// RestoreTexture puts a texture's state back to what TextureState returned.
+func (dt *DeviceTracker) RestoreTexture(index track.TrackerIndex, usage track.TextureUses, tracked bool) {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	if tracked {
+		dt.textures.InsertSingle(index, usage)
+	} else {
+		dt.textures.Remove(index)
+	}
+}
+
+// BufferState returns the usage the device tracker holds for a buffer and
+// whether it tracks it, for RestoreBuffer.
+func (dt *DeviceTracker) BufferState(index track.TrackerIndex) (track.BufferUses, bool) {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	return dt.buffers.GetUsage(index), dt.buffers.IsTracked(index)
+}
+
+// RestoreBuffer puts a buffer's state back to what BufferState returned.
+func (dt *DeviceTracker) RestoreBuffer(index track.TrackerIndex, usage track.BufferUses, tracked bool) {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	if tracked {
+		dt.buffers.InsertSingle(index, usage)
+	} else {
+		dt.buffers.Remove(index)
+	}
+}
+
 // BarrierCBFromTransitions creates a HAL command buffer containing texture
 // barriers for the given transitions. The caller provides a HAL command
 // encoder (from the encoder pool) and a function to resolve tracker indices

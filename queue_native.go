@@ -211,6 +211,7 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (_ uint64, err error) {
 		}
 		q.pending.flushedViews = nil
 		q.pending.flushedDestroys, q.pending.flushedRefs = nil, nil
+		q.pending.forgetUndo()
 		// Update the staging belt with the actual submission index
 		// (belt.finish() was called during flush() before Submit).
 		if q.pending.belt != nil {
