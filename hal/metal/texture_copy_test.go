@@ -7,6 +7,7 @@ package metal
 
 import (
 	"bytes"
+	"fmt"
 	"math"
 	"testing"
 	"unsafe"
@@ -27,7 +28,7 @@ func TestMetalTextureDataCopyLayoutValidatesCompleteSourceRange(t *testing.T) {
 	layout := hal.ImageDataLayout{Offset: 17, BytesPerRow: bytesPerRow, RowsPerImage: rowsPerImage}
 	size := hal.Extent3D{Width: width, Height: height, DepthOrArrayLayers: depth}
 
-	got, err := validateMetalTextureDataCopyLayout(requiredBytes, gputypes.TextureFormatRGBA8Unorm, layout, size)
+	got, err := validateMetalTextureDataCopyLayout(requiredBytes, gputypes.TextureFormatRGBA8Unorm, gputypes.TextureAspectAll, layout, size)
 	if err != nil {
 		t.Fatalf("exact source range rejected: %v", err)
 	}
@@ -62,7 +63,7 @@ func TestMetalTextureDataCopyLayoutValidatesCompleteSourceRange(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := validateMetalTextureDataCopyLayout(test.dataLength, gputypes.TextureFormatRGBA8Unorm, test.layout, test.size); err == nil {
+			if _, err := validateMetalTextureDataCopyLayout(test.dataLength, gputypes.TextureFormatRGBA8Unorm, gputypes.TextureAspectAll, test.layout, test.size); err == nil {
 				t.Fatal("invalid source range accepted")
 			}
 		})
@@ -110,6 +111,7 @@ func TestMetalTextureDataCopyLayoutUsesCompressedBlockRows(t *testing.T) {
 	layout, err := validateMetalTextureDataCopyLayout(
 		64,
 		gputypes.TextureFormatASTC5x4Unorm,
+		gputypes.TextureAspectAll,
 		hal.ImageDataLayout{},
 		hal.Extent3D{Width: 6, Height: 5, DepthOrArrayLayers: 1},
 	)
@@ -122,12 +124,12 @@ func TestMetalTextureDataCopyLayoutUsesCompressedBlockRows(t *testing.T) {
 }
 
 func TestMetalCopyBytesPerImageUsesCompressedBlockRows(t *testing.T) {
-	got, ok := metalCopyBytesPerImage(gputypes.TextureFormatASTC5x4Unorm, 32, 0, 5)
+	got, ok := metalCopyBytesPerImage(gputypes.TextureFormatASTC5x4Unorm, gputypes.TextureAspectAll, 32, 0, 5)
 	if !ok || got != 64 {
 		t.Fatalf("compressed bytes per image = %d, ok=%t; want 64, true", got, ok)
 	}
 
-	got, ok = metalCopyBytesPerImage(gputypes.TextureFormatRGBA8Unorm, 32, 0, 5)
+	got, ok = metalCopyBytesPerImage(gputypes.TextureFormatRGBA8Unorm, gputypes.TextureAspectAll, 32, 0, 5)
 	if !ok || got != 160 {
 		t.Fatalf("plain bytes per image = %d, ok=%t; want 160, true", got, ok)
 	}
@@ -747,5 +749,154 @@ func TestDepthStencilTexturesArePrivate(t *testing.T) {
 			t.Errorf("%s: storage mode %d, isShared %v; want Private", format, mode, texture.isShared)
 		}
 		texture.Destroy()
+	}
+}
+
+// TestDepthStencilAspectCopies copies the stencil of combined depth-stencil
+// textures, and the depth of Depth32FloatStencil8, in and out through a
+// buffer and Queue.WriteTexture: Metal's blits have to be told the aspect of
+// a combined format, and a copy without RowsPerImage needs its texel size.
+func TestDepthStencilAspectCopies(t *testing.T) {
+	device, queue := newMetalTextureCopyTestDevice(t)
+	for _, test := range []struct {
+		format gputypes.TextureFormat
+		aspect gputypes.TextureAspect
+		texel  int
+	}{
+		{gputypes.TextureFormatDepth24PlusStencil8, gputypes.TextureAspectStencilOnly, 1},
+		{gputypes.TextureFormatDepth32FloatStencil8, gputypes.TextureAspectStencilOnly, 1},
+		{gputypes.TextureFormatDepth32FloatStencil8, gputypes.TextureAspectDepthOnly, 4},
+	} {
+		t.Run(fmt.Sprintf("%s/%d", test.format, test.aspect), func(t *testing.T) {
+			const side, pitch = 4, 256
+			raw, err := device.CreateTexture(&hal.TextureDescriptor{
+				Size:          hal.Extent3D{Width: side, Height: side, DepthOrArrayLayers: 1},
+				MipLevelCount: 1,
+				SampleCount:   1,
+				Dimension:     gputypes.TextureDimension2D,
+				Format:        test.format,
+				Usage:         gputypes.TextureUsageCopySrc | gputypes.TextureUsageCopyDst | gputypes.TextureUsageRenderAttachment,
+			})
+			if err != nil {
+				t.Fatalf("CreateTexture failed: %v", err)
+			}
+			texture := raw.(*Texture)
+			defer texture.Destroy()
+
+			rowBytes := side * test.texel
+			data := make([]byte, pitch*side)
+			for y := range side {
+				for x := 0; x < rowBytes; x += test.texel {
+					v := byte(y*side + x/test.texel + 1)
+					if test.texel == 4 {
+						copy(data[y*pitch+x:], unsafe.Slice((*byte)(unsafe.Pointer(&[]float32{float32(v) / 64}[0])), 4))
+					} else {
+						data[y*pitch+x] = v
+					}
+				}
+			}
+			region := []hal.BufferTextureCopy{{
+				BufferLayout: hal.ImageDataLayout{BytesPerRow: pitch},
+				TextureBase:  hal.ImageCopyTexture{Texture: texture, Aspect: test.aspect},
+				Size:         hal.Extent3D{Width: side, Height: side, DepthOrArrayLayers: 1},
+			}}
+			check := func(what string, got []byte) {
+				t.Helper()
+				for y := range side {
+					row := y * pitch
+					if !bytes.Equal(got[row:row+rowBytes], data[row:row+rowBytes]) {
+						t.Fatalf("%s: row %d = %v, want %v", what, y, got[row:row+rowBytes], data[row:row+rowBytes])
+					}
+				}
+			}
+			readBack := func() []byte {
+				t.Helper()
+				readback := createMetalTextureCopyTestReadback(t, device, uint64(len(data)))
+				defer readback.Destroy()
+				encoder := &CommandEncoder{device: device}
+				if err := encoder.BeginEncoding("aspect readback"); err != nil {
+					t.Fatalf("BeginEncoding failed: %v", err)
+				}
+				encoder.CopyTextureToBuffer(texture, readback, region)
+				submitMetalTextureCopyTestEncoder(t, device, queue, encoder)
+				return append([]byte(nil), unsafe.Slice((*byte)(readback.Contents()), len(data))...)
+			}
+
+			upload := createMetalTextureCopyTestUpload(t, device, 0, data)
+			defer upload.Destroy()
+			encoder := &CommandEncoder{device: device}
+			if err := encoder.BeginEncoding("aspect upload"); err != nil {
+				t.Fatalf("BeginEncoding failed: %v", err)
+			}
+			encoder.CopyBufferToTexture(upload, texture, region)
+			submitMetalTextureCopyTestEncoder(t, device, queue, encoder)
+			check("CopyBufferToTexture", readBack())
+
+			if test.aspect == gputypes.TextureAspectStencilOnly {
+				for i := range data {
+					data[i] ^= 0x5a
+				}
+				if err := queue.WriteTexture(&region[0].TextureBase, data, &region[0].BufferLayout, &region[0].Size); err != nil {
+					t.Fatalf("WriteTexture failed: %v", err)
+				}
+				if err := device.WaitIdle(); err != nil {
+					t.Fatalf("WaitIdle failed: %v", err)
+				}
+				check("WriteTexture", readBack())
+			}
+		})
+	}
+}
+
+// TestCopyBetweenSRGBAndLinearTextures copies RGBA8Unorm texels into an
+// RGBA8UnormSrgb texture, which WebGPU allows and Metal's blit only does
+// between textures of one pixel format.
+func TestCopyBetweenSRGBAndLinearTextures(t *testing.T) {
+	device, queue := newMetalTextureCopyTestDevice(t)
+	const side, pitch = 4, 256
+	create := func(format gputypes.TextureFormat) *Texture {
+		t.Helper()
+		raw, err := device.CreateTexture(&hal.TextureDescriptor{
+			Size:          hal.Extent3D{Width: side, Height: side, DepthOrArrayLayers: 1},
+			MipLevelCount: 1,
+			SampleCount:   1,
+			Dimension:     gputypes.TextureDimension2D,
+			Format:        format,
+			Usage:         gputypes.TextureUsageCopySrc | gputypes.TextureUsageCopyDst,
+		})
+		if err != nil {
+			t.Fatalf("CreateTexture(%s) failed: %v", format, err)
+		}
+		return raw.(*Texture)
+	}
+	src, dst := create(gputypes.TextureFormatRGBA8Unorm), create(gputypes.TextureFormatRGBA8UnormSrgb)
+	defer src.Destroy()
+	defer dst.Destroy()
+
+	data := make([]byte, pitch*side)
+	for i := range data {
+		data[i] = byte(i*7 + 3)
+	}
+	upload := createMetalTextureCopyTestUpload(t, device, 0, data)
+	defer upload.Destroy()
+	readback := createMetalTextureCopyTestReadback(t, device, uint64(len(data)))
+	defer readback.Destroy()
+	layout := hal.ImageDataLayout{BytesPerRow: pitch, RowsPerImage: side}
+	size := hal.Extent3D{Width: side, Height: side, DepthOrArrayLayers: 1}
+	encoder := &CommandEncoder{device: device}
+	if err := encoder.BeginEncoding("srgb copy"); err != nil {
+		t.Fatalf("BeginEncoding failed: %v", err)
+	}
+	encoder.CopyBufferToTexture(upload, src, []hal.BufferTextureCopy{{BufferLayout: layout, TextureBase: hal.ImageCopyTexture{Texture: src}, Size: size}})
+	encoder.CopyTextureToTexture(src, dst, []hal.TextureCopy{{SrcBase: hal.ImageCopyTexture{Texture: src}, DstBase: hal.ImageCopyTexture{Texture: dst}, Size: size}})
+	encoder.CopyTextureToBuffer(dst, readback, []hal.BufferTextureCopy{{BufferLayout: layout, TextureBase: hal.ImageCopyTexture{Texture: dst}, Size: size}})
+	submitMetalTextureCopyTestEncoder(t, device, queue, encoder)
+
+	got := unsafe.Slice((*byte)(readback.Contents()), len(data))
+	for y := range side {
+		row := y * pitch
+		if !bytes.Equal(got[row:row+side*4], data[row:row+side*4]) {
+			t.Fatalf("row %d = %v, want %v", y, got[row:row+side*4], data[row:row+side*4])
+		}
 	}
 }

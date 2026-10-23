@@ -292,13 +292,13 @@ func (q *Queue) WriteTexture(dst *hal.ImageCopyTexture, data []byte, layout *hal
 	if tex == nil || len(data) == 0 || size == nil {
 		return fmt.Errorf("metal: WriteTexture: invalid arguments")
 	}
-	copyLayout, err := validateMetalTextureDataCopyLayout(uint64(len(data)), tex.format, *layout, *size)
+	copyLayout, err := validateMetalTextureDataCopyLayout(uint64(len(data)), tex.format, dst.Aspect, *layout, *size)
 	if err != nil {
 		return fmt.Errorf("metal: WriteTexture: %w", err)
 	}
 	normalizedLayout := *layout
 	normalizedLayout.BytesPerRow = copyLayout.bytesPerRow
-	plan, bytesPerImage, ok := validateMetalBufferTextureCopyPlan(tex.format, tex.dimension, normalizedLayout, dst.Origin, *size)
+	plan, bytesPerImage, ok := validateMetalBufferTextureCopyPlan(tex.format, dst.Aspect, tex.dimension, normalizedLayout, dst.Origin, *size)
 	if !ok || bytesPerImage != copyLayout.bytesPerImage {
 		return fmt.Errorf("metal: WriteTexture: copy address arithmetic overflows")
 	}
@@ -343,7 +343,7 @@ func (q *Queue) WriteTexture(dst *hal.ImageCopyTexture, data []byte, layout *hal
 	for operation := uint32(0); operation < plan.operationCount; operation++ {
 		destination, _ := plan.textureRegion(tex.dimension, dst.Origin, *size, operation)
 		sourceOffset, _ := plan.bufferOffset(layout.Offset, copyLayout.bytesPerImage, operation)
-		msgSendVoid(blitEncoder, Sel("copyFromBuffer:sourceOffset:sourceBytesPerRow:sourceBytesPerImage:sourceSize:toTexture:destinationSlice:destinationLevel:destinationOrigin:"),
+		msgSendVoid(blitEncoder, Sel("copyFromBuffer:sourceOffset:sourceBytesPerRow:sourceBytesPerImage:sourceSize:toTexture:destinationSlice:destinationLevel:destinationOrigin:options:"),
 			argPointer(uintptr(stagingBuffer)),
 			argUint64(sourceOffset),
 			argUint64(strides.bytesPerRow),
@@ -353,6 +353,7 @@ func (q *Queue) WriteTexture(dst *hal.ImageCopyTexture, data []byte, layout *hal
 			argUint64(uint64(destination.slice)),
 			argUint64(uint64(dst.MipLevel)),
 			argStruct(destination.origin, mtlOriginType),
+			argUint64(uint64(metalBlitOption(tex.format, dst.Aspect))),
 		)
 	}
 

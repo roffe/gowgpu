@@ -80,8 +80,11 @@ static void gm_v_pppp3uppp3u(U o, U s, U a, U b, U c, U d, G3u e, U f, U g, U h,
 static void gm_v_ppp3u3uppp3u(U o, U s, U a, U b, U c, G3u d, G3u e, U f, U g, U h, G3u i) {
 	((void (*)(U, U, U, U, U, G3u, G3u, U, U, U, G3u))objc_msgSend)(o, s, a, b, c, d, e, f, g, h, i);
 }
-static void gm_v_ppp3u3upppp(U o, U s, U a, U b, U c, G3u d, G3u e, U f, U g, U h, U i) {
-	((void (*)(U, U, U, U, U, G3u, G3u, U, U, U, U))objc_msgSend)(o, s, a, b, c, d, e, f, g, h, i);
+static void gm_v_pppp3uppp3up(U o, U s, U a, U b, U c, U d, G3u e, U f, U g, U h, G3u i, U j) {
+	((void (*)(U, U, U, U, U, U, G3u, U, U, U, G3u, U))objc_msgSend)(o, s, a, b, c, d, e, f, g, h, i, j);
+}
+static void gm_v_ppp3u3uppppp(U o, U s, U a, U b, U c, G3u d, G3u e, U f, U g, U h, U i, U j) {
+	((void (*)(U, U, U, U, U, G3u, G3u, U, U, U, U, U))objc_msgSend)(o, s, a, b, c, d, e, f, g, h, i, j);
 }
 static void gm_v_6uppppp(U o, U s, G6u a, U b, U c, U d, U e, U f) {
 	((void (*)(U, U, G6u, U, U, U, U, U))objc_msgSend)(o, s, a, b, c, d, e, f);
@@ -385,8 +388,10 @@ func msgSend(obj ID, sel SEL, retType structType, retPtr unsafe.Pointer, args ..
 		C.gm_v_pppp3uppp3u(o, s, a[0].word(), a[1].word(), a[2].word(), a[3].word(), a[4].s3u(), a[5].word(), a[6].word(), a[7].word(), a[8].s3u())
 	case "ppp88ppp8":
 		C.gm_v_ppp3u3uppp3u(o, s, a[0].word(), a[1].word(), a[2].word(), a[3].s3u(), a[4].s3u(), a[5].word(), a[6].word(), a[7].word(), a[8].s3u())
-	case "ppp88pppp":
-		C.gm_v_ppp3u3upppp(o, s, a[0].word(), a[1].word(), a[2].word(), a[3].s3u(), a[4].s3u(), a[5].word(), a[6].word(), a[7].word(), a[8].word())
+	case "pppp8ppp8p":
+		C.gm_v_pppp3uppp3up(o, s, a[0].word(), a[1].word(), a[2].word(), a[3].word(), a[4].s3u(), a[5].word(), a[6].word(), a[7].word(), a[8].s3u(), a[9].word())
+	case "ppp88ppppp":
+		C.gm_v_ppp3u3uppppp(o, s, a[0].word(), a[1].word(), a[2].word(), a[3].s3u(), a[4].s3u(), a[5].word(), a[6].word(), a[7].word(), a[8].word(), a[9].word())
 	case ":ppppp": // MTLRegion, then integers
 		C.gm_v_6uppppp(o, s, a[0].s6u(), a[1].word(), a[2].word(), a[3].word(), a[4].word(), a[5].word())
 	case ":ppbpp": // replaceRegion:mipmapLevel:slice:withBytes:bytesPerRow:bytesPerImage:

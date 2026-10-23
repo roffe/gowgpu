@@ -410,6 +410,15 @@ const (
 	MTLStoreActionUnknown                    MTLStoreAction = 4
 )
 
+// MTLBlitOption selects what a blit between a buffer and a texture copies.
+type MTLBlitOption NSUInteger
+
+const (
+	MTLBlitOptionNone                    MTLBlitOption = 0
+	MTLBlitOptionDepthFromDepthStencil   MTLBlitOption = 1 << 0
+	MTLBlitOptionStencilFromDepthStencil MTLBlitOption = 1 << 1
+)
+
 // MTLCommandBufferStatus represents command buffer status.
 type MTLCommandBufferStatus NSUInteger
 
