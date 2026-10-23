@@ -1,4 +1,4 @@
-//go:build android && (arm64 || amd64)
+//go:build android
 
 // Copyright 2026 The GoGPU Authors
 // SPDX-License-Identifier: MIT
