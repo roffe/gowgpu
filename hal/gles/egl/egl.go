@@ -276,17 +276,20 @@ func HasPlatformWindowSurface() bool {
 
 // CreatePlatformWindowSurface creates a new EGL window surface using the EGL 1.5
 // platform-aware API. Takes void* native window instead of EGLNativeWindowType.
-// On Wayland: nativeWindow is wl_egl_window*. Attribs use EGLAttrib (pointer-sized).
+// On Wayland: nativeWindow is wl_egl_window*. attribs ends with None.
 // Rust wgpu-hal egl.rs:1485 uses this when EGL 1.5 is available.
 // Falls back to CreateWindowSurface when EGL 1.5 is not available.
-func CreatePlatformWindowSurface(dpy EGLDisplay, config EGLConfig, nativeWindow uintptr, attribList *EGLAttrib) EGLSurface {
+func CreatePlatformWindowSurface(dpy EGLDisplay, config EGLConfig, nativeWindow uintptr, attribs []EGLAttrib) EGLSurface {
 	if !hasPlatformWindowSurface {
 		// Fallback: cast to EGLNativeWindowType (works on x86_64 where sizes match).
-		attribs := []EGLInt{None}
-		return CreateWindowSurface(dpy, config, EGLNativeWindowType(nativeWindow), &attribs[0])
+		ints := make([]EGLInt, len(attribs))
+		for i, a := range attribs {
+			ints[i] = EGLInt(a)
+		}
+		return CreateWindowSurface(dpy, config, EGLNativeWindowType(nativeWindow), &ints[0])
 	}
 	var result EGLSurface
-	result = EGLSurface(C.egl_u_uuup(C.uintptr_t(uintptr(symEglCreatePlatformWindowSurface)), C.uintptr_t(dpy), C.uintptr_t(config), C.uintptr_t(nativeWindow), (*C.uint8_t)(unsafe.Pointer(attribList))))
+	result = EGLSurface(C.egl_u_uuup(C.uintptr_t(uintptr(symEglCreatePlatformWindowSurface)), C.uintptr_t(dpy), C.uintptr_t(config), C.uintptr_t(nativeWindow), (*C.uint8_t)(unsafe.Pointer(&attribs[0]))))
 	return result
 }
 

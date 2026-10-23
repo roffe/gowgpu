@@ -100,15 +100,19 @@ func (a *Adapter) TextureFormatCapabilities(format gputypes.TextureFormat) hal.T
 	return queryTextureFormatCapabilities(format, a.caps.Features, a.caps.MaxMSAASamples, a.caps.Extensions)
 }
 
-// SurfaceCapabilities returns surface capabilities.
+// SurfaceCapabilities returns surface capabilities. The sRGB formats need
+// sRGB window surfaces on ES (EGL 1.5 or EGL_KHR_gl_colorspace), where the
+// present blit decodes an sRGB swapchain, as wgpu-hal and Dawn offer them.
 func (a *Adapter) SurfaceCapabilities(_ hal.Surface) *hal.SurfaceCapabilities {
+	formats := []gputypes.TextureFormat{
+		gputypes.TextureFormatBGRA8Unorm,
+		gputypes.TextureFormatRGBA8Unorm,
+	}
+	if !a.caps.IsES || a.ctx != nil && a.ctx.EGL() != nil && a.ctx.EGL().SupportsGLColorspace() {
+		formats = append(formats, gputypes.TextureFormatBGRA8UnormSrgb, gputypes.TextureFormatRGBA8UnormSrgb)
+	}
 	return &hal.SurfaceCapabilities{
-		Formats: []gputypes.TextureFormat{
-			gputypes.TextureFormatBGRA8Unorm,
-			gputypes.TextureFormatRGBA8Unorm,
-			gputypes.TextureFormatBGRA8UnormSrgb,
-			gputypes.TextureFormatRGBA8UnormSrgb,
-		},
+		Formats: formats,
 		PresentModes: []gputypes.PresentMode{
 			hal.PresentModeFifo,      // VSync on
 			hal.PresentModeImmediate, // VSync off (if supported)

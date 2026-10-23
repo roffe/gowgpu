@@ -41,6 +41,7 @@ type Surface struct {
 	// Zero on X11 (where windowHandle is used directly with eglCreateWindowSurface).
 	eglWindow uintptr // wl_egl_window* (0 on X11 or before Configure)
 	isWayland bool    // true if the Context was created for Wayland
+	srgb      bool    // the EGL surface was made with EGL_GL_COLORSPACE_SRGB
 
 	// Swapchain offscreen framebuffer. User render passes that target this
 	// Surface render into swapchainFBO (backed by colorRenderbuffer), not FBO 0.
@@ -83,11 +84,20 @@ func (s *Surface) Configure(_ hal.Device, config *hal.SurfaceConfiguration) erro
 		return fmt.Errorf("gles: surface has no AdapterContext")
 	}
 
+	// On ES an sRGB swapchain goes to an sRGB window surface, as in
+	// wgpu-hal: the present blit decodes the sRGB swapchain, and only an
+	// sRGB window surface encodes it again. Desktop GL blits the bytes as
+	// they are. A format that changes that makes the surface again.
+	srgb := config.Format.IsSrgb() && s.ctx.GL().IsGLES() && s.ctx.EGL().SupportsGLColorspace()
+	if s.eglSurface != 0 && s.srgb != srgb {
+		s.destroyEGLSurface()
+	}
+
 	// Create EGL window surface if not yet created (first Configure call).
 	// On Wayland: need wl_egl_window → eglCreateWindowSurface.
 	// On X11: eglCreateWindowSurface with raw X11 Window.
 	if s.eglSurface == 0 && s.windowHandle != 0 {
-		if err := s.createEGLWindowSurface(config.Width, config.Height); err != nil {
+		if err := s.createEGLWindowSurface(config.Width, config.Height, srgb); err != nil {
 			return fmt.Errorf("gles: failed to create EGL window surface: %w", err)
 		}
 	}
@@ -119,38 +129,71 @@ func (s *Surface) Configure(_ hal.Device, config *hal.SurfaceConfiguration) erro
 	return nil
 }
 
-// createEGLWindowSurface creates the EGL window surface. On Wayland this
-// requires creating a wl_egl_window first via libwayland-egl.so.
-func (s *Surface) createEGLWindowSurface(width, height uint32) error {
+// createEGLWindowSurface creates the EGL window surface, in the sRGB colour
+// space or not. On Wayland this requires creating a wl_egl_window first via
+// libwayland-egl.so.
+func (s *Surface) createEGLWindowSurface(width, height uint32, srgb bool) error {
 	eglCtx := s.ctx.EGL()
 	s.eglDisplay = eglCtx.Display()
 	s.isWayland = eglCtx.WindowKind() == egl.WindowKindWayland
-
-	if s.isWayland {
-		return s.createWaylandEGLSurface(width, height)
+	attribs := []egl.EGLInt{egl.None}
+	if srgb {
+		attribs = []egl.EGLInt{egl.GLColorspaceKHR, egl.GLColorspaceSRGBKHR, egl.None}
 	}
-	return s.createX11EGLSurface() // an ANativeWindow* goes the same way
+
+	create := s.createX11EGLSurface // an ANativeWindow* goes the same way
+	if s.isWayland {
+		create = func(attribs []egl.EGLInt) error { return s.createWaylandEGLSurface(width, height, attribs) }
+	}
+	err := create(attribs)
+	if err != nil && srgb {
+		// The display has sRGB surfaces, but not with this config.
+		hal.Logger().Warn("gles: no sRGB window surface, presenting the sRGB swapchain through a linear one", "err", err)
+		srgb = false
+		err = create([]egl.EGLInt{egl.None})
+	}
+	if err == nil {
+		s.srgb = srgb
+	}
+	return err
+}
+
+// destroyEGLSurface destroys the EGL window surface, keeping the window
+// (and on Wayland the wl_egl_window) for a new one.
+func (s *Surface) destroyEGLSurface() {
+	s.ctx.Lock()
+	s.ctx.ReleaseSurface(s.eglSurface)
+	s.ctx.Unlock()
+	egl.DestroySurface(s.eglDisplay, s.eglSurface)
+	s.eglSurface = 0
+	s.swapIntervalSet = false
 }
 
 // createWaylandEGLSurface creates a wl_egl_window then an EGL window surface.
 // Prefers EGL 1.5 eglCreatePlatformWindowSurface (spec-correct void* native window)
 // with fallback to EGL 1.4 eglCreateWindowSurface.
 // Rust wgpu-hal egl.rs:1479-1491 uses the same preference order.
-func (s *Surface) createWaylandEGLSurface(width, height uint32) error {
+func (s *Surface) createWaylandEGLSurface(width, height uint32, attribs []egl.EGLInt) error {
 	if !egl.InitWaylandEGL() {
 		return fmt.Errorf("libwayland-egl.so not available — cannot create Wayland EGL surface")
 	}
 
-	eglWin := egl.WlEGLWindowCreate(s.windowHandle, int32(width), int32(height))
+	eglWin := s.eglWindow
 	if eglWin == 0 {
-		return fmt.Errorf("wl_egl_window_create failed for wl_surface 0x%x", s.windowHandle)
+		eglWin = egl.WlEGLWindowCreate(s.windowHandle, int32(width), int32(height))
+		if eglWin == 0 {
+			return fmt.Errorf("wl_egl_window_create failed for wl_surface 0x%x", s.windowHandle)
+		}
+		s.eglWindow = eglWin
 	}
-	s.eglWindow = eglWin
 
 	// EGL 1.5 path: eglCreatePlatformWindowSurface takes void* — spec-correct for Wayland.
 	// Falls back to eglCreateWindowSurface internally if EGL 1.5 unavailable.
-	attribs := []egl.EGLAttrib{egl.EGLAttrib(egl.None)}
-	eglSurface := egl.CreatePlatformWindowSurface(s.eglDisplay, s.ctx.EGL().Config(), eglWin, &attribs[0])
+	platformAttribs := make([]egl.EGLAttrib, len(attribs))
+	for i, a := range attribs {
+		platformAttribs[i] = egl.EGLAttrib(a)
+	}
+	eglSurface := egl.CreatePlatformWindowSurface(s.eglDisplay, s.ctx.EGL().Config(), eglWin, platformAttribs)
 	if eglSurface == egl.NoSurface {
 		egl.WlEGLWindowDestroy(eglWin)
 		s.eglWindow = 0
@@ -172,8 +215,7 @@ func (s *Surface) createWaylandEGLSurface(width, height uint32) error {
 }
 
 // createX11EGLSurface creates an EGL window surface directly from an X11 Window.
-func (s *Surface) createX11EGLSurface() error {
-	attribs := []egl.EGLInt{egl.None}
+func (s *Surface) createX11EGLSurface(attribs []egl.EGLInt) error {
 	eglSurface := egl.CreateWindowSurface(s.eglDisplay, s.ctx.EGL().Config(), egl.EGLNativeWindowType(s.windowHandle), &attribs[0])
 	if eglSurface == egl.NoSurface {
 		return fmt.Errorf("eglCreateWindowSurface failed for window 0x%x: error 0x%x", s.windowHandle, egl.GetError())

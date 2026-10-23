@@ -11,6 +11,7 @@ import (
 
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/gowgpu/hal/gles/egl"
 	"github.com/roffe/gowgpu/hal/gles/gl"
 )
 
@@ -181,5 +182,48 @@ func TestMultisampledAttachmentOnES(t *testing.T) {
 	}
 	if [4]byte(px[:4]) != [4]byte{0, 255, 0, 255} {
 		t.Errorf("resolved pixel %v, want green", px[:4])
+	}
+}
+
+// The present blit of an sRGB swapchain to an sRGB EGL surface keeps its
+// bytes on ES, where the blit decodes the sRGB swapchain and only an sRGB
+// destination encodes it again: to a linear window surface a stored 188
+// arrived as 128. A pbuffer stands in for the window.
+func TestSRGBPresentBlitOnES(t *testing.T) {
+	ctx := newTestESAdapterContext(t)
+	t.Cleanup(ctx.Destroy)
+	eglCtx := ctx.EGL()
+	if !eglCtx.SupportsGLColorspace() {
+		t.Skip("no EGL_GL_COLORSPACE on this display")
+	}
+	attribs := []egl.EGLInt{egl.Width, 4, egl.Height, 4, egl.GLColorspaceKHR, egl.GLColorspaceSRGBKHR, egl.None}
+	pb := egl.CreatePbufferSurface(eglCtx.Display(), eglCtx.Config(), &attribs[0])
+	if pb == egl.NoSurface {
+		t.Skipf("no sRGB pbuffer: EGL error %#x", egl.GetError())
+	}
+	t.Cleanup(func() { egl.DestroySurface(eglCtx.Display(), pb) })
+
+	glCtx := ctx.LockForSurface(pb)
+	defer ctx.Unlock()
+	s := &Surface{}
+	if err := s.reconfigureSwapchainFBOWith(glCtx, gputypes.TextureFormatRGBA8UnormSrgb, 4, 4); err != nil {
+		t.Fatalf("swapchain: %v", err)
+	}
+	defer destroySwapchainFBO(glCtx, s.swapchainFBO, s.colorRenderbuffer)
+	glCtx.BindFramebuffer(gl.FRAMEBUFFER, s.swapchainFBO)
+	grey := [4]float32{0.5, 0.5, 0.5, 1}
+	glCtx.ClearBufferfv(gl.COLOR, 0, &grey)
+	var stored, presented [4]byte
+	glCtx.ReadPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, unsafe.Pointer(&stored[0]))
+	glCtx.BindFramebuffer(gl.FRAMEBUFFER, 0)
+
+	s.blitSwapchainToDefaultWith(glCtx)
+	glCtx.BindFramebuffer(gl.READ_FRAMEBUFFER, 0)
+	glCtx.ReadPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, unsafe.Pointer(&presented[0]))
+	if glErr := glCtx.GetError(); glErr != 0 {
+		t.Fatalf("GL error %#x", glErr)
+	}
+	if d := int(presented[0]) - int(stored[0]); d < -1 || d > 1 {
+		t.Errorf("the swapchain held %v and the surface got %v", stored, presented)
 	}
 }

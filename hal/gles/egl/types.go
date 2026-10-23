@@ -199,6 +199,7 @@ const (
 	PlatformAngleDebugLayersEnabled      EGLInt = 0x3451
 	GLColorspaceKHR                      EGLInt = 0x309D
 	GLColorspaceSRGBKHR                  EGLInt = 0x3089
+	GLColorspaceLinearKHR                EGLInt = 0x308A
 )
 
 // EGL constants - Swap behavior

@@ -18,6 +18,8 @@ type Context struct {
 	context      EGLContext
 	pbuffer      EGLSurface
 	windowKind   WindowKind
+	major, minor EGLInt        // the display's EGL version
+	extensions   string        // the display's extensions
 	cfg          ContextConfig // what made the context, for NewShared
 	shared       bool          // made by NewShared: borrows the display
 	displayOwner *DisplayOwner // owns native display connection (X11); closed after eglTerminate
@@ -117,11 +119,9 @@ func NewContext(config ContextConfig) (*Context, error) {
 	// MakeCurrent with EGL_NO_SURFACE. Skip pbuffer creation in that case.
 	// Fallback to 1×1 pbuffer for older drivers.
 	// Matches Rust wgpu-hal egl.rs:735-758.
-	hasSurfaceless := (major > 1 || (major == 1 && minor >= 5))
-	if !hasSurfaceless {
-		displayExts := QueryString(display, Extensions)
-		hasSurfaceless = strings.Contains(displayExts, "EGL_KHR_surfaceless_context")
-	}
+	displayExts := QueryString(display, Extensions)
+	hasSurfaceless := (major > 1 || (major == 1 && minor >= 5)) ||
+		strings.Contains(displayExts, "EGL_KHR_surfaceless_context")
 
 	var pbuffer EGLSurface
 	if hasSurfaceless {
@@ -143,8 +143,27 @@ func NewContext(config ContextConfig) (*Context, error) {
 		cfg:          config,
 		pbuffer:      pbuffer,
 		windowKind:   windowKind,
+		major:        major,
+		minor:        minor,
+		extensions:   displayExts,
 		displayOwner: displayOwner,
 	}, nil
+}
+
+// HasExtension reports whether the context's display has the EGL extension.
+func (c *Context) HasExtension(name string) bool {
+	for _, e := range strings.Fields(c.extensions) {
+		if e == name {
+			return true
+		}
+	}
+	return false
+}
+
+// SupportsGLColorspace reports whether surfaces on the display can be made
+// sRGB, with EGL_GL_COLORSPACE (EGL 1.5 or EGL_KHR_gl_colorspace).
+func (c *Context) SupportsGLColorspace() bool {
+	return c.major > 1 || c.major == 1 && c.minor >= 5 || c.HasExtension("EGL_KHR_gl_colorspace")
 }
 
 func selectWindowKind(requested *WindowKind, detect func() WindowKind) WindowKind {
@@ -349,7 +368,8 @@ func (c *Context) NewShared() (*Context, error) {
 			return nil, fmt.Errorf("eglCreatePbufferSurface (shared) failed: error 0x%x", GetError())
 		}
 	}
-	return &Context{display: c.display, config: c.config, context: ctx, pbuffer: pbuffer, windowKind: c.windowKind, cfg: c.cfg, shared: true}, nil
+	return &Context{display: c.display, config: c.config, context: ctx, pbuffer: pbuffer, windowKind: c.windowKind,
+		major: c.major, minor: c.minor, extensions: c.extensions, cfg: c.cfg, shared: true}, nil
 }
 
 // EGLContext returns the EGL context handle.
