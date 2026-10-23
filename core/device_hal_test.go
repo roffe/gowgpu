@@ -378,3 +378,32 @@ func TestDeviceDestroyFailsPendingMaps(t *testing.T) {
 		t.Errorf("pending map = %v, %v, want done with device lost", done, err)
 	}
 }
+
+// Destroy stops the encoders still recording, whose HAL encoders go with
+// the HAL device, and leaves a finished one alone.
+func TestDeviceDestroyStopsRecordingEncoders(t *testing.T) {
+	device := NewDevice(&mockHALDevice{}, &Adapter{}, gputypes.Features(0), gputypes.DefaultLimits(), "Destroy")
+	live, err := device.CreateCommandEncoder("live")
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	finished, err := device.CreateCommandEncoder("finished")
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	if _, err := finished.Finish(); err != nil {
+		t.Fatalf("Finish: %v", err)
+	}
+
+	device.Destroy()
+
+	if live.RecordingEncoder() != nil || live.RawEncoder() != nil {
+		t.Error("an encoder recording at Destroy still hands out its HAL encoder")
+	}
+	if _, err := live.Finish(); !errors.Is(err, ErrDeviceDestroyed) {
+		t.Errorf("Finish after Destroy = %v, want ErrDeviceDestroyed", err)
+	}
+	if finished.Status() != CommandEncoderStatusFinished {
+		t.Errorf("finished encoder's status = %v after Destroy, want finished", finished.Status())
+	}
+}

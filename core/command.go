@@ -531,8 +531,12 @@ func (d *Device) InitCommandEncoderWithHAL(enc *CoreCommandEncoder, halEncoder h
 // command buffer. Whatever e did before is spent: its command buffer handed
 // its scopes back, its lists were moved out.
 func (e *CoreCommandEncoder) init(d *Device, halEncoder hal.CommandEncoder, label string) {
+	if e.device != nil && e.device != d {
+		e.device.encoders.remove(e)
+	}
 	e.raw.Set(halEncoder)
 	e.device = d
+	d.encoders.add(e)
 	e.mutable = d.scopes.get()
 	e.error = nil
 	e.label = label
@@ -581,6 +585,68 @@ func (e *CoreCommandEncoder) RawEncoder() hal.CommandEncoder {
 		return nil
 	}
 	return *halEncoder
+}
+
+// Discard ends the encoder's recording without a command buffer, throwing
+// away what it recorded.
+func (e *CoreCommandEncoder) Discard() {
+	e.device.encoders.remove(e)
+	if raw := e.RawEncoder(); raw != nil {
+		raw.DiscardEncoding()
+	}
+}
+
+// abandon stops the encoder of a device being destroyed: its HAL encoder
+// goes with the HAL device, so it and an open pass record nothing more,
+// and Finish reports the device destroyed.
+func (e *CoreCommandEncoder) abandon() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.raw.Snatch(ExclusiveSnatchGuard{})
+	e.pass.ended, e.pass.raw = true, nil
+	e.cpass.ended, e.cpass.raw = true, nil
+	e.setError(ErrDeviceDestroyed)
+}
+
+// liveEncoders are the command encoders recording on a device.
+type liveEncoders struct {
+	mu sync.Mutex
+	m  map[*CoreCommandEncoder]struct{}
+}
+
+func (l *liveEncoders) add(e *CoreCommandEncoder) {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	if l.m == nil {
+		l.m = make(map[*CoreCommandEncoder]struct{})
+	}
+	l.m[e] = struct{}{}
+	l.mu.Unlock()
+}
+
+func (l *liveEncoders) remove(e *CoreCommandEncoder) {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	delete(l.m, e)
+	l.mu.Unlock()
+}
+
+// abandonAll abandons every encoder still recording.
+func (l *liveEncoders) abandonAll() {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	live := l.m
+	l.m = nil
+	l.mu.Unlock()
+	for e := range live {
+		e.abandon()
+	}
 }
 
 // Status returns the current encoder status.
@@ -930,6 +996,7 @@ func (e *CoreCommandEncoder) EndComputePass(pass *CoreComputePassEncoder) error 
 func (e *CoreCommandEncoder) Finish() (*CoreCommandBuffer, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	e.device.encoders.remove(e)
 
 	if e.Status() != CommandEncoderStatusRecording {
 		return nil, e.statusError("finish")

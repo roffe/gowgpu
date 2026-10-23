@@ -106,6 +106,10 @@ type Device struct {
 	// mapped. nil for devices made without NewDevice, which cannot map.
 	maps *deviceMapTracker
 
+	// encoders are the command encoders recording on the device, which
+	// Destroy stops: their HAL encoders go with the HAL device.
+	encoders *liveEncoders
+
 	// === Common fields ===
 
 	// Label is a debug label for the device.
@@ -195,6 +199,7 @@ func NewDevice(
 		trackerIndices: NewTrackerIndexAllocators(),
 		destroyQueue:   NewDestroyQueue(),
 		maps:           newDeviceMapTracker(),
+		encoders:       &liveEncoders{},
 		tracker:        NewDeviceTracker(),
 		scopes:         &scopePool{},
 		Label:          label,
@@ -291,6 +296,7 @@ func (d *Device) Destroy() {
 	untrackResource(uintptr(unsafe.Pointer(d))) //nolint:gosec // debug tracking uses pointer as unique ID
 
 	d.failAllMaps(&BufferMapError{Kind: BufferMapErrKindDeviceLost})
+	d.encoders.abandonAll()
 
 	// Flush all deferred resource destructions before destroying the device.
 	// At this point the GPU should be idle (caller should have called WaitIdle

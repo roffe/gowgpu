@@ -317,3 +317,67 @@ func TestDeviceReleaseFailsPendingMaps(t *testing.T) {
 		t.Errorf("Map after Release = %v, want ErrReleased", err)
 	}
 }
+
+// An encoder made before Release records nothing more after it and fails
+// to finish, in a pass or not, instead of recording into the command
+// buffers of the destroyed device.
+func TestDeviceReleaseStopsEncoders(t *testing.T) {
+	inst, adapter, device := newTestDevice(t)
+	defer inst.Release()
+	defer adapter.Release()
+
+	buf, err := device.CreateBuffer(&BufferDescriptor{Label: "released-dst", Size: 4, Usage: BufferUsageCopyDst})
+	if err != nil {
+		t.Fatalf("CreateBuffer: %v", err)
+	}
+	defer buf.Release()
+	src, err := device.CreateBuffer(&BufferDescriptor{Label: "released-src", Size: 4, Usage: BufferUsageCopySrc})
+	if err != nil {
+		t.Fatalf("CreateBuffer: %v", err)
+	}
+	defer src.Release()
+	tex, err := device.CreateTexture(&TextureDescriptor{
+		Size:          Extent3D{Width: 4, Height: 4, DepthOrArrayLayers: 1},
+		MipLevelCount: 1,
+		SampleCount:   1,
+		Dimension:     TextureDimension2D,
+		Format:        TextureFormatRGBA8Unorm,
+		Usage:         TextureUsageRenderAttachment,
+	})
+	if err != nil {
+		t.Fatalf("CreateTexture: %v", err)
+	}
+	defer tex.Release()
+	view, err := device.CreateTextureView(tex, nil)
+	if err != nil {
+		t.Fatalf("CreateTextureView: %v", err)
+	}
+	defer view.Release()
+
+	inPass, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	pass, err := inPass.BeginRenderPass(&RenderPassDescriptor{ColorAttachments: []RenderPassColorAttachment{{
+		View: view, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore,
+	}}})
+	if err != nil {
+		t.Fatalf("BeginRenderPass: %v", err)
+	}
+	copying, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+
+	device.Release()
+
+	pass.SetViewport(gputypes.Viewport{Width: 4, Height: 4, MaxDepth: 1})
+	_ = pass.End()
+	if _, err := inPass.Finish(); err == nil {
+		t.Error("Finish of an encoder in a pass at Release succeeded")
+	}
+	copying.CopyBufferToBuffer(src, 0, buf, 0, 4)
+	if _, err := copying.Finish(); err == nil {
+		t.Error("Finish of an encoder made before Release succeeded")
+	}
+}
