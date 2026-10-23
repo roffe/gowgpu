@@ -1037,11 +1037,10 @@ func (pw *pendingWrites) zeroTextureLocked(t *Texture) error {
 			pw.zeros = make([]byte, n)
 		}
 		for z := range layers {
-			// The tracker knows the texture as a whole, which the copies of
-			// the levels and layers before moved on, while this one is still
-			// as the texture was made, where its first copy starts. A level
-			// of a 3D texture is one subresource, every slice of it.
-			if idx, ok := pw.trackedIndex(t); ok && !cpu && (z == 0 || ct.Dimension() != gputypes.TextureDimension3D) {
+			// The first copy starts from the state the texture was made in;
+			// the copies' barriers take the whole texture, so each later one
+			// starts from what the one before left.
+			if idx, ok := pw.trackedIndex(t); ok && !cpu && mip == 0 && z == 0 {
 				pw.tracker.InsertTexture(idx, track.TextureUsesUninitialized)
 			}
 			for r := uint32(0); r < blockRows; r += rows {
