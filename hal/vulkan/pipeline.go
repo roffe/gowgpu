@@ -189,14 +189,16 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		multisampleState.AlphaToCoverageEnable = vk.Bool32(vk.True)
 	}
 
-	// Depth stencil state
+	// Depth stencil state. The tests are on only where they do anything, as
+	// in wgpu-hal, and what WebGPU leaves unset compares Always and keeps.
 	var depthStencilState *vk.PipelineDepthStencilStateCreateInfo
 	if desc.DepthStencil != nil {
+		depthCompare := orAlways(desc.DepthStencil.DepthCompare)
 		depthStencilState = &vk.PipelineDepthStencilStateCreateInfo{
 			SType:                 vk.StructureTypePipelineDepthStencilStateCreateInfo,
-			DepthTestEnable:       vk.Bool32(vk.True),
+			DepthTestEnable:       boolToVk(depthCompare != gputypes.CompareFunctionAlways || desc.DepthStencil.DepthWriteEnabled),
 			DepthWriteEnable:      boolToVk(desc.DepthStencil.DepthWriteEnabled),
-			DepthCompareOp:        compareFunctionToVk(desc.DepthStencil.DepthCompare),
+			DepthCompareOp:        compareFunctionToVk(depthCompare),
 			DepthBoundsTestEnable: vk.Bool32(vk.False),
 			StencilTestEnable:     vk.Bool32(vk.False),
 		}
@@ -210,7 +212,8 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		}
 
 		// Stencil operations
-		if desc.DepthStencil.StencilReadMask != 0 || desc.DepthStencil.StencilWriteMask != 0 {
+		ds := desc.DepthStencil
+		if (!stencilFaceIgnored(ds.StencilFront) || !stencilFaceIgnored(ds.StencilBack)) && (ds.StencilReadMask != 0 || ds.StencilWriteMask != 0) {
 			depthStencilState.StencilTestEnable = vk.Bool32(vk.True)
 			depthStencilState.Front = stencilFaceStateToVk(desc.DepthStencil.StencilFront)
 			depthStencilState.Front.CompareMask = desc.DepthStencil.StencilReadMask
@@ -487,6 +490,24 @@ func (d *Device) DestroyComputePipeline(pipeline hal.ComputePipeline) {
 }
 
 // Helper functions
+
+// orAlways is fn, or Always where WebGPU left it unset.
+func orAlways(fn gputypes.CompareFunction) gputypes.CompareFunction {
+	if fn == gputypes.CompareFunctionUndefined {
+		return gputypes.CompareFunctionAlways
+	}
+	return fn
+}
+
+// stencilFaceIgnored reports whether face leaves the stencil test as if
+// there were none: it compares Always and keeps the value whatever happens.
+// What WebGPU leaves unset compares Always and keeps.
+func stencilFaceIgnored(face hal.StencilFaceState) bool {
+	keeps := func(op gputypes.StencilOperation) bool {
+		return op == hal.StencilOperationKeep || op == gputypes.StencilOperationUndefined
+	}
+	return orAlways(face.Compare) == gputypes.CompareFunctionAlways && keeps(face.FailOp) && keeps(face.DepthFailOp) && keeps(face.PassOp)
+}
 
 //nolint:unused // Reserved for depth-stencil pipeline support
 func hasStencilComponent(format gputypes.TextureFormat) bool {

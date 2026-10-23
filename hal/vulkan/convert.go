@@ -583,7 +583,7 @@ func stencilFaceStateToVk(state hal.StencilFaceState) vk.StencilOpState {
 		FailOp:      stencilOperationToVk(state.FailOp),
 		PassOp:      stencilOperationToVk(state.PassOp),
 		DepthFailOp: stencilOperationToVk(state.DepthFailOp),
-		CompareOp:   compareFunctionToVk(state.Compare),
+		CompareOp:   compareFunctionToVk(orAlways(state.Compare)),
 	}
 }
 
