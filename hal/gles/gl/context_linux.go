@@ -93,6 +93,8 @@ package gl
 #cgo nocallback gl_v_iiiuii
 #cgo noescape gl_v_iiiuu
 #cgo nocallback gl_v_iiiuu
+#cgo noescape gl_v_iigp
+#cgo nocallback gl_v_iigp
 #cgo noescape gl_v_iip
 #cgo nocallback gl_v_iip
 #cgo noescape gl_v_iipp
@@ -112,7 +114,10 @@ package gl
 */
 import "C"
 
-import "unsafe"
+import (
+	"runtime"
+	"unsafe"
+)
 
 // Context holds OpenGL function pointers loaded at runtime, called through the
 // C trampolines in trampolines_linux.h.
@@ -698,11 +703,14 @@ func (c *Context) DeleteShader(shader uint32) {
 func (c *Context) ShaderSource(shader uint32, source string) {
 	csource, free := cString(source)
 	defer free()
+	var pins runtime.Pinner
+	defer pins.Unpin()
+	pins.Pin(csource)
 	count := int32(1)
 	length := int32(len(source))
-	stringsPtr := &csource // const GLchar **: one string
-	lengthsPtr := &length  // const GLint *: its length
-	C.gl_v_iipp(C.uintptr_t(uintptr(c.glShaderSource)), C.uint32_t(shader), C.uint32_t(count), (*C.uint8_t)(unsafe.Pointer(stringsPtr)), (*C.uint8_t)(unsafe.Pointer(lengthsPtr)))
+	lengthsPtr := &length // const GLint *: its length
+	//nolint:gocritic // cgo checks &csource, the const GLchar **, with _cgoCheckPointer(p, 0 == 0)
+	C.gl_v_iigp(C.uintptr_t(uintptr(c.glShaderSource)), C.uint32_t(shader), C.uint32_t(count), unsafe.Pointer(&csource), (*C.uint8_t)(unsafe.Pointer(lengthsPtr)))
 }
 
 func (c *Context) CompileShader(shader uint32) {

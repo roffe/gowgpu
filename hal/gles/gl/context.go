@@ -7,6 +7,7 @@ package gl
 
 import (
 	"math"
+	"runtime"
 	"syscall"
 	"unsafe"
 )
@@ -564,6 +565,9 @@ func (c *Context) DeleteShader(shader uint32) {
 func (c *Context) ShaderSource(shader uint32, source string) {
 	csource, free := cString(source)
 	defer free()
+	var pins runtime.Pinner
+	defer pins.Unpin()
+	pins.Pin(csource)
 	length := int32(len(source))
 	syscall.SyscallN(c.glShaderSource, uintptr(shader), 1,
 		uintptr(unsafe.Pointer(&csource)),
