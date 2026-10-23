@@ -343,19 +343,26 @@ func (s *Surface) GetCurrentTexture() (*SurfaceTexture, bool, error) {
 	// created from this SurfaceTexture. Its TrackerIndex is what a render
 	// pass's usage scope records the surface texture's usage under, for
 	// barrier generation.
-	if s.swapchainTexture == nil && s.device != nil && s.device.core != nil {
-		cfg := s.core.Config()
-		if cfg != nil {
+	//
+	// It has the size of the swapchain's images, which on Vulkan is the
+	// compositor's current extent rather than the configured size where the
+	// two differ, and which a PrepareFrame hook changes without a Configure:
+	// render passes compare their other attachments with it.
+	if cfg := s.core.Config(); cfg != nil && s.device != nil && s.device.core != nil {
+		size := gputypes.Extent3D{Width: cfg.Width, Height: cfg.Height, DepthOrArrayLayers: 1}
+		if w, h := s.ActualExtent(); w != 0 && h != 0 {
+			size.Width, size.Height = w, h
+		}
+		if s.swapchainTexture != nil && s.swapchainTexture.Size() != size {
+			s.destroySwapchainTexture()
+		}
+		if s.swapchainTexture == nil {
 			s.swapchainTexture = core.NewTexture(
 				acquired.Texture, s.device.core,
 				cfg.Format,
 				gputypes.TextureDimension2D,
 				cfg.Usage,
-				gputypes.Extent3D{
-					Width:              cfg.Width,
-					Height:             cfg.Height,
-					DepthOrArrayLayers: 1,
-				},
+				size,
 				1, 1, "surface",
 			)
 		}
