@@ -124,18 +124,19 @@ static U gm_copy_all_devices(void) {
 }
 
 // Completion blocks: real heap blocks (clang -fblocks, plain C) that call
-// gogpuMetalBlock(kind, id). Metal copies a block it keeps, so the creator
-// releases its own reference right after handing it over.
+// gogpuMetalBlock(kind, id, command buffer or 0). Metal copies a block it
+// keeps, so the creator releases its own reference right after handing it
+// over.
 extern void *_Block_copy(const void *);
 extern void _Block_release(const void *);
-extern void gogpuMetalBlock(uint32_t kind, uint64_t id);
+extern void gogpuMetalBlock(uint32_t kind, uint64_t id, uintptr_t cmdbuf);
 // void (^)(id<MTLCommandBuffer>)
 static U gm_new_block1(uint32_t kind, uint64_t id) {
-	return (U)_Block_copy(^(U cmdbuf) { gogpuMetalBlock(kind, id); });
+	return (U)_Block_copy(^(U cmdbuf) { gogpuMetalBlock(kind, id, cmdbuf); });
 }
 // void (^)(id<MTLSharedEvent>, uint64_t)
 static U gm_new_block2(uint32_t kind, uint64_t id) {
-	return (U)_Block_copy(^(U event, uint64_t value) { gogpuMetalBlock(kind, id); });
+	return (U)_Block_copy(^(U event, uint64_t value) { gogpuMetalBlock(kind, id, 0); });
 }
 static void gm_release_block(U b) { _Block_release((const void *)b); }
 */
@@ -640,6 +641,7 @@ var (
 type gpuCompletionEntry struct {
 	target *atomic.Uint64
 	value  uint64
+	lost   *atomic.Bool
 }
 
 func initBlockSupport() {}
@@ -665,7 +667,7 @@ func releaseBlockRef(block uintptr) {
 }
 
 //export gogpuMetalBlock
-func gogpuMetalBlock(kind C.uint32_t, cid C.uint64_t) {
+func gogpuMetalBlock(kind C.uint32_t, cid C.uint64_t, cmdbuf C.uintptr_t) {
 	id := uint64(cid)
 	switch uint32(kind) {
 	case blockSharedEvent:
@@ -698,6 +700,11 @@ func gogpuMetalBlock(kind C.uint32_t, cid C.uint64_t) {
 		}
 		if val, ok := gpuCompletionRegistry.LoadAndDelete(id); ok {
 			entry := val.(*gpuCompletionEntry)
+			// Lost before the index moves, so that whoever sees the
+			// submission complete sees the loss too, as in Dawn.
+			if entry.lost != nil && commandBufferFailed(ID(cmdbuf)) {
+				entry.lost.Store(true)
+			}
 			for {
 				current := entry.target.Load()
 				if entry.value <= current || entry.target.CompareAndSwap(current, entry.value) {
@@ -756,13 +763,14 @@ func newFrameCompletionBlock(frameSemaphore chan struct{}) uintptr {
 }
 
 // newGPUCompletionBlock creates an addCompletedHandler: block that raises
-// target to submissionIndex.
-func newGPUCompletionBlock(target *atomic.Uint64, submissionIndex uint64) uintptr {
+// target to submissionIndex, and sets lost first when the command buffer
+// failed.
+func newGPUCompletionBlock(target *atomic.Uint64, lost *atomic.Bool, submissionIndex uint64) uintptr {
 	if target == nil {
 		return 0
 	}
 	id := nextBlockID()
-	gpuCompletionRegistry.Store(id, &gpuCompletionEntry{target: target, value: submissionIndex})
+	gpuCompletionRegistry.Store(id, &gpuCompletionEntry{target: target, value: submissionIndex, lost: lost})
 	b := newBlock(blockGPU, id)
 	if b == 0 {
 		gpuCompletionRegistry.Delete(id)

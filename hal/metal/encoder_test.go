@@ -510,3 +510,37 @@ func TestResetFenceAfterSignal(t *testing.T) {
 		t.Error("Wait for 1 after the event passed the reset by 1 timed out")
 	}
 }
+
+// TestLostQueueRefusesWork checks that a completed command buffer reads as
+// no failure, and that a queue whose command buffer failed refuses
+// submissions and waits with hal.ErrDeviceLost.
+func TestLostQueueRefusesWork(t *testing.T) {
+	device, queue := newMetalTextureCopyTestDevice(t)
+	encoder := &CommandEncoder{device: device}
+	if err := encoder.BeginEncoding("fine"); err != nil {
+		t.Fatalf("BeginEncoding failed: %v", err)
+	}
+	raw, err := encoder.EndEncoding()
+	if err != nil {
+		t.Fatalf("EndEncoding failed: %v", err)
+	}
+	cb := raw.(*CommandBuffer)
+	defer cb.Destroy()
+	if _, err := queue.Submit([]hal.CommandBuffer{cb}); err != nil {
+		t.Fatalf("Submit failed: %v", err)
+	}
+	if err := device.WaitIdle(); err != nil {
+		t.Fatalf("WaitIdle failed: %v", err)
+	}
+	if commandBufferFailed(cb.raw) {
+		t.Error("a completed command buffer reads as failed")
+	}
+
+	queue.lost.Store(true)
+	if _, err := queue.Submit(nil); !errors.Is(err, hal.ErrDeviceLost) {
+		t.Errorf("Submit on a lost queue: %v, want hal.ErrDeviceLost", err)
+	}
+	if err := device.WaitIdle(); !errors.Is(err, hal.ErrDeviceLost) {
+		t.Errorf("WaitIdle on a lost queue: %v, want hal.ErrDeviceLost", err)
+	}
+}

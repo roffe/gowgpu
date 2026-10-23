@@ -1510,6 +1510,9 @@ func (d *Device) WaitIdle() error {
 				break
 			}
 		}
+		if q.lost.Load() {
+			return hal.ErrDeviceLost
+		}
 	}
 
 	hal.Logger().Debug("metal: WaitIdle complete")

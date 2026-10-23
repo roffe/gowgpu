@@ -34,6 +34,11 @@ type Queue struct {
 	// submissionIndex is a monotonically increasing counter for tracking submissions.
 	submissionIndex uint64
 
+	// lost is set once a command buffer of a submission ended in an error
+	// that loses the device; Submit and WaitIdle return hal.ErrDeviceLost
+	// from then on.
+	lost atomic.Bool
+
 	// completedIndex tracks the highest submission index completed by the GPU.
 	// Updated atomically by addCompletedHandler blocks that fire when the GPU
 	// finishes executing the last command buffer of each Submit batch.
@@ -60,6 +65,9 @@ type Queue struct {
 // GPU finishes, releasing the slot for the next frame. This prevents unbounded
 // memory growth from queued command buffers and avoids drawable pool exhaustion.
 func (q *Queue) Submit(commandBuffers []hal.CommandBuffer) (uint64, error) {
+	if q.lost.Load() {
+		return 0, hal.ErrDeviceLost
+	}
 	// Acquire a frame slot — blocks if maxFramesInFlight frames are in-flight.
 	// This is the CPU-side throttle point.
 	if q.frameSemaphore != nil {
@@ -144,7 +152,7 @@ func (q *Queue) PollCompleted() uint64 {
 // fallback — this is conservative (reports completion too early rather than
 // too late) but prevents maintain() from never recycling resources.
 func (q *Queue) registerSubmissionCompletionHandler(cmdBuffer ID, subIdx uint64) {
-	blockPtr := newGPUCompletionBlock(&q.completedIndex, subIdx)
+	blockPtr := newGPUCompletionBlock(&q.completedIndex, &q.lost, subIdx)
 	if blockPtr == 0 {
 		// Block creation failed — update immediately as fallback.
 		hal.Logger().Warn("metal: submission completion block creation failed, updating immediately")
@@ -157,6 +165,26 @@ func (q *Queue) registerSubmissionCompletionHandler(cmdBuffer ID, subIdx uint64)
 	if hal.DebugEnabled() {
 		hal.Logger().Debug("metal: submission completion handler registered", "subIdx", subIdx)
 	}
+}
+
+// mtlCommandBufferErrorNotPermitted is MTLCommandBufferErrorNotPermitted:
+// iOS refused the GPU to an app in the background, which loses no device.
+const mtlCommandBufferErrorNotPermitted = 7
+
+// commandBufferFailed reports whether cmdbuf, a completed command buffer,
+// ended in an error that loses the device, and logs any error it ended in.
+// Metal leaves no other trace of a GPU fault, a watchdog kill or running
+// out of memory.
+func commandBufferFailed(cmdbuf ID) bool {
+	if cmdbuf == 0 || MTLCommandBufferStatus(MsgSendUint(cmdbuf, Sel("status"))) != MTLCommandBufferStatusError {
+		return false
+	}
+	pool := NewAutoreleasePool()
+	defer pool.Drain()
+	nsError := MsgSend(cmdbuf, Sel("error"))
+	code := MsgSendUint(nsError, Sel("code"))
+	hal.Logger().Error("metal: command buffer failed", "code", code, "error", formatNSError(nsError))
+	return code != mtlCommandBufferErrorNotPermitted
 }
 
 // registerFrameCompletionHandler attaches an addCompletedHandler: block to the
