@@ -6,9 +6,10 @@
 // Package vk provides Vulkan bindings through cgo, without Vulkan headers:
 // the loader library is opened at run time, every command is called through
 // the pointer vkGet*ProcAddr returns, by one C trampoline per C signature
-// (trampolines.h). Pointers cross as const uint8_t *, a pointee with no
-// pointers as far as cgo can tell, so cgocheck never walks the Go memory a
-// create info points at; noescape keeps stack pointees on the stack.
+// (trampolines.h). An argument that points at more pointers, a create info
+// say, crosses so that cgocheck walks it: Go memory passed to C may only
+// point at Go memory that is pinned (see Pin), the caller's stack or C
+// memory. noescape keeps stack pointees on the stack.
 //
 // # Intel Driver Compatibility
 //
@@ -24,8 +25,6 @@ package vk
 #include "trampolines.h"
 #cgo noescape gvk_h_hp
 #cgo nocallback gvk_h_hp
-#cgo noescape gvk_v_hp
-#cgo nocallback gvk_v_hp
 */
 import "C"
 
@@ -131,10 +130,8 @@ func GetDeviceProcAddr(device Device, name string) unsafe.Pointer {
 // DestroyDevice calls vkDestroyDevice through proc, a pointer from
 // GetDeviceProcAddr, for when the device's Commands are already gone.
 func DestroyDevice(proc unsafe.Pointer, device Device, allocator *AllocationCallbacks) {
-	if proc == nil {
-		return
-	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(proc)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(allocator)))
+	c := Commands{destroyDevice: proc}
+	c.DestroyDevice(device, allocator)
 }
 
 // Close releases the Vulkan library.

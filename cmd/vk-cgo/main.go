@@ -1,11 +1,13 @@
 // Command vk-cgo rewrites the goffi Vulkan wrappers vk-gen writes
 // (vk/commands_gen.go) into cgo: every wrapper calls
 // one C trampoline per distinct C signature, through the function pointer the
-// loader resolved. Pointer arguments cross as const uint8_t *: a pointee cgo
-// sees no pointers in, so cgocheck never walks the Go memory a create info
-// points at, while the argument stays a real pointer that stack copying
-// adjusts. Every trampoline is marked noescape and nocallback, so stack
-// pointees stay on the stack and nothing allocates.
+// loader resolved. A pointer argument stays a real pointer that stack copying
+// adjusts. One to memory without pointers crosses as const uint8_t *, which
+// cgo has nothing to check in. One to memory with pointers, a create info
+// say, crosses as const void * built from a slice of the elements it points
+// at, its length from vk.xml's len, so cgocheck walks each element for Go
+// pointers to unpinned memory. Every trampoline is marked noescape and
+// nocallback, so stack pointees stay on the stack and nothing allocates.
 //
 // It is the second half of regenerating the bindings, after vk-gen:
 //
@@ -30,7 +32,10 @@ import (
 	"strings"
 )
 
-var typedefs = map[string]string{}
+var (
+	typedefs = map[string]string{}
+	types    = map[string]ast.Expr{} // every type's definition
+)
 
 func collectTypedefs(f *ast.File) {
 	for _, d := range f.Decls {
@@ -40,6 +45,7 @@ func collectTypedefs(f *ast.File) {
 		}
 		for _, s := range g.Specs {
 			ts := s.(*ast.TypeSpec)
+			types[ts.Name.Name] = ts.Type
 			switch t := ts.Type.(type) {
 			case *ast.Ident:
 				typedefs[ts.Name.Name] = t.Name
@@ -65,13 +71,39 @@ func resolve(name string) string {
 	return name
 }
 
+// hasPointers reports whether memory of type e holds pointers.
+func hasPointers(e ast.Expr, seen map[string]bool) bool {
+	switch t := e.(type) {
+	case *ast.StarExpr, *ast.SelectorExpr, *ast.FuncType, *ast.MapType, *ast.ChanType, *ast.InterfaceType:
+		return true
+	case *ast.ArrayType:
+		return t.Len == nil || hasPointers(t.Elt, seen)
+	case *ast.StructType:
+		for _, f := range t.Fields.List {
+			if hasPointers(f.Type, seen) {
+				return true
+			}
+		}
+	case *ast.Ident:
+		if def, ok := types[t.Name]; ok && !seen[t.Name] {
+			seen[t.Name] = true
+			return hasPointers(def, seen)
+		}
+		return t.Name == "string"
+	}
+	return false
+}
+
 // class is the C ABI class of a Go type: h pointer-sized integer (a
-// dispatchable handle, a size_t), p pointer, q 64-bit int (a non-dispatchable
-// handle among them), i 32-bit int, s 16-bit int, b 8-bit int, f float, d
-// double.
+// dispatchable handle, a size_t), p pointer to memory without pointers, g
+// pointer to memory with pointers, q 64-bit int (a non-dispatchable handle
+// among them), i 32-bit int, s 16-bit int, b 8-bit int, f float, d double.
 func class(e ast.Expr) (string, error) {
 	switch t := e.(type) {
 	case *ast.StarExpr:
+		if hasPointers(t.X, map[string]bool{}) {
+			return "g", nil
+		}
 		return "p", nil
 	case *ast.ArrayType: // a C array parameter: passed as a pointer to it
 		return "a", nil
@@ -102,10 +134,14 @@ func class(e ast.Expr) (string, error) {
 	return "", fmt.Errorf("unsupported type expression %T", e)
 }
 
-// cPtr is how every pointer argument crosses into C.
-const cPtr = "const uint8_t *"
+// cPtr is how a pointer to memory without pointers crosses into C, and
+// cCheckedPtr one to memory with pointers, which cgo checks.
+const (
+	cPtr        = "const uint8_t *"
+	cCheckedPtr = "const void *"
+)
 
-var ctype = map[byte]string{'h': "uintptr_t", 'p': cPtr, 'P': cPtr, 'a': cPtr, 'q': "uint64_t", 'i': "uint32_t", 's': "uint16_t", 'b': "uint8_t", 'f': "float", 'd': "double", 'v': "void"}
+var ctype = map[byte]string{'h': "uintptr_t", 'p': cPtr, 'P': cPtr, 'a': cPtr, 'g': cCheckedPtr, 'q': "uint64_t", 'i': "uint32_t", 's': "uint16_t", 'b': "uint8_t", 'f': "float", 'd': "double", 'v': "void"}
 
 func trampolineName(ret string, params []string) string {
 	s := strings.Join(params, "")
@@ -167,8 +203,60 @@ func exprString(fset *token.FileSet, e ast.Node) string {
 	return b.String()
 }
 
+// lengths maps each array parameter of fd to the parameter that counts its
+// elements, from vk-gen's //vk:len lines in fd's body.
+func lengths(fd *ast.FuncDecl, comments []*ast.CommentGroup) map[string]string {
+	lens := map[string]string{}
+	for _, cg := range comments {
+		if cg.Pos() < fd.Body.Pos() || cg.End() > fd.Body.End() {
+			continue
+		}
+		for _, c := range cg.List {
+			if rest, ok := strings.CutPrefix(c.Text, "//vk:len "); ok {
+				param, count, _ := strings.Cut(rest, " ")
+				lens[param] = count
+			}
+		}
+	}
+	return lens
+}
+
+// cArg is the expression that hands p to its trampoline, lens the counts
+// of array parameters.
+func cArg(p param, lens map[string]string) string {
+	switch p.cls {
+	case "h":
+		return fmt.Sprintf("C.uintptr_t(%s)", p.name)
+	case "q":
+		return fmt.Sprintf("C.uint64_t(%s)", p.name)
+	case "i":
+		return fmt.Sprintf("C.uint32_t(%s)", p.name)
+	case "s":
+		return fmt.Sprintf("C.uint16_t(%s)", p.name)
+	case "b":
+		return fmt.Sprintf("C.uint8_t(%s)", p.name)
+	case "f":
+		return fmt.Sprintf("C.float(%s)", p.name)
+	case "d":
+		return fmt.Sprintf("C.double(%s)", p.name)
+	case "p":
+		return fmt.Sprintf("(*C.uint8_t)(unsafe.Pointer(%s))", p.name)
+	case "g":
+		n := "1"
+		if count, ok := lens[p.name]; ok {
+			n = "int(" + count + ")"
+		}
+		return fmt.Sprintf("unsafe.Pointer(unsafe.SliceData(unsafe.Slice(%s, lenIfSet(%s != nil, %s))[:]))", p.name, p.name, n)
+	case "P":
+		return fmt.Sprintf("(*C.uint8_t)(%s)", p.name)
+	case "a":
+		return fmt.Sprintf("(*C.uint8_t)(unsafe.Pointer(&%s))", p.name)
+	}
+	panic("vk-cgo: no argument form for class " + p.cls)
+}
+
 // convert rewrites one method; ok is false when it has no goffi call.
-func convert(fset *token.FileSet, fd *ast.FuncDecl) (string, bool, error) {
+func convert(fset *token.FileSet, fd *ast.FuncDecl, comments []*ast.CommentGroup) (string, bool, error) {
 	var field string
 	ast.Inspect(fd.Body, func(n ast.Node) bool {
 		c, ok := n.(*ast.CallExpr)
@@ -240,32 +328,12 @@ func convert(fset *token.FileSet, fd *ast.FuncDecl) (string, bool, error) {
 		zero = " 0"
 	}
 	fmt.Fprintf(&b, "\tif c.%s == nil {\n\t\treturn%s\n\t}\n", field, zero)
+	lens := lengths(fd, comments)
 	var args []string
 	args = append(args, fmt.Sprintf("C.uintptr_t(uintptr(c.%s))", field))
 	var keep []string
 	for _, p := range params {
-		switch p.cls {
-		case "h":
-			args = append(args, fmt.Sprintf("C.uintptr_t(%s)", p.name))
-		case "q":
-			args = append(args, fmt.Sprintf("C.uint64_t(%s)", p.name))
-		case "i":
-			args = append(args, fmt.Sprintf("C.uint32_t(%s)", p.name))
-		case "s":
-			args = append(args, fmt.Sprintf("C.uint16_t(%s)", p.name))
-		case "b":
-			args = append(args, fmt.Sprintf("C.uint8_t(%s)", p.name))
-		case "f":
-			args = append(args, fmt.Sprintf("C.float(%s)", p.name))
-		case "d":
-			args = append(args, fmt.Sprintf("C.double(%s)", p.name))
-		case "p":
-			args = append(args, fmt.Sprintf("(*C.uint8_t)(unsafe.Pointer(%s))", p.name))
-		case "P":
-			args = append(args, fmt.Sprintf("(*C.uint8_t)(%s)", p.name))
-		case "a":
-			args = append(args, fmt.Sprintf("(*C.uint8_t)(unsafe.Pointer(&%s))", p.name))
-		}
+		args = append(args, cArg(p, lens))
 	}
 	call := fmt.Sprintf("C.%s(%s)", name, strings.Join(args, ", "))
 	if ret == "v" {
@@ -317,7 +385,7 @@ func rewrite(dir, name string) (int, error) {
 			}
 		}
 		if fd, ok := d.(*ast.FuncDecl); ok && fd.Recv != nil {
-			src, ok, err := convert(fset, fd)
+			src, ok, err := convert(fset, fd, f.Comments)
 			if err != nil {
 				return 0, err
 			}
@@ -384,8 +452,9 @@ func main() {
 
 // One trampoline per C signature of the Vulkan commands gogpu wraps. No
 // Vulkan headers: dispatchable handles and other pointer-sized integers are
-// uintptr_t, non-dispatchable handles uint64_t, pointers const uint8_t *,
-// and fn is the pointer vkGet*ProcAddr returned.
+// uintptr_t, non-dispatchable handles uint64_t, pointers const uint8_t *, or
+// const void * where they lead to more pointers, which cgo checks, and fn
+// is the pointer vkGet*ProcAddr returned.
 #ifndef GVK_TRAMPOLINES_H
 #define GVK_TRAMPOLINES_H
 #include <stdint.h>

@@ -18,3 +18,14 @@ func Pin[T any](pins *runtime.Pinner, p *T) *T {
 	}
 	return p
 }
+
+// lenIfSet is n for a pointer that is set, and 0 for nil, which
+// unsafe.Slice takes no other length with. The wrappers hand C an argument
+// that leads to more pointers as unsafe.Slice(p, lenIfSet(p != nil, n)),
+// the form in which cgocheck walks each element.
+func lenIfSet(set bool, n int) int {
+	if set {
+		return n
+	}
+	return 0
+}

@@ -2,8 +2,9 @@
 
 // One trampoline per C signature of the Vulkan commands gogpu wraps. No
 // Vulkan headers: dispatchable handles and other pointer-sized integers are
-// uintptr_t, non-dispatchable handles uint64_t, pointers const uint8_t *,
-// and fn is the pointer vkGet*ProcAddr returned.
+// uintptr_t, non-dispatchable handles uint64_t, pointers const uint8_t *, or
+// const void * where they lead to more pointers, which cgo checks, and fn
+// is the pointer vkGet*ProcAddr returned.
 #ifndef GVK_TRAMPOLINES_H
 #define GVK_TRAMPOLINES_H
 #include <stdint.h>
@@ -18,6 +19,8 @@
 
 typedef uintptr_t (VKAPI_PTR *gvk_pfn_h_hp)(uintptr_t, const void *);
 static inline uintptr_t gvk_h_hp(uintptr_t fn, uintptr_t a0, const uint8_t * a1) { return ((gvk_pfn_h_hp)fn)(a0, a1); }
+typedef uint32_t (VKAPI_PTR *gvk_pfn_i_hg)(uintptr_t, const void *);
+static inline uint32_t gvk_i_hg(uintptr_t fn, uintptr_t a0, const void * a1) { return ((gvk_pfn_i_hg)fn)(a0, a1); }
 typedef uint32_t (VKAPI_PTR *gvk_pfn_i_hi)(uintptr_t, uint32_t);
 static inline uint32_t gvk_i_hi(uintptr_t fn, uintptr_t a0, uint32_t a1) { return ((gvk_pfn_i_hi)fn)(a0, a1); }
 typedef uint32_t (VKAPI_PTR *gvk_pfn_i_hip)(uintptr_t, uint32_t, const void *);
@@ -26,22 +29,54 @@ typedef uint32_t (VKAPI_PTR *gvk_pfn_i_hiph)(uintptr_t, uint32_t, const void *, 
 static inline uint32_t gvk_i_hiph(uintptr_t fn, uintptr_t a0, uint32_t a1, const uint8_t * a2, uintptr_t a3) { return ((gvk_pfn_i_hiph)fn)(a0, a1, a2, a3); }
 typedef uint32_t (VKAPI_PTR *gvk_pfn_i_hipi)(uintptr_t, uint32_t, const void *, uint32_t);
 static inline uint32_t gvk_i_hipi(uintptr_t fn, uintptr_t a0, uint32_t a1, const uint8_t * a2, uint32_t a3) { return ((gvk_pfn_i_hipi)fn)(a0, a1, a2, a3); }
-typedef uint32_t (VKAPI_PTR *gvk_pfn_i_hp)(uintptr_t, const void *);
-static inline uint32_t gvk_i_hp(uintptr_t fn, uintptr_t a0, const uint8_t * a1) { return ((gvk_pfn_i_hp)fn)(a0, a1); }
 typedef uint32_t (VKAPI_PTR *gvk_pfn_i_hq)(uintptr_t, uint64_t);
 static inline uint32_t gvk_i_hq(uintptr_t fn, uintptr_t a0, uint64_t a1) { return ((gvk_pfn_i_hq)fn)(a0, a1); }
-typedef uint64_t (VKAPI_PTR *gvk_pfn_q_hp)(uintptr_t, const void *);
-static inline uint64_t gvk_q_hp(uintptr_t fn, uintptr_t a0, const uint8_t * a1) { return ((gvk_pfn_q_hp)fn)(a0, a1); }
+typedef uint64_t (VKAPI_PTR *gvk_pfn_q_hg)(uintptr_t, const void *);
+static inline uint64_t gvk_q_hg(uintptr_t fn, uintptr_t a0, const void * a1) { return ((gvk_pfn_q_hg)fn)(a0, a1); }
 typedef uint64_t (VKAPI_PTR *gvk_pfn_q_hqii)(uintptr_t, uint64_t, uint32_t, uint32_t);
 static inline uint64_t gvk_q_hqii(uintptr_t fn, uintptr_t a0, uint64_t a1, uint32_t a2, uint32_t a3) { return ((gvk_pfn_q_hqii)fn)(a0, a1, a2, a3); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_ggp)(const void *, const void *, const void *);
+static inline int32_t gvk_r_ggp(uintptr_t fn, const void * a0, const void * a1, const uint8_t * a2) { return ((gvk_pfn_r_ggp)fn)(a0, a1, a2); }
 typedef int32_t (VKAPI_PTR *gvk_pfn_r_h)(uintptr_t);
 static inline int32_t gvk_r_h(uintptr_t fn, uintptr_t a0) { return ((gvk_pfn_r_h)fn)(a0); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_hg)(uintptr_t, const void *);
+static inline int32_t gvk_r_hg(uintptr_t fn, uintptr_t a0, const void * a1) { return ((gvk_pfn_r_hg)fn)(a0, a1); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_hgg)(uintptr_t, const void *, const void *);
+static inline int32_t gvk_r_hgg(uintptr_t fn, uintptr_t a0, const void * a1, const void * a2) { return ((gvk_pfn_r_hgg)fn)(a0, a1, a2); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_hggg)(uintptr_t, const void *, const void *, const void *);
+static inline int32_t gvk_r_hggg(uintptr_t fn, uintptr_t a0, const void * a1, const void * a2, const void * a3) { return ((gvk_pfn_r_hggg)fn)(a0, a1, a2, a3); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_hggp)(uintptr_t, const void *, const void *, const void *);
+static inline int32_t gvk_r_hggp(uintptr_t fn, uintptr_t a0, const void * a1, const void * a2, const uint8_t * a3) { return ((gvk_pfn_r_hggp)fn)(a0, a1, a2, a3); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_hggpp)(uintptr_t, const void *, const void *, const void *, const void *);
+static inline int32_t gvk_r_hggpp(uintptr_t fn, uintptr_t a0, const void * a1, const void * a2, const uint8_t * a3, const uint8_t * a4) { return ((gvk_pfn_r_hggpp)fn)(a0, a1, a2, a3, a4); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_hgh)(uintptr_t, const void *, uintptr_t);
+static inline int32_t gvk_r_hgh(uintptr_t fn, uintptr_t a0, const void * a1, uintptr_t a2) { return ((gvk_pfn_r_hgh)fn)(a0, a1, a2); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_hgig)(uintptr_t, const void *, uint32_t, const void *);
+static inline int32_t gvk_r_hgig(uintptr_t fn, uintptr_t a0, const void * a1, uint32_t a2, const void * a3) { return ((gvk_pfn_r_hgig)fn)(a0, a1, a2, a3); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_hgp)(uintptr_t, const void *, const void *);
+static inline int32_t gvk_r_hgp(uintptr_t fn, uintptr_t a0, const void * a1, const uint8_t * a2) { return ((gvk_pfn_r_hgp)fn)(a0, a1, a2); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_hgpg)(uintptr_t, const void *, const void *, const void *);
+static inline int32_t gvk_r_hgpg(uintptr_t fn, uintptr_t a0, const void * a1, const uint8_t * a2, const void * a3) { return ((gvk_pfn_r_hgpg)fn)(a0, a1, a2, a3); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_hgpp)(uintptr_t, const void *, const void *, const void *);
+static inline int32_t gvk_r_hgpp(uintptr_t fn, uintptr_t a0, const void * a1, const uint8_t * a2, const uint8_t * a3) { return ((gvk_pfn_r_hgpp)fn)(a0, a1, a2, a3); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_hgq)(uintptr_t, const void *, uint64_t);
+static inline int32_t gvk_r_hgq(uintptr_t fn, uintptr_t a0, const void * a1, uint64_t a2) { return ((gvk_pfn_r_hgq)fn)(a0, a1, a2); }
 typedef int32_t (VKAPI_PTR *gvk_pfn_r_hh)(uintptr_t, uintptr_t);
 static inline int32_t gvk_r_hh(uintptr_t fn, uintptr_t a0, uintptr_t a1) { return ((gvk_pfn_r_hh)fn)(a0, a1); }
 typedef int32_t (VKAPI_PTR *gvk_pfn_r_hi)(uintptr_t, uint32_t);
 static inline int32_t gvk_r_hi(uintptr_t fn, uintptr_t a0, uint32_t a1) { return ((gvk_pfn_r_hi)fn)(a0, a1); }
-typedef int32_t (VKAPI_PTR *gvk_pfn_r_hihp)(uintptr_t, uint32_t, uintptr_t, const void *);
-static inline int32_t gvk_r_hihp(uintptr_t fn, uintptr_t a0, uint32_t a1, uintptr_t a2, const uint8_t * a3) { return ((gvk_pfn_r_hihp)fn)(a0, a1, a2, a3); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_hig)(uintptr_t, uint32_t, const void *);
+static inline int32_t gvk_r_hig(uintptr_t fn, uintptr_t a0, uint32_t a1, const void * a2) { return ((gvk_pfn_r_hig)fn)(a0, a1, a2); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_higgp)(uintptr_t, uint32_t, const void *, const void *, const void *);
+static inline int32_t gvk_r_higgp(uintptr_t fn, uintptr_t a0, uint32_t a1, const void * a2, const void * a3, const uint8_t * a4) { return ((gvk_pfn_r_higgp)fn)(a0, a1, a2, a3, a4); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_higpp)(uintptr_t, uint32_t, const void *, const void *, const void *);
+static inline int32_t gvk_r_higpp(uintptr_t fn, uintptr_t a0, uint32_t a1, const void * a2, const uint8_t * a3, const uint8_t * a4) { return ((gvk_pfn_r_higpp)fn)(a0, a1, a2, a3, a4); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_higq)(uintptr_t, uint32_t, const void *, uint64_t);
+static inline int32_t gvk_r_higq(uintptr_t fn, uintptr_t a0, uint32_t a1, const void * a2, uint64_t a3) { return ((gvk_pfn_r_higq)fn)(a0, a1, a2, a3); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_hihg)(uintptr_t, uint32_t, uintptr_t, const void *);
+static inline int32_t gvk_r_hihg(uintptr_t fn, uintptr_t a0, uint32_t a1, uintptr_t a2, const void * a3) { return ((gvk_pfn_r_hihg)fn)(a0, a1, a2, a3); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_hiig)(uintptr_t, uint32_t, uint32_t, const void *);
+static inline int32_t gvk_r_hiig(uintptr_t fn, uintptr_t a0, uint32_t a1, uint32_t a2, const void * a3) { return ((gvk_pfn_r_hiig)fn)(a0, a1, a2, a3); }
 typedef int32_t (VKAPI_PTR *gvk_pfn_r_hiiiiiip)(uintptr_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, const void *);
 static inline int32_t gvk_r_hiiiiiip(uintptr_t fn, uintptr_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5, uint32_t a6, const uint8_t * a7) { return ((gvk_pfn_r_hiiiiiip)fn)(a0, a1, a2, a3, a4, a5, a6, a7); }
 typedef int32_t (VKAPI_PTR *gvk_pfn_r_hiiiiip)(uintptr_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, const void *);
@@ -52,16 +87,18 @@ typedef int32_t (VKAPI_PTR *gvk_pfn_r_hiip)(uintptr_t, uint32_t, uint32_t, const
 static inline int32_t gvk_r_hiip(uintptr_t fn, uintptr_t a0, uint32_t a1, uint32_t a2, const uint8_t * a3) { return ((gvk_pfn_r_hiip)fn)(a0, a1, a2, a3); }
 typedef int32_t (VKAPI_PTR *gvk_pfn_r_hip)(uintptr_t, uint32_t, const void *);
 static inline int32_t gvk_r_hip(uintptr_t fn, uintptr_t a0, uint32_t a1, const uint8_t * a2) { return ((gvk_pfn_r_hip)fn)(a0, a1, a2); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_hipg)(uintptr_t, uint32_t, const void *, const void *);
+static inline int32_t gvk_r_hipg(uintptr_t fn, uintptr_t a0, uint32_t a1, const uint8_t * a2, const void * a3) { return ((gvk_pfn_r_hipg)fn)(a0, a1, a2, a3); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_hipgg)(uintptr_t, uint32_t, const void *, const void *, const void *);
+static inline int32_t gvk_r_hipgg(uintptr_t fn, uintptr_t a0, uint32_t a1, const uint8_t * a2, const void * a3, const void * a4) { return ((gvk_pfn_r_hipgg)fn)(a0, a1, a2, a3, a4); }
 typedef int32_t (VKAPI_PTR *gvk_pfn_r_hipihph)(uintptr_t, uint32_t, const void *, uint32_t, uintptr_t, const void *, uintptr_t);
 static inline int32_t gvk_r_hipihph(uintptr_t fn, uintptr_t a0, uint32_t a1, const uint8_t * a2, uint32_t a3, uintptr_t a4, const uint8_t * a5, uintptr_t a6) { return ((gvk_pfn_r_hipihph)fn)(a0, a1, a2, a3, a4, a5, a6); }
 typedef int32_t (VKAPI_PTR *gvk_pfn_r_hipiq)(uintptr_t, uint32_t, const void *, uint32_t, uint64_t);
 static inline int32_t gvk_r_hipiq(uintptr_t fn, uintptr_t a0, uint32_t a1, const uint8_t * a2, uint32_t a3, uint64_t a4) { return ((gvk_pfn_r_hipiq)fn)(a0, a1, a2, a3, a4); }
 typedef int32_t (VKAPI_PTR *gvk_pfn_r_hipp)(uintptr_t, uint32_t, const void *, const void *);
 static inline int32_t gvk_r_hipp(uintptr_t fn, uintptr_t a0, uint32_t a1, const uint8_t * a2, const uint8_t * a3) { return ((gvk_pfn_r_hipp)fn)(a0, a1, a2, a3); }
-typedef int32_t (VKAPI_PTR *gvk_pfn_r_hippp)(uintptr_t, uint32_t, const void *, const void *, const void *);
-static inline int32_t gvk_r_hippp(uintptr_t fn, uintptr_t a0, uint32_t a1, const uint8_t * a2, const uint8_t * a3, const uint8_t * a4) { return ((gvk_pfn_r_hippp)fn)(a0, a1, a2, a3, a4); }
-typedef int32_t (VKAPI_PTR *gvk_pfn_r_hipq)(uintptr_t, uint32_t, const void *, uint64_t);
-static inline int32_t gvk_r_hipq(uintptr_t fn, uintptr_t a0, uint32_t a1, const uint8_t * a2, uint64_t a3) { return ((gvk_pfn_r_hipq)fn)(a0, a1, a2, a3); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_hippg)(uintptr_t, uint32_t, const void *, const void *, const void *);
+static inline int32_t gvk_r_hippg(uintptr_t fn, uintptr_t a0, uint32_t a1, const uint8_t * a2, const uint8_t * a3, const void * a4) { return ((gvk_pfn_r_hippg)fn)(a0, a1, a2, a3, a4); }
 typedef int32_t (VKAPI_PTR *gvk_pfn_r_hipqp)(uintptr_t, uint32_t, const void *, uint64_t, const void *);
 static inline int32_t gvk_r_hipqp(uintptr_t fn, uintptr_t a0, uint32_t a1, const uint8_t * a2, uint64_t a3, const uint8_t * a4) { return ((gvk_pfn_r_hipqp)fn)(a0, a1, a2, a3, a4); }
 typedef int32_t (VKAPI_PTR *gvk_pfn_r_hiq)(uintptr_t, uint32_t, uint64_t);
@@ -70,28 +107,34 @@ typedef int32_t (VKAPI_PTR *gvk_pfn_r_hiqp)(uintptr_t, uint32_t, uint64_t, const
 static inline int32_t gvk_r_hiqp(uintptr_t fn, uintptr_t a0, uint32_t a1, uint64_t a2, const uint8_t * a3) { return ((gvk_pfn_r_hiqp)fn)(a0, a1, a2, a3); }
 typedef int32_t (VKAPI_PTR *gvk_pfn_r_hiqqq)(uintptr_t, uint32_t, uint64_t, uint64_t, uint64_t);
 static inline int32_t gvk_r_hiqqq(uintptr_t fn, uintptr_t a0, uint32_t a1, uint64_t a2, uint64_t a3, uint64_t a4) { return ((gvk_pfn_r_hiqqq)fn)(a0, a1, a2, a3, a4); }
-typedef int32_t (VKAPI_PTR *gvk_pfn_r_hp)(uintptr_t, const void *);
-static inline int32_t gvk_r_hp(uintptr_t fn, uintptr_t a0, const uint8_t * a1) { return ((gvk_pfn_r_hp)fn)(a0, a1); }
-typedef int32_t (VKAPI_PTR *gvk_pfn_r_hph)(uintptr_t, const void *, uintptr_t);
-static inline int32_t gvk_r_hph(uintptr_t fn, uintptr_t a0, const uint8_t * a1, uintptr_t a2) { return ((gvk_pfn_r_hph)fn)(a0, a1, a2); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_hpg)(uintptr_t, const void *, const void *);
+static inline int32_t gvk_r_hpg(uintptr_t fn, uintptr_t a0, const uint8_t * a1, const void * a2) { return ((gvk_pfn_r_hpg)fn)(a0, a1, a2); }
 typedef int32_t (VKAPI_PTR *gvk_pfn_r_hphp)(uintptr_t, const void *, uintptr_t, const void *);
 static inline int32_t gvk_r_hphp(uintptr_t fn, uintptr_t a0, const uint8_t * a1, uintptr_t a2, const uint8_t * a3) { return ((gvk_pfn_r_hphp)fn)(a0, a1, a2, a3); }
-typedef int32_t (VKAPI_PTR *gvk_pfn_r_hpip)(uintptr_t, const void *, uint32_t, const void *);
-static inline int32_t gvk_r_hpip(uintptr_t fn, uintptr_t a0, const uint8_t * a1, uint32_t a2, const uint8_t * a3) { return ((gvk_pfn_r_hpip)fn)(a0, a1, a2, a3); }
 typedef int32_t (VKAPI_PTR *gvk_pfn_r_hpp)(uintptr_t, const void *, const void *);
 static inline int32_t gvk_r_hpp(uintptr_t fn, uintptr_t a0, const uint8_t * a1, const uint8_t * a2) { return ((gvk_pfn_r_hpp)fn)(a0, a1, a2); }
 typedef int32_t (VKAPI_PTR *gvk_pfn_r_hppp)(uintptr_t, const void *, const void *, const void *);
 static inline int32_t gvk_r_hppp(uintptr_t fn, uintptr_t a0, const uint8_t * a1, const uint8_t * a2, const uint8_t * a3) { return ((gvk_pfn_r_hppp)fn)(a0, a1, a2, a3); }
-typedef int32_t (VKAPI_PTR *gvk_pfn_r_hpppp)(uintptr_t, const void *, const void *, const void *, const void *);
-static inline int32_t gvk_r_hpppp(uintptr_t fn, uintptr_t a0, const uint8_t * a1, const uint8_t * a2, const uint8_t * a3, const uint8_t * a4) { return ((gvk_pfn_r_hpppp)fn)(a0, a1, a2, a3, a4); }
 typedef int32_t (VKAPI_PTR *gvk_pfn_r_hpq)(uintptr_t, const void *, uint64_t);
 static inline int32_t gvk_r_hpq(uintptr_t fn, uintptr_t a0, const uint8_t * a1, uint64_t a2) { return ((gvk_pfn_r_hpq)fn)(a0, a1, a2); }
 typedef int32_t (VKAPI_PTR *gvk_pfn_r_hq)(uintptr_t, uint64_t);
 static inline int32_t gvk_r_hq(uintptr_t fn, uintptr_t a0, uint64_t a1) { return ((gvk_pfn_r_hq)fn)(a0, a1); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_hqg)(uintptr_t, uint64_t, const void *);
+static inline int32_t gvk_r_hqg(uintptr_t fn, uintptr_t a0, uint64_t a1, const void * a2) { return ((gvk_pfn_r_hqg)fn)(a0, a1, a2); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_hqggp)(uintptr_t, uint64_t, const void *, const void *, const void *);
+static inline int32_t gvk_r_hqggp(uintptr_t fn, uintptr_t a0, uint64_t a1, const void * a2, const void * a3, const uint8_t * a4) { return ((gvk_pfn_r_hqggp)fn)(a0, a1, a2, a3, a4); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_hqgp)(uintptr_t, uint64_t, const void *, const void *);
+static inline int32_t gvk_r_hqgp(uintptr_t fn, uintptr_t a0, uint64_t a1, const void * a2, const uint8_t * a3) { return ((gvk_pfn_r_hqgp)fn)(a0, a1, a2, a3); }
 typedef int32_t (VKAPI_PTR *gvk_pfn_r_hqhp)(uintptr_t, uint64_t, uintptr_t, const void *);
 static inline int32_t gvk_r_hqhp(uintptr_t fn, uintptr_t a0, uint64_t a1, uintptr_t a2, const uint8_t * a3) { return ((gvk_pfn_r_hqhp)fn)(a0, a1, a2, a3); }
 typedef int32_t (VKAPI_PTR *gvk_pfn_r_hqi)(uintptr_t, uint64_t, uint32_t);
 static inline int32_t gvk_r_hqi(uintptr_t fn, uintptr_t a0, uint64_t a1, uint32_t a2) { return ((gvk_pfn_r_hqi)fn)(a0, a1, a2); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_hqig)(uintptr_t, uint64_t, uint32_t, const void *);
+static inline int32_t gvk_r_hqig(uintptr_t fn, uintptr_t a0, uint64_t a1, uint32_t a2, const void * a3) { return ((gvk_pfn_r_hqig)fn)(a0, a1, a2, a3); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_hqigg)(uintptr_t, uint64_t, uint32_t, const void *, const void *);
+static inline int32_t gvk_r_hqigg(uintptr_t fn, uintptr_t a0, uint64_t a1, uint32_t a2, const void * a3, const void * a4) { return ((gvk_pfn_r_hqigg)fn)(a0, a1, a2, a3, a4); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_hqiggp)(uintptr_t, uint64_t, uint32_t, const void *, const void *, const void *);
+static inline int32_t gvk_r_hqiggp(uintptr_t fn, uintptr_t a0, uint64_t a1, uint32_t a2, const void * a3, const void * a4, const uint8_t * a5) { return ((gvk_pfn_r_hqiggp)fn)(a0, a1, a2, a3, a4, a5); }
 typedef int32_t (VKAPI_PTR *gvk_pfn_r_hqiihp)(uintptr_t, uint64_t, uint32_t, uint32_t, uintptr_t, const void *);
 static inline int32_t gvk_r_hqiihp(uintptr_t fn, uintptr_t a0, uint64_t a1, uint32_t a2, uint32_t a3, uintptr_t a4, const uint8_t * a5) { return ((gvk_pfn_r_hqiihp)fn)(a0, a1, a2, a3, a4, a5); }
 typedef int32_t (VKAPI_PTR *gvk_pfn_r_hqiihpqi)(uintptr_t, uint64_t, uint32_t, uint32_t, uintptr_t, const void *, uint64_t, uint32_t);
@@ -100,26 +143,22 @@ typedef int32_t (VKAPI_PTR *gvk_pfn_r_hqiipp)(uintptr_t, uint64_t, uint32_t, uin
 static inline int32_t gvk_r_hqiipp(uintptr_t fn, uintptr_t a0, uint64_t a1, uint32_t a2, uint32_t a3, const uint8_t * a4, const uint8_t * a5) { return ((gvk_pfn_r_hqiipp)fn)(a0, a1, a2, a3, a4, a5); }
 typedef int32_t (VKAPI_PTR *gvk_pfn_r_hqip)(uintptr_t, uint64_t, uint32_t, const void *);
 static inline int32_t gvk_r_hqip(uintptr_t fn, uintptr_t a0, uint64_t a1, uint32_t a2, const uint8_t * a3) { return ((gvk_pfn_r_hqip)fn)(a0, a1, a2, a3); }
-typedef int32_t (VKAPI_PTR *gvk_pfn_r_hqipp)(uintptr_t, uint64_t, uint32_t, const void *, const void *);
-static inline int32_t gvk_r_hqipp(uintptr_t fn, uintptr_t a0, uint64_t a1, uint32_t a2, const uint8_t * a3, const uint8_t * a4) { return ((gvk_pfn_r_hqipp)fn)(a0, a1, a2, a3, a4); }
-typedef int32_t (VKAPI_PTR *gvk_pfn_r_hqippp)(uintptr_t, uint64_t, uint32_t, const void *, const void *, const void *);
-static inline int32_t gvk_r_hqippp(uintptr_t fn, uintptr_t a0, uint64_t a1, uint32_t a2, const uint8_t * a3, const uint8_t * a4, const uint8_t * a5) { return ((gvk_pfn_r_hqippp)fn)(a0, a1, a2, a3, a4, a5); }
 typedef int32_t (VKAPI_PTR *gvk_pfn_r_hqiqi)(uintptr_t, uint64_t, uint32_t, uint64_t, uint32_t);
 static inline int32_t gvk_r_hqiqi(uintptr_t fn, uintptr_t a0, uint64_t a1, uint32_t a2, uint64_t a3, uint32_t a4) { return ((gvk_pfn_r_hqiqi)fn)(a0, a1, a2, a3, a4); }
 typedef int32_t (VKAPI_PTR *gvk_pfn_r_hqiqq)(uintptr_t, uint64_t, uint32_t, uint64_t, uint64_t);
 static inline int32_t gvk_r_hqiqq(uintptr_t fn, uintptr_t a0, uint64_t a1, uint32_t a2, uint64_t a3, uint64_t a4) { return ((gvk_pfn_r_hqiqq)fn)(a0, a1, a2, a3, a4); }
 typedef int32_t (VKAPI_PTR *gvk_pfn_r_hqp)(uintptr_t, uint64_t, const void *);
 static inline int32_t gvk_r_hqp(uintptr_t fn, uintptr_t a0, uint64_t a1, const uint8_t * a2) { return ((gvk_pfn_r_hqp)fn)(a0, a1, a2); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_hqpg)(uintptr_t, uint64_t, const void *, const void *);
+static inline int32_t gvk_r_hqpg(uintptr_t fn, uintptr_t a0, uint64_t a1, const uint8_t * a2, const void * a3) { return ((gvk_pfn_r_hqpg)fn)(a0, a1, a2, a3); }
 typedef int32_t (VKAPI_PTR *gvk_pfn_r_hqpp)(uintptr_t, uint64_t, const void *, const void *);
 static inline int32_t gvk_r_hqpp(uintptr_t fn, uintptr_t a0, uint64_t a1, const uint8_t * a2, const uint8_t * a3) { return ((gvk_pfn_r_hqpp)fn)(a0, a1, a2, a3); }
-typedef int32_t (VKAPI_PTR *gvk_pfn_r_hqppp)(uintptr_t, uint64_t, const void *, const void *, const void *);
-static inline int32_t gvk_r_hqppp(uintptr_t fn, uintptr_t a0, uint64_t a1, const uint8_t * a2, const uint8_t * a3, const uint8_t * a4) { return ((gvk_pfn_r_hqppp)fn)(a0, a1, a2, a3, a4); }
-typedef int32_t (VKAPI_PTR *gvk_pfn_r_hqqippp)(uintptr_t, uint64_t, uint64_t, uint32_t, const void *, const void *, const void *);
-static inline int32_t gvk_r_hqqippp(uintptr_t fn, uintptr_t a0, uint64_t a1, uint64_t a2, uint32_t a3, const uint8_t * a4, const uint8_t * a5, const uint8_t * a6) { return ((gvk_pfn_r_hqqippp)fn)(a0, a1, a2, a3, a4, a5, a6); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_hqqiggp)(uintptr_t, uint64_t, uint64_t, uint32_t, const void *, const void *, const void *);
+static inline int32_t gvk_r_hqqiggp(uintptr_t fn, uintptr_t a0, uint64_t a1, uint64_t a2, uint32_t a3, const void * a4, const void * a5, const uint8_t * a6) { return ((gvk_pfn_r_hqqiggp)fn)(a0, a1, a2, a3, a4, a5, a6); }
 typedef int32_t (VKAPI_PTR *gvk_pfn_r_hqqq)(uintptr_t, uint64_t, uint64_t, uint64_t);
 static inline int32_t gvk_r_hqqq(uintptr_t fn, uintptr_t a0, uint64_t a1, uint64_t a2, uint64_t a3) { return ((gvk_pfn_r_hqqq)fn)(a0, a1, a2, a3); }
-typedef int32_t (VKAPI_PTR *gvk_pfn_r_hqqqip)(uintptr_t, uint64_t, uint64_t, uint64_t, uint32_t, const void *);
-static inline int32_t gvk_r_hqqqip(uintptr_t fn, uintptr_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint32_t a4, const uint8_t * a5) { return ((gvk_pfn_r_hqqqip)fn)(a0, a1, a2, a3, a4, a5); }
+typedef int32_t (VKAPI_PTR *gvk_pfn_r_hqqqig)(uintptr_t, uint64_t, uint64_t, uint64_t, uint32_t, const void *);
+static inline int32_t gvk_r_hqqqig(uintptr_t fn, uintptr_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint32_t a4, const void * a5) { return ((gvk_pfn_r_hqqqig)fn)(a0, a1, a2, a3, a4, a5); }
 typedef int32_t (VKAPI_PTR *gvk_pfn_r_hqqqqp)(uintptr_t, uint64_t, uint64_t, uint64_t, uint64_t, const void *);
 static inline int32_t gvk_r_hqqqqp(uintptr_t fn, uintptr_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, const uint8_t * a5) { return ((gvk_pfn_r_hqqqqp)fn)(a0, a1, a2, a3, a4, a5); }
 typedef int32_t (VKAPI_PTR *gvk_pfn_r_p)(const void *);
@@ -136,24 +175,52 @@ typedef void (VKAPI_PTR *gvk_pfn_v_hff)(uintptr_t, float, float);
 static inline void gvk_v_hff(uintptr_t fn, uintptr_t a0, float a1, float a2) { ((gvk_pfn_v_hff)fn)(a0, a1, a2); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hfff)(uintptr_t, float, float, float);
 static inline void gvk_v_hfff(uintptr_t fn, uintptr_t a0, float a1, float a2, float a3) { ((gvk_pfn_v_hfff)fn)(a0, a1, a2, a3); }
-typedef void (VKAPI_PTR *gvk_pfn_v_hhp)(uintptr_t, uintptr_t, const void *);
-static inline void gvk_v_hhp(uintptr_t fn, uintptr_t a0, uintptr_t a1, const uint8_t * a2) { ((gvk_pfn_v_hhp)fn)(a0, a1, a2); }
+typedef void (VKAPI_PTR *gvk_pfn_v_hg)(uintptr_t, const void *);
+static inline void gvk_v_hg(uintptr_t fn, uintptr_t a0, const void * a1) { ((gvk_pfn_v_hg)fn)(a0, a1); }
+typedef void (VKAPI_PTR *gvk_pfn_v_hgg)(uintptr_t, const void *, const void *);
+static inline void gvk_v_hgg(uintptr_t fn, uintptr_t a0, const void * a1, const void * a2) { ((gvk_pfn_v_hgg)fn)(a0, a1, a2); }
+typedef void (VKAPI_PTR *gvk_pfn_v_hgh)(uintptr_t, const void *, uintptr_t);
+static inline void gvk_v_hgh(uintptr_t fn, uintptr_t a0, const void * a1, uintptr_t a2) { ((gvk_pfn_v_hgh)fn)(a0, a1, a2); }
+typedef void (VKAPI_PTR *gvk_pfn_v_hghp)(uintptr_t, const void *, uintptr_t, const void *);
+static inline void gvk_v_hghp(uintptr_t fn, uintptr_t a0, const void * a1, uintptr_t a2, const uint8_t * a3) { ((gvk_pfn_v_hghp)fn)(a0, a1, a2, a3); }
+typedef void (VKAPI_PTR *gvk_pfn_v_hgi)(uintptr_t, const void *, uint32_t);
+static inline void gvk_v_hgi(uintptr_t fn, uintptr_t a0, const void * a1, uint32_t a2) { ((gvk_pfn_v_hgi)fn)(a0, a1, a2); }
+typedef void (VKAPI_PTR *gvk_pfn_v_hgp)(uintptr_t, const void *, const void *);
+static inline void gvk_v_hgp(uintptr_t fn, uintptr_t a0, const void * a1, const uint8_t * a2) { ((gvk_pfn_v_hgp)fn)(a0, a1, a2); }
+typedef void (VKAPI_PTR *gvk_pfn_v_hgpg)(uintptr_t, const void *, const void *, const void *);
+static inline void gvk_v_hgpg(uintptr_t fn, uintptr_t a0, const void * a1, const uint8_t * a2, const void * a3) { ((gvk_pfn_v_hgpg)fn)(a0, a1, a2, a3); }
+typedef void (VKAPI_PTR *gvk_pfn_v_hgqqiqqqq)(uintptr_t, const void *, uint64_t, uint64_t, uint32_t, uint64_t, uint64_t, uint64_t, uint64_t);
+static inline void gvk_v_hgqqiqqqq(uintptr_t fn, uintptr_t a0, const void * a1, uint64_t a2, uint64_t a3, uint32_t a4, uint64_t a5, uint64_t a6, uint64_t a7, uint64_t a8) { ((gvk_pfn_v_hgqqiqqqq)fn)(a0, a1, a2, a3, a4, a5, a6, a7, a8); }
+typedef void (VKAPI_PTR *gvk_pfn_v_hhg)(uintptr_t, uintptr_t, const void *);
+static inline void gvk_v_hhg(uintptr_t fn, uintptr_t a0, uintptr_t a1, const void * a2) { ((gvk_pfn_v_hhg)fn)(a0, a1, a2); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hi)(uintptr_t, uint32_t);
 static inline void gvk_v_hi(uintptr_t fn, uintptr_t a0, uint32_t a1) { ((gvk_pfn_v_hi)fn)(a0, a1); }
+typedef void (VKAPI_PTR *gvk_pfn_v_hig)(uintptr_t, uint32_t, const void *);
+static inline void gvk_v_hig(uintptr_t fn, uintptr_t a0, uint32_t a1, const void * a2) { ((gvk_pfn_v_hig)fn)(a0, a1, a2); }
+typedef void (VKAPI_PTR *gvk_pfn_v_higg)(uintptr_t, uint32_t, const void *, const void *);
+static inline void gvk_v_higg(uintptr_t fn, uintptr_t a0, uint32_t a1, const void * a2, const void * a3) { ((gvk_pfn_v_higg)fn)(a0, a1, a2, a3); }
+typedef void (VKAPI_PTR *gvk_pfn_v_higig)(uintptr_t, uint32_t, const void *, uint32_t, const void *);
+static inline void gvk_v_higig(uintptr_t fn, uintptr_t a0, uint32_t a1, const void * a2, uint32_t a3, const void * a4) { ((gvk_pfn_v_higig)fn)(a0, a1, a2, a3, a4); }
+typedef void (VKAPI_PTR *gvk_pfn_v_higpg)(uintptr_t, uint32_t, const void *, const void *, const void *);
+static inline void gvk_v_higpg(uintptr_t fn, uintptr_t a0, uint32_t a1, const void * a2, const uint8_t * a3, const void * a4) { ((gvk_pfn_v_higpg)fn)(a0, a1, a2, a3, a4); }
+typedef void (VKAPI_PTR *gvk_pfn_v_higppg)(uintptr_t, uint32_t, const void *, const void *, const void *, const void *);
+static inline void gvk_v_higppg(uintptr_t fn, uintptr_t a0, uint32_t a1, const void * a2, const uint8_t * a3, const uint8_t * a4, const void * a5) { ((gvk_pfn_v_higppg)fn)(a0, a1, a2, a3, a4, a5); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hii)(uintptr_t, uint32_t, uint32_t);
 static inline void gvk_v_hii(uintptr_t fn, uintptr_t a0, uint32_t a1, uint32_t a2) { ((gvk_pfn_v_hii)fn)(a0, a1, a2); }
+typedef void (VKAPI_PTR *gvk_pfn_v_hiig)(uintptr_t, uint32_t, uint32_t, const void *);
+static inline void gvk_v_hiig(uintptr_t fn, uintptr_t a0, uint32_t a1, uint32_t a2, const void * a3) { ((gvk_pfn_v_hiig)fn)(a0, a1, a2, a3); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hiii)(uintptr_t, uint32_t, uint32_t, uint32_t);
 static inline void gvk_v_hiii(uintptr_t fn, uintptr_t a0, uint32_t a1, uint32_t a2, uint32_t a3) { ((gvk_pfn_v_hiii)fn)(a0, a1, a2, a3); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hiiii)(uintptr_t, uint32_t, uint32_t, uint32_t, uint32_t);
 static inline void gvk_v_hiiii(uintptr_t fn, uintptr_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4) { ((gvk_pfn_v_hiiii)fn)(a0, a1, a2, a3, a4); }
+typedef void (VKAPI_PTR *gvk_pfn_v_hiiiigigig)(uintptr_t, uint32_t, uint32_t, uint32_t, uint32_t, const void *, uint32_t, const void *, uint32_t, const void *);
+static inline void gvk_v_hiiiigigig(uintptr_t fn, uintptr_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, const void * a5, uint32_t a6, const void * a7, uint32_t a8, const void * a9) { ((gvk_pfn_v_hiiiigigig)fn)(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hiiiii)(uintptr_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
 static inline void gvk_v_hiiiii(uintptr_t fn, uintptr_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5) { ((gvk_pfn_v_hiiiii)fn)(a0, a1, a2, a3, a4, a5); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hiiiiii)(uintptr_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
 static inline void gvk_v_hiiiiii(uintptr_t fn, uintptr_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5, uint32_t a6) { ((gvk_pfn_v_hiiiiii)fn)(a0, a1, a2, a3, a4, a5, a6); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hiiiiipp)(uintptr_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, const void *, const void *);
 static inline void gvk_v_hiiiiipp(uintptr_t fn, uintptr_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, uint32_t a5, const uint8_t * a6, const uint8_t * a7) { ((gvk_pfn_v_hiiiiipp)fn)(a0, a1, a2, a3, a4, a5, a6, a7); }
-typedef void (VKAPI_PTR *gvk_pfn_v_hiiiipipip)(uintptr_t, uint32_t, uint32_t, uint32_t, uint32_t, const void *, uint32_t, const void *, uint32_t, const void *);
-static inline void gvk_v_hiiiipipip(uintptr_t fn, uintptr_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, const uint8_t * a5, uint32_t a6, const uint8_t * a7, uint32_t a8, const uint8_t * a9) { ((gvk_pfn_v_hiiiipipip)fn)(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hiiip)(uintptr_t, uint32_t, uint32_t, uint32_t, const void *);
 static inline void gvk_v_hiiip(uintptr_t fn, uintptr_t a0, uint32_t a1, uint32_t a2, uint32_t a3, const uint8_t * a4) { ((gvk_pfn_v_hiiip)fn)(a0, a1, a2, a3, a4); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hiip)(uintptr_t, uint32_t, uint32_t, const void *);
@@ -170,28 +237,26 @@ typedef void (VKAPI_PTR *gvk_pfn_v_hiiqqii)(uintptr_t, uint32_t, uint32_t, uint6
 static inline void gvk_v_hiiqqii(uintptr_t fn, uintptr_t a0, uint32_t a1, uint32_t a2, uint64_t a3, uint64_t a4, uint32_t a5, uint32_t a6) { ((gvk_pfn_v_hiiqqii)fn)(a0, a1, a2, a3, a4, a5, a6); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hip)(uintptr_t, uint32_t, const void *);
 static inline void gvk_v_hip(uintptr_t fn, uintptr_t a0, uint32_t a1, const uint8_t * a2) { ((gvk_pfn_v_hip)fn)(a0, a1, a2); }
+typedef void (VKAPI_PTR *gvk_pfn_v_hipg)(uintptr_t, uint32_t, const void *, const void *);
+static inline void gvk_v_hipg(uintptr_t fn, uintptr_t a0, uint32_t a1, const uint8_t * a2, const void * a3) { ((gvk_pfn_v_hipg)fn)(a0, a1, a2, a3); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hipiii)(uintptr_t, uint32_t, const void *, uint32_t, uint32_t, uint32_t);
 static inline void gvk_v_hipiii(uintptr_t fn, uintptr_t a0, uint32_t a1, const uint8_t * a2, uint32_t a3, uint32_t a4, uint32_t a5) { ((gvk_pfn_v_hipiii)fn)(a0, a1, a2, a3, a4, a5); }
+typedef void (VKAPI_PTR *gvk_pfn_v_hipiiigigig)(uintptr_t, uint32_t, const void *, uint32_t, uint32_t, uint32_t, const void *, uint32_t, const void *, uint32_t, const void *);
+static inline void gvk_v_hipiiigigig(uintptr_t fn, uintptr_t a0, uint32_t a1, const uint8_t * a2, uint32_t a3, uint32_t a4, uint32_t a5, const void * a6, uint32_t a7, const void * a8, uint32_t a9, const void * a10) { ((gvk_pfn_v_hipiiigigig)fn)(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hipiiip)(uintptr_t, uint32_t, const void *, uint32_t, uint32_t, uint32_t, const void *);
 static inline void gvk_v_hipiiip(uintptr_t fn, uintptr_t a0, uint32_t a1, const uint8_t * a2, uint32_t a3, uint32_t a4, uint32_t a5, const uint8_t * a6) { ((gvk_pfn_v_hipiiip)fn)(a0, a1, a2, a3, a4, a5, a6); }
-typedef void (VKAPI_PTR *gvk_pfn_v_hipiiipipip)(uintptr_t, uint32_t, const void *, uint32_t, uint32_t, uint32_t, const void *, uint32_t, const void *, uint32_t, const void *);
-static inline void gvk_v_hipiiipipip(uintptr_t fn, uintptr_t a0, uint32_t a1, const uint8_t * a2, uint32_t a3, uint32_t a4, uint32_t a5, const uint8_t * a6, uint32_t a7, const uint8_t * a8, uint32_t a9, const uint8_t * a10) { ((gvk_pfn_v_hipiiipipip)fn)(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hipip)(uintptr_t, uint32_t, const void *, uint32_t, const void *);
 static inline void gvk_v_hipip(uintptr_t fn, uintptr_t a0, uint32_t a1, const uint8_t * a2, uint32_t a3, const uint8_t * a4) { ((gvk_pfn_v_hipip)fn)(a0, a1, a2, a3, a4); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hipiqi)(uintptr_t, uint32_t, const void *, uint32_t, uint64_t, uint32_t);
 static inline void gvk_v_hipiqi(uintptr_t fn, uintptr_t a0, uint32_t a1, const uint8_t * a2, uint32_t a3, uint64_t a4, uint32_t a5) { ((gvk_pfn_v_hipiqi)fn)(a0, a1, a2, a3, a4, a5); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hipp)(uintptr_t, uint32_t, const void *, const void *);
 static inline void gvk_v_hipp(uintptr_t fn, uintptr_t a0, uint32_t a1, const uint8_t * a2, const uint8_t * a3) { ((gvk_pfn_v_hipp)fn)(a0, a1, a2, a3); }
-typedef void (VKAPI_PTR *gvk_pfn_v_hippp)(uintptr_t, uint32_t, const void *, const void *, const void *);
-static inline void gvk_v_hippp(uintptr_t fn, uintptr_t a0, uint32_t a1, const uint8_t * a2, const uint8_t * a3, const uint8_t * a4) { ((gvk_pfn_v_hippp)fn)(a0, a1, a2, a3, a4); }
-typedef void (VKAPI_PTR *gvk_pfn_v_hipppp)(uintptr_t, uint32_t, const void *, const void *, const void *, const void *);
-static inline void gvk_v_hipppp(uintptr_t fn, uintptr_t a0, uint32_t a1, const uint8_t * a2, const uint8_t * a3, const uint8_t * a4, const uint8_t * a5) { ((gvk_pfn_v_hipppp)fn)(a0, a1, a2, a3, a4, a5); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hiq)(uintptr_t, uint32_t, uint64_t);
 static inline void gvk_v_hiq(uintptr_t fn, uintptr_t a0, uint32_t a1, uint64_t a2) { ((gvk_pfn_v_hiq)fn)(a0, a1, a2); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hiqi)(uintptr_t, uint32_t, uint64_t, uint32_t);
 static inline void gvk_v_hiqi(uintptr_t fn, uintptr_t a0, uint32_t a1, uint64_t a2, uint32_t a3) { ((gvk_pfn_v_hiqi)fn)(a0, a1, a2, a3); }
-typedef void (VKAPI_PTR *gvk_pfn_v_hiqiip)(uintptr_t, uint32_t, uint64_t, uint32_t, uint32_t, const void *);
-static inline void gvk_v_hiqiip(uintptr_t fn, uintptr_t a0, uint32_t a1, uint64_t a2, uint32_t a3, uint32_t a4, const uint8_t * a5) { ((gvk_pfn_v_hiqiip)fn)(a0, a1, a2, a3, a4, a5); }
+typedef void (VKAPI_PTR *gvk_pfn_v_hiqiig)(uintptr_t, uint32_t, uint64_t, uint32_t, uint32_t, const void *);
+static inline void gvk_v_hiqiig(uintptr_t fn, uintptr_t a0, uint32_t a1, uint64_t a2, uint32_t a3, uint32_t a4, const void * a5) { ((gvk_pfn_v_hiqiig)fn)(a0, a1, a2, a3, a4, a5); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hiqiipip)(uintptr_t, uint32_t, uint64_t, uint32_t, uint32_t, const void *, uint32_t, const void *);
 static inline void gvk_v_hiqiipip(uintptr_t fn, uintptr_t a0, uint32_t a1, uint64_t a2, uint32_t a3, uint32_t a4, const uint8_t * a5, uint32_t a6, const uint8_t * a7) { ((gvk_pfn_v_hiqiipip)fn)(a0, a1, a2, a3, a4, a5, a6, a7); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hiqiipp)(uintptr_t, uint32_t, uint64_t, uint32_t, uint32_t, const void *, const void *);
@@ -204,30 +269,28 @@ typedef void (VKAPI_PTR *gvk_pfn_v_his)(uintptr_t, uint32_t, uint16_t);
 static inline void gvk_v_his(uintptr_t fn, uintptr_t a0, uint32_t a1, uint16_t a2) { ((gvk_pfn_v_his)fn)(a0, a1, a2); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hp)(uintptr_t, const void *);
 static inline void gvk_v_hp(uintptr_t fn, uintptr_t a0, const uint8_t * a1) { ((gvk_pfn_v_hp)fn)(a0, a1); }
-typedef void (VKAPI_PTR *gvk_pfn_v_hph)(uintptr_t, const void *, uintptr_t);
-static inline void gvk_v_hph(uintptr_t fn, uintptr_t a0, const uint8_t * a1, uintptr_t a2) { ((gvk_pfn_v_hph)fn)(a0, a1, a2); }
-typedef void (VKAPI_PTR *gvk_pfn_v_hphp)(uintptr_t, const void *, uintptr_t, const void *);
-static inline void gvk_v_hphp(uintptr_t fn, uintptr_t a0, const uint8_t * a1, uintptr_t a2, const uint8_t * a3) { ((gvk_pfn_v_hphp)fn)(a0, a1, a2, a3); }
-typedef void (VKAPI_PTR *gvk_pfn_v_hpi)(uintptr_t, const void *, uint32_t);
-static inline void gvk_v_hpi(uintptr_t fn, uintptr_t a0, const uint8_t * a1, uint32_t a2) { ((gvk_pfn_v_hpi)fn)(a0, a1, a2); }
+typedef void (VKAPI_PTR *gvk_pfn_v_hpg)(uintptr_t, const void *, const void *);
+static inline void gvk_v_hpg(uintptr_t fn, uintptr_t a0, const uint8_t * a1, const void * a2) { ((gvk_pfn_v_hpg)fn)(a0, a1, a2); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hpp)(uintptr_t, const void *, const void *);
 static inline void gvk_v_hpp(uintptr_t fn, uintptr_t a0, const uint8_t * a1, const uint8_t * a2) { ((gvk_pfn_v_hpp)fn)(a0, a1, a2); }
-typedef void (VKAPI_PTR *gvk_pfn_v_hppp)(uintptr_t, const void *, const void *, const void *);
-static inline void gvk_v_hppp(uintptr_t fn, uintptr_t a0, const uint8_t * a1, const uint8_t * a2, const uint8_t * a3) { ((gvk_pfn_v_hppp)fn)(a0, a1, a2, a3); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hppppiii)(uintptr_t, const void *, const void *, const void *, const void *, uint32_t, uint32_t, uint32_t);
 static inline void gvk_v_hppppiii(uintptr_t fn, uintptr_t a0, const uint8_t * a1, const uint8_t * a2, const uint8_t * a3, const uint8_t * a4, uint32_t a5, uint32_t a6, uint32_t a7) { ((gvk_pfn_v_hppppiii)fn)(a0, a1, a2, a3, a4, a5, a6, a7); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hppppq)(uintptr_t, const void *, const void *, const void *, const void *, uint64_t);
 static inline void gvk_v_hppppq(uintptr_t fn, uintptr_t a0, const uint8_t * a1, const uint8_t * a2, const uint8_t * a3, const uint8_t * a4, uint64_t a5) { ((gvk_pfn_v_hppppq)fn)(a0, a1, a2, a3, a4, a5); }
-typedef void (VKAPI_PTR *gvk_pfn_v_hpqqiqqqq)(uintptr_t, const void *, uint64_t, uint64_t, uint32_t, uint64_t, uint64_t, uint64_t, uint64_t);
-static inline void gvk_v_hpqqiqqqq(uintptr_t fn, uintptr_t a0, const uint8_t * a1, uint64_t a2, uint64_t a3, uint32_t a4, uint64_t a5, uint64_t a6, uint64_t a7, uint64_t a8) { ((gvk_pfn_v_hpqqiqqqq)fn)(a0, a1, a2, a3, a4, a5, a6, a7, a8); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hq)(uintptr_t, uint64_t);
 static inline void gvk_v_hq(uintptr_t fn, uintptr_t a0, uint64_t a1) { ((gvk_pfn_v_hq)fn)(a0, a1); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hqf)(uintptr_t, uint64_t, float);
 static inline void gvk_v_hqf(uintptr_t fn, uintptr_t a0, uint64_t a1, float a2) { ((gvk_pfn_v_hqf)fn)(a0, a1, a2); }
-typedef void (VKAPI_PTR *gvk_pfn_v_hqhp)(uintptr_t, uint64_t, uintptr_t, const void *);
-static inline void gvk_v_hqhp(uintptr_t fn, uintptr_t a0, uint64_t a1, uintptr_t a2, const uint8_t * a3) { ((gvk_pfn_v_hqhp)fn)(a0, a1, a2, a3); }
+typedef void (VKAPI_PTR *gvk_pfn_v_hqg)(uintptr_t, uint64_t, const void *);
+static inline void gvk_v_hqg(uintptr_t fn, uintptr_t a0, uint64_t a1, const void * a2) { ((gvk_pfn_v_hqg)fn)(a0, a1, a2); }
+typedef void (VKAPI_PTR *gvk_pfn_v_hqgg)(uintptr_t, uint64_t, const void *, const void *);
+static inline void gvk_v_hqgg(uintptr_t fn, uintptr_t a0, uint64_t a1, const void * a2, const void * a3) { ((gvk_pfn_v_hqgg)fn)(a0, a1, a2, a3); }
+typedef void (VKAPI_PTR *gvk_pfn_v_hqhg)(uintptr_t, uint64_t, uintptr_t, const void *);
+static inline void gvk_v_hqhg(uintptr_t fn, uintptr_t a0, uint64_t a1, uintptr_t a2, const void * a3) { ((gvk_pfn_v_hqhg)fn)(a0, a1, a2, a3); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hqi)(uintptr_t, uint64_t, uint32_t);
 static inline void gvk_v_hqi(uintptr_t fn, uintptr_t a0, uint64_t a1, uint32_t a2) { ((gvk_pfn_v_hqi)fn)(a0, a1, a2); }
+typedef void (VKAPI_PTR *gvk_pfn_v_hqig)(uintptr_t, uint64_t, uint32_t, const void *);
+static inline void gvk_v_hqig(uintptr_t fn, uintptr_t a0, uint64_t a1, uint32_t a2, const void * a3) { ((gvk_pfn_v_hqig)fn)(a0, a1, a2, a3); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hqii)(uintptr_t, uint64_t, uint32_t, uint32_t);
 static inline void gvk_v_hqii(uintptr_t fn, uintptr_t a0, uint64_t a1, uint32_t a2, uint32_t a3) { ((gvk_pfn_v_hqii)fn)(a0, a1, a2, a3); }
 typedef void (VKAPI_PTR *gvk_pfn_v_hqiii)(uintptr_t, uint64_t, uint32_t, uint32_t, uint32_t);

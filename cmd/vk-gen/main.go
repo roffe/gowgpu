@@ -1051,6 +1051,14 @@ func generateCommandMethod(f *os.File, cmd Command) error {
 
 	fmt.Fprintln(f, " {")
 
+	// vk-cgo reads these to hand C an array argument as a slice of its
+	// length, whose every element cgocheck then walks.
+	for _, param := range params {
+		if count := countParam(param, params); count != "" {
+			fmt.Fprintf(f, "\t//vk:len %s %s\n", goParamName(param.Name), goParamName(count))
+		}
+	}
+
 	// Method body
 	hasReturn := returnType == "VkResult" || returnType != "void"
 	if hasReturn {
@@ -1124,6 +1132,20 @@ func generateCommandMethod(f *os.File, cmd Command) error {
 	fmt.Fprintln(f, "")
 
 	return nil
+}
+
+// countParam is the parameter passed by value that counts the elements
+// param points at, from param's len, or "" when there is none.
+func countParam(param Param, params []Param) string {
+	if !strings.Contains(param.RawXML, "*") {
+		return ""
+	}
+	for _, p := range params {
+		if p.Name == param.Len && !strings.Contains(p.RawXML, "*") {
+			return p.Name
+		}
+	}
+	return ""
 }
 
 // goParamName keeps a Vulkan parameter name from being a Go keyword: three

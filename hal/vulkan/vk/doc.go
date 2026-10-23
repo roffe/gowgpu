@@ -9,8 +9,10 @@
 // Every call goes through one of the C trampolines in trampolines.h, one per
 // C signature, with the function pointer as the first argument. Pointers
 // cross as typed pointers under #cgo noescape and nocallback, so nothing
-// escapes and nothing allocates. Building without cgo stops with a message
-// saying so.
+// escapes and nothing allocates. cgocheck walks every argument that points
+// at more pointers, each element of an array, and those may only lead to Go
+// memory that is pinned (see Pin), the caller's stack or C memory. Building
+// without cgo stops with a message saying so.
 //
 // # Generation
 //

@@ -8,6 +8,8 @@ package vk
 #include "trampolines.h"
 #cgo noescape gvk_h_hp
 #cgo nocallback gvk_h_hp
+#cgo noescape gvk_i_hg
+#cgo nocallback gvk_i_hg
 #cgo noescape gvk_i_hi
 #cgo nocallback gvk_i_hi
 #cgo noescape gvk_i_hip
@@ -16,22 +18,54 @@ package vk
 #cgo nocallback gvk_i_hiph
 #cgo noescape gvk_i_hipi
 #cgo nocallback gvk_i_hipi
-#cgo noescape gvk_i_hp
-#cgo nocallback gvk_i_hp
 #cgo noescape gvk_i_hq
 #cgo nocallback gvk_i_hq
-#cgo noescape gvk_q_hp
-#cgo nocallback gvk_q_hp
+#cgo noescape gvk_q_hg
+#cgo nocallback gvk_q_hg
 #cgo noescape gvk_q_hqii
 #cgo nocallback gvk_q_hqii
+#cgo noescape gvk_r_ggp
+#cgo nocallback gvk_r_ggp
 #cgo noescape gvk_r_h
 #cgo nocallback gvk_r_h
+#cgo noescape gvk_r_hg
+#cgo nocallback gvk_r_hg
+#cgo noescape gvk_r_hgg
+#cgo nocallback gvk_r_hgg
+#cgo noescape gvk_r_hggg
+#cgo nocallback gvk_r_hggg
+#cgo noescape gvk_r_hggp
+#cgo nocallback gvk_r_hggp
+#cgo noescape gvk_r_hggpp
+#cgo nocallback gvk_r_hggpp
+#cgo noescape gvk_r_hgh
+#cgo nocallback gvk_r_hgh
+#cgo noescape gvk_r_hgig
+#cgo nocallback gvk_r_hgig
+#cgo noescape gvk_r_hgp
+#cgo nocallback gvk_r_hgp
+#cgo noescape gvk_r_hgpg
+#cgo nocallback gvk_r_hgpg
+#cgo noescape gvk_r_hgpp
+#cgo nocallback gvk_r_hgpp
+#cgo noescape gvk_r_hgq
+#cgo nocallback gvk_r_hgq
 #cgo noescape gvk_r_hh
 #cgo nocallback gvk_r_hh
 #cgo noescape gvk_r_hi
 #cgo nocallback gvk_r_hi
-#cgo noescape gvk_r_hihp
-#cgo nocallback gvk_r_hihp
+#cgo noescape gvk_r_hig
+#cgo nocallback gvk_r_hig
+#cgo noescape gvk_r_higgp
+#cgo nocallback gvk_r_higgp
+#cgo noescape gvk_r_higpp
+#cgo nocallback gvk_r_higpp
+#cgo noescape gvk_r_higq
+#cgo nocallback gvk_r_higq
+#cgo noescape gvk_r_hihg
+#cgo nocallback gvk_r_hihg
+#cgo noescape gvk_r_hiig
+#cgo nocallback gvk_r_hiig
 #cgo noescape gvk_r_hiiiiiip
 #cgo nocallback gvk_r_hiiiiiip
 #cgo noescape gvk_r_hiiiiip
@@ -42,16 +76,18 @@ package vk
 #cgo nocallback gvk_r_hiip
 #cgo noescape gvk_r_hip
 #cgo nocallback gvk_r_hip
+#cgo noescape gvk_r_hipg
+#cgo nocallback gvk_r_hipg
+#cgo noescape gvk_r_hipgg
+#cgo nocallback gvk_r_hipgg
 #cgo noescape gvk_r_hipihph
 #cgo nocallback gvk_r_hipihph
 #cgo noescape gvk_r_hipiq
 #cgo nocallback gvk_r_hipiq
 #cgo noescape gvk_r_hipp
 #cgo nocallback gvk_r_hipp
-#cgo noescape gvk_r_hippp
-#cgo nocallback gvk_r_hippp
-#cgo noescape gvk_r_hipq
-#cgo nocallback gvk_r_hipq
+#cgo noescape gvk_r_hippg
+#cgo nocallback gvk_r_hippg
 #cgo noescape gvk_r_hipqp
 #cgo nocallback gvk_r_hipqp
 #cgo noescape gvk_r_hiq
@@ -60,28 +96,34 @@ package vk
 #cgo nocallback gvk_r_hiqp
 #cgo noescape gvk_r_hiqqq
 #cgo nocallback gvk_r_hiqqq
-#cgo noescape gvk_r_hp
-#cgo nocallback gvk_r_hp
-#cgo noescape gvk_r_hph
-#cgo nocallback gvk_r_hph
+#cgo noescape gvk_r_hpg
+#cgo nocallback gvk_r_hpg
 #cgo noescape gvk_r_hphp
 #cgo nocallback gvk_r_hphp
-#cgo noescape gvk_r_hpip
-#cgo nocallback gvk_r_hpip
 #cgo noescape gvk_r_hpp
 #cgo nocallback gvk_r_hpp
 #cgo noescape gvk_r_hppp
 #cgo nocallback gvk_r_hppp
-#cgo noescape gvk_r_hpppp
-#cgo nocallback gvk_r_hpppp
 #cgo noescape gvk_r_hpq
 #cgo nocallback gvk_r_hpq
 #cgo noescape gvk_r_hq
 #cgo nocallback gvk_r_hq
+#cgo noescape gvk_r_hqg
+#cgo nocallback gvk_r_hqg
+#cgo noescape gvk_r_hqggp
+#cgo nocallback gvk_r_hqggp
+#cgo noescape gvk_r_hqgp
+#cgo nocallback gvk_r_hqgp
 #cgo noescape gvk_r_hqhp
 #cgo nocallback gvk_r_hqhp
 #cgo noescape gvk_r_hqi
 #cgo nocallback gvk_r_hqi
+#cgo noescape gvk_r_hqig
+#cgo nocallback gvk_r_hqig
+#cgo noescape gvk_r_hqigg
+#cgo nocallback gvk_r_hqigg
+#cgo noescape gvk_r_hqiggp
+#cgo nocallback gvk_r_hqiggp
 #cgo noescape gvk_r_hqiihp
 #cgo nocallback gvk_r_hqiihp
 #cgo noescape gvk_r_hqiihpqi
@@ -90,26 +132,22 @@ package vk
 #cgo nocallback gvk_r_hqiipp
 #cgo noescape gvk_r_hqip
 #cgo nocallback gvk_r_hqip
-#cgo noescape gvk_r_hqipp
-#cgo nocallback gvk_r_hqipp
-#cgo noescape gvk_r_hqippp
-#cgo nocallback gvk_r_hqippp
 #cgo noescape gvk_r_hqiqi
 #cgo nocallback gvk_r_hqiqi
 #cgo noescape gvk_r_hqiqq
 #cgo nocallback gvk_r_hqiqq
 #cgo noescape gvk_r_hqp
 #cgo nocallback gvk_r_hqp
+#cgo noescape gvk_r_hqpg
+#cgo nocallback gvk_r_hqpg
 #cgo noescape gvk_r_hqpp
 #cgo nocallback gvk_r_hqpp
-#cgo noescape gvk_r_hqppp
-#cgo nocallback gvk_r_hqppp
-#cgo noescape gvk_r_hqqippp
-#cgo nocallback gvk_r_hqqippp
+#cgo noescape gvk_r_hqqiggp
+#cgo nocallback gvk_r_hqqiggp
 #cgo noescape gvk_r_hqqq
 #cgo nocallback gvk_r_hqqq
-#cgo noescape gvk_r_hqqqip
-#cgo nocallback gvk_r_hqqqip
+#cgo noescape gvk_r_hqqqig
+#cgo nocallback gvk_r_hqqqig
 #cgo noescape gvk_r_hqqqqp
 #cgo nocallback gvk_r_hqqqqp
 #cgo noescape gvk_r_p
@@ -126,24 +164,52 @@ package vk
 #cgo nocallback gvk_v_hff
 #cgo noescape gvk_v_hfff
 #cgo nocallback gvk_v_hfff
-#cgo noescape gvk_v_hhp
-#cgo nocallback gvk_v_hhp
+#cgo noescape gvk_v_hg
+#cgo nocallback gvk_v_hg
+#cgo noescape gvk_v_hgg
+#cgo nocallback gvk_v_hgg
+#cgo noescape gvk_v_hgh
+#cgo nocallback gvk_v_hgh
+#cgo noescape gvk_v_hghp
+#cgo nocallback gvk_v_hghp
+#cgo noescape gvk_v_hgi
+#cgo nocallback gvk_v_hgi
+#cgo noescape gvk_v_hgp
+#cgo nocallback gvk_v_hgp
+#cgo noescape gvk_v_hgpg
+#cgo nocallback gvk_v_hgpg
+#cgo noescape gvk_v_hgqqiqqqq
+#cgo nocallback gvk_v_hgqqiqqqq
+#cgo noescape gvk_v_hhg
+#cgo nocallback gvk_v_hhg
 #cgo noescape gvk_v_hi
 #cgo nocallback gvk_v_hi
+#cgo noescape gvk_v_hig
+#cgo nocallback gvk_v_hig
+#cgo noescape gvk_v_higg
+#cgo nocallback gvk_v_higg
+#cgo noescape gvk_v_higig
+#cgo nocallback gvk_v_higig
+#cgo noescape gvk_v_higpg
+#cgo nocallback gvk_v_higpg
+#cgo noescape gvk_v_higppg
+#cgo nocallback gvk_v_higppg
 #cgo noescape gvk_v_hii
 #cgo nocallback gvk_v_hii
+#cgo noescape gvk_v_hiig
+#cgo nocallback gvk_v_hiig
 #cgo noescape gvk_v_hiii
 #cgo nocallback gvk_v_hiii
 #cgo noescape gvk_v_hiiii
 #cgo nocallback gvk_v_hiiii
+#cgo noescape gvk_v_hiiiigigig
+#cgo nocallback gvk_v_hiiiigigig
 #cgo noescape gvk_v_hiiiii
 #cgo nocallback gvk_v_hiiiii
 #cgo noescape gvk_v_hiiiiii
 #cgo nocallback gvk_v_hiiiiii
 #cgo noescape gvk_v_hiiiiipp
 #cgo nocallback gvk_v_hiiiiipp
-#cgo noescape gvk_v_hiiiipipip
-#cgo nocallback gvk_v_hiiiipipip
 #cgo noescape gvk_v_hiiip
 #cgo nocallback gvk_v_hiiip
 #cgo noescape gvk_v_hiip
@@ -160,28 +226,26 @@ package vk
 #cgo nocallback gvk_v_hiiqqii
 #cgo noescape gvk_v_hip
 #cgo nocallback gvk_v_hip
+#cgo noescape gvk_v_hipg
+#cgo nocallback gvk_v_hipg
 #cgo noescape gvk_v_hipiii
 #cgo nocallback gvk_v_hipiii
+#cgo noescape gvk_v_hipiiigigig
+#cgo nocallback gvk_v_hipiiigigig
 #cgo noescape gvk_v_hipiiip
 #cgo nocallback gvk_v_hipiiip
-#cgo noescape gvk_v_hipiiipipip
-#cgo nocallback gvk_v_hipiiipipip
 #cgo noescape gvk_v_hipip
 #cgo nocallback gvk_v_hipip
 #cgo noescape gvk_v_hipiqi
 #cgo nocallback gvk_v_hipiqi
 #cgo noescape gvk_v_hipp
 #cgo nocallback gvk_v_hipp
-#cgo noescape gvk_v_hippp
-#cgo nocallback gvk_v_hippp
-#cgo noescape gvk_v_hipppp
-#cgo nocallback gvk_v_hipppp
 #cgo noescape gvk_v_hiq
 #cgo nocallback gvk_v_hiq
 #cgo noescape gvk_v_hiqi
 #cgo nocallback gvk_v_hiqi
-#cgo noescape gvk_v_hiqiip
-#cgo nocallback gvk_v_hiqiip
+#cgo noescape gvk_v_hiqiig
+#cgo nocallback gvk_v_hiqiig
 #cgo noescape gvk_v_hiqiipip
 #cgo nocallback gvk_v_hiqiipip
 #cgo noescape gvk_v_hiqiipp
@@ -194,30 +258,28 @@ package vk
 #cgo nocallback gvk_v_his
 #cgo noescape gvk_v_hp
 #cgo nocallback gvk_v_hp
-#cgo noescape gvk_v_hph
-#cgo nocallback gvk_v_hph
-#cgo noescape gvk_v_hphp
-#cgo nocallback gvk_v_hphp
-#cgo noescape gvk_v_hpi
-#cgo nocallback gvk_v_hpi
+#cgo noescape gvk_v_hpg
+#cgo nocallback gvk_v_hpg
 #cgo noescape gvk_v_hpp
 #cgo nocallback gvk_v_hpp
-#cgo noescape gvk_v_hppp
-#cgo nocallback gvk_v_hppp
 #cgo noescape gvk_v_hppppiii
 #cgo nocallback gvk_v_hppppiii
 #cgo noescape gvk_v_hppppq
 #cgo nocallback gvk_v_hppppq
-#cgo noescape gvk_v_hpqqiqqqq
-#cgo nocallback gvk_v_hpqqiqqqq
 #cgo noescape gvk_v_hq
 #cgo nocallback gvk_v_hq
 #cgo noescape gvk_v_hqf
 #cgo nocallback gvk_v_hqf
-#cgo noescape gvk_v_hqhp
-#cgo nocallback gvk_v_hqhp
+#cgo noescape gvk_v_hqg
+#cgo nocallback gvk_v_hqg
+#cgo noescape gvk_v_hqgg
+#cgo nocallback gvk_v_hqgg
+#cgo noescape gvk_v_hqhg
+#cgo nocallback gvk_v_hqhg
 #cgo noescape gvk_v_hqi
 #cgo nocallback gvk_v_hqi
+#cgo noescape gvk_v_hqig
+#cgo nocallback gvk_v_hqig
 #cgo noescape gvk_v_hqii
 #cgo nocallback gvk_v_hqii
 #cgo noescape gvk_v_hqiii
@@ -972,7 +1034,7 @@ func (c *Commands) CreateInstance(pCreateInfo *InstanceCreateInfo, pAllocator *A
 	if c.createInstance == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_ppp(C.uintptr_t(uintptr(c.createInstance)), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pInstance)))
+	r := C.gvk_r_ggp(C.uintptr_t(uintptr(c.createInstance)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pInstance)))
 	return Result(r)
 }
 
@@ -981,7 +1043,7 @@ func (c *Commands) DestroyInstance(instance Instance, pAllocator *AllocationCall
 	if c.destroyInstance == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.destroyInstance)), C.uintptr_t(instance), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.destroyInstance)), C.uintptr_t(instance), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // EnumeratePhysicalDevices wraps vkEnumeratePhysicalDevices.
@@ -1065,7 +1127,7 @@ func (c *Commands) CreateDevice(physicalDevice PhysicalDevice, pCreateInfo *Devi
 	if c.createDevice == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createDevice)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pDevice)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createDevice)), C.uintptr_t(physicalDevice), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pDevice)))
 	return Result(r)
 }
 
@@ -1074,7 +1136,7 @@ func (c *Commands) DestroyDevice(device Device, pAllocator *AllocationCallbacks)
 	if c.destroyDevice == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.destroyDevice)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.destroyDevice)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // EnumerateInstanceVersion wraps vkEnumerateInstanceVersion.
@@ -1135,7 +1197,7 @@ func (c *Commands) QueueSubmit(queue Queue, submitCount uint32, pSubmits *Submit
 	if c.queueSubmit == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hipq(C.uintptr_t(uintptr(c.queueSubmit)), C.uintptr_t(queue), C.uint32_t(submitCount), (*C.uint8_t)(unsafe.Pointer(pSubmits)), C.uint64_t(fence))
+	r := C.gvk_r_higq(C.uintptr_t(uintptr(c.queueSubmit)), C.uintptr_t(queue), C.uint32_t(submitCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSubmits, lenIfSet(pSubmits != nil, int(submitCount)))[:])), C.uint64_t(fence))
 	return Result(r)
 }
 
@@ -1162,7 +1224,7 @@ func (c *Commands) AllocateMemory(device Device, pAllocateInfo *MemoryAllocateIn
 	if c.allocateMemory == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.allocateMemory)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pAllocateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pMemory)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.allocateMemory)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocateInfo, lenIfSet(pAllocateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pMemory)))
 	return Result(r)
 }
 
@@ -1171,7 +1233,7 @@ func (c *Commands) FreeMemory(device Device, memory DeviceMemory, pAllocator *Al
 	if c.freeMemory == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.freeMemory)), C.uintptr_t(device), C.uint64_t(memory), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.freeMemory)), C.uintptr_t(device), C.uint64_t(memory), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // MapMemory wraps vkMapMemory.
@@ -1179,7 +1241,7 @@ func (c *Commands) MapMemory(device Device, memory DeviceMemory, offset DeviceSi
 	if c.mapMemory == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqqqip(C.uintptr_t(uintptr(c.mapMemory)), C.uintptr_t(device), C.uint64_t(memory), C.uint64_t(offset), C.uint64_t(size), C.uint32_t(flags), (*C.uint8_t)(unsafe.Pointer(ppData)))
+	r := C.gvk_r_hqqqig(C.uintptr_t(uintptr(c.mapMemory)), C.uintptr_t(device), C.uint64_t(memory), C.uint64_t(offset), C.uint64_t(size), C.uint32_t(flags), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(ppData, lenIfSet(ppData != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -1196,7 +1258,7 @@ func (c *Commands) FlushMappedMemoryRanges(device Device, memoryRangeCount uint3
 	if c.flushMappedMemoryRanges == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hip(C.uintptr_t(uintptr(c.flushMappedMemoryRanges)), C.uintptr_t(device), C.uint32_t(memoryRangeCount), (*C.uint8_t)(unsafe.Pointer(pMemoryRanges)))
+	r := C.gvk_r_hig(C.uintptr_t(uintptr(c.flushMappedMemoryRanges)), C.uintptr_t(device), C.uint32_t(memoryRangeCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMemoryRanges, lenIfSet(pMemoryRanges != nil, int(memoryRangeCount)))[:])))
 	return Result(r)
 }
 
@@ -1205,7 +1267,7 @@ func (c *Commands) InvalidateMappedMemoryRanges(device Device, memoryRangeCount 
 	if c.invalidateMappedMemoryRanges == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hip(C.uintptr_t(uintptr(c.invalidateMappedMemoryRanges)), C.uintptr_t(device), C.uint32_t(memoryRangeCount), (*C.uint8_t)(unsafe.Pointer(pMemoryRanges)))
+	r := C.gvk_r_hig(C.uintptr_t(uintptr(c.invalidateMappedMemoryRanges)), C.uintptr_t(device), C.uint32_t(memoryRangeCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMemoryRanges, lenIfSet(pMemoryRanges != nil, int(memoryRangeCount)))[:])))
 	return Result(r)
 }
 
@@ -1272,7 +1334,7 @@ func (c *Commands) QueueBindSparse(queue Queue, bindInfoCount uint32, pBindInfo 
 	if c.queueBindSparse == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hipq(C.uintptr_t(uintptr(c.queueBindSparse)), C.uintptr_t(queue), C.uint32_t(bindInfoCount), (*C.uint8_t)(unsafe.Pointer(pBindInfo)), C.uint64_t(fence))
+	r := C.gvk_r_higq(C.uintptr_t(uintptr(c.queueBindSparse)), C.uintptr_t(queue), C.uint32_t(bindInfoCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pBindInfo, lenIfSet(pBindInfo != nil, int(bindInfoCount)))[:])), C.uint64_t(fence))
 	return Result(r)
 }
 
@@ -1281,7 +1343,7 @@ func (c *Commands) CreateFence(device Device, pCreateInfo *FenceCreateInfo, pAll
 	if c.createFence == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createFence)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pFence)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createFence)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pFence)))
 	return Result(r)
 }
 
@@ -1290,7 +1352,7 @@ func (c *Commands) DestroyFence(device Device, fence Fence, pAllocator *Allocati
 	if c.destroyFence == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyFence)), C.uintptr_t(device), C.uint64_t(fence), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyFence)), C.uintptr_t(device), C.uint64_t(fence), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // ResetFences wraps vkResetFences.
@@ -1325,7 +1387,7 @@ func (c *Commands) CreateSemaphore(device Device, pCreateInfo *SemaphoreCreateIn
 	if c.createSemaphore == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createSemaphore)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pSemaphore)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createSemaphore)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pSemaphore)))
 	return Result(r)
 }
 
@@ -1334,7 +1396,7 @@ func (c *Commands) DestroySemaphore(device Device, semaphore Semaphore, pAllocat
 	if c.destroySemaphore == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroySemaphore)), C.uintptr_t(device), C.uint64_t(semaphore), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroySemaphore)), C.uintptr_t(device), C.uint64_t(semaphore), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // CreateEvent wraps vkCreateEvent.
@@ -1342,7 +1404,7 @@ func (c *Commands) CreateEvent(device Device, pCreateInfo *EventCreateInfo, pAll
 	if c.createEvent == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createEvent)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pEvent)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createEvent)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pEvent)))
 	return Result(r)
 }
 
@@ -1351,7 +1413,7 @@ func (c *Commands) DestroyEvent(device Device, event Event, pAllocator *Allocati
 	if c.destroyEvent == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyEvent)), C.uintptr_t(device), C.uint64_t(event), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyEvent)), C.uintptr_t(device), C.uint64_t(event), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // GetEventStatus wraps vkGetEventStatus.
@@ -1386,7 +1448,7 @@ func (c *Commands) CreateQueryPool(device Device, pCreateInfo *QueryPoolCreateIn
 	if c.createQueryPool == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createQueryPool)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pQueryPool)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createQueryPool)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pQueryPool)))
 	return Result(r)
 }
 
@@ -1395,7 +1457,7 @@ func (c *Commands) DestroyQueryPool(device Device, queryPool QueryPool, pAllocat
 	if c.destroyQueryPool == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyQueryPool)), C.uintptr_t(device), C.uint64_t(queryPool), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyQueryPool)), C.uintptr_t(device), C.uint64_t(queryPool), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // GetQueryPoolResults wraps vkGetQueryPoolResults.
@@ -1420,7 +1482,7 @@ func (c *Commands) CreateBuffer(device Device, pCreateInfo *BufferCreateInfo, pA
 	if c.createBuffer == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createBuffer)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pBuffer)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createBuffer)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pBuffer)))
 	return Result(r)
 }
 
@@ -1429,7 +1491,7 @@ func (c *Commands) DestroyBuffer(device Device, buffer Buffer, pAllocator *Alloc
 	if c.destroyBuffer == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyBuffer)), C.uintptr_t(device), C.uint64_t(buffer), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyBuffer)), C.uintptr_t(device), C.uint64_t(buffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // CreateBufferView wraps vkCreateBufferView.
@@ -1437,7 +1499,7 @@ func (c *Commands) CreateBufferView(device Device, pCreateInfo *BufferViewCreate
 	if c.createBufferView == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createBufferView)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pView)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createBufferView)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pView)))
 	return Result(r)
 }
 
@@ -1446,7 +1508,7 @@ func (c *Commands) DestroyBufferView(device Device, bufferView BufferView, pAllo
 	if c.destroyBufferView == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyBufferView)), C.uintptr_t(device), C.uint64_t(bufferView), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyBufferView)), C.uintptr_t(device), C.uint64_t(bufferView), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // CreateImage wraps vkCreateImage.
@@ -1454,7 +1516,7 @@ func (c *Commands) CreateImage(device Device, pCreateInfo *ImageCreateInfo, pAll
 	if c.createImage == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createImage)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pImage)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createImage)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pImage)))
 	return Result(r)
 }
 
@@ -1463,7 +1525,7 @@ func (c *Commands) DestroyImage(device Device, image Image, pAllocator *Allocati
 	if c.destroyImage == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyImage)), C.uintptr_t(device), C.uint64_t(image), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyImage)), C.uintptr_t(device), C.uint64_t(image), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // GetImageSubresourceLayout wraps vkGetImageSubresourceLayout.
@@ -1479,7 +1541,7 @@ func (c *Commands) CreateImageView(device Device, pCreateInfo *ImageViewCreateIn
 	if c.createImageView == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createImageView)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pView)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createImageView)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pView)))
 	return Result(r)
 }
 
@@ -1488,7 +1550,7 @@ func (c *Commands) DestroyImageView(device Device, imageView ImageView, pAllocat
 	if c.destroyImageView == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyImageView)), C.uintptr_t(device), C.uint64_t(imageView), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyImageView)), C.uintptr_t(device), C.uint64_t(imageView), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // CreateShaderModule wraps vkCreateShaderModule.
@@ -1496,7 +1558,7 @@ func (c *Commands) CreateShaderModule(device Device, pCreateInfo *ShaderModuleCr
 	if c.createShaderModule == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createShaderModule)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pShaderModule)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createShaderModule)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pShaderModule)))
 	return Result(r)
 }
 
@@ -1505,7 +1567,7 @@ func (c *Commands) DestroyShaderModule(device Device, shaderModule ShaderModule,
 	if c.destroyShaderModule == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyShaderModule)), C.uintptr_t(device), C.uint64_t(shaderModule), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyShaderModule)), C.uintptr_t(device), C.uint64_t(shaderModule), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // CreatePipelineCache wraps vkCreatePipelineCache.
@@ -1513,7 +1575,7 @@ func (c *Commands) CreatePipelineCache(device Device, pCreateInfo *PipelineCache
 	if c.createPipelineCache == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createPipelineCache)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pPipelineCache)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createPipelineCache)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pPipelineCache)))
 	return Result(r)
 }
 
@@ -1522,7 +1584,7 @@ func (c *Commands) DestroyPipelineCache(device Device, pipelineCache PipelineCac
 	if c.destroyPipelineCache == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyPipelineCache)), C.uintptr_t(device), C.uint64_t(pipelineCache), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyPipelineCache)), C.uintptr_t(device), C.uint64_t(pipelineCache), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // GetPipelineCacheData wraps vkGetPipelineCacheData.
@@ -1548,7 +1610,7 @@ func (c *Commands) CreatePipelineBinariesKHR(device Device, pCreateInfo *Pipelin
 	if c.createPipelineBinariesKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createPipelineBinariesKHR)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pBinaries)))
+	r := C.gvk_r_hggg(C.uintptr_t(uintptr(c.createPipelineBinariesKHR)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pBinaries, lenIfSet(pBinaries != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -1557,7 +1619,7 @@ func (c *Commands) DestroyPipelineBinaryKHR(device Device, pipelineBinary Pipeli
 	if c.destroyPipelineBinaryKHR == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyPipelineBinaryKHR)), C.uintptr_t(device), C.uint64_t(pipelineBinary), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyPipelineBinaryKHR)), C.uintptr_t(device), C.uint64_t(pipelineBinary), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // GetPipelineKeyKHR wraps vkGetPipelineKeyKHR.
@@ -1565,7 +1627,7 @@ func (c *Commands) GetPipelineKeyKHR(device Device, pPipelineCreateInfo *Pipelin
 	if c.getPipelineKeyKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getPipelineKeyKHR)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pPipelineCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pPipelineKey)))
+	r := C.gvk_r_hgg(C.uintptr_t(uintptr(c.getPipelineKeyKHR)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pPipelineCreateInfo, lenIfSet(pPipelineCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pPipelineKey, lenIfSet(pPipelineKey != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -1574,7 +1636,7 @@ func (c *Commands) GetPipelineBinaryDataKHR(device Device, pInfo *PipelineBinary
 	if c.getPipelineBinaryDataKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpppp(C.uintptr_t(uintptr(c.getPipelineBinaryDataKHR)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pPipelineBinaryKey)), (*C.uint8_t)(unsafe.Pointer(pPipelineBinaryDataSize)), (*C.uint8_t)(unsafe.Pointer(pPipelineBinaryData)))
+	r := C.gvk_r_hggpp(C.uintptr_t(uintptr(c.getPipelineBinaryDataKHR)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pPipelineBinaryKey, lenIfSet(pPipelineBinaryKey != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pPipelineBinaryDataSize)), (*C.uint8_t)(unsafe.Pointer(pPipelineBinaryData)))
 	return Result(r)
 }
 
@@ -1583,7 +1645,7 @@ func (c *Commands) ReleaseCapturedPipelineDataKHR(device Device, pInfo *ReleaseC
 	if c.releaseCapturedPipelineDataKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.releaseCapturedPipelineDataKHR)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	r := C.gvk_r_hgg(C.uintptr_t(uintptr(c.releaseCapturedPipelineDataKHR)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -1592,7 +1654,7 @@ func (c *Commands) CreateGraphicsPipelines(device Device, pipelineCache Pipeline
 	if c.createGraphicsPipelines == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqippp(C.uintptr_t(uintptr(c.createGraphicsPipelines)), C.uintptr_t(device), C.uint64_t(pipelineCache), C.uint32_t(createInfoCount), (*C.uint8_t)(unsafe.Pointer(pCreateInfos)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pPipelines)))
+	r := C.gvk_r_hqiggp(C.uintptr_t(uintptr(c.createGraphicsPipelines)), C.uintptr_t(device), C.uint64_t(pipelineCache), C.uint32_t(createInfoCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfos, lenIfSet(pCreateInfos != nil, int(createInfoCount)))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pPipelines)))
 	return Result(r)
 }
 
@@ -1601,7 +1663,7 @@ func (c *Commands) CreateComputePipelines(device Device, pipelineCache PipelineC
 	if c.createComputePipelines == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqippp(C.uintptr_t(uintptr(c.createComputePipelines)), C.uintptr_t(device), C.uint64_t(pipelineCache), C.uint32_t(createInfoCount), (*C.uint8_t)(unsafe.Pointer(pCreateInfos)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pPipelines)))
+	r := C.gvk_r_hqiggp(C.uintptr_t(uintptr(c.createComputePipelines)), C.uintptr_t(device), C.uint64_t(pipelineCache), C.uint32_t(createInfoCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfos, lenIfSet(pCreateInfos != nil, int(createInfoCount)))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pPipelines)))
 	return Result(r)
 }
 
@@ -1619,7 +1681,7 @@ func (c *Commands) DestroyPipeline(device Device, pipeline Pipeline, pAllocator 
 	if c.destroyPipeline == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyPipeline)), C.uintptr_t(device), C.uint64_t(pipeline), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyPipeline)), C.uintptr_t(device), C.uint64_t(pipeline), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // CreatePipelineLayout wraps vkCreatePipelineLayout.
@@ -1627,7 +1689,7 @@ func (c *Commands) CreatePipelineLayout(device Device, pCreateInfo *PipelineLayo
 	if c.createPipelineLayout == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createPipelineLayout)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pPipelineLayout)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createPipelineLayout)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pPipelineLayout)))
 	return Result(r)
 }
 
@@ -1636,7 +1698,7 @@ func (c *Commands) DestroyPipelineLayout(device Device, pipelineLayout PipelineL
 	if c.destroyPipelineLayout == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyPipelineLayout)), C.uintptr_t(device), C.uint64_t(pipelineLayout), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyPipelineLayout)), C.uintptr_t(device), C.uint64_t(pipelineLayout), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // CreateSampler wraps vkCreateSampler.
@@ -1644,7 +1706,7 @@ func (c *Commands) CreateSampler(device Device, pCreateInfo *SamplerCreateInfo, 
 	if c.createSampler == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createSampler)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pSampler)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createSampler)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pSampler)))
 	return Result(r)
 }
 
@@ -1653,7 +1715,7 @@ func (c *Commands) DestroySampler(device Device, sampler Sampler, pAllocator *Al
 	if c.destroySampler == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroySampler)), C.uintptr_t(device), C.uint64_t(sampler), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroySampler)), C.uintptr_t(device), C.uint64_t(sampler), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // CreateDescriptorSetLayout wraps vkCreateDescriptorSetLayout.
@@ -1661,7 +1723,7 @@ func (c *Commands) CreateDescriptorSetLayout(device Device, pCreateInfo *Descrip
 	if c.createDescriptorSetLayout == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createDescriptorSetLayout)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pSetLayout)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createDescriptorSetLayout)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pSetLayout)))
 	return Result(r)
 }
 
@@ -1670,7 +1732,7 @@ func (c *Commands) DestroyDescriptorSetLayout(device Device, descriptorSetLayout
 	if c.destroyDescriptorSetLayout == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyDescriptorSetLayout)), C.uintptr_t(device), C.uint64_t(descriptorSetLayout), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyDescriptorSetLayout)), C.uintptr_t(device), C.uint64_t(descriptorSetLayout), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // CreateDescriptorPool wraps vkCreateDescriptorPool.
@@ -1678,7 +1740,7 @@ func (c *Commands) CreateDescriptorPool(device Device, pCreateInfo *DescriptorPo
 	if c.createDescriptorPool == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createDescriptorPool)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pDescriptorPool)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createDescriptorPool)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pDescriptorPool)))
 	return Result(r)
 }
 
@@ -1687,7 +1749,7 @@ func (c *Commands) DestroyDescriptorPool(device Device, descriptorPool Descripto
 	if c.destroyDescriptorPool == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyDescriptorPool)), C.uintptr_t(device), C.uint64_t(descriptorPool), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyDescriptorPool)), C.uintptr_t(device), C.uint64_t(descriptorPool), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // ResetDescriptorPool wraps vkResetDescriptorPool.
@@ -1704,7 +1766,7 @@ func (c *Commands) AllocateDescriptorSets(device Device, pAllocateInfo *Descript
 	if c.allocateDescriptorSets == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.allocateDescriptorSets)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pAllocateInfo)), (*C.uint8_t)(unsafe.Pointer(pDescriptorSets)))
+	r := C.gvk_r_hgp(C.uintptr_t(uintptr(c.allocateDescriptorSets)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocateInfo, lenIfSet(pAllocateInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pDescriptorSets)))
 	return Result(r)
 }
 
@@ -1722,7 +1784,7 @@ func (c *Commands) UpdateDescriptorSets(device Device, descriptorWriteCount uint
 	if c.updateDescriptorSets == nil {
 		return
 	}
-	C.gvk_v_hipip(C.uintptr_t(uintptr(c.updateDescriptorSets)), C.uintptr_t(device), C.uint32_t(descriptorWriteCount), (*C.uint8_t)(unsafe.Pointer(pDescriptorWrites)), C.uint32_t(descriptorCopyCount), (*C.uint8_t)(unsafe.Pointer(pDescriptorCopies)))
+	C.gvk_v_higig(C.uintptr_t(uintptr(c.updateDescriptorSets)), C.uintptr_t(device), C.uint32_t(descriptorWriteCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pDescriptorWrites, lenIfSet(pDescriptorWrites != nil, int(descriptorWriteCount)))[:])), C.uint32_t(descriptorCopyCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pDescriptorCopies, lenIfSet(pDescriptorCopies != nil, int(descriptorCopyCount)))[:])))
 }
 
 // CreateFramebuffer wraps vkCreateFramebuffer.
@@ -1730,7 +1792,7 @@ func (c *Commands) CreateFramebuffer(device Device, pCreateInfo *FramebufferCrea
 	if c.createFramebuffer == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createFramebuffer)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pFramebuffer)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createFramebuffer)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pFramebuffer)))
 	return Result(r)
 }
 
@@ -1739,7 +1801,7 @@ func (c *Commands) DestroyFramebuffer(device Device, framebuffer Framebuffer, pA
 	if c.destroyFramebuffer == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyFramebuffer)), C.uintptr_t(device), C.uint64_t(framebuffer), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyFramebuffer)), C.uintptr_t(device), C.uint64_t(framebuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // CreateRenderPass wraps vkCreateRenderPass.
@@ -1747,7 +1809,7 @@ func (c *Commands) CreateRenderPass(device Device, pCreateInfo *RenderPassCreate
 	if c.createRenderPass == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createRenderPass)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pRenderPass)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createRenderPass)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pRenderPass)))
 	return Result(r)
 }
 
@@ -1756,7 +1818,7 @@ func (c *Commands) DestroyRenderPass(device Device, renderPass RenderPass, pAllo
 	if c.destroyRenderPass == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyRenderPass)), C.uintptr_t(device), C.uint64_t(renderPass), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyRenderPass)), C.uintptr_t(device), C.uint64_t(renderPass), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // GetRenderAreaGranularity wraps vkGetRenderAreaGranularity.
@@ -1772,7 +1834,7 @@ func (c *Commands) GetRenderingAreaGranularity(device Device, pRenderingAreaInfo
 	if c.getRenderingAreaGranularity == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getRenderingAreaGranularity)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pRenderingAreaInfo)), (*C.uint8_t)(unsafe.Pointer(pGranularity)))
+	C.gvk_v_hgp(C.uintptr_t(uintptr(c.getRenderingAreaGranularity)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pRenderingAreaInfo, lenIfSet(pRenderingAreaInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pGranularity)))
 }
 
 // CreateCommandPool wraps vkCreateCommandPool.
@@ -1780,7 +1842,7 @@ func (c *Commands) CreateCommandPool(device Device, pCreateInfo *CommandPoolCrea
 	if c.createCommandPool == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createCommandPool)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pCommandPool)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createCommandPool)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pCommandPool)))
 	return Result(r)
 }
 
@@ -1789,7 +1851,7 @@ func (c *Commands) DestroyCommandPool(device Device, commandPool CommandPool, pA
 	if c.destroyCommandPool == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyCommandPool)), C.uintptr_t(device), C.uint64_t(commandPool), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyCommandPool)), C.uintptr_t(device), C.uint64_t(commandPool), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // ResetCommandPool wraps vkResetCommandPool.
@@ -1806,7 +1868,7 @@ func (c *Commands) AllocateCommandBuffers(device Device, pAllocateInfo *CommandB
 	if c.allocateCommandBuffers == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.allocateCommandBuffers)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pAllocateInfo)), (*C.uint8_t)(unsafe.Pointer(pCommandBuffers)))
+	r := C.gvk_r_hgp(C.uintptr_t(uintptr(c.allocateCommandBuffers)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocateInfo, lenIfSet(pAllocateInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pCommandBuffers)))
 	return Result(r)
 }
 
@@ -1823,7 +1885,7 @@ func (c *Commands) BeginCommandBuffer(commandBuffer CommandBuffer, pBeginInfo *C
 	if c.beginCommandBuffer == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hp(C.uintptr_t(uintptr(c.beginCommandBuffer)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pBeginInfo)))
+	r := C.gvk_r_hg(C.uintptr_t(uintptr(c.beginCommandBuffer)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pBeginInfo, lenIfSet(pBeginInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -2106,7 +2168,7 @@ func (c *Commands) CmdCopyMemoryIndirectKHR(commandBuffer CommandBuffer, pCopyMe
 	if c.cmdCopyMemoryIndirectKHR == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdCopyMemoryIndirectKHR)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pCopyMemoryIndirectInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdCopyMemoryIndirectKHR)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCopyMemoryIndirectInfo, lenIfSet(pCopyMemoryIndirectInfo != nil, 1))[:])))
 }
 
 // CmdCopyMemoryToImageIndirectNV wraps vkCmdCopyMemoryToImageIndirectNV.
@@ -2122,7 +2184,7 @@ func (c *Commands) CmdCopyMemoryToImageIndirectKHR(commandBuffer CommandBuffer, 
 	if c.cmdCopyMemoryToImageIndirectKHR == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdCopyMemoryToImageIndirectKHR)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pCopyMemoryToImageIndirectInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdCopyMemoryToImageIndirectKHR)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCopyMemoryToImageIndirectInfo, lenIfSet(pCopyMemoryToImageIndirectInfo != nil, 1))[:])))
 }
 
 // CmdUpdateBuffer wraps vkCmdUpdateBuffer.
@@ -2194,7 +2256,7 @@ func (c *Commands) CmdWaitEvents(commandBuffer CommandBuffer, eventCount uint32,
 	if c.cmdWaitEvents == nil {
 		return
 	}
-	C.gvk_v_hipiiipipip(C.uintptr_t(uintptr(c.cmdWaitEvents)), C.uintptr_t(commandBuffer), C.uint32_t(eventCount), (*C.uint8_t)(unsafe.Pointer(pEvents)), C.uint32_t(srcStageMask), C.uint32_t(dstStageMask), C.uint32_t(memoryBarrierCount), (*C.uint8_t)(unsafe.Pointer(pMemoryBarriers)), C.uint32_t(bufferMemoryBarrierCount), (*C.uint8_t)(unsafe.Pointer(pBufferMemoryBarriers)), C.uint32_t(imageMemoryBarrierCount), (*C.uint8_t)(unsafe.Pointer(pImageMemoryBarriers)))
+	C.gvk_v_hipiiigigig(C.uintptr_t(uintptr(c.cmdWaitEvents)), C.uintptr_t(commandBuffer), C.uint32_t(eventCount), (*C.uint8_t)(unsafe.Pointer(pEvents)), C.uint32_t(srcStageMask), C.uint32_t(dstStageMask), C.uint32_t(memoryBarrierCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMemoryBarriers, lenIfSet(pMemoryBarriers != nil, int(memoryBarrierCount)))[:])), C.uint32_t(bufferMemoryBarrierCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pBufferMemoryBarriers, lenIfSet(pBufferMemoryBarriers != nil, int(bufferMemoryBarrierCount)))[:])), C.uint32_t(imageMemoryBarrierCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pImageMemoryBarriers, lenIfSet(pImageMemoryBarriers != nil, int(imageMemoryBarrierCount)))[:])))
 }
 
 // CmdPipelineBarrier wraps vkCmdPipelineBarrier.
@@ -2202,7 +2264,7 @@ func (c *Commands) CmdPipelineBarrier(commandBuffer CommandBuffer, srcStageMask 
 	if c.cmdPipelineBarrier == nil {
 		return
 	}
-	C.gvk_v_hiiiipipip(C.uintptr_t(uintptr(c.cmdPipelineBarrier)), C.uintptr_t(commandBuffer), C.uint32_t(srcStageMask), C.uint32_t(dstStageMask), C.uint32_t(dependencyFlags), C.uint32_t(memoryBarrierCount), (*C.uint8_t)(unsafe.Pointer(pMemoryBarriers)), C.uint32_t(bufferMemoryBarrierCount), (*C.uint8_t)(unsafe.Pointer(pBufferMemoryBarriers)), C.uint32_t(imageMemoryBarrierCount), (*C.uint8_t)(unsafe.Pointer(pImageMemoryBarriers)))
+	C.gvk_v_hiiiigigig(C.uintptr_t(uintptr(c.cmdPipelineBarrier)), C.uintptr_t(commandBuffer), C.uint32_t(srcStageMask), C.uint32_t(dstStageMask), C.uint32_t(dependencyFlags), C.uint32_t(memoryBarrierCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMemoryBarriers, lenIfSet(pMemoryBarriers != nil, int(memoryBarrierCount)))[:])), C.uint32_t(bufferMemoryBarrierCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pBufferMemoryBarriers, lenIfSet(pBufferMemoryBarriers != nil, int(bufferMemoryBarrierCount)))[:])), C.uint32_t(imageMemoryBarrierCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pImageMemoryBarriers, lenIfSet(pImageMemoryBarriers != nil, int(imageMemoryBarrierCount)))[:])))
 }
 
 // CmdBeginQuery wraps vkCmdBeginQuery.
@@ -2226,7 +2288,7 @@ func (c *Commands) CmdBeginConditionalRenderingEXT(commandBuffer CommandBuffer, 
 	if c.cmdBeginConditionalRenderingEXT == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdBeginConditionalRenderingEXT)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pConditionalRenderingBegin)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdBeginConditionalRenderingEXT)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pConditionalRenderingBegin, lenIfSet(pConditionalRenderingBegin != nil, 1))[:])))
 }
 
 // CmdEndConditionalRenderingEXT wraps vkCmdEndConditionalRenderingEXT.
@@ -2242,7 +2304,7 @@ func (c *Commands) CmdBeginCustomResolveEXT(commandBuffer CommandBuffer, pBeginC
 	if c.cmdBeginCustomResolveEXT == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdBeginCustomResolveEXT)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pBeginCustomResolveInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdBeginCustomResolveEXT)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pBeginCustomResolveInfo, lenIfSet(pBeginCustomResolveInfo != nil, 1))[:])))
 }
 
 // CmdResetQueryPool wraps vkCmdResetQueryPool.
@@ -2282,7 +2344,7 @@ func (c *Commands) CmdBeginRenderPass(commandBuffer CommandBuffer, pRenderPassBe
 	if c.cmdBeginRenderPass == nil {
 		return
 	}
-	C.gvk_v_hpi(C.uintptr_t(uintptr(c.cmdBeginRenderPass)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pRenderPassBegin)), C.uint32_t(contents))
+	C.gvk_v_hgi(C.uintptr_t(uintptr(c.cmdBeginRenderPass)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pRenderPassBegin, lenIfSet(pRenderPassBegin != nil, 1))[:])), C.uint32_t(contents))
 }
 
 // CmdNextSubpass wraps vkCmdNextSubpass.
@@ -2314,7 +2376,7 @@ func (c *Commands) CreateAndroidSurfaceKHR(instance Instance, pCreateInfo *Andro
 	if c.createAndroidSurfaceKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createAndroidSurfaceKHR)), C.uintptr_t(instance), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pSurface)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createAndroidSurfaceKHR)), C.uintptr_t(instance), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pSurface)))
 	return Result(r)
 }
 
@@ -2323,7 +2385,7 @@ func (c *Commands) CreateSurfaceOHOS(instance Instance, pCreateInfo *SurfaceCrea
 	if c.createSurfaceOHOS == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createSurfaceOHOS)), C.uintptr_t(instance), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pSurface)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createSurfaceOHOS)), C.uintptr_t(instance), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pSurface)))
 	return Result(r)
 }
 
@@ -2332,7 +2394,7 @@ func (c *Commands) GetPhysicalDeviceDisplayPropertiesKHR(physicalDevice Physical
 	if c.getPhysicalDeviceDisplayPropertiesKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getPhysicalDeviceDisplayPropertiesKHR)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pPropertyCount)), (*C.uint8_t)(unsafe.Pointer(pProperties)))
+	r := C.gvk_r_hpg(C.uintptr_t(uintptr(c.getPhysicalDeviceDisplayPropertiesKHR)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pPropertyCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pProperties, lenIfSet(pProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -2368,7 +2430,7 @@ func (c *Commands) CreateDisplayModeKHR(physicalDevice PhysicalDevice, display D
 	if c.createDisplayModeKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqppp(C.uintptr_t(uintptr(c.createDisplayModeKHR)), C.uintptr_t(physicalDevice), C.uint64_t(display), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pMode)))
+	r := C.gvk_r_hqggp(C.uintptr_t(uintptr(c.createDisplayModeKHR)), C.uintptr_t(physicalDevice), C.uint64_t(display), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pMode)))
 	return Result(r)
 }
 
@@ -2386,7 +2448,7 @@ func (c *Commands) CreateDisplayPlaneSurfaceKHR(instance Instance, pCreateInfo *
 	if c.createDisplayPlaneSurfaceKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createDisplayPlaneSurfaceKHR)), C.uintptr_t(instance), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pSurface)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createDisplayPlaneSurfaceKHR)), C.uintptr_t(instance), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pSurface)))
 	return Result(r)
 }
 
@@ -2395,7 +2457,7 @@ func (c *Commands) CreateSharedSwapchainsKHR(device Device, swapchainCount uint3
 	if c.createSharedSwapchainsKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hippp(C.uintptr_t(uintptr(c.createSharedSwapchainsKHR)), C.uintptr_t(device), C.uint32_t(swapchainCount), (*C.uint8_t)(unsafe.Pointer(pCreateInfos)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pSwapchains)))
+	r := C.gvk_r_higgp(C.uintptr_t(uintptr(c.createSharedSwapchainsKHR)), C.uintptr_t(device), C.uint32_t(swapchainCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfos, lenIfSet(pCreateInfos != nil, int(swapchainCount)))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pSwapchains)))
 	return Result(r)
 }
 
@@ -2404,7 +2466,7 @@ func (c *Commands) DestroySurfaceKHR(instance Instance, surface SurfaceKHR, pAll
 	if c.destroySurfaceKHR == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroySurfaceKHR)), C.uintptr_t(instance), C.uint64_t(surface), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroySurfaceKHR)), C.uintptr_t(instance), C.uint64_t(surface), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // GetPhysicalDeviceSurfaceSupportKHR wraps vkGetPhysicalDeviceSurfaceSupportKHR.
@@ -2448,7 +2510,7 @@ func (c *Commands) CreateSwapchainKHR(device Device, pCreateInfo *SwapchainCreat
 	if c.createSwapchainKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createSwapchainKHR)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pSwapchain)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createSwapchainKHR)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pSwapchain)))
 	return Result(r)
 }
 
@@ -2457,7 +2519,7 @@ func (c *Commands) DestroySwapchainKHR(device Device, swapchain SwapchainKHR, pA
 	if c.destroySwapchainKHR == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroySwapchainKHR)), C.uintptr_t(device), C.uint64_t(swapchain), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroySwapchainKHR)), C.uintptr_t(device), C.uint64_t(swapchain), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // GetSwapchainImagesKHR wraps vkGetSwapchainImagesKHR.
@@ -2483,7 +2545,7 @@ func (c *Commands) QueuePresentKHR(queue Queue, pPresentInfo *PresentInfoKHR) Re
 	if c.queuePresentKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hp(C.uintptr_t(uintptr(c.queuePresentKHR)), C.uintptr_t(queue), (*C.uint8_t)(unsafe.Pointer(pPresentInfo)))
+	r := C.gvk_r_hg(C.uintptr_t(uintptr(c.queuePresentKHR)), C.uintptr_t(queue), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pPresentInfo, lenIfSet(pPresentInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -2492,7 +2554,7 @@ func (c *Commands) CreateViSurfaceNN(instance Instance, pCreateInfo *ViSurfaceCr
 	if c.createViSurfaceNN == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createViSurfaceNN)), C.uintptr_t(instance), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pSurface)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createViSurfaceNN)), C.uintptr_t(instance), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pSurface)))
 	return Result(r)
 }
 
@@ -2501,7 +2563,7 @@ func (c *Commands) CreateWaylandSurfaceKHR(instance Instance, pCreateInfo *Wayla
 	if c.createWaylandSurfaceKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createWaylandSurfaceKHR)), C.uintptr_t(instance), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pSurface)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createWaylandSurfaceKHR)), C.uintptr_t(instance), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pSurface)))
 	return Result(r)
 }
 
@@ -2519,7 +2581,7 @@ func (c *Commands) CreateWin32SurfaceKHR(instance Instance, pCreateInfo *Win32Su
 	if c.createWin32SurfaceKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createWin32SurfaceKHR)), C.uintptr_t(instance), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pSurface)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createWin32SurfaceKHR)), C.uintptr_t(instance), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pSurface)))
 	return Result(r)
 }
 
@@ -2537,7 +2599,7 @@ func (c *Commands) CreateXlibSurfaceKHR(instance Instance, pCreateInfo *XlibSurf
 	if c.createXlibSurfaceKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createXlibSurfaceKHR)), C.uintptr_t(instance), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pSurface)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createXlibSurfaceKHR)), C.uintptr_t(instance), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pSurface)))
 	return Result(r)
 }
 
@@ -2555,7 +2617,7 @@ func (c *Commands) CreateXcbSurfaceKHR(instance Instance, pCreateInfo *XcbSurfac
 	if c.createXcbSurfaceKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createXcbSurfaceKHR)), C.uintptr_t(instance), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pSurface)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createXcbSurfaceKHR)), C.uintptr_t(instance), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pSurface)))
 	return Result(r)
 }
 
@@ -2573,7 +2635,7 @@ func (c *Commands) CreateDirectFBSurfaceEXT(instance Instance, pCreateInfo *Dire
 	if c.createDirectFBSurfaceEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createDirectFBSurfaceEXT)), C.uintptr_t(instance), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pSurface)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createDirectFBSurfaceEXT)), C.uintptr_t(instance), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pSurface)))
 	return Result(r)
 }
 
@@ -2591,7 +2653,7 @@ func (c *Commands) CreateImagePipeSurfaceFUCHSIA(instance Instance, pCreateInfo 
 	if c.createImagePipeSurfaceFUCHSIA == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createImagePipeSurfaceFUCHSIA)), C.uintptr_t(instance), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pSurface)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createImagePipeSurfaceFUCHSIA)), C.uintptr_t(instance), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pSurface)))
 	return Result(r)
 }
 
@@ -2600,7 +2662,7 @@ func (c *Commands) CreateStreamDescriptorSurfaceGGP(instance Instance, pCreateIn
 	if c.createStreamDescriptorSurfaceGGP == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createStreamDescriptorSurfaceGGP)), C.uintptr_t(instance), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pSurface)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createStreamDescriptorSurfaceGGP)), C.uintptr_t(instance), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pSurface)))
 	return Result(r)
 }
 
@@ -2609,7 +2671,7 @@ func (c *Commands) CreateScreenSurfaceQNX(instance Instance, pCreateInfo *Screen
 	if c.createScreenSurfaceQNX == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createScreenSurfaceQNX)), C.uintptr_t(instance), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pSurface)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createScreenSurfaceQNX)), C.uintptr_t(instance), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pSurface)))
 	return Result(r)
 }
 
@@ -2627,7 +2689,7 @@ func (c *Commands) CreateDebugReportCallbackEXT(instance Instance, pCreateInfo *
 	if c.createDebugReportCallbackEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createDebugReportCallbackEXT)), C.uintptr_t(instance), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pCallback)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createDebugReportCallbackEXT)), C.uintptr_t(instance), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pCallback)))
 	return Result(r)
 }
 
@@ -2636,7 +2698,7 @@ func (c *Commands) DestroyDebugReportCallbackEXT(instance Instance, callback Deb
 	if c.destroyDebugReportCallbackEXT == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyDebugReportCallbackEXT)), C.uintptr_t(instance), C.uint64_t(callback), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyDebugReportCallbackEXT)), C.uintptr_t(instance), C.uint64_t(callback), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // DebugReportMessageEXT wraps vkDebugReportMessageEXT.
@@ -2652,7 +2714,7 @@ func (c *Commands) DebugMarkerSetObjectNameEXT(device Device, pNameInfo *DebugMa
 	if c.debugMarkerSetObjectNameEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hp(C.uintptr_t(uintptr(c.debugMarkerSetObjectNameEXT)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pNameInfo)))
+	r := C.gvk_r_hg(C.uintptr_t(uintptr(c.debugMarkerSetObjectNameEXT)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pNameInfo, lenIfSet(pNameInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -2661,7 +2723,7 @@ func (c *Commands) DebugMarkerSetObjectTagEXT(device Device, pTagInfo *DebugMark
 	if c.debugMarkerSetObjectTagEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hp(C.uintptr_t(uintptr(c.debugMarkerSetObjectTagEXT)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pTagInfo)))
+	r := C.gvk_r_hg(C.uintptr_t(uintptr(c.debugMarkerSetObjectTagEXT)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pTagInfo, lenIfSet(pTagInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -2670,7 +2732,7 @@ func (c *Commands) CmdDebugMarkerBeginEXT(commandBuffer CommandBuffer, pMarkerIn
 	if c.cmdDebugMarkerBeginEXT == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdDebugMarkerBeginEXT)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pMarkerInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdDebugMarkerBeginEXT)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMarkerInfo, lenIfSet(pMarkerInfo != nil, 1))[:])))
 }
 
 // CmdDebugMarkerEndEXT wraps vkCmdDebugMarkerEndEXT.
@@ -2686,7 +2748,7 @@ func (c *Commands) CmdDebugMarkerInsertEXT(commandBuffer CommandBuffer, pMarkerI
 	if c.cmdDebugMarkerInsertEXT == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdDebugMarkerInsertEXT)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pMarkerInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdDebugMarkerInsertEXT)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMarkerInfo, lenIfSet(pMarkerInfo != nil, 1))[:])))
 }
 
 // GetPhysicalDeviceExternalImageFormatPropertiesNV wraps vkGetPhysicalDeviceExternalImageFormatPropertiesNV.
@@ -2712,7 +2774,7 @@ func (c *Commands) CmdExecuteGeneratedCommandsNV(commandBuffer CommandBuffer, is
 	if c.cmdExecuteGeneratedCommandsNV == nil {
 		return
 	}
-	C.gvk_v_hip(C.uintptr_t(uintptr(c.cmdExecuteGeneratedCommandsNV)), C.uintptr_t(commandBuffer), C.uint32_t(isPreprocessed), (*C.uint8_t)(unsafe.Pointer(pGeneratedCommandsInfo)))
+	C.gvk_v_hig(C.uintptr_t(uintptr(c.cmdExecuteGeneratedCommandsNV)), C.uintptr_t(commandBuffer), C.uint32_t(isPreprocessed), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pGeneratedCommandsInfo, lenIfSet(pGeneratedCommandsInfo != nil, 1))[:])))
 }
 
 // CmdPreprocessGeneratedCommandsNV wraps vkCmdPreprocessGeneratedCommandsNV.
@@ -2720,7 +2782,7 @@ func (c *Commands) CmdPreprocessGeneratedCommandsNV(commandBuffer CommandBuffer,
 	if c.cmdPreprocessGeneratedCommandsNV == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdPreprocessGeneratedCommandsNV)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pGeneratedCommandsInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdPreprocessGeneratedCommandsNV)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pGeneratedCommandsInfo, lenIfSet(pGeneratedCommandsInfo != nil, 1))[:])))
 }
 
 // CmdBindPipelineShaderGroupNV wraps vkCmdBindPipelineShaderGroupNV.
@@ -2736,7 +2798,7 @@ func (c *Commands) GetGeneratedCommandsMemoryRequirementsNV(device Device, pInfo
 	if c.getGeneratedCommandsMemoryRequirementsNV == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getGeneratedCommandsMemoryRequirementsNV)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pMemoryRequirements)))
+	C.gvk_v_hgg(C.uintptr_t(uintptr(c.getGeneratedCommandsMemoryRequirementsNV)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMemoryRequirements, lenIfSet(pMemoryRequirements != nil, 1))[:])))
 }
 
 // CreateIndirectCommandsLayoutNV wraps vkCreateIndirectCommandsLayoutNV.
@@ -2744,7 +2806,7 @@ func (c *Commands) CreateIndirectCommandsLayoutNV(device Device, pCreateInfo *In
 	if c.createIndirectCommandsLayoutNV == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createIndirectCommandsLayoutNV)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pIndirectCommandsLayout)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createIndirectCommandsLayoutNV)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pIndirectCommandsLayout)))
 	return Result(r)
 }
 
@@ -2753,7 +2815,7 @@ func (c *Commands) DestroyIndirectCommandsLayoutNV(device Device, indirectComman
 	if c.destroyIndirectCommandsLayoutNV == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyIndirectCommandsLayoutNV)), C.uintptr_t(device), C.uint64_t(indirectCommandsLayout), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyIndirectCommandsLayoutNV)), C.uintptr_t(device), C.uint64_t(indirectCommandsLayout), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // CmdExecuteGeneratedCommandsEXT wraps vkCmdExecuteGeneratedCommandsEXT.
@@ -2761,7 +2823,7 @@ func (c *Commands) CmdExecuteGeneratedCommandsEXT(commandBuffer CommandBuffer, i
 	if c.cmdExecuteGeneratedCommandsEXT == nil {
 		return
 	}
-	C.gvk_v_hip(C.uintptr_t(uintptr(c.cmdExecuteGeneratedCommandsEXT)), C.uintptr_t(commandBuffer), C.uint32_t(isPreprocessed), (*C.uint8_t)(unsafe.Pointer(pGeneratedCommandsInfo)))
+	C.gvk_v_hig(C.uintptr_t(uintptr(c.cmdExecuteGeneratedCommandsEXT)), C.uintptr_t(commandBuffer), C.uint32_t(isPreprocessed), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pGeneratedCommandsInfo, lenIfSet(pGeneratedCommandsInfo != nil, 1))[:])))
 }
 
 // CmdPreprocessGeneratedCommandsEXT wraps vkCmdPreprocessGeneratedCommandsEXT.
@@ -2769,7 +2831,7 @@ func (c *Commands) CmdPreprocessGeneratedCommandsEXT(commandBuffer CommandBuffer
 	if c.cmdPreprocessGeneratedCommandsEXT == nil {
 		return
 	}
-	C.gvk_v_hph(C.uintptr_t(uintptr(c.cmdPreprocessGeneratedCommandsEXT)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pGeneratedCommandsInfo)), C.uintptr_t(stateCommandBuffer))
+	C.gvk_v_hgh(C.uintptr_t(uintptr(c.cmdPreprocessGeneratedCommandsEXT)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pGeneratedCommandsInfo, lenIfSet(pGeneratedCommandsInfo != nil, 1))[:])), C.uintptr_t(stateCommandBuffer))
 }
 
 // GetGeneratedCommandsMemoryRequirementsEXT wraps vkGetGeneratedCommandsMemoryRequirementsEXT.
@@ -2777,7 +2839,7 @@ func (c *Commands) GetGeneratedCommandsMemoryRequirementsEXT(device Device, pInf
 	if c.getGeneratedCommandsMemoryRequirementsEXT == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getGeneratedCommandsMemoryRequirementsEXT)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pMemoryRequirements)))
+	C.gvk_v_hgg(C.uintptr_t(uintptr(c.getGeneratedCommandsMemoryRequirementsEXT)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMemoryRequirements, lenIfSet(pMemoryRequirements != nil, 1))[:])))
 }
 
 // CreateIndirectCommandsLayoutEXT wraps vkCreateIndirectCommandsLayoutEXT.
@@ -2785,7 +2847,7 @@ func (c *Commands) CreateIndirectCommandsLayoutEXT(device Device, pCreateInfo *I
 	if c.createIndirectCommandsLayoutEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createIndirectCommandsLayoutEXT)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pIndirectCommandsLayout)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createIndirectCommandsLayoutEXT)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pIndirectCommandsLayout)))
 	return Result(r)
 }
 
@@ -2794,7 +2856,7 @@ func (c *Commands) DestroyIndirectCommandsLayoutEXT(device Device, indirectComma
 	if c.destroyIndirectCommandsLayoutEXT == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyIndirectCommandsLayoutEXT)), C.uintptr_t(device), C.uint64_t(indirectCommandsLayout), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyIndirectCommandsLayoutEXT)), C.uintptr_t(device), C.uint64_t(indirectCommandsLayout), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // CreateIndirectExecutionSetEXT wraps vkCreateIndirectExecutionSetEXT.
@@ -2802,7 +2864,7 @@ func (c *Commands) CreateIndirectExecutionSetEXT(device Device, pCreateInfo *Ind
 	if c.createIndirectExecutionSetEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createIndirectExecutionSetEXT)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pIndirectExecutionSet)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createIndirectExecutionSetEXT)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pIndirectExecutionSet)))
 	return Result(r)
 }
 
@@ -2811,7 +2873,7 @@ func (c *Commands) DestroyIndirectExecutionSetEXT(device Device, indirectExecuti
 	if c.destroyIndirectExecutionSetEXT == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyIndirectExecutionSetEXT)), C.uintptr_t(device), C.uint64_t(indirectExecutionSet), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyIndirectExecutionSetEXT)), C.uintptr_t(device), C.uint64_t(indirectExecutionSet), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // UpdateIndirectExecutionSetPipelineEXT wraps vkUpdateIndirectExecutionSetPipelineEXT.
@@ -2819,7 +2881,7 @@ func (c *Commands) UpdateIndirectExecutionSetPipelineEXT(device Device, indirect
 	if c.updateIndirectExecutionSetPipelineEXT == nil {
 		return
 	}
-	C.gvk_v_hqip(C.uintptr_t(uintptr(c.updateIndirectExecutionSetPipelineEXT)), C.uintptr_t(device), C.uint64_t(indirectExecutionSet), C.uint32_t(executionSetWriteCount), (*C.uint8_t)(unsafe.Pointer(pExecutionSetWrites)))
+	C.gvk_v_hqig(C.uintptr_t(uintptr(c.updateIndirectExecutionSetPipelineEXT)), C.uintptr_t(device), C.uint64_t(indirectExecutionSet), C.uint32_t(executionSetWriteCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pExecutionSetWrites, lenIfSet(pExecutionSetWrites != nil, int(executionSetWriteCount)))[:])))
 }
 
 // UpdateIndirectExecutionSetShaderEXT wraps vkUpdateIndirectExecutionSetShaderEXT.
@@ -2827,7 +2889,7 @@ func (c *Commands) UpdateIndirectExecutionSetShaderEXT(device Device, indirectEx
 	if c.updateIndirectExecutionSetShaderEXT == nil {
 		return
 	}
-	C.gvk_v_hqip(C.uintptr_t(uintptr(c.updateIndirectExecutionSetShaderEXT)), C.uintptr_t(device), C.uint64_t(indirectExecutionSet), C.uint32_t(executionSetWriteCount), (*C.uint8_t)(unsafe.Pointer(pExecutionSetWrites)))
+	C.gvk_v_hqig(C.uintptr_t(uintptr(c.updateIndirectExecutionSetShaderEXT)), C.uintptr_t(device), C.uint64_t(indirectExecutionSet), C.uint32_t(executionSetWriteCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pExecutionSetWrites, lenIfSet(pExecutionSetWrites != nil, int(executionSetWriteCount)))[:])))
 }
 
 // GetPhysicalDeviceFeatures2 wraps vkGetPhysicalDeviceFeatures2.
@@ -2835,7 +2897,7 @@ func (c *Commands) GetPhysicalDeviceFeatures2(physicalDevice PhysicalDevice, pFe
 	if c.getPhysicalDeviceFeatures2 == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.getPhysicalDeviceFeatures2)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pFeatures)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.getPhysicalDeviceFeatures2)), C.uintptr_t(physicalDevice), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pFeatures, lenIfSet(pFeatures != nil, 1))[:])))
 }
 
 // GetPhysicalDeviceProperties2 wraps vkGetPhysicalDeviceProperties2.
@@ -2843,7 +2905,7 @@ func (c *Commands) GetPhysicalDeviceProperties2(physicalDevice PhysicalDevice, p
 	if c.getPhysicalDeviceProperties2 == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.getPhysicalDeviceProperties2)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pProperties)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.getPhysicalDeviceProperties2)), C.uintptr_t(physicalDevice), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pProperties, lenIfSet(pProperties != nil, 1))[:])))
 }
 
 // GetPhysicalDeviceFormatProperties2 wraps vkGetPhysicalDeviceFormatProperties2.
@@ -2851,7 +2913,7 @@ func (c *Commands) GetPhysicalDeviceFormatProperties2(physicalDevice PhysicalDev
 	if c.getPhysicalDeviceFormatProperties2 == nil {
 		return
 	}
-	C.gvk_v_hip(C.uintptr_t(uintptr(c.getPhysicalDeviceFormatProperties2)), C.uintptr_t(physicalDevice), C.uint32_t(format), (*C.uint8_t)(unsafe.Pointer(pFormatProperties)))
+	C.gvk_v_hig(C.uintptr_t(uintptr(c.getPhysicalDeviceFormatProperties2)), C.uintptr_t(physicalDevice), C.uint32_t(format), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pFormatProperties, lenIfSet(pFormatProperties != nil, 1))[:])))
 }
 
 // GetPhysicalDeviceImageFormatProperties2 wraps vkGetPhysicalDeviceImageFormatProperties2.
@@ -2859,7 +2921,7 @@ func (c *Commands) GetPhysicalDeviceImageFormatProperties2(physicalDevice Physic
 	if c.getPhysicalDeviceImageFormatProperties2 == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getPhysicalDeviceImageFormatProperties2)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pImageFormatInfo)), (*C.uint8_t)(unsafe.Pointer(pImageFormatProperties)))
+	r := C.gvk_r_hgg(C.uintptr_t(uintptr(c.getPhysicalDeviceImageFormatProperties2)), C.uintptr_t(physicalDevice), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pImageFormatInfo, lenIfSet(pImageFormatInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pImageFormatProperties, lenIfSet(pImageFormatProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -2868,7 +2930,7 @@ func (c *Commands) GetPhysicalDeviceQueueFamilyProperties2(physicalDevice Physic
 	if c.getPhysicalDeviceQueueFamilyProperties2 == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getPhysicalDeviceQueueFamilyProperties2)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pQueueFamilyPropertyCount)), (*C.uint8_t)(unsafe.Pointer(pQueueFamilyProperties)))
+	C.gvk_v_hpg(C.uintptr_t(uintptr(c.getPhysicalDeviceQueueFamilyProperties2)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pQueueFamilyPropertyCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pQueueFamilyProperties, lenIfSet(pQueueFamilyProperties != nil, 1))[:])))
 }
 
 // GetPhysicalDeviceMemoryProperties2 wraps vkGetPhysicalDeviceMemoryProperties2.
@@ -2876,7 +2938,7 @@ func (c *Commands) GetPhysicalDeviceMemoryProperties2(physicalDevice PhysicalDev
 	if c.getPhysicalDeviceMemoryProperties2 == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.getPhysicalDeviceMemoryProperties2)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pMemoryProperties)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.getPhysicalDeviceMemoryProperties2)), C.uintptr_t(physicalDevice), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMemoryProperties, lenIfSet(pMemoryProperties != nil, 1))[:])))
 }
 
 // GetPhysicalDeviceSparseImageFormatProperties2 wraps vkGetPhysicalDeviceSparseImageFormatProperties2.
@@ -2884,7 +2946,7 @@ func (c *Commands) GetPhysicalDeviceSparseImageFormatProperties2(physicalDevice 
 	if c.getPhysicalDeviceSparseImageFormatProperties2 == nil {
 		return
 	}
-	C.gvk_v_hppp(C.uintptr_t(uintptr(c.getPhysicalDeviceSparseImageFormatProperties2)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pFormatInfo)), (*C.uint8_t)(unsafe.Pointer(pPropertyCount)), (*C.uint8_t)(unsafe.Pointer(pProperties)))
+	C.gvk_v_hgpg(C.uintptr_t(uintptr(c.getPhysicalDeviceSparseImageFormatProperties2)), C.uintptr_t(physicalDevice), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pFormatInfo, lenIfSet(pFormatInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pPropertyCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pProperties, lenIfSet(pProperties != nil, 1))[:])))
 }
 
 // CmdPushDescriptorSet wraps vkCmdPushDescriptorSet.
@@ -2892,7 +2954,7 @@ func (c *Commands) CmdPushDescriptorSet(commandBuffer CommandBuffer, pipelineBin
 	if c.cmdPushDescriptorSet == nil {
 		return
 	}
-	C.gvk_v_hiqiip(C.uintptr_t(uintptr(c.cmdPushDescriptorSet)), C.uintptr_t(commandBuffer), C.uint32_t(pipelineBindPoint), C.uint64_t(layout), C.uint32_t(set), C.uint32_t(descriptorWriteCount), (*C.uint8_t)(unsafe.Pointer(pDescriptorWrites)))
+	C.gvk_v_hiqiig(C.uintptr_t(uintptr(c.cmdPushDescriptorSet)), C.uintptr_t(commandBuffer), C.uint32_t(pipelineBindPoint), C.uint64_t(layout), C.uint32_t(set), C.uint32_t(descriptorWriteCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pDescriptorWrites, lenIfSet(pDescriptorWrites != nil, int(descriptorWriteCount)))[:])))
 }
 
 // TrimCommandPool wraps vkTrimCommandPool.
@@ -2908,7 +2970,7 @@ func (c *Commands) GetPhysicalDeviceExternalBufferProperties(physicalDevice Phys
 	if c.getPhysicalDeviceExternalBufferProperties == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getPhysicalDeviceExternalBufferProperties)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pExternalBufferInfo)), (*C.uint8_t)(unsafe.Pointer(pExternalBufferProperties)))
+	C.gvk_v_hgg(C.uintptr_t(uintptr(c.getPhysicalDeviceExternalBufferProperties)), C.uintptr_t(physicalDevice), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pExternalBufferInfo, lenIfSet(pExternalBufferInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pExternalBufferProperties, lenIfSet(pExternalBufferProperties != nil, 1))[:])))
 }
 
 // GetMemoryWin32HandleKHR wraps vkGetMemoryWin32HandleKHR.
@@ -2916,7 +2978,7 @@ func (c *Commands) GetMemoryWin32HandleKHR(device Device, pGetWin32HandleInfo *M
 	if c.getMemoryWin32HandleKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getMemoryWin32HandleKHR)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pGetWin32HandleInfo)), (*C.uint8_t)(unsafe.Pointer(pHandle)))
+	r := C.gvk_r_hgp(C.uintptr_t(uintptr(c.getMemoryWin32HandleKHR)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pGetWin32HandleInfo, lenIfSet(pGetWin32HandleInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pHandle)))
 	return Result(r)
 }
 
@@ -2925,7 +2987,7 @@ func (c *Commands) GetMemoryWin32HandlePropertiesKHR(device Device, handleType E
 	if c.getMemoryWin32HandlePropertiesKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hihp(C.uintptr_t(uintptr(c.getMemoryWin32HandlePropertiesKHR)), C.uintptr_t(device), C.uint32_t(handleType), C.uintptr_t(handle), (*C.uint8_t)(unsafe.Pointer(pMemoryWin32HandleProperties)))
+	r := C.gvk_r_hihg(C.uintptr_t(uintptr(c.getMemoryWin32HandlePropertiesKHR)), C.uintptr_t(device), C.uint32_t(handleType), C.uintptr_t(handle), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMemoryWin32HandleProperties, lenIfSet(pMemoryWin32HandleProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -2934,7 +2996,7 @@ func (c *Commands) GetMemoryFdKHR(device Device, pGetFdInfo *MemoryGetFdInfoKHR,
 	if c.getMemoryFdKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getMemoryFdKHR)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pGetFdInfo)), (*C.uint8_t)(unsafe.Pointer(pFd)))
+	r := C.gvk_r_hgp(C.uintptr_t(uintptr(c.getMemoryFdKHR)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pGetFdInfo, lenIfSet(pGetFdInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pFd)))
 	return Result(r)
 }
 
@@ -2943,7 +3005,7 @@ func (c *Commands) GetMemoryFdPropertiesKHR(device Device, handleType ExternalMe
 	if c.getMemoryFdPropertiesKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hiip(C.uintptr_t(uintptr(c.getMemoryFdPropertiesKHR)), C.uintptr_t(device), C.uint32_t(handleType), C.uint32_t(fd), (*C.uint8_t)(unsafe.Pointer(pMemoryFdProperties)))
+	r := C.gvk_r_hiig(C.uintptr_t(uintptr(c.getMemoryFdPropertiesKHR)), C.uintptr_t(device), C.uint32_t(handleType), C.uint32_t(fd), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMemoryFdProperties, lenIfSet(pMemoryFdProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -2952,7 +3014,7 @@ func (c *Commands) GetMemoryZirconHandleFUCHSIA(device Device, pGetZirconHandleI
 	if c.getMemoryZirconHandleFUCHSIA == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getMemoryZirconHandleFUCHSIA)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pGetZirconHandleInfo)), (*C.uint8_t)(unsafe.Pointer(pZirconHandle)))
+	r := C.gvk_r_hgp(C.uintptr_t(uintptr(c.getMemoryZirconHandleFUCHSIA)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pGetZirconHandleInfo, lenIfSet(pGetZirconHandleInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pZirconHandle)))
 	return Result(r)
 }
 
@@ -2961,7 +3023,7 @@ func (c *Commands) GetMemoryZirconHandlePropertiesFUCHSIA(device Device, handleT
 	if c.getMemoryZirconHandlePropertiesFUCHSIA == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hiip(C.uintptr_t(uintptr(c.getMemoryZirconHandlePropertiesFUCHSIA)), C.uintptr_t(device), C.uint32_t(handleType), C.uint32_t(zirconHandle), (*C.uint8_t)(unsafe.Pointer(pMemoryZirconHandleProperties)))
+	r := C.gvk_r_hiig(C.uintptr_t(uintptr(c.getMemoryZirconHandlePropertiesFUCHSIA)), C.uintptr_t(device), C.uint32_t(handleType), C.uint32_t(zirconHandle), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMemoryZirconHandleProperties, lenIfSet(pMemoryZirconHandleProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -2970,7 +3032,7 @@ func (c *Commands) GetMemoryRemoteAddressNV(device Device, pMemoryGetRemoteAddre
 	if c.getMemoryRemoteAddressNV == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getMemoryRemoteAddressNV)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pMemoryGetRemoteAddressInfo)), (*C.uint8_t)(unsafe.Pointer(pAddress)))
+	r := C.gvk_r_hgp(C.uintptr_t(uintptr(c.getMemoryRemoteAddressNV)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMemoryGetRemoteAddressInfo, lenIfSet(pMemoryGetRemoteAddressInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pAddress)))
 	return Result(r)
 }
 
@@ -2979,7 +3041,7 @@ func (c *Commands) GetMemorySciBufNV(device Device, pGetSciBufInfo *MemoryGetSci
 	if c.getMemorySciBufNV == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getMemorySciBufNV)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pGetSciBufInfo)), (*C.uint8_t)(unsafe.Pointer(pHandle)))
+	r := C.gvk_r_hgp(C.uintptr_t(uintptr(c.getMemorySciBufNV)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pGetSciBufInfo, lenIfSet(pGetSciBufInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pHandle)))
 	return Result(r)
 }
 
@@ -2988,7 +3050,7 @@ func (c *Commands) GetPhysicalDeviceExternalMemorySciBufPropertiesNV(physicalDev
 	if c.getPhysicalDeviceExternalMemorySciBufPropertiesNV == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hihp(C.uintptr_t(uintptr(c.getPhysicalDeviceExternalMemorySciBufPropertiesNV)), C.uintptr_t(physicalDevice), C.uint32_t(handleType), C.uintptr_t(handle), (*C.uint8_t)(unsafe.Pointer(pMemorySciBufProperties)))
+	r := C.gvk_r_hihg(C.uintptr_t(uintptr(c.getPhysicalDeviceExternalMemorySciBufPropertiesNV)), C.uintptr_t(physicalDevice), C.uint32_t(handleType), C.uintptr_t(handle), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMemorySciBufProperties, lenIfSet(pMemorySciBufProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -3006,7 +3068,7 @@ func (c *Commands) GetPhysicalDeviceExternalSemaphoreProperties(physicalDevice P
 	if c.getPhysicalDeviceExternalSemaphoreProperties == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getPhysicalDeviceExternalSemaphoreProperties)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pExternalSemaphoreInfo)), (*C.uint8_t)(unsafe.Pointer(pExternalSemaphoreProperties)))
+	C.gvk_v_hgg(C.uintptr_t(uintptr(c.getPhysicalDeviceExternalSemaphoreProperties)), C.uintptr_t(physicalDevice), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pExternalSemaphoreInfo, lenIfSet(pExternalSemaphoreInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pExternalSemaphoreProperties, lenIfSet(pExternalSemaphoreProperties != nil, 1))[:])))
 }
 
 // GetSemaphoreWin32HandleKHR wraps vkGetSemaphoreWin32HandleKHR.
@@ -3014,7 +3076,7 @@ func (c *Commands) GetSemaphoreWin32HandleKHR(device Device, pGetWin32HandleInfo
 	if c.getSemaphoreWin32HandleKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getSemaphoreWin32HandleKHR)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pGetWin32HandleInfo)), (*C.uint8_t)(unsafe.Pointer(pHandle)))
+	r := C.gvk_r_hgp(C.uintptr_t(uintptr(c.getSemaphoreWin32HandleKHR)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pGetWin32HandleInfo, lenIfSet(pGetWin32HandleInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pHandle)))
 	return Result(r)
 }
 
@@ -3023,7 +3085,7 @@ func (c *Commands) ImportSemaphoreWin32HandleKHR(device Device, pImportSemaphore
 	if c.importSemaphoreWin32HandleKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hp(C.uintptr_t(uintptr(c.importSemaphoreWin32HandleKHR)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pImportSemaphoreWin32HandleInfo)))
+	r := C.gvk_r_hg(C.uintptr_t(uintptr(c.importSemaphoreWin32HandleKHR)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pImportSemaphoreWin32HandleInfo, lenIfSet(pImportSemaphoreWin32HandleInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -3032,7 +3094,7 @@ func (c *Commands) GetSemaphoreFdKHR(device Device, pGetFdInfo *SemaphoreGetFdIn
 	if c.getSemaphoreFdKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getSemaphoreFdKHR)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pGetFdInfo)), (*C.uint8_t)(unsafe.Pointer(pFd)))
+	r := C.gvk_r_hgp(C.uintptr_t(uintptr(c.getSemaphoreFdKHR)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pGetFdInfo, lenIfSet(pGetFdInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pFd)))
 	return Result(r)
 }
 
@@ -3041,7 +3103,7 @@ func (c *Commands) ImportSemaphoreFdKHR(device Device, pImportSemaphoreFdInfo *I
 	if c.importSemaphoreFdKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hp(C.uintptr_t(uintptr(c.importSemaphoreFdKHR)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pImportSemaphoreFdInfo)))
+	r := C.gvk_r_hg(C.uintptr_t(uintptr(c.importSemaphoreFdKHR)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pImportSemaphoreFdInfo, lenIfSet(pImportSemaphoreFdInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -3050,7 +3112,7 @@ func (c *Commands) GetSemaphoreZirconHandleFUCHSIA(device Device, pGetZirconHand
 	if c.getSemaphoreZirconHandleFUCHSIA == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getSemaphoreZirconHandleFUCHSIA)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pGetZirconHandleInfo)), (*C.uint8_t)(unsafe.Pointer(pZirconHandle)))
+	r := C.gvk_r_hgp(C.uintptr_t(uintptr(c.getSemaphoreZirconHandleFUCHSIA)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pGetZirconHandleInfo, lenIfSet(pGetZirconHandleInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pZirconHandle)))
 	return Result(r)
 }
 
@@ -3059,7 +3121,7 @@ func (c *Commands) ImportSemaphoreZirconHandleFUCHSIA(device Device, pImportSema
 	if c.importSemaphoreZirconHandleFUCHSIA == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hp(C.uintptr_t(uintptr(c.importSemaphoreZirconHandleFUCHSIA)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pImportSemaphoreZirconHandleInfo)))
+	r := C.gvk_r_hg(C.uintptr_t(uintptr(c.importSemaphoreZirconHandleFUCHSIA)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pImportSemaphoreZirconHandleInfo, lenIfSet(pImportSemaphoreZirconHandleInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -3068,7 +3130,7 @@ func (c *Commands) GetPhysicalDeviceExternalFenceProperties(physicalDevice Physi
 	if c.getPhysicalDeviceExternalFenceProperties == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getPhysicalDeviceExternalFenceProperties)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pExternalFenceInfo)), (*C.uint8_t)(unsafe.Pointer(pExternalFenceProperties)))
+	C.gvk_v_hgg(C.uintptr_t(uintptr(c.getPhysicalDeviceExternalFenceProperties)), C.uintptr_t(physicalDevice), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pExternalFenceInfo, lenIfSet(pExternalFenceInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pExternalFenceProperties, lenIfSet(pExternalFenceProperties != nil, 1))[:])))
 }
 
 // GetFenceWin32HandleKHR wraps vkGetFenceWin32HandleKHR.
@@ -3076,7 +3138,7 @@ func (c *Commands) GetFenceWin32HandleKHR(device Device, pGetWin32HandleInfo *Fe
 	if c.getFenceWin32HandleKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getFenceWin32HandleKHR)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pGetWin32HandleInfo)), (*C.uint8_t)(unsafe.Pointer(pHandle)))
+	r := C.gvk_r_hgp(C.uintptr_t(uintptr(c.getFenceWin32HandleKHR)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pGetWin32HandleInfo, lenIfSet(pGetWin32HandleInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pHandle)))
 	return Result(r)
 }
 
@@ -3085,7 +3147,7 @@ func (c *Commands) ImportFenceWin32HandleKHR(device Device, pImportFenceWin32Han
 	if c.importFenceWin32HandleKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hp(C.uintptr_t(uintptr(c.importFenceWin32HandleKHR)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pImportFenceWin32HandleInfo)))
+	r := C.gvk_r_hg(C.uintptr_t(uintptr(c.importFenceWin32HandleKHR)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pImportFenceWin32HandleInfo, lenIfSet(pImportFenceWin32HandleInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -3094,7 +3156,7 @@ func (c *Commands) GetFenceFdKHR(device Device, pGetFdInfo *FenceGetFdInfoKHR, p
 	if c.getFenceFdKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getFenceFdKHR)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pGetFdInfo)), (*C.uint8_t)(unsafe.Pointer(pFd)))
+	r := C.gvk_r_hgp(C.uintptr_t(uintptr(c.getFenceFdKHR)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pGetFdInfo, lenIfSet(pGetFdInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pFd)))
 	return Result(r)
 }
 
@@ -3103,7 +3165,7 @@ func (c *Commands) ImportFenceFdKHR(device Device, pImportFenceFdInfo *ImportFen
 	if c.importFenceFdKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hp(C.uintptr_t(uintptr(c.importFenceFdKHR)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pImportFenceFdInfo)))
+	r := C.gvk_r_hg(C.uintptr_t(uintptr(c.importFenceFdKHR)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pImportFenceFdInfo, lenIfSet(pImportFenceFdInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -3112,7 +3174,7 @@ func (c *Commands) GetFenceSciSyncFenceNV(device Device, pGetSciSyncHandleInfo *
 	if c.getFenceSciSyncFenceNV == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getFenceSciSyncFenceNV)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pGetSciSyncHandleInfo)), (*C.uint8_t)(unsafe.Pointer(pHandle)))
+	r := C.gvk_r_hgp(C.uintptr_t(uintptr(c.getFenceSciSyncFenceNV)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pGetSciSyncHandleInfo, lenIfSet(pGetSciSyncHandleInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pHandle)))
 	return Result(r)
 }
 
@@ -3121,7 +3183,7 @@ func (c *Commands) GetFenceSciSyncObjNV(device Device, pGetSciSyncHandleInfo *Fe
 	if c.getFenceSciSyncObjNV == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getFenceSciSyncObjNV)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pGetSciSyncHandleInfo)), (*C.uint8_t)(unsafe.Pointer(pHandle)))
+	r := C.gvk_r_hgp(C.uintptr_t(uintptr(c.getFenceSciSyncObjNV)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pGetSciSyncHandleInfo, lenIfSet(pGetSciSyncHandleInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pHandle)))
 	return Result(r)
 }
 
@@ -3130,7 +3192,7 @@ func (c *Commands) ImportFenceSciSyncFenceNV(device Device, pImportFenceSciSyncI
 	if c.importFenceSciSyncFenceNV == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hp(C.uintptr_t(uintptr(c.importFenceSciSyncFenceNV)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pImportFenceSciSyncInfo)))
+	r := C.gvk_r_hg(C.uintptr_t(uintptr(c.importFenceSciSyncFenceNV)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pImportFenceSciSyncInfo, lenIfSet(pImportFenceSciSyncInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -3139,7 +3201,7 @@ func (c *Commands) ImportFenceSciSyncObjNV(device Device, pImportFenceSciSyncInf
 	if c.importFenceSciSyncObjNV == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hp(C.uintptr_t(uintptr(c.importFenceSciSyncObjNV)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pImportFenceSciSyncInfo)))
+	r := C.gvk_r_hg(C.uintptr_t(uintptr(c.importFenceSciSyncObjNV)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pImportFenceSciSyncInfo, lenIfSet(pImportFenceSciSyncInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -3148,7 +3210,7 @@ func (c *Commands) GetSemaphoreSciSyncObjNV(device Device, pGetSciSyncInfo *Sema
 	if c.getSemaphoreSciSyncObjNV == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getSemaphoreSciSyncObjNV)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pGetSciSyncInfo)), (*C.uint8_t)(unsafe.Pointer(pHandle)))
+	r := C.gvk_r_hgp(C.uintptr_t(uintptr(c.getSemaphoreSciSyncObjNV)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pGetSciSyncInfo, lenIfSet(pGetSciSyncInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pHandle)))
 	return Result(r)
 }
 
@@ -3157,7 +3219,7 @@ func (c *Commands) ImportSemaphoreSciSyncObjNV(device Device, pImportSemaphoreSc
 	if c.importSemaphoreSciSyncObjNV == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hp(C.uintptr_t(uintptr(c.importSemaphoreSciSyncObjNV)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pImportSemaphoreSciSyncInfo)))
+	r := C.gvk_r_hg(C.uintptr_t(uintptr(c.importSemaphoreSciSyncObjNV)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pImportSemaphoreSciSyncInfo, lenIfSet(pImportSemaphoreSciSyncInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -3166,7 +3228,7 @@ func (c *Commands) GetPhysicalDeviceSciSyncAttributesNV(physicalDevice PhysicalD
 	if c.getPhysicalDeviceSciSyncAttributesNV == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hph(C.uintptr_t(uintptr(c.getPhysicalDeviceSciSyncAttributesNV)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pSciSyncAttributesInfo)), C.uintptr_t(pAttributes))
+	r := C.gvk_r_hgh(C.uintptr_t(uintptr(c.getPhysicalDeviceSciSyncAttributesNV)), C.uintptr_t(physicalDevice), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSciSyncAttributesInfo, lenIfSet(pSciSyncAttributesInfo != nil, 1))[:])), C.uintptr_t(pAttributes))
 	return Result(r)
 }
 
@@ -3175,7 +3237,7 @@ func (c *Commands) CreateSemaphoreSciSyncPoolNV(device Device, pCreateInfo *Sema
 	if c.createSemaphoreSciSyncPoolNV == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createSemaphoreSciSyncPoolNV)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pSemaphorePool)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createSemaphoreSciSyncPoolNV)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pSemaphorePool)))
 	return Result(r)
 }
 
@@ -3184,7 +3246,7 @@ func (c *Commands) DestroySemaphoreSciSyncPoolNV(device Device, semaphorePool Se
 	if c.destroySemaphoreSciSyncPoolNV == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroySemaphoreSciSyncPoolNV)), C.uintptr_t(device), C.uint64_t(semaphorePool), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroySemaphoreSciSyncPoolNV)), C.uintptr_t(device), C.uint64_t(semaphorePool), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // ReleaseDisplayEXT wraps vkReleaseDisplayEXT.
@@ -3237,7 +3299,7 @@ func (c *Commands) DisplayPowerControlEXT(device Device, display DisplayKHR, pDi
 	if c.displayPowerControlEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqp(C.uintptr_t(uintptr(c.displayPowerControlEXT)), C.uintptr_t(device), C.uint64_t(display), (*C.uint8_t)(unsafe.Pointer(pDisplayPowerInfo)))
+	r := C.gvk_r_hqg(C.uintptr_t(uintptr(c.displayPowerControlEXT)), C.uintptr_t(device), C.uint64_t(display), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pDisplayPowerInfo, lenIfSet(pDisplayPowerInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -3246,7 +3308,7 @@ func (c *Commands) RegisterDeviceEventEXT(device Device, pDeviceEventInfo *Devic
 	if c.registerDeviceEventEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.registerDeviceEventEXT)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pDeviceEventInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pFence)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.registerDeviceEventEXT)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pDeviceEventInfo, lenIfSet(pDeviceEventInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pFence)))
 	return Result(r)
 }
 
@@ -3255,7 +3317,7 @@ func (c *Commands) RegisterDisplayEventEXT(device Device, display DisplayKHR, pD
 	if c.registerDisplayEventEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqppp(C.uintptr_t(uintptr(c.registerDisplayEventEXT)), C.uintptr_t(device), C.uint64_t(display), (*C.uint8_t)(unsafe.Pointer(pDisplayEventInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pFence)))
+	r := C.gvk_r_hqggp(C.uintptr_t(uintptr(c.registerDisplayEventEXT)), C.uintptr_t(device), C.uint64_t(display), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pDisplayEventInfo, lenIfSet(pDisplayEventInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pFence)))
 	return Result(r)
 }
 
@@ -3273,7 +3335,7 @@ func (c *Commands) GetPhysicalDeviceSurfaceCapabilities2EXT(physicalDevice Physi
 	if c.getPhysicalDeviceSurfaceCapabilities2EXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqp(C.uintptr_t(uintptr(c.getPhysicalDeviceSurfaceCapabilities2EXT)), C.uintptr_t(physicalDevice), C.uint64_t(surface), (*C.uint8_t)(unsafe.Pointer(pSurfaceCapabilities)))
+	r := C.gvk_r_hqg(C.uintptr_t(uintptr(c.getPhysicalDeviceSurfaceCapabilities2EXT)), C.uintptr_t(physicalDevice), C.uint64_t(surface), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSurfaceCapabilities, lenIfSet(pSurfaceCapabilities != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -3282,7 +3344,7 @@ func (c *Commands) EnumeratePhysicalDeviceGroups(instance Instance, pPhysicalDev
 	if c.enumeratePhysicalDeviceGroups == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.enumeratePhysicalDeviceGroups)), C.uintptr_t(instance), (*C.uint8_t)(unsafe.Pointer(pPhysicalDeviceGroupCount)), (*C.uint8_t)(unsafe.Pointer(pPhysicalDeviceGroupProperties)))
+	r := C.gvk_r_hpg(C.uintptr_t(uintptr(c.enumeratePhysicalDeviceGroups)), C.uintptr_t(instance), (*C.uint8_t)(unsafe.Pointer(pPhysicalDeviceGroupCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pPhysicalDeviceGroupProperties, lenIfSet(pPhysicalDeviceGroupProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -3299,7 +3361,7 @@ func (c *Commands) BindBufferMemory2(device Device, bindInfoCount uint32, pBindI
 	if c.bindBufferMemory2 == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hip(C.uintptr_t(uintptr(c.bindBufferMemory2)), C.uintptr_t(device), C.uint32_t(bindInfoCount), (*C.uint8_t)(unsafe.Pointer(pBindInfos)))
+	r := C.gvk_r_hig(C.uintptr_t(uintptr(c.bindBufferMemory2)), C.uintptr_t(device), C.uint32_t(bindInfoCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pBindInfos, lenIfSet(pBindInfos != nil, int(bindInfoCount)))[:])))
 	return Result(r)
 }
 
@@ -3308,7 +3370,7 @@ func (c *Commands) BindImageMemory2(device Device, bindInfoCount uint32, pBindIn
 	if c.bindImageMemory2 == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hip(C.uintptr_t(uintptr(c.bindImageMemory2)), C.uintptr_t(device), C.uint32_t(bindInfoCount), (*C.uint8_t)(unsafe.Pointer(pBindInfos)))
+	r := C.gvk_r_hig(C.uintptr_t(uintptr(c.bindImageMemory2)), C.uintptr_t(device), C.uint32_t(bindInfoCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pBindInfos, lenIfSet(pBindInfos != nil, int(bindInfoCount)))[:])))
 	return Result(r)
 }
 
@@ -3325,7 +3387,7 @@ func (c *Commands) GetDeviceGroupPresentCapabilitiesKHR(device Device, pDeviceGr
 	if c.getDeviceGroupPresentCapabilitiesKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hp(C.uintptr_t(uintptr(c.getDeviceGroupPresentCapabilitiesKHR)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pDeviceGroupPresentCapabilities)))
+	r := C.gvk_r_hg(C.uintptr_t(uintptr(c.getDeviceGroupPresentCapabilitiesKHR)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pDeviceGroupPresentCapabilities, lenIfSet(pDeviceGroupPresentCapabilities != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -3343,7 +3405,7 @@ func (c *Commands) AcquireNextImage2KHR(device Device, pAcquireInfo *AcquireNext
 	if c.acquireNextImage2KHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.acquireNextImage2KHR)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pAcquireInfo)), (*C.uint8_t)(unsafe.Pointer(pImageIndex)))
+	r := C.gvk_r_hgp(C.uintptr_t(uintptr(c.acquireNextImage2KHR)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAcquireInfo, lenIfSet(pAcquireInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pImageIndex)))
 	return Result(r)
 }
 
@@ -3369,7 +3431,7 @@ func (c *Commands) CreateDescriptorUpdateTemplate(device Device, pCreateInfo *De
 	if c.createDescriptorUpdateTemplate == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createDescriptorUpdateTemplate)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pDescriptorUpdateTemplate)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createDescriptorUpdateTemplate)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pDescriptorUpdateTemplate)))
 	return Result(r)
 }
 
@@ -3378,7 +3440,7 @@ func (c *Commands) DestroyDescriptorUpdateTemplate(device Device, descriptorUpda
 	if c.destroyDescriptorUpdateTemplate == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyDescriptorUpdateTemplate)), C.uintptr_t(device), C.uint64_t(descriptorUpdateTemplate), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyDescriptorUpdateTemplate)), C.uintptr_t(device), C.uint64_t(descriptorUpdateTemplate), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // UpdateDescriptorSetWithTemplate wraps vkUpdateDescriptorSetWithTemplate.
@@ -3402,7 +3464,7 @@ func (c *Commands) SetHdrMetadataEXT(device Device, swapchainCount uint32, pSwap
 	if c.setHdrMetadataEXT == nil {
 		return
 	}
-	C.gvk_v_hipp(C.uintptr_t(uintptr(c.setHdrMetadataEXT)), C.uintptr_t(device), C.uint32_t(swapchainCount), (*C.uint8_t)(unsafe.Pointer(pSwapchains)), (*C.uint8_t)(unsafe.Pointer(pMetadata)))
+	C.gvk_v_hipg(C.uintptr_t(uintptr(c.setHdrMetadataEXT)), C.uintptr_t(device), C.uint32_t(swapchainCount), (*C.uint8_t)(unsafe.Pointer(pSwapchains)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMetadata, lenIfSet(pMetadata != nil, int(swapchainCount)))[:])))
 }
 
 // GetSwapchainStatusKHR wraps vkGetSwapchainStatusKHR.
@@ -3437,7 +3499,7 @@ func (c *Commands) CreateIOSSurfaceMVK(instance Instance, pCreateInfo *IOSSurfac
 	if c.createIOSSurfaceMVK == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createIOSSurfaceMVK)), C.uintptr_t(instance), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pSurface)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createIOSSurfaceMVK)), C.uintptr_t(instance), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pSurface)))
 	return Result(r)
 }
 
@@ -3446,7 +3508,7 @@ func (c *Commands) CreateMacOSSurfaceMVK(instance Instance, pCreateInfo *MacOSSu
 	if c.createMacOSSurfaceMVK == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createMacOSSurfaceMVK)), C.uintptr_t(instance), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pSurface)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createMacOSSurfaceMVK)), C.uintptr_t(instance), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pSurface)))
 	return Result(r)
 }
 
@@ -3455,7 +3517,7 @@ func (c *Commands) CreateMetalSurfaceEXT(instance Instance, pCreateInfo *MetalSu
 	if c.createMetalSurfaceEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createMetalSurfaceEXT)), C.uintptr_t(instance), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pSurface)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createMetalSurfaceEXT)), C.uintptr_t(instance), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pSurface)))
 	return Result(r)
 }
 
@@ -3496,7 +3558,7 @@ func (c *Commands) CmdSetSampleLocationsEXT(commandBuffer CommandBuffer, pSample
 	if c.cmdSetSampleLocationsEXT == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdSetSampleLocationsEXT)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pSampleLocationsInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdSetSampleLocationsEXT)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSampleLocationsInfo, lenIfSet(pSampleLocationsInfo != nil, 1))[:])))
 }
 
 // GetPhysicalDeviceMultisamplePropertiesEXT wraps vkGetPhysicalDeviceMultisamplePropertiesEXT.
@@ -3504,7 +3566,7 @@ func (c *Commands) GetPhysicalDeviceMultisamplePropertiesEXT(physicalDevice Phys
 	if c.getPhysicalDeviceMultisamplePropertiesEXT == nil {
 		return
 	}
-	C.gvk_v_hip(C.uintptr_t(uintptr(c.getPhysicalDeviceMultisamplePropertiesEXT)), C.uintptr_t(physicalDevice), C.uint32_t(samples), (*C.uint8_t)(unsafe.Pointer(pMultisampleProperties)))
+	C.gvk_v_hig(C.uintptr_t(uintptr(c.getPhysicalDeviceMultisamplePropertiesEXT)), C.uintptr_t(physicalDevice), C.uint32_t(samples), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMultisampleProperties, lenIfSet(pMultisampleProperties != nil, 1))[:])))
 }
 
 // GetPhysicalDeviceSurfaceCapabilities2KHR wraps vkGetPhysicalDeviceSurfaceCapabilities2KHR.
@@ -3512,7 +3574,7 @@ func (c *Commands) GetPhysicalDeviceSurfaceCapabilities2KHR(physicalDevice Physi
 	if c.getPhysicalDeviceSurfaceCapabilities2KHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getPhysicalDeviceSurfaceCapabilities2KHR)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pSurfaceInfo)), (*C.uint8_t)(unsafe.Pointer(pSurfaceCapabilities)))
+	r := C.gvk_r_hgg(C.uintptr_t(uintptr(c.getPhysicalDeviceSurfaceCapabilities2KHR)), C.uintptr_t(physicalDevice), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSurfaceInfo, lenIfSet(pSurfaceInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSurfaceCapabilities, lenIfSet(pSurfaceCapabilities != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -3521,7 +3583,7 @@ func (c *Commands) GetPhysicalDeviceSurfaceFormats2KHR(physicalDevice PhysicalDe
 	if c.getPhysicalDeviceSurfaceFormats2KHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.getPhysicalDeviceSurfaceFormats2KHR)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pSurfaceInfo)), (*C.uint8_t)(unsafe.Pointer(pSurfaceFormatCount)), (*C.uint8_t)(unsafe.Pointer(pSurfaceFormats)))
+	r := C.gvk_r_hgpg(C.uintptr_t(uintptr(c.getPhysicalDeviceSurfaceFormats2KHR)), C.uintptr_t(physicalDevice), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSurfaceInfo, lenIfSet(pSurfaceInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pSurfaceFormatCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSurfaceFormats, lenIfSet(pSurfaceFormats != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -3530,7 +3592,7 @@ func (c *Commands) GetPhysicalDeviceDisplayProperties2KHR(physicalDevice Physica
 	if c.getPhysicalDeviceDisplayProperties2KHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getPhysicalDeviceDisplayProperties2KHR)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pPropertyCount)), (*C.uint8_t)(unsafe.Pointer(pProperties)))
+	r := C.gvk_r_hpg(C.uintptr_t(uintptr(c.getPhysicalDeviceDisplayProperties2KHR)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pPropertyCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pProperties, lenIfSet(pProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -3539,7 +3601,7 @@ func (c *Commands) GetPhysicalDeviceDisplayPlaneProperties2KHR(physicalDevice Ph
 	if c.getPhysicalDeviceDisplayPlaneProperties2KHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getPhysicalDeviceDisplayPlaneProperties2KHR)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pPropertyCount)), (*C.uint8_t)(unsafe.Pointer(pProperties)))
+	r := C.gvk_r_hpg(C.uintptr_t(uintptr(c.getPhysicalDeviceDisplayPlaneProperties2KHR)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pPropertyCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pProperties, lenIfSet(pProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -3548,7 +3610,7 @@ func (c *Commands) GetDisplayModeProperties2KHR(physicalDevice PhysicalDevice, d
 	if c.getDisplayModeProperties2KHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqpp(C.uintptr_t(uintptr(c.getDisplayModeProperties2KHR)), C.uintptr_t(physicalDevice), C.uint64_t(display), (*C.uint8_t)(unsafe.Pointer(pPropertyCount)), (*C.uint8_t)(unsafe.Pointer(pProperties)))
+	r := C.gvk_r_hqpg(C.uintptr_t(uintptr(c.getDisplayModeProperties2KHR)), C.uintptr_t(physicalDevice), C.uint64_t(display), (*C.uint8_t)(unsafe.Pointer(pPropertyCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pProperties, lenIfSet(pProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -3557,7 +3619,7 @@ func (c *Commands) GetDisplayPlaneCapabilities2KHR(physicalDevice PhysicalDevice
 	if c.getDisplayPlaneCapabilities2KHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getDisplayPlaneCapabilities2KHR)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pDisplayPlaneInfo)), (*C.uint8_t)(unsafe.Pointer(pCapabilities)))
+	r := C.gvk_r_hgg(C.uintptr_t(uintptr(c.getDisplayPlaneCapabilities2KHR)), C.uintptr_t(physicalDevice), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pDisplayPlaneInfo, lenIfSet(pDisplayPlaneInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCapabilities, lenIfSet(pCapabilities != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -3566,7 +3628,7 @@ func (c *Commands) GetBufferMemoryRequirements2(device Device, pInfo *BufferMemo
 	if c.getBufferMemoryRequirements2 == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getBufferMemoryRequirements2)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pMemoryRequirements)))
+	C.gvk_v_hgg(C.uintptr_t(uintptr(c.getBufferMemoryRequirements2)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMemoryRequirements, lenIfSet(pMemoryRequirements != nil, 1))[:])))
 }
 
 // GetImageMemoryRequirements2 wraps vkGetImageMemoryRequirements2.
@@ -3574,7 +3636,7 @@ func (c *Commands) GetImageMemoryRequirements2(device Device, pInfo *ImageMemory
 	if c.getImageMemoryRequirements2 == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getImageMemoryRequirements2)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pMemoryRequirements)))
+	C.gvk_v_hgg(C.uintptr_t(uintptr(c.getImageMemoryRequirements2)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMemoryRequirements, lenIfSet(pMemoryRequirements != nil, 1))[:])))
 }
 
 // GetImageSparseMemoryRequirements2 wraps vkGetImageSparseMemoryRequirements2.
@@ -3582,7 +3644,7 @@ func (c *Commands) GetImageSparseMemoryRequirements2(device Device, pInfo *Image
 	if c.getImageSparseMemoryRequirements2 == nil {
 		return
 	}
-	C.gvk_v_hppp(C.uintptr_t(uintptr(c.getImageSparseMemoryRequirements2)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pSparseMemoryRequirementCount)), (*C.uint8_t)(unsafe.Pointer(pSparseMemoryRequirements)))
+	C.gvk_v_hgpg(C.uintptr_t(uintptr(c.getImageSparseMemoryRequirements2)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pSparseMemoryRequirementCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSparseMemoryRequirements, lenIfSet(pSparseMemoryRequirements != nil, 1))[:])))
 }
 
 // GetDeviceBufferMemoryRequirements wraps vkGetDeviceBufferMemoryRequirements.
@@ -3590,7 +3652,7 @@ func (c *Commands) GetDeviceBufferMemoryRequirements(device Device, pInfo *Devic
 	if c.getDeviceBufferMemoryRequirements == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getDeviceBufferMemoryRequirements)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pMemoryRequirements)))
+	C.gvk_v_hgg(C.uintptr_t(uintptr(c.getDeviceBufferMemoryRequirements)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMemoryRequirements, lenIfSet(pMemoryRequirements != nil, 1))[:])))
 }
 
 // GetDeviceImageMemoryRequirements wraps vkGetDeviceImageMemoryRequirements.
@@ -3598,7 +3660,7 @@ func (c *Commands) GetDeviceImageMemoryRequirements(device Device, pInfo *Device
 	if c.getDeviceImageMemoryRequirements == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getDeviceImageMemoryRequirements)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pMemoryRequirements)))
+	C.gvk_v_hgg(C.uintptr_t(uintptr(c.getDeviceImageMemoryRequirements)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMemoryRequirements, lenIfSet(pMemoryRequirements != nil, 1))[:])))
 }
 
 // GetDeviceImageSparseMemoryRequirements wraps vkGetDeviceImageSparseMemoryRequirements.
@@ -3606,7 +3668,7 @@ func (c *Commands) GetDeviceImageSparseMemoryRequirements(device Device, pInfo *
 	if c.getDeviceImageSparseMemoryRequirements == nil {
 		return
 	}
-	C.gvk_v_hppp(C.uintptr_t(uintptr(c.getDeviceImageSparseMemoryRequirements)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pSparseMemoryRequirementCount)), (*C.uint8_t)(unsafe.Pointer(pSparseMemoryRequirements)))
+	C.gvk_v_hgpg(C.uintptr_t(uintptr(c.getDeviceImageSparseMemoryRequirements)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pSparseMemoryRequirementCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSparseMemoryRequirements, lenIfSet(pSparseMemoryRequirements != nil, 1))[:])))
 }
 
 // CreateSamplerYcbcrConversion wraps vkCreateSamplerYcbcrConversion.
@@ -3614,7 +3676,7 @@ func (c *Commands) CreateSamplerYcbcrConversion(device Device, pCreateInfo *Samp
 	if c.createSamplerYcbcrConversion == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createSamplerYcbcrConversion)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pYcbcrConversion)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createSamplerYcbcrConversion)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pYcbcrConversion)))
 	return Result(r)
 }
 
@@ -3623,7 +3685,7 @@ func (c *Commands) DestroySamplerYcbcrConversion(device Device, ycbcrConversion 
 	if c.destroySamplerYcbcrConversion == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroySamplerYcbcrConversion)), C.uintptr_t(device), C.uint64_t(ycbcrConversion), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroySamplerYcbcrConversion)), C.uintptr_t(device), C.uint64_t(ycbcrConversion), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // GetDeviceQueue2 wraps vkGetDeviceQueue2.
@@ -3631,7 +3693,7 @@ func (c *Commands) GetDeviceQueue2(device Device, pQueueInfo *DeviceQueueInfo2, 
 	if c.getDeviceQueue2 == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getDeviceQueue2)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pQueueInfo)), (*C.uint8_t)(unsafe.Pointer(pQueue)))
+	C.gvk_v_hgp(C.uintptr_t(uintptr(c.getDeviceQueue2)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pQueueInfo, lenIfSet(pQueueInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pQueue)))
 }
 
 // CreateValidationCacheEXT wraps vkCreateValidationCacheEXT.
@@ -3639,7 +3701,7 @@ func (c *Commands) CreateValidationCacheEXT(device Device, pCreateInfo *Validati
 	if c.createValidationCacheEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createValidationCacheEXT)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pValidationCache)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createValidationCacheEXT)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pValidationCache)))
 	return Result(r)
 }
 
@@ -3648,7 +3710,7 @@ func (c *Commands) DestroyValidationCacheEXT(device Device, validationCache Vali
 	if c.destroyValidationCacheEXT == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyValidationCacheEXT)), C.uintptr_t(device), C.uint64_t(validationCache), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyValidationCacheEXT)), C.uintptr_t(device), C.uint64_t(validationCache), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // GetValidationCacheDataEXT wraps vkGetValidationCacheDataEXT.
@@ -3674,7 +3736,7 @@ func (c *Commands) GetDescriptorSetLayoutSupport(device Device, pCreateInfo *Des
 	if c.getDescriptorSetLayoutSupport == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getDescriptorSetLayoutSupport)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pSupport)))
+	C.gvk_v_hgg(C.uintptr_t(uintptr(c.getDescriptorSetLayoutSupport)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSupport, lenIfSet(pSupport != nil, 1))[:])))
 }
 
 // GetSwapchainGrallocUsageANDROID wraps vkGetSwapchainGrallocUsageANDROID.
@@ -3744,7 +3806,7 @@ func (c *Commands) GetCalibratedTimestampsKHR(device Device, timestampCount uint
 	if c.getCalibratedTimestampsKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hippp(C.uintptr_t(uintptr(c.getCalibratedTimestampsKHR)), C.uintptr_t(device), C.uint32_t(timestampCount), (*C.uint8_t)(unsafe.Pointer(pTimestampInfos)), (*C.uint8_t)(unsafe.Pointer(pTimestamps)), (*C.uint8_t)(unsafe.Pointer(pMaxDeviation)))
+	r := C.gvk_r_higpp(C.uintptr_t(uintptr(c.getCalibratedTimestampsKHR)), C.uintptr_t(device), C.uint32_t(timestampCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pTimestampInfos, lenIfSet(pTimestampInfos != nil, int(timestampCount)))[:])), (*C.uint8_t)(unsafe.Pointer(pTimestamps)), (*C.uint8_t)(unsafe.Pointer(pMaxDeviation)))
 	return Result(r)
 }
 
@@ -3753,7 +3815,7 @@ func (c *Commands) SetDebugUtilsObjectNameEXT(device Device, pNameInfo *DebugUti
 	if c.setDebugUtilsObjectNameEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hp(C.uintptr_t(uintptr(c.setDebugUtilsObjectNameEXT)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pNameInfo)))
+	r := C.gvk_r_hg(C.uintptr_t(uintptr(c.setDebugUtilsObjectNameEXT)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pNameInfo, lenIfSet(pNameInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -3762,7 +3824,7 @@ func (c *Commands) SetDebugUtilsObjectTagEXT(device Device, pTagInfo *DebugUtils
 	if c.setDebugUtilsObjectTagEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hp(C.uintptr_t(uintptr(c.setDebugUtilsObjectTagEXT)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pTagInfo)))
+	r := C.gvk_r_hg(C.uintptr_t(uintptr(c.setDebugUtilsObjectTagEXT)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pTagInfo, lenIfSet(pTagInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -3771,7 +3833,7 @@ func (c *Commands) QueueBeginDebugUtilsLabelEXT(queue Queue, pLabelInfo *DebugUt
 	if c.queueBeginDebugUtilsLabelEXT == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.queueBeginDebugUtilsLabelEXT)), C.uintptr_t(queue), (*C.uint8_t)(unsafe.Pointer(pLabelInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.queueBeginDebugUtilsLabelEXT)), C.uintptr_t(queue), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pLabelInfo, lenIfSet(pLabelInfo != nil, 1))[:])))
 }
 
 // QueueEndDebugUtilsLabelEXT wraps vkQueueEndDebugUtilsLabelEXT.
@@ -3787,7 +3849,7 @@ func (c *Commands) QueueInsertDebugUtilsLabelEXT(queue Queue, pLabelInfo *DebugU
 	if c.queueInsertDebugUtilsLabelEXT == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.queueInsertDebugUtilsLabelEXT)), C.uintptr_t(queue), (*C.uint8_t)(unsafe.Pointer(pLabelInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.queueInsertDebugUtilsLabelEXT)), C.uintptr_t(queue), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pLabelInfo, lenIfSet(pLabelInfo != nil, 1))[:])))
 }
 
 // CmdBeginDebugUtilsLabelEXT wraps vkCmdBeginDebugUtilsLabelEXT.
@@ -3795,7 +3857,7 @@ func (c *Commands) CmdBeginDebugUtilsLabelEXT(commandBuffer CommandBuffer, pLabe
 	if c.cmdBeginDebugUtilsLabelEXT == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdBeginDebugUtilsLabelEXT)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pLabelInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdBeginDebugUtilsLabelEXT)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pLabelInfo, lenIfSet(pLabelInfo != nil, 1))[:])))
 }
 
 // CmdEndDebugUtilsLabelEXT wraps vkCmdEndDebugUtilsLabelEXT.
@@ -3811,7 +3873,7 @@ func (c *Commands) CmdInsertDebugUtilsLabelEXT(commandBuffer CommandBuffer, pLab
 	if c.cmdInsertDebugUtilsLabelEXT == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdInsertDebugUtilsLabelEXT)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pLabelInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdInsertDebugUtilsLabelEXT)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pLabelInfo, lenIfSet(pLabelInfo != nil, 1))[:])))
 }
 
 // CreateDebugUtilsMessengerEXT wraps vkCreateDebugUtilsMessengerEXT.
@@ -3819,7 +3881,7 @@ func (c *Commands) CreateDebugUtilsMessengerEXT(instance Instance, pCreateInfo *
 	if c.createDebugUtilsMessengerEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createDebugUtilsMessengerEXT)), C.uintptr_t(instance), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pMessenger)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createDebugUtilsMessengerEXT)), C.uintptr_t(instance), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pMessenger)))
 	return Result(r)
 }
 
@@ -3828,7 +3890,7 @@ func (c *Commands) DestroyDebugUtilsMessengerEXT(instance Instance, messenger De
 	if c.destroyDebugUtilsMessengerEXT == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyDebugUtilsMessengerEXT)), C.uintptr_t(instance), C.uint64_t(messenger), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyDebugUtilsMessengerEXT)), C.uintptr_t(instance), C.uint64_t(messenger), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // SubmitDebugUtilsMessageEXT wraps vkSubmitDebugUtilsMessageEXT.
@@ -3836,7 +3898,7 @@ func (c *Commands) SubmitDebugUtilsMessageEXT(instance Instance, messageSeverity
 	if c.submitDebugUtilsMessageEXT == nil {
 		return
 	}
-	C.gvk_v_hiip(C.uintptr_t(uintptr(c.submitDebugUtilsMessageEXT)), C.uintptr_t(instance), C.uint32_t(messageSeverity), C.uint32_t(messageTypes), (*C.uint8_t)(unsafe.Pointer(pCallbackData)))
+	C.gvk_v_hiig(C.uintptr_t(uintptr(c.submitDebugUtilsMessageEXT)), C.uintptr_t(instance), C.uint32_t(messageSeverity), C.uint32_t(messageTypes), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCallbackData, lenIfSet(pCallbackData != nil, 1))[:])))
 }
 
 // GetMemoryHostPointerPropertiesEXT wraps vkGetMemoryHostPointerPropertiesEXT.
@@ -3844,7 +3906,7 @@ func (c *Commands) GetMemoryHostPointerPropertiesEXT(device Device, handleType E
 	if c.getMemoryHostPointerPropertiesEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hipp(C.uintptr_t(uintptr(c.getMemoryHostPointerPropertiesEXT)), C.uintptr_t(device), C.uint32_t(handleType), (*C.uint8_t)(unsafe.Pointer(pHostPointer)), (*C.uint8_t)(unsafe.Pointer(pMemoryHostPointerProperties)))
+	r := C.gvk_r_hipg(C.uintptr_t(uintptr(c.getMemoryHostPointerPropertiesEXT)), C.uintptr_t(device), C.uint32_t(handleType), (*C.uint8_t)(unsafe.Pointer(pHostPointer)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMemoryHostPointerProperties, lenIfSet(pMemoryHostPointerProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -3861,7 +3923,7 @@ func (c *Commands) CreateRenderPass2(device Device, pCreateInfo *RenderPassCreat
 	if c.createRenderPass2 == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createRenderPass2)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pRenderPass)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createRenderPass2)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pRenderPass)))
 	return Result(r)
 }
 
@@ -3870,7 +3932,7 @@ func (c *Commands) CmdBeginRenderPass2(commandBuffer CommandBuffer, pRenderPassB
 	if c.cmdBeginRenderPass2 == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.cmdBeginRenderPass2)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pRenderPassBegin)), (*C.uint8_t)(unsafe.Pointer(pSubpassBeginInfo)))
+	C.gvk_v_hgg(C.uintptr_t(uintptr(c.cmdBeginRenderPass2)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pRenderPassBegin, lenIfSet(pRenderPassBegin != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSubpassBeginInfo, lenIfSet(pSubpassBeginInfo != nil, 1))[:])))
 }
 
 // CmdNextSubpass2 wraps vkCmdNextSubpass2.
@@ -3878,7 +3940,7 @@ func (c *Commands) CmdNextSubpass2(commandBuffer CommandBuffer, pSubpassBeginInf
 	if c.cmdNextSubpass2 == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.cmdNextSubpass2)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pSubpassBeginInfo)), (*C.uint8_t)(unsafe.Pointer(pSubpassEndInfo)))
+	C.gvk_v_hgg(C.uintptr_t(uintptr(c.cmdNextSubpass2)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSubpassBeginInfo, lenIfSet(pSubpassBeginInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSubpassEndInfo, lenIfSet(pSubpassEndInfo != nil, 1))[:])))
 }
 
 // CmdEndRenderPass2 wraps vkCmdEndRenderPass2.
@@ -3886,7 +3948,7 @@ func (c *Commands) CmdEndRenderPass2(commandBuffer CommandBuffer, pSubpassEndInf
 	if c.cmdEndRenderPass2 == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdEndRenderPass2)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pSubpassEndInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdEndRenderPass2)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSubpassEndInfo, lenIfSet(pSubpassEndInfo != nil, 1))[:])))
 }
 
 // GetSemaphoreCounterValue wraps vkGetSemaphoreCounterValue.
@@ -3903,7 +3965,7 @@ func (c *Commands) WaitSemaphores(device Device, pWaitInfo *SemaphoreWaitInfo, t
 	if c.waitSemaphores == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpq(C.uintptr_t(uintptr(c.waitSemaphores)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pWaitInfo)), C.uint64_t(timeout))
+	r := C.gvk_r_hgq(C.uintptr_t(uintptr(c.waitSemaphores)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pWaitInfo, lenIfSet(pWaitInfo != nil, 1))[:])), C.uint64_t(timeout))
 	return Result(r)
 }
 
@@ -3912,7 +3974,7 @@ func (c *Commands) SignalSemaphore(device Device, pSignalInfo *SemaphoreSignalIn
 	if c.signalSemaphore == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hp(C.uintptr_t(uintptr(c.signalSemaphore)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pSignalInfo)))
+	r := C.gvk_r_hg(C.uintptr_t(uintptr(c.signalSemaphore)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSignalInfo, lenIfSet(pSignalInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -3921,7 +3983,7 @@ func (c *Commands) GetAndroidHardwareBufferPropertiesANDROID(device Device, buff
 	if c.getAndroidHardwareBufferPropertiesANDROID == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getAndroidHardwareBufferPropertiesANDROID)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(buffer)), (*C.uint8_t)(unsafe.Pointer(pProperties)))
+	r := C.gvk_r_hpg(C.uintptr_t(uintptr(c.getAndroidHardwareBufferPropertiesANDROID)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(buffer)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pProperties, lenIfSet(pProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -3930,7 +3992,7 @@ func (c *Commands) GetMemoryAndroidHardwareBufferANDROID(device Device, pInfo *M
 	if c.getMemoryAndroidHardwareBufferANDROID == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getMemoryAndroidHardwareBufferANDROID)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pBuffer)))
+	r := C.gvk_r_hgg(C.uintptr_t(uintptr(c.getMemoryAndroidHardwareBufferANDROID)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pBuffer, lenIfSet(pBuffer != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -3963,7 +4025,7 @@ func (c *Commands) GetQueueCheckpointDataNV(queue Queue, pCheckpointDataCount *u
 	if c.getQueueCheckpointDataNV == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getQueueCheckpointDataNV)), C.uintptr_t(queue), (*C.uint8_t)(unsafe.Pointer(pCheckpointDataCount)), (*C.uint8_t)(unsafe.Pointer(pCheckpointData)))
+	C.gvk_v_hpg(C.uintptr_t(uintptr(c.getQueueCheckpointDataNV)), C.uintptr_t(queue), (*C.uint8_t)(unsafe.Pointer(pCheckpointDataCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCheckpointData, lenIfSet(pCheckpointData != nil, 1))[:])))
 }
 
 // CmdBindTransformFeedbackBuffersEXT wraps vkCmdBindTransformFeedbackBuffersEXT.
@@ -4043,7 +4105,7 @@ func (c *Commands) CmdSetViewportShadingRatePaletteNV(commandBuffer CommandBuffe
 	if c.cmdSetViewportShadingRatePaletteNV == nil {
 		return
 	}
-	C.gvk_v_hiip(C.uintptr_t(uintptr(c.cmdSetViewportShadingRatePaletteNV)), C.uintptr_t(commandBuffer), C.uint32_t(firstViewport), C.uint32_t(viewportCount), (*C.uint8_t)(unsafe.Pointer(pShadingRatePalettes)))
+	C.gvk_v_hiig(C.uintptr_t(uintptr(c.cmdSetViewportShadingRatePaletteNV)), C.uintptr_t(commandBuffer), C.uint32_t(firstViewport), C.uint32_t(viewportCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pShadingRatePalettes, lenIfSet(pShadingRatePalettes != nil, int(viewportCount)))[:])))
 }
 
 // CmdSetCoarseSampleOrderNV wraps vkCmdSetCoarseSampleOrderNV.
@@ -4051,7 +4113,7 @@ func (c *Commands) CmdSetCoarseSampleOrderNV(commandBuffer CommandBuffer, sample
 	if c.cmdSetCoarseSampleOrderNV == nil {
 		return
 	}
-	C.gvk_v_hiip(C.uintptr_t(uintptr(c.cmdSetCoarseSampleOrderNV)), C.uintptr_t(commandBuffer), C.uint32_t(sampleOrderType), C.uint32_t(customSampleOrderCount), (*C.uint8_t)(unsafe.Pointer(pCustomSampleOrders)))
+	C.gvk_v_hiig(C.uintptr_t(uintptr(c.cmdSetCoarseSampleOrderNV)), C.uintptr_t(commandBuffer), C.uint32_t(sampleOrderType), C.uint32_t(customSampleOrderCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCustomSampleOrders, lenIfSet(pCustomSampleOrders != nil, int(customSampleOrderCount)))[:])))
 }
 
 // CmdDrawMeshTasksNV wraps vkCmdDrawMeshTasksNV.
@@ -4116,7 +4178,7 @@ func (c *Commands) CreateAccelerationStructureNV(device Device, pCreateInfo *Acc
 	if c.createAccelerationStructureNV == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createAccelerationStructureNV)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pAccelerationStructure)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createAccelerationStructureNV)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pAccelerationStructure)))
 	return Result(r)
 }
 
@@ -4133,7 +4195,7 @@ func (c *Commands) DestroyAccelerationStructureKHR(device Device, accelerationSt
 	if c.destroyAccelerationStructureKHR == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyAccelerationStructureKHR)), C.uintptr_t(device), C.uint64_t(accelerationStructure), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyAccelerationStructureKHR)), C.uintptr_t(device), C.uint64_t(accelerationStructure), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // DestroyAccelerationStructureNV wraps vkDestroyAccelerationStructureNV.
@@ -4141,7 +4203,7 @@ func (c *Commands) DestroyAccelerationStructureNV(device Device, accelerationStr
 	if c.destroyAccelerationStructureNV == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyAccelerationStructureNV)), C.uintptr_t(device), C.uint64_t(accelerationStructure), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyAccelerationStructureNV)), C.uintptr_t(device), C.uint64_t(accelerationStructure), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // GetAccelerationStructureMemoryRequirementsNV wraps vkGetAccelerationStructureMemoryRequirementsNV.
@@ -4149,7 +4211,7 @@ func (c *Commands) GetAccelerationStructureMemoryRequirementsNV(device Device, p
 	if c.getAccelerationStructureMemoryRequirementsNV == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getAccelerationStructureMemoryRequirementsNV)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pMemoryRequirements)))
+	C.gvk_v_hgg(C.uintptr_t(uintptr(c.getAccelerationStructureMemoryRequirementsNV)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMemoryRequirements, lenIfSet(pMemoryRequirements != nil, 1))[:])))
 }
 
 // BindAccelerationStructureMemoryNV wraps vkBindAccelerationStructureMemoryNV.
@@ -4157,7 +4219,7 @@ func (c *Commands) BindAccelerationStructureMemoryNV(device Device, bindInfoCoun
 	if c.bindAccelerationStructureMemoryNV == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hip(C.uintptr_t(uintptr(c.bindAccelerationStructureMemoryNV)), C.uintptr_t(device), C.uint32_t(bindInfoCount), (*C.uint8_t)(unsafe.Pointer(pBindInfos)))
+	r := C.gvk_r_hig(C.uintptr_t(uintptr(c.bindAccelerationStructureMemoryNV)), C.uintptr_t(device), C.uint32_t(bindInfoCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pBindInfos, lenIfSet(pBindInfos != nil, int(bindInfoCount)))[:])))
 	return Result(r)
 }
 
@@ -4174,7 +4236,7 @@ func (c *Commands) CmdCopyAccelerationStructureKHR(commandBuffer CommandBuffer, 
 	if c.cmdCopyAccelerationStructureKHR == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdCopyAccelerationStructureKHR)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdCopyAccelerationStructureKHR)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])))
 }
 
 // CopyAccelerationStructureKHR wraps vkCopyAccelerationStructureKHR.
@@ -4182,7 +4244,7 @@ func (c *Commands) CopyAccelerationStructureKHR(device Device, deferredOperation
 	if c.copyAccelerationStructureKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqp(C.uintptr_t(uintptr(c.copyAccelerationStructureKHR)), C.uintptr_t(device), C.uint64_t(deferredOperation), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	r := C.gvk_r_hqg(C.uintptr_t(uintptr(c.copyAccelerationStructureKHR)), C.uintptr_t(device), C.uint64_t(deferredOperation), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -4191,7 +4253,7 @@ func (c *Commands) CmdCopyAccelerationStructureToMemoryKHR(commandBuffer Command
 	if c.cmdCopyAccelerationStructureToMemoryKHR == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdCopyAccelerationStructureToMemoryKHR)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdCopyAccelerationStructureToMemoryKHR)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])))
 }
 
 // CopyAccelerationStructureToMemoryKHR wraps vkCopyAccelerationStructureToMemoryKHR.
@@ -4199,7 +4261,7 @@ func (c *Commands) CopyAccelerationStructureToMemoryKHR(device Device, deferredO
 	if c.copyAccelerationStructureToMemoryKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqp(C.uintptr_t(uintptr(c.copyAccelerationStructureToMemoryKHR)), C.uintptr_t(device), C.uint64_t(deferredOperation), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	r := C.gvk_r_hqg(C.uintptr_t(uintptr(c.copyAccelerationStructureToMemoryKHR)), C.uintptr_t(device), C.uint64_t(deferredOperation), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -4208,7 +4270,7 @@ func (c *Commands) CmdCopyMemoryToAccelerationStructureKHR(commandBuffer Command
 	if c.cmdCopyMemoryToAccelerationStructureKHR == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdCopyMemoryToAccelerationStructureKHR)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdCopyMemoryToAccelerationStructureKHR)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])))
 }
 
 // CopyMemoryToAccelerationStructureKHR wraps vkCopyMemoryToAccelerationStructureKHR.
@@ -4216,7 +4278,7 @@ func (c *Commands) CopyMemoryToAccelerationStructureKHR(device Device, deferredO
 	if c.copyMemoryToAccelerationStructureKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqp(C.uintptr_t(uintptr(c.copyMemoryToAccelerationStructureKHR)), C.uintptr_t(device), C.uint64_t(deferredOperation), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	r := C.gvk_r_hqg(C.uintptr_t(uintptr(c.copyMemoryToAccelerationStructureKHR)), C.uintptr_t(device), C.uint64_t(deferredOperation), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -4241,7 +4303,7 @@ func (c *Commands) CmdBuildAccelerationStructureNV(commandBuffer CommandBuffer, 
 	if c.cmdBuildAccelerationStructureNV == nil {
 		return
 	}
-	C.gvk_v_hpqqiqqqq(C.uintptr_t(uintptr(c.cmdBuildAccelerationStructureNV)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pInfo)), C.uint64_t(instanceData), C.uint64_t(instanceOffset), C.uint32_t(update), C.uint64_t(dst), C.uint64_t(src), C.uint64_t(scratch), C.uint64_t(scratchOffset))
+	C.gvk_v_hgqqiqqqq(C.uintptr_t(uintptr(c.cmdBuildAccelerationStructureNV)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])), C.uint64_t(instanceData), C.uint64_t(instanceOffset), C.uint32_t(update), C.uint64_t(dst), C.uint64_t(src), C.uint64_t(scratch), C.uint64_t(scratchOffset))
 }
 
 // WriteAccelerationStructuresPropertiesKHR wraps vkWriteAccelerationStructuresPropertiesKHR.
@@ -4301,7 +4363,7 @@ func (c *Commands) CreateRayTracingPipelinesNV(device Device, pipelineCache Pipe
 	if c.createRayTracingPipelinesNV == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqippp(C.uintptr_t(uintptr(c.createRayTracingPipelinesNV)), C.uintptr_t(device), C.uint64_t(pipelineCache), C.uint32_t(createInfoCount), (*C.uint8_t)(unsafe.Pointer(pCreateInfos)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pPipelines)))
+	r := C.gvk_r_hqiggp(C.uintptr_t(uintptr(c.createRayTracingPipelinesNV)), C.uintptr_t(device), C.uint64_t(pipelineCache), C.uint32_t(createInfoCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfos, lenIfSet(pCreateInfos != nil, int(createInfoCount)))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pPipelines)))
 	return Result(r)
 }
 
@@ -4310,7 +4372,7 @@ func (c *Commands) CreateRayTracingPipelinesKHR(device Device, deferredOperation
 	if c.createRayTracingPipelinesKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqqippp(C.uintptr_t(uintptr(c.createRayTracingPipelinesKHR)), C.uintptr_t(device), C.uint64_t(deferredOperation), C.uint64_t(pipelineCache), C.uint32_t(createInfoCount), (*C.uint8_t)(unsafe.Pointer(pCreateInfos)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pPipelines)))
+	r := C.gvk_r_hqqiggp(C.uintptr_t(uintptr(c.createRayTracingPipelinesKHR)), C.uintptr_t(device), C.uint64_t(deferredOperation), C.uint64_t(pipelineCache), C.uint32_t(createInfoCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfos, lenIfSet(pCreateInfos != nil, int(createInfoCount)))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pPipelines)))
 	return Result(r)
 }
 
@@ -4319,7 +4381,7 @@ func (c *Commands) GetPhysicalDeviceCooperativeMatrixPropertiesNV(physicalDevice
 	if c.getPhysicalDeviceCooperativeMatrixPropertiesNV == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getPhysicalDeviceCooperativeMatrixPropertiesNV)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pPropertyCount)), (*C.uint8_t)(unsafe.Pointer(pProperties)))
+	r := C.gvk_r_hpg(C.uintptr_t(uintptr(c.getPhysicalDeviceCooperativeMatrixPropertiesNV)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pPropertyCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pProperties, lenIfSet(pProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -4344,7 +4406,7 @@ func (c *Commands) GetClusterAccelerationStructureBuildSizesNV(device Device, pI
 	if c.getClusterAccelerationStructureBuildSizesNV == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getClusterAccelerationStructureBuildSizesNV)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pSizeInfo)))
+	C.gvk_v_hgg(C.uintptr_t(uintptr(c.getClusterAccelerationStructureBuildSizesNV)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSizeInfo, lenIfSet(pSizeInfo != nil, 1))[:])))
 }
 
 // CmdBuildClusterAccelerationStructureIndirectNV wraps vkCmdBuildClusterAccelerationStructureIndirectNV.
@@ -4352,7 +4414,7 @@ func (c *Commands) CmdBuildClusterAccelerationStructureIndirectNV(commandBuffer 
 	if c.cmdBuildClusterAccelerationStructureIndirectNV == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdBuildClusterAccelerationStructureIndirectNV)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pCommandInfos)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdBuildClusterAccelerationStructureIndirectNV)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCommandInfos, lenIfSet(pCommandInfos != nil, 1))[:])))
 }
 
 // GetDeviceAccelerationStructureCompatibilityKHR wraps vkGetDeviceAccelerationStructureCompatibilityKHR.
@@ -4360,7 +4422,7 @@ func (c *Commands) GetDeviceAccelerationStructureCompatibilityKHR(device Device,
 	if c.getDeviceAccelerationStructureCompatibilityKHR == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getDeviceAccelerationStructureCompatibilityKHR)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pVersionInfo)), (*C.uint8_t)(unsafe.Pointer(pCompatibility)))
+	C.gvk_v_hgp(C.uintptr_t(uintptr(c.getDeviceAccelerationStructureCompatibilityKHR)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pVersionInfo, lenIfSet(pVersionInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pCompatibility)))
 }
 
 // GetRayTracingShaderGroupStackSizeKHR wraps vkGetRayTracingShaderGroupStackSizeKHR.
@@ -4385,7 +4447,7 @@ func (c *Commands) GetImageViewHandleNVX(device Device, pInfo *ImageViewHandleIn
 	if c.getImageViewHandleNVX == nil {
 		return 0
 	}
-	r := C.gvk_i_hp(C.uintptr_t(uintptr(c.getImageViewHandleNVX)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	r := C.gvk_i_hg(C.uintptr_t(uintptr(c.getImageViewHandleNVX)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])))
 	return uint32(r)
 }
 
@@ -4394,7 +4456,7 @@ func (c *Commands) GetImageViewHandle64NVX(device Device, pInfo *ImageViewHandle
 	if c.getImageViewHandle64NVX == nil {
 		return 0
 	}
-	r := C.gvk_q_hp(C.uintptr_t(uintptr(c.getImageViewHandle64NVX)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	r := C.gvk_q_hg(C.uintptr_t(uintptr(c.getImageViewHandle64NVX)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])))
 	return uint64(r)
 }
 
@@ -4403,7 +4465,7 @@ func (c *Commands) GetImageViewAddressNVX(device Device, imageView ImageView, pP
 	if c.getImageViewAddressNVX == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqp(C.uintptr_t(uintptr(c.getImageViewAddressNVX)), C.uintptr_t(device), C.uint64_t(imageView), (*C.uint8_t)(unsafe.Pointer(pProperties)))
+	r := C.gvk_r_hqg(C.uintptr_t(uintptr(c.getImageViewAddressNVX)), C.uintptr_t(device), C.uint64_t(imageView), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pProperties, lenIfSet(pProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -4412,7 +4474,7 @@ func (c *Commands) GetPhysicalDeviceSurfacePresentModes2EXT(physicalDevice Physi
 	if c.getPhysicalDeviceSurfacePresentModes2EXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.getPhysicalDeviceSurfacePresentModes2EXT)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pSurfaceInfo)), (*C.uint8_t)(unsafe.Pointer(pPresentModeCount)), (*C.uint8_t)(unsafe.Pointer(pPresentModes)))
+	r := C.gvk_r_hgpp(C.uintptr_t(uintptr(c.getPhysicalDeviceSurfacePresentModes2EXT)), C.uintptr_t(physicalDevice), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSurfaceInfo, lenIfSet(pSurfaceInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pPresentModeCount)), (*C.uint8_t)(unsafe.Pointer(pPresentModes)))
 	return Result(r)
 }
 
@@ -4421,7 +4483,7 @@ func (c *Commands) GetDeviceGroupSurfacePresentModes2EXT(device Device, pSurface
 	if c.getDeviceGroupSurfacePresentModes2EXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getDeviceGroupSurfacePresentModes2EXT)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pSurfaceInfo)), (*C.uint8_t)(unsafe.Pointer(pModes)))
+	r := C.gvk_r_hgp(C.uintptr_t(uintptr(c.getDeviceGroupSurfacePresentModes2EXT)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSurfaceInfo, lenIfSet(pSurfaceInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pModes)))
 	return Result(r)
 }
 
@@ -4448,7 +4510,7 @@ func (c *Commands) EnumeratePhysicalDeviceQueueFamilyPerformanceQueryCountersKHR
 	if c.enumeratePhysicalDeviceQueueFamilyPerformanceQueryCountersKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hippp(C.uintptr_t(uintptr(c.enumeratePhysicalDeviceQueueFamilyPerformanceQueryCountersKHR)), C.uintptr_t(physicalDevice), C.uint32_t(queueFamilyIndex), (*C.uint8_t)(unsafe.Pointer(pCounterCount)), (*C.uint8_t)(unsafe.Pointer(pCounters)), (*C.uint8_t)(unsafe.Pointer(pCounterDescriptions)))
+	r := C.gvk_r_hipgg(C.uintptr_t(uintptr(c.enumeratePhysicalDeviceQueueFamilyPerformanceQueryCountersKHR)), C.uintptr_t(physicalDevice), C.uint32_t(queueFamilyIndex), (*C.uint8_t)(unsafe.Pointer(pCounterCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCounters, lenIfSet(pCounters != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCounterDescriptions, lenIfSet(pCounterDescriptions != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -4457,7 +4519,7 @@ func (c *Commands) GetPhysicalDeviceQueueFamilyPerformanceQueryPassesKHR(physica
 	if c.getPhysicalDeviceQueueFamilyPerformanceQueryPassesKHR == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getPhysicalDeviceQueueFamilyPerformanceQueryPassesKHR)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pPerformanceQueryCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pNumPasses)))
+	C.gvk_v_hgp(C.uintptr_t(uintptr(c.getPhysicalDeviceQueueFamilyPerformanceQueryPassesKHR)), C.uintptr_t(physicalDevice), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pPerformanceQueryCreateInfo, lenIfSet(pPerformanceQueryCreateInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pNumPasses)))
 }
 
 // AcquireProfilingLockKHR wraps vkAcquireProfilingLockKHR.
@@ -4465,7 +4527,7 @@ func (c *Commands) AcquireProfilingLockKHR(device Device, pInfo *AcquireProfilin
 	if c.acquireProfilingLockKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hp(C.uintptr_t(uintptr(c.acquireProfilingLockKHR)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	r := C.gvk_r_hg(C.uintptr_t(uintptr(c.acquireProfilingLockKHR)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -4482,7 +4544,7 @@ func (c *Commands) GetImageDrmFormatModifierPropertiesEXT(device Device, image I
 	if c.getImageDrmFormatModifierPropertiesEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqp(C.uintptr_t(uintptr(c.getImageDrmFormatModifierPropertiesEXT)), C.uintptr_t(device), C.uint64_t(image), (*C.uint8_t)(unsafe.Pointer(pProperties)))
+	r := C.gvk_r_hqg(C.uintptr_t(uintptr(c.getImageDrmFormatModifierPropertiesEXT)), C.uintptr_t(device), C.uint64_t(image), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pProperties, lenIfSet(pProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -4491,7 +4553,7 @@ func (c *Commands) GetBufferOpaqueCaptureAddress(device Device, pInfo *BufferDev
 	if c.getBufferOpaqueCaptureAddress == nil {
 		return 0
 	}
-	r := C.gvk_q_hp(C.uintptr_t(uintptr(c.getBufferOpaqueCaptureAddress)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	r := C.gvk_q_hg(C.uintptr_t(uintptr(c.getBufferOpaqueCaptureAddress)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])))
 	return uint64(r)
 }
 
@@ -4500,7 +4562,7 @@ func (c *Commands) GetBufferDeviceAddress(device Device, pInfo *BufferDeviceAddr
 	if c.getBufferDeviceAddress == nil {
 		return 0
 	}
-	r := C.gvk_q_hp(C.uintptr_t(uintptr(c.getBufferDeviceAddress)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	r := C.gvk_q_hg(C.uintptr_t(uintptr(c.getBufferDeviceAddress)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])))
 	return DeviceAddress(r)
 }
 
@@ -4509,7 +4571,7 @@ func (c *Commands) CreateHeadlessSurfaceEXT(instance Instance, pCreateInfo *Head
 	if c.createHeadlessSurfaceEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createHeadlessSurfaceEXT)), C.uintptr_t(instance), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pSurface)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createHeadlessSurfaceEXT)), C.uintptr_t(instance), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pSurface)))
 	return Result(r)
 }
 
@@ -4518,7 +4580,7 @@ func (c *Commands) GetPhysicalDeviceSupportedFramebufferMixedSamplesCombinations
 	if c.getPhysicalDeviceSupportedFramebufferMixedSamplesCombinationsNV == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getPhysicalDeviceSupportedFramebufferMixedSamplesCombinationsNV)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pCombinationCount)), (*C.uint8_t)(unsafe.Pointer(pCombinations)))
+	r := C.gvk_r_hpg(C.uintptr_t(uintptr(c.getPhysicalDeviceSupportedFramebufferMixedSamplesCombinationsNV)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pCombinationCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCombinations, lenIfSet(pCombinations != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -4527,7 +4589,7 @@ func (c *Commands) InitializePerformanceApiINTEL(device Device, pInitializeInfo 
 	if c.initializePerformanceApiINTEL == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hp(C.uintptr_t(uintptr(c.initializePerformanceApiINTEL)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInitializeInfo)))
+	r := C.gvk_r_hg(C.uintptr_t(uintptr(c.initializePerformanceApiINTEL)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInitializeInfo, lenIfSet(pInitializeInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -4544,7 +4606,7 @@ func (c *Commands) CmdSetPerformanceMarkerINTEL(commandBuffer CommandBuffer, pMa
 	if c.cmdSetPerformanceMarkerINTEL == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hp(C.uintptr_t(uintptr(c.cmdSetPerformanceMarkerINTEL)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pMarkerInfo)))
+	r := C.gvk_r_hg(C.uintptr_t(uintptr(c.cmdSetPerformanceMarkerINTEL)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMarkerInfo, lenIfSet(pMarkerInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -4553,7 +4615,7 @@ func (c *Commands) CmdSetPerformanceStreamMarkerINTEL(commandBuffer CommandBuffe
 	if c.cmdSetPerformanceStreamMarkerINTEL == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hp(C.uintptr_t(uintptr(c.cmdSetPerformanceStreamMarkerINTEL)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pMarkerInfo)))
+	r := C.gvk_r_hg(C.uintptr_t(uintptr(c.cmdSetPerformanceStreamMarkerINTEL)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMarkerInfo, lenIfSet(pMarkerInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -4562,7 +4624,7 @@ func (c *Commands) CmdSetPerformanceOverrideINTEL(commandBuffer CommandBuffer, p
 	if c.cmdSetPerformanceOverrideINTEL == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hp(C.uintptr_t(uintptr(c.cmdSetPerformanceOverrideINTEL)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pOverrideInfo)))
+	r := C.gvk_r_hg(C.uintptr_t(uintptr(c.cmdSetPerformanceOverrideINTEL)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pOverrideInfo, lenIfSet(pOverrideInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -4571,7 +4633,7 @@ func (c *Commands) AcquirePerformanceConfigurationINTEL(device Device, pAcquireI
 	if c.acquirePerformanceConfigurationINTEL == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.acquirePerformanceConfigurationINTEL)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pAcquireInfo)), (*C.uint8_t)(unsafe.Pointer(pConfiguration)))
+	r := C.gvk_r_hgp(C.uintptr_t(uintptr(c.acquirePerformanceConfigurationINTEL)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAcquireInfo, lenIfSet(pAcquireInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pConfiguration)))
 	return Result(r)
 }
 
@@ -4607,7 +4669,7 @@ func (c *Commands) GetDeviceMemoryOpaqueCaptureAddress(device Device, pInfo *Dev
 	if c.getDeviceMemoryOpaqueCaptureAddress == nil {
 		return 0
 	}
-	r := C.gvk_q_hp(C.uintptr_t(uintptr(c.getDeviceMemoryOpaqueCaptureAddress)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	r := C.gvk_q_hg(C.uintptr_t(uintptr(c.getDeviceMemoryOpaqueCaptureAddress)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])))
 	return uint64(r)
 }
 
@@ -4616,7 +4678,7 @@ func (c *Commands) GetPipelineExecutablePropertiesKHR(device Device, pPipelineIn
 	if c.getPipelineExecutablePropertiesKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.getPipelineExecutablePropertiesKHR)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pPipelineInfo)), (*C.uint8_t)(unsafe.Pointer(pExecutableCount)), (*C.uint8_t)(unsafe.Pointer(pProperties)))
+	r := C.gvk_r_hgpg(C.uintptr_t(uintptr(c.getPipelineExecutablePropertiesKHR)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pPipelineInfo, lenIfSet(pPipelineInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pExecutableCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pProperties, lenIfSet(pProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -4625,7 +4687,7 @@ func (c *Commands) GetPipelineExecutableStatisticsKHR(device Device, pExecutable
 	if c.getPipelineExecutableStatisticsKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.getPipelineExecutableStatisticsKHR)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pExecutableInfo)), (*C.uint8_t)(unsafe.Pointer(pStatisticCount)), (*C.uint8_t)(unsafe.Pointer(pStatistics)))
+	r := C.gvk_r_hgpg(C.uintptr_t(uintptr(c.getPipelineExecutableStatisticsKHR)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pExecutableInfo, lenIfSet(pExecutableInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pStatisticCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pStatistics, lenIfSet(pStatistics != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -4634,7 +4696,7 @@ func (c *Commands) GetPipelineExecutableInternalRepresentationsKHR(device Device
 	if c.getPipelineExecutableInternalRepresentationsKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.getPipelineExecutableInternalRepresentationsKHR)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pExecutableInfo)), (*C.uint8_t)(unsafe.Pointer(pInternalRepresentationCount)), (*C.uint8_t)(unsafe.Pointer(pInternalRepresentations)))
+	r := C.gvk_r_hgpg(C.uintptr_t(uintptr(c.getPipelineExecutableInternalRepresentationsKHR)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pExecutableInfo, lenIfSet(pExecutableInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pInternalRepresentationCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInternalRepresentations, lenIfSet(pInternalRepresentations != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -4651,7 +4713,7 @@ func (c *Commands) GetFaultData(device Device, faultQueryBehavior FaultQueryBeha
 	if c.getFaultData == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hippp(C.uintptr_t(uintptr(c.getFaultData)), C.uintptr_t(device), C.uint32_t(faultQueryBehavior), (*C.uint8_t)(unsafe.Pointer(pUnrecordedFaults)), (*C.uint8_t)(unsafe.Pointer(pFaultCount)), (*C.uint8_t)(unsafe.Pointer(pFaults)))
+	r := C.gvk_r_hippg(C.uintptr_t(uintptr(c.getFaultData)), C.uintptr_t(device), C.uint32_t(faultQueryBehavior), (*C.uint8_t)(unsafe.Pointer(pUnrecordedFaults)), (*C.uint8_t)(unsafe.Pointer(pFaultCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pFaults, lenIfSet(pFaults != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -4660,7 +4722,7 @@ func (c *Commands) GetPhysicalDeviceToolProperties(physicalDevice PhysicalDevice
 	if c.getPhysicalDeviceToolProperties == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getPhysicalDeviceToolProperties)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pToolCount)), (*C.uint8_t)(unsafe.Pointer(pToolProperties)))
+	r := C.gvk_r_hpg(C.uintptr_t(uintptr(c.getPhysicalDeviceToolProperties)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pToolCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pToolProperties, lenIfSet(pToolProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -4669,7 +4731,7 @@ func (c *Commands) CreateAccelerationStructureKHR(device Device, pCreateInfo *Ac
 	if c.createAccelerationStructureKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createAccelerationStructureKHR)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pAccelerationStructure)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createAccelerationStructureKHR)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pAccelerationStructure)))
 	return Result(r)
 }
 
@@ -4678,7 +4740,7 @@ func (c *Commands) CmdBuildAccelerationStructuresKHR(commandBuffer CommandBuffer
 	if c.cmdBuildAccelerationStructuresKHR == nil {
 		return
 	}
-	C.gvk_v_hipp(C.uintptr_t(uintptr(c.cmdBuildAccelerationStructuresKHR)), C.uintptr_t(commandBuffer), C.uint32_t(infoCount), (*C.uint8_t)(unsafe.Pointer(pInfos)), (*C.uint8_t)(unsafe.Pointer(ppBuildRangeInfos)))
+	C.gvk_v_higg(C.uintptr_t(uintptr(c.cmdBuildAccelerationStructuresKHR)), C.uintptr_t(commandBuffer), C.uint32_t(infoCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfos, lenIfSet(pInfos != nil, int(infoCount)))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(ppBuildRangeInfos, lenIfSet(ppBuildRangeInfos != nil, int(infoCount)))[:])))
 }
 
 // CmdBuildAccelerationStructuresIndirectKHR wraps vkCmdBuildAccelerationStructuresIndirectKHR.
@@ -4686,7 +4748,7 @@ func (c *Commands) CmdBuildAccelerationStructuresIndirectKHR(commandBuffer Comma
 	if c.cmdBuildAccelerationStructuresIndirectKHR == nil {
 		return
 	}
-	C.gvk_v_hipppp(C.uintptr_t(uintptr(c.cmdBuildAccelerationStructuresIndirectKHR)), C.uintptr_t(commandBuffer), C.uint32_t(infoCount), (*C.uint8_t)(unsafe.Pointer(pInfos)), (*C.uint8_t)(unsafe.Pointer(pIndirectDeviceAddresses)), (*C.uint8_t)(unsafe.Pointer(pIndirectStrides)), (*C.uint8_t)(unsafe.Pointer(ppMaxPrimitiveCounts)))
+	C.gvk_v_higppg(C.uintptr_t(uintptr(c.cmdBuildAccelerationStructuresIndirectKHR)), C.uintptr_t(commandBuffer), C.uint32_t(infoCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfos, lenIfSet(pInfos != nil, int(infoCount)))[:])), (*C.uint8_t)(unsafe.Pointer(pIndirectDeviceAddresses)), (*C.uint8_t)(unsafe.Pointer(pIndirectStrides)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(ppMaxPrimitiveCounts, lenIfSet(ppMaxPrimitiveCounts != nil, int(infoCount)))[:])))
 }
 
 // BuildAccelerationStructuresKHR wraps vkBuildAccelerationStructuresKHR.
@@ -4694,7 +4756,7 @@ func (c *Commands) BuildAccelerationStructuresKHR(device Device, deferredOperati
 	if c.buildAccelerationStructuresKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqipp(C.uintptr_t(uintptr(c.buildAccelerationStructuresKHR)), C.uintptr_t(device), C.uint64_t(deferredOperation), C.uint32_t(infoCount), (*C.uint8_t)(unsafe.Pointer(pInfos)), (*C.uint8_t)(unsafe.Pointer(ppBuildRangeInfos)))
+	r := C.gvk_r_hqigg(C.uintptr_t(uintptr(c.buildAccelerationStructuresKHR)), C.uintptr_t(device), C.uint64_t(deferredOperation), C.uint32_t(infoCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfos, lenIfSet(pInfos != nil, int(infoCount)))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(ppBuildRangeInfos, lenIfSet(ppBuildRangeInfos != nil, int(infoCount)))[:])))
 	return Result(r)
 }
 
@@ -4703,7 +4765,7 @@ func (c *Commands) GetAccelerationStructureDeviceAddressKHR(device Device, pInfo
 	if c.getAccelerationStructureDeviceAddressKHR == nil {
 		return 0
 	}
-	r := C.gvk_q_hp(C.uintptr_t(uintptr(c.getAccelerationStructureDeviceAddressKHR)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	r := C.gvk_q_hg(C.uintptr_t(uintptr(c.getAccelerationStructureDeviceAddressKHR)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])))
 	return DeviceAddress(r)
 }
 
@@ -4712,7 +4774,7 @@ func (c *Commands) CreateDeferredOperationKHR(device Device, pAllocator *Allocat
 	if c.createDeferredOperationKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.createDeferredOperationKHR)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pDeferredOperation)))
+	r := C.gvk_r_hgp(C.uintptr_t(uintptr(c.createDeferredOperationKHR)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pDeferredOperation)))
 	return Result(r)
 }
 
@@ -4721,7 +4783,7 @@ func (c *Commands) DestroyDeferredOperationKHR(device Device, operation Deferred
 	if c.destroyDeferredOperationKHR == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyDeferredOperationKHR)), C.uintptr_t(device), C.uint64_t(operation), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyDeferredOperationKHR)), C.uintptr_t(device), C.uint64_t(operation), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // GetDeferredOperationMaxConcurrencyKHR wraps vkGetDeferredOperationMaxConcurrencyKHR.
@@ -4756,7 +4818,7 @@ func (c *Commands) GetPipelineIndirectMemoryRequirementsNV(device Device, pCreat
 	if c.getPipelineIndirectMemoryRequirementsNV == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getPipelineIndirectMemoryRequirementsNV)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pMemoryRequirements)))
+	C.gvk_v_hgg(C.uintptr_t(uintptr(c.getPipelineIndirectMemoryRequirementsNV)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMemoryRequirements, lenIfSet(pMemoryRequirements != nil, 1))[:])))
 }
 
 // GetPipelineIndirectDeviceAddressNV wraps vkGetPipelineIndirectDeviceAddressNV.
@@ -4764,7 +4826,7 @@ func (c *Commands) GetPipelineIndirectDeviceAddressNV(device Device, pInfo *Pipe
 	if c.getPipelineIndirectDeviceAddressNV == nil {
 		return 0
 	}
-	r := C.gvk_q_hp(C.uintptr_t(uintptr(c.getPipelineIndirectDeviceAddressNV)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	r := C.gvk_q_hg(C.uintptr_t(uintptr(c.getPipelineIndirectDeviceAddressNV)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])))
 	return DeviceAddress(r)
 }
 
@@ -4773,7 +4835,7 @@ func (c *Commands) AntiLagUpdateAMD(device Device, pData *AntiLagDataAMD) {
 	if c.antiLagUpdateAMD == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.antiLagUpdateAMD)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pData)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.antiLagUpdateAMD)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pData, lenIfSet(pData != nil, 1))[:])))
 }
 
 // CmdSetCullMode wraps vkCmdSetCullMode.
@@ -5173,7 +5235,7 @@ func (c *Commands) CreatePrivateDataSlot(device Device, pCreateInfo *PrivateData
 	if c.createPrivateDataSlot == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createPrivateDataSlot)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pPrivateDataSlot)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createPrivateDataSlot)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pPrivateDataSlot)))
 	return Result(r)
 }
 
@@ -5182,7 +5244,7 @@ func (c *Commands) DestroyPrivateDataSlot(device Device, privateDataSlot Private
 	if c.destroyPrivateDataSlot == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyPrivateDataSlot)), C.uintptr_t(device), C.uint64_t(privateDataSlot), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyPrivateDataSlot)), C.uintptr_t(device), C.uint64_t(privateDataSlot), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // SetPrivateData wraps vkSetPrivateData.
@@ -5207,7 +5269,7 @@ func (c *Commands) CmdCopyBuffer2(commandBuffer CommandBuffer, pCopyBufferInfo *
 	if c.cmdCopyBuffer2 == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdCopyBuffer2)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pCopyBufferInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdCopyBuffer2)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCopyBufferInfo, lenIfSet(pCopyBufferInfo != nil, 1))[:])))
 }
 
 // CmdCopyImage2 wraps vkCmdCopyImage2.
@@ -5215,7 +5277,7 @@ func (c *Commands) CmdCopyImage2(commandBuffer CommandBuffer, pCopyImageInfo *Co
 	if c.cmdCopyImage2 == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdCopyImage2)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pCopyImageInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdCopyImage2)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCopyImageInfo, lenIfSet(pCopyImageInfo != nil, 1))[:])))
 }
 
 // CmdBlitImage2 wraps vkCmdBlitImage2.
@@ -5223,7 +5285,7 @@ func (c *Commands) CmdBlitImage2(commandBuffer CommandBuffer, pBlitImageInfo *Bl
 	if c.cmdBlitImage2 == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdBlitImage2)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pBlitImageInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdBlitImage2)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pBlitImageInfo, lenIfSet(pBlitImageInfo != nil, 1))[:])))
 }
 
 // CmdCopyBufferToImage2 wraps vkCmdCopyBufferToImage2.
@@ -5231,7 +5293,7 @@ func (c *Commands) CmdCopyBufferToImage2(commandBuffer CommandBuffer, pCopyBuffe
 	if c.cmdCopyBufferToImage2 == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdCopyBufferToImage2)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pCopyBufferToImageInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdCopyBufferToImage2)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCopyBufferToImageInfo, lenIfSet(pCopyBufferToImageInfo != nil, 1))[:])))
 }
 
 // CmdCopyImageToBuffer2 wraps vkCmdCopyImageToBuffer2.
@@ -5239,7 +5301,7 @@ func (c *Commands) CmdCopyImageToBuffer2(commandBuffer CommandBuffer, pCopyImage
 	if c.cmdCopyImageToBuffer2 == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdCopyImageToBuffer2)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pCopyImageToBufferInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdCopyImageToBuffer2)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCopyImageToBufferInfo, lenIfSet(pCopyImageToBufferInfo != nil, 1))[:])))
 }
 
 // CmdResolveImage2 wraps vkCmdResolveImage2.
@@ -5247,7 +5309,7 @@ func (c *Commands) CmdResolveImage2(commandBuffer CommandBuffer, pResolveImageIn
 	if c.cmdResolveImage2 == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdResolveImage2)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pResolveImageInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdResolveImage2)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pResolveImageInfo, lenIfSet(pResolveImageInfo != nil, 1))[:])))
 }
 
 // CmdRefreshObjectsKHR wraps vkCmdRefreshObjectsKHR.
@@ -5255,7 +5317,7 @@ func (c *Commands) CmdRefreshObjectsKHR(commandBuffer CommandBuffer, pRefreshObj
 	if c.cmdRefreshObjectsKHR == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdRefreshObjectsKHR)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pRefreshObjects)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdRefreshObjectsKHR)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pRefreshObjects, lenIfSet(pRefreshObjects != nil, 1))[:])))
 }
 
 // GetPhysicalDeviceRefreshableObjectTypesKHR wraps vkGetPhysicalDeviceRefreshableObjectTypesKHR.
@@ -5280,7 +5342,7 @@ func (c *Commands) GetPhysicalDeviceFragmentShadingRatesKHR(physicalDevice Physi
 	if c.getPhysicalDeviceFragmentShadingRatesKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getPhysicalDeviceFragmentShadingRatesKHR)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pFragmentShadingRateCount)), (*C.uint8_t)(unsafe.Pointer(pFragmentShadingRates)))
+	r := C.gvk_r_hpg(C.uintptr_t(uintptr(c.getPhysicalDeviceFragmentShadingRatesKHR)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pFragmentShadingRateCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pFragmentShadingRates, lenIfSet(pFragmentShadingRates != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -5297,7 +5359,7 @@ func (c *Commands) GetAccelerationStructureBuildSizesKHR(device Device, buildTyp
 	if c.getAccelerationStructureBuildSizesKHR == nil {
 		return
 	}
-	C.gvk_v_hippp(C.uintptr_t(uintptr(c.getAccelerationStructureBuildSizesKHR)), C.uintptr_t(device), C.uint32_t(buildType), (*C.uint8_t)(unsafe.Pointer(pBuildInfo)), (*C.uint8_t)(unsafe.Pointer(pMaxPrimitiveCounts)), (*C.uint8_t)(unsafe.Pointer(pSizeInfo)))
+	C.gvk_v_higpg(C.uintptr_t(uintptr(c.getAccelerationStructureBuildSizesKHR)), C.uintptr_t(device), C.uint32_t(buildType), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pBuildInfo, lenIfSet(pBuildInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pMaxPrimitiveCounts)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSizeInfo, lenIfSet(pSizeInfo != nil, 1))[:])))
 }
 
 // CmdSetVertexInputEXT wraps vkCmdSetVertexInputEXT.
@@ -5305,7 +5367,7 @@ func (c *Commands) CmdSetVertexInputEXT(commandBuffer CommandBuffer, vertexBindi
 	if c.cmdSetVertexInputEXT == nil {
 		return
 	}
-	C.gvk_v_hipip(C.uintptr_t(uintptr(c.cmdSetVertexInputEXT)), C.uintptr_t(commandBuffer), C.uint32_t(vertexBindingDescriptionCount), (*C.uint8_t)(unsafe.Pointer(pVertexBindingDescriptions)), C.uint32_t(vertexAttributeDescriptionCount), (*C.uint8_t)(unsafe.Pointer(pVertexAttributeDescriptions)))
+	C.gvk_v_higig(C.uintptr_t(uintptr(c.cmdSetVertexInputEXT)), C.uintptr_t(commandBuffer), C.uint32_t(vertexBindingDescriptionCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pVertexBindingDescriptions, lenIfSet(pVertexBindingDescriptions != nil, int(vertexBindingDescriptionCount)))[:])), C.uint32_t(vertexAttributeDescriptionCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pVertexAttributeDescriptions, lenIfSet(pVertexAttributeDescriptions != nil, int(vertexAttributeDescriptionCount)))[:])))
 }
 
 // CmdSetColorWriteEnableEXT wraps vkCmdSetColorWriteEnableEXT.
@@ -5321,7 +5383,7 @@ func (c *Commands) CmdSetEvent2(commandBuffer CommandBuffer, event Event, pDepen
 	if c.cmdSetEvent2 == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.cmdSetEvent2)), C.uintptr_t(commandBuffer), C.uint64_t(event), (*C.uint8_t)(unsafe.Pointer(pDependencyInfo)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.cmdSetEvent2)), C.uintptr_t(commandBuffer), C.uint64_t(event), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pDependencyInfo, lenIfSet(pDependencyInfo != nil, 1))[:])))
 }
 
 // CmdResetEvent2 wraps vkCmdResetEvent2.
@@ -5337,7 +5399,7 @@ func (c *Commands) CmdWaitEvents2(commandBuffer CommandBuffer, eventCount uint32
 	if c.cmdWaitEvents2 == nil {
 		return
 	}
-	C.gvk_v_hipp(C.uintptr_t(uintptr(c.cmdWaitEvents2)), C.uintptr_t(commandBuffer), C.uint32_t(eventCount), (*C.uint8_t)(unsafe.Pointer(pEvents)), (*C.uint8_t)(unsafe.Pointer(pDependencyInfos)))
+	C.gvk_v_hipg(C.uintptr_t(uintptr(c.cmdWaitEvents2)), C.uintptr_t(commandBuffer), C.uint32_t(eventCount), (*C.uint8_t)(unsafe.Pointer(pEvents)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pDependencyInfos, lenIfSet(pDependencyInfos != nil, int(eventCount)))[:])))
 }
 
 // CmdPipelineBarrier2 wraps vkCmdPipelineBarrier2.
@@ -5345,7 +5407,7 @@ func (c *Commands) CmdPipelineBarrier2(commandBuffer CommandBuffer, pDependencyI
 	if c.cmdPipelineBarrier2 == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdPipelineBarrier2)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pDependencyInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdPipelineBarrier2)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pDependencyInfo, lenIfSet(pDependencyInfo != nil, 1))[:])))
 }
 
 // QueueSubmit2 wraps vkQueueSubmit2.
@@ -5353,7 +5415,7 @@ func (c *Commands) QueueSubmit2(queue Queue, submitCount uint32, pSubmits *Submi
 	if c.queueSubmit2 == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hipq(C.uintptr_t(uintptr(c.queueSubmit2)), C.uintptr_t(queue), C.uint32_t(submitCount), (*C.uint8_t)(unsafe.Pointer(pSubmits)), C.uint64_t(fence))
+	r := C.gvk_r_higq(C.uintptr_t(uintptr(c.queueSubmit2)), C.uintptr_t(queue), C.uint32_t(submitCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSubmits, lenIfSet(pSubmits != nil, int(submitCount)))[:])), C.uint64_t(fence))
 	return Result(r)
 }
 
@@ -5378,7 +5440,7 @@ func (c *Commands) GetQueueCheckpointData2NV(queue Queue, pCheckpointDataCount *
 	if c.getQueueCheckpointData2NV == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getQueueCheckpointData2NV)), C.uintptr_t(queue), (*C.uint8_t)(unsafe.Pointer(pCheckpointDataCount)), (*C.uint8_t)(unsafe.Pointer(pCheckpointData)))
+	C.gvk_v_hpg(C.uintptr_t(uintptr(c.getQueueCheckpointData2NV)), C.uintptr_t(queue), (*C.uint8_t)(unsafe.Pointer(pCheckpointDataCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCheckpointData, lenIfSet(pCheckpointData != nil, 1))[:])))
 }
 
 // CopyMemoryToImage wraps vkCopyMemoryToImage.
@@ -5386,7 +5448,7 @@ func (c *Commands) CopyMemoryToImage(device Device, pCopyMemoryToImageInfo *Copy
 	if c.copyMemoryToImage == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hp(C.uintptr_t(uintptr(c.copyMemoryToImage)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCopyMemoryToImageInfo)))
+	r := C.gvk_r_hg(C.uintptr_t(uintptr(c.copyMemoryToImage)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCopyMemoryToImageInfo, lenIfSet(pCopyMemoryToImageInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -5395,7 +5457,7 @@ func (c *Commands) CopyImageToMemory(device Device, pCopyImageToMemoryInfo *Copy
 	if c.copyImageToMemory == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hp(C.uintptr_t(uintptr(c.copyImageToMemory)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCopyImageToMemoryInfo)))
+	r := C.gvk_r_hg(C.uintptr_t(uintptr(c.copyImageToMemory)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCopyImageToMemoryInfo, lenIfSet(pCopyImageToMemoryInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -5404,7 +5466,7 @@ func (c *Commands) CopyImageToImage(device Device, pCopyImageToImageInfo *CopyIm
 	if c.copyImageToImage == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hp(C.uintptr_t(uintptr(c.copyImageToImage)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCopyImageToImageInfo)))
+	r := C.gvk_r_hg(C.uintptr_t(uintptr(c.copyImageToImage)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCopyImageToImageInfo, lenIfSet(pCopyImageToImageInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -5413,7 +5475,7 @@ func (c *Commands) TransitionImageLayout(device Device, transitionCount uint32, 
 	if c.transitionImageLayout == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hip(C.uintptr_t(uintptr(c.transitionImageLayout)), C.uintptr_t(device), C.uint32_t(transitionCount), (*C.uint8_t)(unsafe.Pointer(pTransitions)))
+	r := C.gvk_r_hig(C.uintptr_t(uintptr(c.transitionImageLayout)), C.uintptr_t(device), C.uint32_t(transitionCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pTransitions, lenIfSet(pTransitions != nil, int(transitionCount)))[:])))
 	return Result(r)
 }
 
@@ -5422,7 +5484,7 @@ func (c *Commands) GetCommandPoolMemoryConsumption(device Device, commandPool Co
 	if c.getCommandPoolMemoryConsumption == nil {
 		return
 	}
-	C.gvk_v_hqhp(C.uintptr_t(uintptr(c.getCommandPoolMemoryConsumption)), C.uintptr_t(device), C.uint64_t(commandPool), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pConsumption)))
+	C.gvk_v_hqhg(C.uintptr_t(uintptr(c.getCommandPoolMemoryConsumption)), C.uintptr_t(device), C.uint64_t(commandPool), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pConsumption, lenIfSet(pConsumption != nil, 1))[:])))
 }
 
 // GetPhysicalDeviceVideoCapabilitiesKHR wraps vkGetPhysicalDeviceVideoCapabilitiesKHR.
@@ -5430,7 +5492,7 @@ func (c *Commands) GetPhysicalDeviceVideoCapabilitiesKHR(physicalDevice Physical
 	if c.getPhysicalDeviceVideoCapabilitiesKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getPhysicalDeviceVideoCapabilitiesKHR)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pVideoProfile)), (*C.uint8_t)(unsafe.Pointer(pCapabilities)))
+	r := C.gvk_r_hgg(C.uintptr_t(uintptr(c.getPhysicalDeviceVideoCapabilitiesKHR)), C.uintptr_t(physicalDevice), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pVideoProfile, lenIfSet(pVideoProfile != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCapabilities, lenIfSet(pCapabilities != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -5439,7 +5501,7 @@ func (c *Commands) GetPhysicalDeviceVideoFormatPropertiesKHR(physicalDevice Phys
 	if c.getPhysicalDeviceVideoFormatPropertiesKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.getPhysicalDeviceVideoFormatPropertiesKHR)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pVideoFormatInfo)), (*C.uint8_t)(unsafe.Pointer(pVideoFormatPropertyCount)), (*C.uint8_t)(unsafe.Pointer(pVideoFormatProperties)))
+	r := C.gvk_r_hgpg(C.uintptr_t(uintptr(c.getPhysicalDeviceVideoFormatPropertiesKHR)), C.uintptr_t(physicalDevice), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pVideoFormatInfo, lenIfSet(pVideoFormatInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pVideoFormatPropertyCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pVideoFormatProperties, lenIfSet(pVideoFormatProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -5448,7 +5510,7 @@ func (c *Commands) GetPhysicalDeviceVideoEncodeQualityLevelPropertiesKHR(physica
 	if c.getPhysicalDeviceVideoEncodeQualityLevelPropertiesKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getPhysicalDeviceVideoEncodeQualityLevelPropertiesKHR)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pQualityLevelInfo)), (*C.uint8_t)(unsafe.Pointer(pQualityLevelProperties)))
+	r := C.gvk_r_hgg(C.uintptr_t(uintptr(c.getPhysicalDeviceVideoEncodeQualityLevelPropertiesKHR)), C.uintptr_t(physicalDevice), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pQualityLevelInfo, lenIfSet(pQualityLevelInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pQualityLevelProperties, lenIfSet(pQualityLevelProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -5457,7 +5519,7 @@ func (c *Commands) CreateVideoSessionKHR(device Device, pCreateInfo *VideoSessio
 	if c.createVideoSessionKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createVideoSessionKHR)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pVideoSession)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createVideoSessionKHR)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pVideoSession)))
 	return Result(r)
 }
 
@@ -5466,7 +5528,7 @@ func (c *Commands) DestroyVideoSessionKHR(device Device, videoSession VideoSessi
 	if c.destroyVideoSessionKHR == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyVideoSessionKHR)), C.uintptr_t(device), C.uint64_t(videoSession), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyVideoSessionKHR)), C.uintptr_t(device), C.uint64_t(videoSession), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // CreateVideoSessionParametersKHR wraps vkCreateVideoSessionParametersKHR.
@@ -5474,7 +5536,7 @@ func (c *Commands) CreateVideoSessionParametersKHR(device Device, pCreateInfo *V
 	if c.createVideoSessionParametersKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createVideoSessionParametersKHR)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pVideoSessionParameters)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createVideoSessionParametersKHR)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pVideoSessionParameters)))
 	return Result(r)
 }
 
@@ -5483,7 +5545,7 @@ func (c *Commands) UpdateVideoSessionParametersKHR(device Device, videoSessionPa
 	if c.updateVideoSessionParametersKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqp(C.uintptr_t(uintptr(c.updateVideoSessionParametersKHR)), C.uintptr_t(device), C.uint64_t(videoSessionParameters), (*C.uint8_t)(unsafe.Pointer(pUpdateInfo)))
+	r := C.gvk_r_hqg(C.uintptr_t(uintptr(c.updateVideoSessionParametersKHR)), C.uintptr_t(device), C.uint64_t(videoSessionParameters), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pUpdateInfo, lenIfSet(pUpdateInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -5492,7 +5554,7 @@ func (c *Commands) GetEncodedVideoSessionParametersKHR(device Device, pVideoSess
 	if c.getEncodedVideoSessionParametersKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpppp(C.uintptr_t(uintptr(c.getEncodedVideoSessionParametersKHR)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pVideoSessionParametersInfo)), (*C.uint8_t)(unsafe.Pointer(pFeedbackInfo)), (*C.uint8_t)(unsafe.Pointer(pDataSize)), (*C.uint8_t)(unsafe.Pointer(pData)))
+	r := C.gvk_r_hggpp(C.uintptr_t(uintptr(c.getEncodedVideoSessionParametersKHR)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pVideoSessionParametersInfo, lenIfSet(pVideoSessionParametersInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pFeedbackInfo, lenIfSet(pFeedbackInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pDataSize)), (*C.uint8_t)(unsafe.Pointer(pData)))
 	return Result(r)
 }
 
@@ -5501,7 +5563,7 @@ func (c *Commands) DestroyVideoSessionParametersKHR(device Device, videoSessionP
 	if c.destroyVideoSessionParametersKHR == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyVideoSessionParametersKHR)), C.uintptr_t(device), C.uint64_t(videoSessionParameters), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyVideoSessionParametersKHR)), C.uintptr_t(device), C.uint64_t(videoSessionParameters), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // GetVideoSessionMemoryRequirementsKHR wraps vkGetVideoSessionMemoryRequirementsKHR.
@@ -5509,7 +5571,7 @@ func (c *Commands) GetVideoSessionMemoryRequirementsKHR(device Device, videoSess
 	if c.getVideoSessionMemoryRequirementsKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqpp(C.uintptr_t(uintptr(c.getVideoSessionMemoryRequirementsKHR)), C.uintptr_t(device), C.uint64_t(videoSession), (*C.uint8_t)(unsafe.Pointer(pMemoryRequirementsCount)), (*C.uint8_t)(unsafe.Pointer(pMemoryRequirements)))
+	r := C.gvk_r_hqpg(C.uintptr_t(uintptr(c.getVideoSessionMemoryRequirementsKHR)), C.uintptr_t(device), C.uint64_t(videoSession), (*C.uint8_t)(unsafe.Pointer(pMemoryRequirementsCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMemoryRequirements, lenIfSet(pMemoryRequirements != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -5518,7 +5580,7 @@ func (c *Commands) BindVideoSessionMemoryKHR(device Device, videoSession VideoSe
 	if c.bindVideoSessionMemoryKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqip(C.uintptr_t(uintptr(c.bindVideoSessionMemoryKHR)), C.uintptr_t(device), C.uint64_t(videoSession), C.uint32_t(bindSessionMemoryInfoCount), (*C.uint8_t)(unsafe.Pointer(pBindSessionMemoryInfos)))
+	r := C.gvk_r_hqig(C.uintptr_t(uintptr(c.bindVideoSessionMemoryKHR)), C.uintptr_t(device), C.uint64_t(videoSession), C.uint32_t(bindSessionMemoryInfoCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pBindSessionMemoryInfos, lenIfSet(pBindSessionMemoryInfos != nil, int(bindSessionMemoryInfoCount)))[:])))
 	return Result(r)
 }
 
@@ -5527,7 +5589,7 @@ func (c *Commands) CmdDecodeVideoKHR(commandBuffer CommandBuffer, pDecodeInfo *V
 	if c.cmdDecodeVideoKHR == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdDecodeVideoKHR)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pDecodeInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdDecodeVideoKHR)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pDecodeInfo, lenIfSet(pDecodeInfo != nil, 1))[:])))
 }
 
 // CmdBeginVideoCodingKHR wraps vkCmdBeginVideoCodingKHR.
@@ -5535,7 +5597,7 @@ func (c *Commands) CmdBeginVideoCodingKHR(commandBuffer CommandBuffer, pBeginInf
 	if c.cmdBeginVideoCodingKHR == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdBeginVideoCodingKHR)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pBeginInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdBeginVideoCodingKHR)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pBeginInfo, lenIfSet(pBeginInfo != nil, 1))[:])))
 }
 
 // CmdControlVideoCodingKHR wraps vkCmdControlVideoCodingKHR.
@@ -5543,7 +5605,7 @@ func (c *Commands) CmdControlVideoCodingKHR(commandBuffer CommandBuffer, pCoding
 	if c.cmdControlVideoCodingKHR == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdControlVideoCodingKHR)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pCodingControlInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdControlVideoCodingKHR)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCodingControlInfo, lenIfSet(pCodingControlInfo != nil, 1))[:])))
 }
 
 // CmdEndVideoCodingKHR wraps vkCmdEndVideoCodingKHR.
@@ -5551,7 +5613,7 @@ func (c *Commands) CmdEndVideoCodingKHR(commandBuffer CommandBuffer, pEndCodingI
 	if c.cmdEndVideoCodingKHR == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdEndVideoCodingKHR)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pEndCodingInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdEndVideoCodingKHR)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pEndCodingInfo, lenIfSet(pEndCodingInfo != nil, 1))[:])))
 }
 
 // CmdEncodeVideoKHR wraps vkCmdEncodeVideoKHR.
@@ -5559,7 +5621,7 @@ func (c *Commands) CmdEncodeVideoKHR(commandBuffer CommandBuffer, pEncodeInfo *V
 	if c.cmdEncodeVideoKHR == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdEncodeVideoKHR)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pEncodeInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdEncodeVideoKHR)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pEncodeInfo, lenIfSet(pEncodeInfo != nil, 1))[:])))
 }
 
 // CmdDecompressMemoryNV wraps vkCmdDecompressMemoryNV.
@@ -5583,7 +5645,7 @@ func (c *Commands) GetPartitionedAccelerationStructuresBuildSizesNV(device Devic
 	if c.getPartitionedAccelerationStructuresBuildSizesNV == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getPartitionedAccelerationStructuresBuildSizesNV)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pSizeInfo)))
+	C.gvk_v_hgg(C.uintptr_t(uintptr(c.getPartitionedAccelerationStructuresBuildSizesNV)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSizeInfo, lenIfSet(pSizeInfo != nil, 1))[:])))
 }
 
 // CmdBuildPartitionedAccelerationStructuresNV wraps vkCmdBuildPartitionedAccelerationStructuresNV.
@@ -5591,7 +5653,7 @@ func (c *Commands) CmdBuildPartitionedAccelerationStructuresNV(commandBuffer Com
 	if c.cmdBuildPartitionedAccelerationStructuresNV == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdBuildPartitionedAccelerationStructuresNV)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pBuildInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdBuildPartitionedAccelerationStructuresNV)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pBuildInfo, lenIfSet(pBuildInfo != nil, 1))[:])))
 }
 
 // CmdDecompressMemoryEXT wraps vkCmdDecompressMemoryEXT.
@@ -5599,7 +5661,7 @@ func (c *Commands) CmdDecompressMemoryEXT(commandBuffer CommandBuffer, pDecompre
 	if c.cmdDecompressMemoryEXT == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdDecompressMemoryEXT)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pDecompressMemoryInfoEXT)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdDecompressMemoryEXT)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pDecompressMemoryInfoEXT, lenIfSet(pDecompressMemoryInfoEXT != nil, 1))[:])))
 }
 
 // CmdDecompressMemoryIndirectCountEXT wraps vkCmdDecompressMemoryIndirectCountEXT.
@@ -5615,7 +5677,7 @@ func (c *Commands) CreateCuModuleNVX(device Device, pCreateInfo *CuModuleCreateI
 	if c.createCuModuleNVX == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createCuModuleNVX)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pModule)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createCuModuleNVX)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pModule)))
 	return Result(r)
 }
 
@@ -5624,7 +5686,7 @@ func (c *Commands) CreateCuFunctionNVX(device Device, pCreateInfo *CuFunctionCre
 	if c.createCuFunctionNVX == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createCuFunctionNVX)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pFunction)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createCuFunctionNVX)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pFunction)))
 	return Result(r)
 }
 
@@ -5633,7 +5695,7 @@ func (c *Commands) DestroyCuModuleNVX(device Device, module CuModuleNVX, pAlloca
 	if c.destroyCuModuleNVX == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyCuModuleNVX)), C.uintptr_t(device), C.uint64_t(module), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyCuModuleNVX)), C.uintptr_t(device), C.uint64_t(module), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // DestroyCuFunctionNVX wraps vkDestroyCuFunctionNVX.
@@ -5641,7 +5703,7 @@ func (c *Commands) DestroyCuFunctionNVX(device Device, function CuFunctionNVX, p
 	if c.destroyCuFunctionNVX == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyCuFunctionNVX)), C.uintptr_t(device), C.uint64_t(function), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyCuFunctionNVX)), C.uintptr_t(device), C.uint64_t(function), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // CmdCuLaunchKernelNVX wraps vkCmdCuLaunchKernelNVX.
@@ -5649,7 +5711,7 @@ func (c *Commands) CmdCuLaunchKernelNVX(commandBuffer CommandBuffer, pLaunchInfo
 	if c.cmdCuLaunchKernelNVX == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdCuLaunchKernelNVX)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pLaunchInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdCuLaunchKernelNVX)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pLaunchInfo, lenIfSet(pLaunchInfo != nil, 1))[:])))
 }
 
 // GetDescriptorSetLayoutSizeEXT wraps vkGetDescriptorSetLayoutSizeEXT.
@@ -5673,7 +5735,7 @@ func (c *Commands) GetDescriptorEXT(device Device, pDescriptorInfo *DescriptorGe
 	if c.getDescriptorEXT == nil {
 		return
 	}
-	C.gvk_v_hphp(C.uintptr_t(uintptr(c.getDescriptorEXT)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pDescriptorInfo)), C.uintptr_t(dataSize), (*C.uint8_t)(unsafe.Pointer(pDescriptor)))
+	C.gvk_v_hghp(C.uintptr_t(uintptr(c.getDescriptorEXT)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pDescriptorInfo, lenIfSet(pDescriptorInfo != nil, 1))[:])), C.uintptr_t(dataSize), (*C.uint8_t)(unsafe.Pointer(pDescriptor)))
 }
 
 // CmdBindDescriptorBuffersEXT wraps vkCmdBindDescriptorBuffersEXT.
@@ -5681,7 +5743,7 @@ func (c *Commands) CmdBindDescriptorBuffersEXT(commandBuffer CommandBuffer, buff
 	if c.cmdBindDescriptorBuffersEXT == nil {
 		return
 	}
-	C.gvk_v_hip(C.uintptr_t(uintptr(c.cmdBindDescriptorBuffersEXT)), C.uintptr_t(commandBuffer), C.uint32_t(bufferCount), (*C.uint8_t)(unsafe.Pointer(pBindingInfos)))
+	C.gvk_v_hig(C.uintptr_t(uintptr(c.cmdBindDescriptorBuffersEXT)), C.uintptr_t(commandBuffer), C.uint32_t(bufferCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pBindingInfos, lenIfSet(pBindingInfos != nil, int(bufferCount)))[:])))
 }
 
 // CmdSetDescriptorBufferOffsetsEXT wraps vkCmdSetDescriptorBufferOffsetsEXT.
@@ -5705,7 +5767,7 @@ func (c *Commands) GetBufferOpaqueCaptureDescriptorDataEXT(device Device, pInfo 
 	if c.getBufferOpaqueCaptureDescriptorDataEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getBufferOpaqueCaptureDescriptorDataEXT)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pData)))
+	r := C.gvk_r_hgp(C.uintptr_t(uintptr(c.getBufferOpaqueCaptureDescriptorDataEXT)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pData)))
 	return Result(r)
 }
 
@@ -5714,7 +5776,7 @@ func (c *Commands) GetImageOpaqueCaptureDescriptorDataEXT(device Device, pInfo *
 	if c.getImageOpaqueCaptureDescriptorDataEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getImageOpaqueCaptureDescriptorDataEXT)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pData)))
+	r := C.gvk_r_hgp(C.uintptr_t(uintptr(c.getImageOpaqueCaptureDescriptorDataEXT)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pData)))
 	return Result(r)
 }
 
@@ -5723,7 +5785,7 @@ func (c *Commands) GetImageViewOpaqueCaptureDescriptorDataEXT(device Device, pIn
 	if c.getImageViewOpaqueCaptureDescriptorDataEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getImageViewOpaqueCaptureDescriptorDataEXT)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pData)))
+	r := C.gvk_r_hgp(C.uintptr_t(uintptr(c.getImageViewOpaqueCaptureDescriptorDataEXT)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pData)))
 	return Result(r)
 }
 
@@ -5732,7 +5794,7 @@ func (c *Commands) GetSamplerOpaqueCaptureDescriptorDataEXT(device Device, pInfo
 	if c.getSamplerOpaqueCaptureDescriptorDataEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getSamplerOpaqueCaptureDescriptorDataEXT)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pData)))
+	r := C.gvk_r_hgp(C.uintptr_t(uintptr(c.getSamplerOpaqueCaptureDescriptorDataEXT)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pData)))
 	return Result(r)
 }
 
@@ -5741,7 +5803,7 @@ func (c *Commands) GetAccelerationStructureOpaqueCaptureDescriptorDataEXT(device
 	if c.getAccelerationStructureOpaqueCaptureDescriptorDataEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getAccelerationStructureOpaqueCaptureDescriptorDataEXT)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pData)))
+	r := C.gvk_r_hgp(C.uintptr_t(uintptr(c.getAccelerationStructureOpaqueCaptureDescriptorDataEXT)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pData)))
 	return Result(r)
 }
 
@@ -5776,7 +5838,7 @@ func (c *Commands) WaitForPresent2KHR(device Device, swapchain SwapchainKHR, pPr
 	if c.waitForPresent2KHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqp(C.uintptr_t(uintptr(c.waitForPresent2KHR)), C.uintptr_t(device), C.uint64_t(swapchain), (*C.uint8_t)(unsafe.Pointer(pPresentWait2Info)))
+	r := C.gvk_r_hqg(C.uintptr_t(uintptr(c.waitForPresent2KHR)), C.uintptr_t(device), C.uint64_t(swapchain), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pPresentWait2Info, lenIfSet(pPresentWait2Info != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -5794,7 +5856,7 @@ func (c *Commands) CreateBufferCollectionFUCHSIA(device Device, pCreateInfo *Buf
 	if c.createBufferCollectionFUCHSIA == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createBufferCollectionFUCHSIA)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pCollection)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createBufferCollectionFUCHSIA)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pCollection)))
 	return Result(r)
 }
 
@@ -5803,7 +5865,7 @@ func (c *Commands) SetBufferCollectionBufferConstraintsFUCHSIA(device Device, co
 	if c.setBufferCollectionBufferConstraintsFUCHSIA == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqp(C.uintptr_t(uintptr(c.setBufferCollectionBufferConstraintsFUCHSIA)), C.uintptr_t(device), C.uint64_t(collection), (*C.uint8_t)(unsafe.Pointer(pBufferConstraintsInfo)))
+	r := C.gvk_r_hqg(C.uintptr_t(uintptr(c.setBufferCollectionBufferConstraintsFUCHSIA)), C.uintptr_t(device), C.uint64_t(collection), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pBufferConstraintsInfo, lenIfSet(pBufferConstraintsInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -5812,7 +5874,7 @@ func (c *Commands) SetBufferCollectionImageConstraintsFUCHSIA(device Device, col
 	if c.setBufferCollectionImageConstraintsFUCHSIA == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqp(C.uintptr_t(uintptr(c.setBufferCollectionImageConstraintsFUCHSIA)), C.uintptr_t(device), C.uint64_t(collection), (*C.uint8_t)(unsafe.Pointer(pImageConstraintsInfo)))
+	r := C.gvk_r_hqg(C.uintptr_t(uintptr(c.setBufferCollectionImageConstraintsFUCHSIA)), C.uintptr_t(device), C.uint64_t(collection), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pImageConstraintsInfo, lenIfSet(pImageConstraintsInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -5821,7 +5883,7 @@ func (c *Commands) DestroyBufferCollectionFUCHSIA(device Device, collection Buff
 	if c.destroyBufferCollectionFUCHSIA == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyBufferCollectionFUCHSIA)), C.uintptr_t(device), C.uint64_t(collection), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyBufferCollectionFUCHSIA)), C.uintptr_t(device), C.uint64_t(collection), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // GetBufferCollectionPropertiesFUCHSIA wraps vkGetBufferCollectionPropertiesFUCHSIA.
@@ -5829,7 +5891,7 @@ func (c *Commands) GetBufferCollectionPropertiesFUCHSIA(device Device, collectio
 	if c.getBufferCollectionPropertiesFUCHSIA == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqp(C.uintptr_t(uintptr(c.getBufferCollectionPropertiesFUCHSIA)), C.uintptr_t(device), C.uint64_t(collection), (*C.uint8_t)(unsafe.Pointer(pProperties)))
+	r := C.gvk_r_hqg(C.uintptr_t(uintptr(c.getBufferCollectionPropertiesFUCHSIA)), C.uintptr_t(device), C.uint64_t(collection), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pProperties, lenIfSet(pProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -5838,7 +5900,7 @@ func (c *Commands) CreateCudaModuleNV(device Device, pCreateInfo *CudaModuleCrea
 	if c.createCudaModuleNV == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createCudaModuleNV)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pModule)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createCudaModuleNV)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pModule)))
 	return Result(r)
 }
 
@@ -5856,7 +5918,7 @@ func (c *Commands) CreateCudaFunctionNV(device Device, pCreateInfo *CudaFunction
 	if c.createCudaFunctionNV == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createCudaFunctionNV)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pFunction)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createCudaFunctionNV)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pFunction)))
 	return Result(r)
 }
 
@@ -5865,7 +5927,7 @@ func (c *Commands) DestroyCudaModuleNV(device Device, module CudaModuleNV, pAllo
 	if c.destroyCudaModuleNV == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyCudaModuleNV)), C.uintptr_t(device), C.uint64_t(module), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyCudaModuleNV)), C.uintptr_t(device), C.uint64_t(module), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // DestroyCudaFunctionNV wraps vkDestroyCudaFunctionNV.
@@ -5873,7 +5935,7 @@ func (c *Commands) DestroyCudaFunctionNV(device Device, function CudaFunctionNV,
 	if c.destroyCudaFunctionNV == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyCudaFunctionNV)), C.uintptr_t(device), C.uint64_t(function), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyCudaFunctionNV)), C.uintptr_t(device), C.uint64_t(function), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // CmdCudaLaunchKernelNV wraps vkCmdCudaLaunchKernelNV.
@@ -5881,7 +5943,7 @@ func (c *Commands) CmdCudaLaunchKernelNV(commandBuffer CommandBuffer, pLaunchInf
 	if c.cmdCudaLaunchKernelNV == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdCudaLaunchKernelNV)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pLaunchInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdCudaLaunchKernelNV)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pLaunchInfo, lenIfSet(pLaunchInfo != nil, 1))[:])))
 }
 
 // CmdBeginRendering wraps vkCmdBeginRendering.
@@ -5889,7 +5951,7 @@ func (c *Commands) CmdBeginRendering(commandBuffer CommandBuffer, pRenderingInfo
 	if c.cmdBeginRendering == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdBeginRendering)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pRenderingInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdBeginRendering)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pRenderingInfo, lenIfSet(pRenderingInfo != nil, 1))[:])))
 }
 
 // CmdEndRendering wraps vkCmdEndRendering.
@@ -5905,7 +5967,7 @@ func (c *Commands) CmdEndRendering2KHR(commandBuffer CommandBuffer, pRenderingEn
 	if c.cmdEndRendering2KHR == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdEndRendering2KHR)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pRenderingEndInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdEndRendering2KHR)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pRenderingEndInfo, lenIfSet(pRenderingEndInfo != nil, 1))[:])))
 }
 
 // GetDescriptorSetLayoutHostMappingInfoVALVE wraps vkGetDescriptorSetLayoutHostMappingInfoVALVE.
@@ -5913,7 +5975,7 @@ func (c *Commands) GetDescriptorSetLayoutHostMappingInfoVALVE(device Device, pBi
 	if c.getDescriptorSetLayoutHostMappingInfoVALVE == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getDescriptorSetLayoutHostMappingInfoVALVE)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pBindingReference)), (*C.uint8_t)(unsafe.Pointer(pHostMapping)))
+	C.gvk_v_hgg(C.uintptr_t(uintptr(c.getDescriptorSetLayoutHostMappingInfoVALVE)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pBindingReference, lenIfSet(pBindingReference != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pHostMapping, lenIfSet(pHostMapping != nil, 1))[:])))
 }
 
 // GetDescriptorSetHostMappingVALVE wraps vkGetDescriptorSetHostMappingVALVE.
@@ -5921,7 +5983,7 @@ func (c *Commands) GetDescriptorSetHostMappingVALVE(device Device, descriptorSet
 	if c.getDescriptorSetHostMappingVALVE == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.getDescriptorSetHostMappingVALVE)), C.uintptr_t(device), C.uint64_t(descriptorSet), (*C.uint8_t)(unsafe.Pointer(ppData)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.getDescriptorSetHostMappingVALVE)), C.uintptr_t(device), C.uint64_t(descriptorSet), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(ppData, lenIfSet(ppData != nil, 1))[:])))
 }
 
 // CreateMicromapEXT wraps vkCreateMicromapEXT.
@@ -5929,7 +5991,7 @@ func (c *Commands) CreateMicromapEXT(device Device, pCreateInfo *MicromapCreateI
 	if c.createMicromapEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createMicromapEXT)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pMicromap)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createMicromapEXT)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pMicromap)))
 	return Result(r)
 }
 
@@ -5938,7 +6000,7 @@ func (c *Commands) CmdBuildMicromapsEXT(commandBuffer CommandBuffer, infoCount u
 	if c.cmdBuildMicromapsEXT == nil {
 		return
 	}
-	C.gvk_v_hip(C.uintptr_t(uintptr(c.cmdBuildMicromapsEXT)), C.uintptr_t(commandBuffer), C.uint32_t(infoCount), (*C.uint8_t)(unsafe.Pointer(pInfos)))
+	C.gvk_v_hig(C.uintptr_t(uintptr(c.cmdBuildMicromapsEXT)), C.uintptr_t(commandBuffer), C.uint32_t(infoCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfos, lenIfSet(pInfos != nil, int(infoCount)))[:])))
 }
 
 // BuildMicromapsEXT wraps vkBuildMicromapsEXT.
@@ -5946,7 +6008,7 @@ func (c *Commands) BuildMicromapsEXT(device Device, deferredOperation DeferredOp
 	if c.buildMicromapsEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqip(C.uintptr_t(uintptr(c.buildMicromapsEXT)), C.uintptr_t(device), C.uint64_t(deferredOperation), C.uint32_t(infoCount), (*C.uint8_t)(unsafe.Pointer(pInfos)))
+	r := C.gvk_r_hqig(C.uintptr_t(uintptr(c.buildMicromapsEXT)), C.uintptr_t(device), C.uint64_t(deferredOperation), C.uint32_t(infoCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfos, lenIfSet(pInfos != nil, int(infoCount)))[:])))
 	return Result(r)
 }
 
@@ -5955,7 +6017,7 @@ func (c *Commands) DestroyMicromapEXT(device Device, micromap MicromapEXT, pAllo
 	if c.destroyMicromapEXT == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyMicromapEXT)), C.uintptr_t(device), C.uint64_t(micromap), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyMicromapEXT)), C.uintptr_t(device), C.uint64_t(micromap), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // CmdCopyMicromapEXT wraps vkCmdCopyMicromapEXT.
@@ -5963,7 +6025,7 @@ func (c *Commands) CmdCopyMicromapEXT(commandBuffer CommandBuffer, pInfo *CopyMi
 	if c.cmdCopyMicromapEXT == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdCopyMicromapEXT)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdCopyMicromapEXT)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])))
 }
 
 // CopyMicromapEXT wraps vkCopyMicromapEXT.
@@ -5971,7 +6033,7 @@ func (c *Commands) CopyMicromapEXT(device Device, deferredOperation DeferredOper
 	if c.copyMicromapEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqp(C.uintptr_t(uintptr(c.copyMicromapEXT)), C.uintptr_t(device), C.uint64_t(deferredOperation), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	r := C.gvk_r_hqg(C.uintptr_t(uintptr(c.copyMicromapEXT)), C.uintptr_t(device), C.uint64_t(deferredOperation), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -5980,7 +6042,7 @@ func (c *Commands) CmdCopyMicromapToMemoryEXT(commandBuffer CommandBuffer, pInfo
 	if c.cmdCopyMicromapToMemoryEXT == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdCopyMicromapToMemoryEXT)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdCopyMicromapToMemoryEXT)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])))
 }
 
 // CopyMicromapToMemoryEXT wraps vkCopyMicromapToMemoryEXT.
@@ -5988,7 +6050,7 @@ func (c *Commands) CopyMicromapToMemoryEXT(device Device, deferredOperation Defe
 	if c.copyMicromapToMemoryEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqp(C.uintptr_t(uintptr(c.copyMicromapToMemoryEXT)), C.uintptr_t(device), C.uint64_t(deferredOperation), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	r := C.gvk_r_hqg(C.uintptr_t(uintptr(c.copyMicromapToMemoryEXT)), C.uintptr_t(device), C.uint64_t(deferredOperation), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -5997,7 +6059,7 @@ func (c *Commands) CmdCopyMemoryToMicromapEXT(commandBuffer CommandBuffer, pInfo
 	if c.cmdCopyMemoryToMicromapEXT == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdCopyMemoryToMicromapEXT)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdCopyMemoryToMicromapEXT)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])))
 }
 
 // CopyMemoryToMicromapEXT wraps vkCopyMemoryToMicromapEXT.
@@ -6005,7 +6067,7 @@ func (c *Commands) CopyMemoryToMicromapEXT(device Device, deferredOperation Defe
 	if c.copyMemoryToMicromapEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqp(C.uintptr_t(uintptr(c.copyMemoryToMicromapEXT)), C.uintptr_t(device), C.uint64_t(deferredOperation), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	r := C.gvk_r_hqg(C.uintptr_t(uintptr(c.copyMemoryToMicromapEXT)), C.uintptr_t(device), C.uint64_t(deferredOperation), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -6031,7 +6093,7 @@ func (c *Commands) GetDeviceMicromapCompatibilityEXT(device Device, pVersionInfo
 	if c.getDeviceMicromapCompatibilityEXT == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getDeviceMicromapCompatibilityEXT)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pVersionInfo)), (*C.uint8_t)(unsafe.Pointer(pCompatibility)))
+	C.gvk_v_hgp(C.uintptr_t(uintptr(c.getDeviceMicromapCompatibilityEXT)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pVersionInfo, lenIfSet(pVersionInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pCompatibility)))
 }
 
 // GetMicromapBuildSizesEXT wraps vkGetMicromapBuildSizesEXT.
@@ -6039,7 +6101,7 @@ func (c *Commands) GetMicromapBuildSizesEXT(device Device, buildType Acceleratio
 	if c.getMicromapBuildSizesEXT == nil {
 		return
 	}
-	C.gvk_v_hipp(C.uintptr_t(uintptr(c.getMicromapBuildSizesEXT)), C.uintptr_t(device), C.uint32_t(buildType), (*C.uint8_t)(unsafe.Pointer(pBuildInfo)), (*C.uint8_t)(unsafe.Pointer(pSizeInfo)))
+	C.gvk_v_higg(C.uintptr_t(uintptr(c.getMicromapBuildSizesEXT)), C.uintptr_t(device), C.uint32_t(buildType), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pBuildInfo, lenIfSet(pBuildInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSizeInfo, lenIfSet(pSizeInfo != nil, 1))[:])))
 }
 
 // GetShaderModuleIdentifierEXT wraps vkGetShaderModuleIdentifierEXT.
@@ -6047,7 +6109,7 @@ func (c *Commands) GetShaderModuleIdentifierEXT(device Device, shaderModule Shad
 	if c.getShaderModuleIdentifierEXT == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.getShaderModuleIdentifierEXT)), C.uintptr_t(device), C.uint64_t(shaderModule), (*C.uint8_t)(unsafe.Pointer(pIdentifier)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.getShaderModuleIdentifierEXT)), C.uintptr_t(device), C.uint64_t(shaderModule), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pIdentifier, lenIfSet(pIdentifier != nil, 1))[:])))
 }
 
 // GetShaderModuleCreateInfoIdentifierEXT wraps vkGetShaderModuleCreateInfoIdentifierEXT.
@@ -6055,7 +6117,7 @@ func (c *Commands) GetShaderModuleCreateInfoIdentifierEXT(device Device, pCreate
 	if c.getShaderModuleCreateInfoIdentifierEXT == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getShaderModuleCreateInfoIdentifierEXT)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pIdentifier)))
+	C.gvk_v_hgg(C.uintptr_t(uintptr(c.getShaderModuleCreateInfoIdentifierEXT)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pIdentifier, lenIfSet(pIdentifier != nil, 1))[:])))
 }
 
 // GetImageSubresourceLayout2 wraps vkGetImageSubresourceLayout2.
@@ -6063,7 +6125,7 @@ func (c *Commands) GetImageSubresourceLayout2(device Device, image Image, pSubre
 	if c.getImageSubresourceLayout2 == nil {
 		return
 	}
-	C.gvk_v_hqpp(C.uintptr_t(uintptr(c.getImageSubresourceLayout2)), C.uintptr_t(device), C.uint64_t(image), (*C.uint8_t)(unsafe.Pointer(pSubresource)), (*C.uint8_t)(unsafe.Pointer(pLayout)))
+	C.gvk_v_hqgg(C.uintptr_t(uintptr(c.getImageSubresourceLayout2)), C.uintptr_t(device), C.uint64_t(image), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSubresource, lenIfSet(pSubresource != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pLayout, lenIfSet(pLayout != nil, 1))[:])))
 }
 
 // GetPipelinePropertiesEXT wraps vkGetPipelinePropertiesEXT.
@@ -6071,7 +6133,7 @@ func (c *Commands) GetPipelinePropertiesEXT(device Device, pPipelineInfo *Pipeli
 	if c.getPipelinePropertiesEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getPipelinePropertiesEXT)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pPipelineInfo)), (*C.uint8_t)(unsafe.Pointer(pPipelineProperties)))
+	r := C.gvk_r_hgg(C.uintptr_t(uintptr(c.getPipelinePropertiesEXT)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pPipelineInfo, lenIfSet(pPipelineInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pPipelineProperties, lenIfSet(pPipelineProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -6080,7 +6142,7 @@ func (c *Commands) ExportMetalObjectsEXT(device Device, pMetalObjectsInfo *Expor
 	if c.exportMetalObjectsEXT == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.exportMetalObjectsEXT)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pMetalObjectsInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.exportMetalObjectsEXT)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMetalObjectsInfo, lenIfSet(pMetalObjectsInfo != nil, 1))[:])))
 }
 
 // CmdBindTileMemoryQCOM wraps vkCmdBindTileMemoryQCOM.
@@ -6088,7 +6150,7 @@ func (c *Commands) CmdBindTileMemoryQCOM(commandBuffer CommandBuffer, pTileMemor
 	if c.cmdBindTileMemoryQCOM == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdBindTileMemoryQCOM)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pTileMemoryBindInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdBindTileMemoryQCOM)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pTileMemoryBindInfo, lenIfSet(pTileMemoryBindInfo != nil, 1))[:])))
 }
 
 // GetFramebufferTilePropertiesQCOM wraps vkGetFramebufferTilePropertiesQCOM.
@@ -6096,7 +6158,7 @@ func (c *Commands) GetFramebufferTilePropertiesQCOM(device Device, framebuffer F
 	if c.getFramebufferTilePropertiesQCOM == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqpp(C.uintptr_t(uintptr(c.getFramebufferTilePropertiesQCOM)), C.uintptr_t(device), C.uint64_t(framebuffer), (*C.uint8_t)(unsafe.Pointer(pPropertiesCount)), (*C.uint8_t)(unsafe.Pointer(pProperties)))
+	r := C.gvk_r_hqpg(C.uintptr_t(uintptr(c.getFramebufferTilePropertiesQCOM)), C.uintptr_t(device), C.uint64_t(framebuffer), (*C.uint8_t)(unsafe.Pointer(pPropertiesCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pProperties, lenIfSet(pProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -6105,7 +6167,7 @@ func (c *Commands) GetDynamicRenderingTilePropertiesQCOM(device Device, pRenderi
 	if c.getDynamicRenderingTilePropertiesQCOM == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getDynamicRenderingTilePropertiesQCOM)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pRenderingInfo)), (*C.uint8_t)(unsafe.Pointer(pProperties)))
+	r := C.gvk_r_hgg(C.uintptr_t(uintptr(c.getDynamicRenderingTilePropertiesQCOM)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pRenderingInfo, lenIfSet(pRenderingInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pProperties, lenIfSet(pProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -6114,7 +6176,7 @@ func (c *Commands) GetPhysicalDeviceOpticalFlowImageFormatsNV(physicalDevice Phy
 	if c.getPhysicalDeviceOpticalFlowImageFormatsNV == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.getPhysicalDeviceOpticalFlowImageFormatsNV)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pOpticalFlowImageFormatInfo)), (*C.uint8_t)(unsafe.Pointer(pFormatCount)), (*C.uint8_t)(unsafe.Pointer(pImageFormatProperties)))
+	r := C.gvk_r_hgpg(C.uintptr_t(uintptr(c.getPhysicalDeviceOpticalFlowImageFormatsNV)), C.uintptr_t(physicalDevice), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pOpticalFlowImageFormatInfo, lenIfSet(pOpticalFlowImageFormatInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pFormatCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pImageFormatProperties, lenIfSet(pImageFormatProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -6123,7 +6185,7 @@ func (c *Commands) CreateOpticalFlowSessionNV(device Device, pCreateInfo *Optica
 	if c.createOpticalFlowSessionNV == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createOpticalFlowSessionNV)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pSession)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createOpticalFlowSessionNV)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pSession)))
 	return Result(r)
 }
 
@@ -6132,7 +6194,7 @@ func (c *Commands) DestroyOpticalFlowSessionNV(device Device, session OpticalFlo
 	if c.destroyOpticalFlowSessionNV == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyOpticalFlowSessionNV)), C.uintptr_t(device), C.uint64_t(session), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyOpticalFlowSessionNV)), C.uintptr_t(device), C.uint64_t(session), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // BindOpticalFlowSessionImageNV wraps vkBindOpticalFlowSessionImageNV.
@@ -6149,7 +6211,7 @@ func (c *Commands) CmdOpticalFlowExecuteNV(commandBuffer CommandBuffer, session 
 	if c.cmdOpticalFlowExecuteNV == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.cmdOpticalFlowExecuteNV)), C.uintptr_t(commandBuffer), C.uint64_t(session), (*C.uint8_t)(unsafe.Pointer(pExecuteInfo)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.cmdOpticalFlowExecuteNV)), C.uintptr_t(commandBuffer), C.uint64_t(session), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pExecuteInfo, lenIfSet(pExecuteInfo != nil, 1))[:])))
 }
 
 // GetDeviceFaultInfoEXT wraps vkGetDeviceFaultInfoEXT.
@@ -6157,7 +6219,7 @@ func (c *Commands) GetDeviceFaultInfoEXT(device Device, pFaultCounts *DeviceFaul
 	if c.getDeviceFaultInfoEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getDeviceFaultInfoEXT)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pFaultCounts)), (*C.uint8_t)(unsafe.Pointer(pFaultInfo)))
+	r := C.gvk_r_hgg(C.uintptr_t(uintptr(c.getDeviceFaultInfoEXT)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pFaultCounts, lenIfSet(pFaultCounts != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pFaultInfo, lenIfSet(pFaultInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -6166,7 +6228,7 @@ func (c *Commands) CmdSetDepthBias2EXT(commandBuffer CommandBuffer, pDepthBiasIn
 	if c.cmdSetDepthBias2EXT == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdSetDepthBias2EXT)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pDepthBiasInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdSetDepthBias2EXT)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pDepthBiasInfo, lenIfSet(pDepthBiasInfo != nil, 1))[:])))
 }
 
 // ReleaseSwapchainImagesKHR wraps vkReleaseSwapchainImagesKHR.
@@ -6174,7 +6236,7 @@ func (c *Commands) ReleaseSwapchainImagesKHR(device Device, pReleaseInfo *Releas
 	if c.releaseSwapchainImagesKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hp(C.uintptr_t(uintptr(c.releaseSwapchainImagesKHR)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pReleaseInfo)))
+	r := C.gvk_r_hg(C.uintptr_t(uintptr(c.releaseSwapchainImagesKHR)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pReleaseInfo, lenIfSet(pReleaseInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -6183,7 +6245,7 @@ func (c *Commands) GetDeviceImageSubresourceLayout(device Device, pInfo *DeviceI
 	if c.getDeviceImageSubresourceLayout == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getDeviceImageSubresourceLayout)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pLayout)))
+	C.gvk_v_hgg(C.uintptr_t(uintptr(c.getDeviceImageSubresourceLayout)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pLayout, lenIfSet(pLayout != nil, 1))[:])))
 }
 
 // MapMemory2 wraps vkMapMemory2.
@@ -6191,7 +6253,7 @@ func (c *Commands) MapMemory2(device Device, pMemoryMapInfo *MemoryMapInfo, ppDa
 	if c.mapMemory2 == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.mapMemory2)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pMemoryMapInfo)), (*C.uint8_t)(unsafe.Pointer(ppData)))
+	r := C.gvk_r_hgg(C.uintptr_t(uintptr(c.mapMemory2)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMemoryMapInfo, lenIfSet(pMemoryMapInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(ppData, lenIfSet(ppData != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -6200,7 +6262,7 @@ func (c *Commands) UnmapMemory2(device Device, pMemoryUnmapInfo *MemoryUnmapInfo
 	if c.unmapMemory2 == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hp(C.uintptr_t(uintptr(c.unmapMemory2)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pMemoryUnmapInfo)))
+	r := C.gvk_r_hg(C.uintptr_t(uintptr(c.unmapMemory2)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMemoryUnmapInfo, lenIfSet(pMemoryUnmapInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -6209,7 +6271,7 @@ func (c *Commands) CreateShadersEXT(device Device, createInfoCount uint32, pCrea
 	if c.createShadersEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hippp(C.uintptr_t(uintptr(c.createShadersEXT)), C.uintptr_t(device), C.uint32_t(createInfoCount), (*C.uint8_t)(unsafe.Pointer(pCreateInfos)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pShaders)))
+	r := C.gvk_r_higgp(C.uintptr_t(uintptr(c.createShadersEXT)), C.uintptr_t(device), C.uint32_t(createInfoCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfos, lenIfSet(pCreateInfos != nil, int(createInfoCount)))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pShaders)))
 	return Result(r)
 }
 
@@ -6218,7 +6280,7 @@ func (c *Commands) DestroyShaderEXT(device Device, shader ShaderEXT, pAllocator 
 	if c.destroyShaderEXT == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyShaderEXT)), C.uintptr_t(device), C.uint64_t(shader), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyShaderEXT)), C.uintptr_t(device), C.uint64_t(shader), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // GetShaderBinaryDataEXT wraps vkGetShaderBinaryDataEXT.
@@ -6252,7 +6314,7 @@ func (c *Commands) GetSwapchainTimingPropertiesEXT(device Device, swapchain Swap
 	if c.getSwapchainTimingPropertiesEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqpp(C.uintptr_t(uintptr(c.getSwapchainTimingPropertiesEXT)), C.uintptr_t(device), C.uint64_t(swapchain), (*C.uint8_t)(unsafe.Pointer(pSwapchainTimingProperties)), (*C.uint8_t)(unsafe.Pointer(pSwapchainTimingPropertiesCounter)))
+	r := C.gvk_r_hqgp(C.uintptr_t(uintptr(c.getSwapchainTimingPropertiesEXT)), C.uintptr_t(device), C.uint64_t(swapchain), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSwapchainTimingProperties, lenIfSet(pSwapchainTimingProperties != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pSwapchainTimingPropertiesCounter)))
 	return Result(r)
 }
 
@@ -6261,7 +6323,7 @@ func (c *Commands) GetSwapchainTimeDomainPropertiesEXT(device Device, swapchain 
 	if c.getSwapchainTimeDomainPropertiesEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqpp(C.uintptr_t(uintptr(c.getSwapchainTimeDomainPropertiesEXT)), C.uintptr_t(device), C.uint64_t(swapchain), (*C.uint8_t)(unsafe.Pointer(pSwapchainTimeDomainProperties)), (*C.uint8_t)(unsafe.Pointer(pTimeDomainsCounter)))
+	r := C.gvk_r_hqgp(C.uintptr_t(uintptr(c.getSwapchainTimeDomainPropertiesEXT)), C.uintptr_t(device), C.uint64_t(swapchain), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSwapchainTimeDomainProperties, lenIfSet(pSwapchainTimeDomainProperties != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pTimeDomainsCounter)))
 	return Result(r)
 }
 
@@ -6270,7 +6332,7 @@ func (c *Commands) GetPastPresentationTimingEXT(device Device, pPastPresentation
 	if c.getPastPresentationTimingEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getPastPresentationTimingEXT)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pPastPresentationTimingInfo)), (*C.uint8_t)(unsafe.Pointer(pPastPresentationTimingProperties)))
+	r := C.gvk_r_hgg(C.uintptr_t(uintptr(c.getPastPresentationTimingEXT)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pPastPresentationTimingInfo, lenIfSet(pPastPresentationTimingInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pPastPresentationTimingProperties, lenIfSet(pPastPresentationTimingProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -6279,7 +6341,7 @@ func (c *Commands) GetScreenBufferPropertiesQNX(device Device, buffer *ScreenBuf
 	if c.getScreenBufferPropertiesQNX == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getScreenBufferPropertiesQNX)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(buffer)), (*C.uint8_t)(unsafe.Pointer(pProperties)))
+	r := C.gvk_r_hpg(C.uintptr_t(uintptr(c.getScreenBufferPropertiesQNX)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(buffer)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pProperties, lenIfSet(pProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -6288,7 +6350,7 @@ func (c *Commands) GetPhysicalDeviceCooperativeMatrixPropertiesKHR(physicalDevic
 	if c.getPhysicalDeviceCooperativeMatrixPropertiesKHR == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getPhysicalDeviceCooperativeMatrixPropertiesKHR)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pPropertyCount)), (*C.uint8_t)(unsafe.Pointer(pProperties)))
+	r := C.gvk_r_hpg(C.uintptr_t(uintptr(c.getPhysicalDeviceCooperativeMatrixPropertiesKHR)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pPropertyCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pProperties, lenIfSet(pProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -6297,7 +6359,7 @@ func (c *Commands) GetExecutionGraphPipelineScratchSizeAMDX(device Device, execu
 	if c.getExecutionGraphPipelineScratchSizeAMDX == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqp(C.uintptr_t(uintptr(c.getExecutionGraphPipelineScratchSizeAMDX)), C.uintptr_t(device), C.uint64_t(executionGraph), (*C.uint8_t)(unsafe.Pointer(pSizeInfo)))
+	r := C.gvk_r_hqg(C.uintptr_t(uintptr(c.getExecutionGraphPipelineScratchSizeAMDX)), C.uintptr_t(device), C.uint64_t(executionGraph), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSizeInfo, lenIfSet(pSizeInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -6306,7 +6368,7 @@ func (c *Commands) GetExecutionGraphPipelineNodeIndexAMDX(device Device, executi
 	if c.getExecutionGraphPipelineNodeIndexAMDX == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqpp(C.uintptr_t(uintptr(c.getExecutionGraphPipelineNodeIndexAMDX)), C.uintptr_t(device), C.uint64_t(executionGraph), (*C.uint8_t)(unsafe.Pointer(pNodeInfo)), (*C.uint8_t)(unsafe.Pointer(pNodeIndex)))
+	r := C.gvk_r_hqgp(C.uintptr_t(uintptr(c.getExecutionGraphPipelineNodeIndexAMDX)), C.uintptr_t(device), C.uint64_t(executionGraph), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pNodeInfo, lenIfSet(pNodeInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pNodeIndex)))
 	return Result(r)
 }
 
@@ -6315,7 +6377,7 @@ func (c *Commands) CreateExecutionGraphPipelinesAMDX(device Device, pipelineCach
 	if c.createExecutionGraphPipelinesAMDX == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqippp(C.uintptr_t(uintptr(c.createExecutionGraphPipelinesAMDX)), C.uintptr_t(device), C.uint64_t(pipelineCache), C.uint32_t(createInfoCount), (*C.uint8_t)(unsafe.Pointer(pCreateInfos)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pPipelines)))
+	r := C.gvk_r_hqiggp(C.uintptr_t(uintptr(c.createExecutionGraphPipelinesAMDX)), C.uintptr_t(device), C.uint64_t(pipelineCache), C.uint32_t(createInfoCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfos, lenIfSet(pCreateInfos != nil, int(createInfoCount)))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pPipelines)))
 	return Result(r)
 }
 
@@ -6356,7 +6418,7 @@ func (c *Commands) CmdBindDescriptorSets2(commandBuffer CommandBuffer, pBindDesc
 	if c.cmdBindDescriptorSets2 == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdBindDescriptorSets2)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pBindDescriptorSetsInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdBindDescriptorSets2)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pBindDescriptorSetsInfo, lenIfSet(pBindDescriptorSetsInfo != nil, 1))[:])))
 }
 
 // CmdPushConstants2 wraps vkCmdPushConstants2.
@@ -6364,7 +6426,7 @@ func (c *Commands) CmdPushConstants2(commandBuffer CommandBuffer, pPushConstants
 	if c.cmdPushConstants2 == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdPushConstants2)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pPushConstantsInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdPushConstants2)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pPushConstantsInfo, lenIfSet(pPushConstantsInfo != nil, 1))[:])))
 }
 
 // CmdPushDescriptorSet2 wraps vkCmdPushDescriptorSet2.
@@ -6372,7 +6434,7 @@ func (c *Commands) CmdPushDescriptorSet2(commandBuffer CommandBuffer, pPushDescr
 	if c.cmdPushDescriptorSet2 == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdPushDescriptorSet2)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pPushDescriptorSetInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdPushDescriptorSet2)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pPushDescriptorSetInfo, lenIfSet(pPushDescriptorSetInfo != nil, 1))[:])))
 }
 
 // CmdPushDescriptorSetWithTemplate2 wraps vkCmdPushDescriptorSetWithTemplate2.
@@ -6380,7 +6442,7 @@ func (c *Commands) CmdPushDescriptorSetWithTemplate2(commandBuffer CommandBuffer
 	if c.cmdPushDescriptorSetWithTemplate2 == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdPushDescriptorSetWithTemplate2)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pPushDescriptorSetWithTemplateInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdPushDescriptorSetWithTemplate2)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pPushDescriptorSetWithTemplateInfo, lenIfSet(pPushDescriptorSetWithTemplateInfo != nil, 1))[:])))
 }
 
 // CmdSetDescriptorBufferOffsets2EXT wraps vkCmdSetDescriptorBufferOffsets2EXT.
@@ -6388,7 +6450,7 @@ func (c *Commands) CmdSetDescriptorBufferOffsets2EXT(commandBuffer CommandBuffer
 	if c.cmdSetDescriptorBufferOffsets2EXT == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdSetDescriptorBufferOffsets2EXT)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pSetDescriptorBufferOffsetsInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdSetDescriptorBufferOffsets2EXT)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSetDescriptorBufferOffsetsInfo, lenIfSet(pSetDescriptorBufferOffsetsInfo != nil, 1))[:])))
 }
 
 // CmdBindDescriptorBufferEmbeddedSamplers2EXT wraps vkCmdBindDescriptorBufferEmbeddedSamplers2EXT.
@@ -6396,7 +6458,7 @@ func (c *Commands) CmdBindDescriptorBufferEmbeddedSamplers2EXT(commandBuffer Com
 	if c.cmdBindDescriptorBufferEmbeddedSamplers2EXT == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdBindDescriptorBufferEmbeddedSamplers2EXT)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pBindDescriptorBufferEmbeddedSamplersInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdBindDescriptorBufferEmbeddedSamplers2EXT)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pBindDescriptorBufferEmbeddedSamplersInfo, lenIfSet(pBindDescriptorBufferEmbeddedSamplersInfo != nil, 1))[:])))
 }
 
 // SetLatencySleepModeNV wraps vkSetLatencySleepModeNV.
@@ -6404,7 +6466,7 @@ func (c *Commands) SetLatencySleepModeNV(device Device, swapchain SwapchainKHR, 
 	if c.setLatencySleepModeNV == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqp(C.uintptr_t(uintptr(c.setLatencySleepModeNV)), C.uintptr_t(device), C.uint64_t(swapchain), (*C.uint8_t)(unsafe.Pointer(pSleepModeInfo)))
+	r := C.gvk_r_hqg(C.uintptr_t(uintptr(c.setLatencySleepModeNV)), C.uintptr_t(device), C.uint64_t(swapchain), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSleepModeInfo, lenIfSet(pSleepModeInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -6413,7 +6475,7 @@ func (c *Commands) LatencySleepNV(device Device, swapchain SwapchainKHR, pSleepI
 	if c.latencySleepNV == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqp(C.uintptr_t(uintptr(c.latencySleepNV)), C.uintptr_t(device), C.uint64_t(swapchain), (*C.uint8_t)(unsafe.Pointer(pSleepInfo)))
+	r := C.gvk_r_hqg(C.uintptr_t(uintptr(c.latencySleepNV)), C.uintptr_t(device), C.uint64_t(swapchain), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pSleepInfo, lenIfSet(pSleepInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -6422,7 +6484,7 @@ func (c *Commands) SetLatencyMarkerNV(device Device, swapchain SwapchainKHR, pLa
 	if c.setLatencyMarkerNV == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.setLatencyMarkerNV)), C.uintptr_t(device), C.uint64_t(swapchain), (*C.uint8_t)(unsafe.Pointer(pLatencyMarkerInfo)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.setLatencyMarkerNV)), C.uintptr_t(device), C.uint64_t(swapchain), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pLatencyMarkerInfo, lenIfSet(pLatencyMarkerInfo != nil, 1))[:])))
 }
 
 // GetLatencyTimingsNV wraps vkGetLatencyTimingsNV.
@@ -6430,7 +6492,7 @@ func (c *Commands) GetLatencyTimingsNV(device Device, swapchain SwapchainKHR, pL
 	if c.getLatencyTimingsNV == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.getLatencyTimingsNV)), C.uintptr_t(device), C.uint64_t(swapchain), (*C.uint8_t)(unsafe.Pointer(pLatencyMarkerInfo)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.getLatencyTimingsNV)), C.uintptr_t(device), C.uint64_t(swapchain), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pLatencyMarkerInfo, lenIfSet(pLatencyMarkerInfo != nil, 1))[:])))
 }
 
 // QueueNotifyOutOfBandNV wraps vkQueueNotifyOutOfBandNV.
@@ -6438,7 +6500,7 @@ func (c *Commands) QueueNotifyOutOfBandNV(queue Queue, pQueueTypeInfo *OutOfBand
 	if c.queueNotifyOutOfBandNV == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.queueNotifyOutOfBandNV)), C.uintptr_t(queue), (*C.uint8_t)(unsafe.Pointer(pQueueTypeInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.queueNotifyOutOfBandNV)), C.uintptr_t(queue), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pQueueTypeInfo, lenIfSet(pQueueTypeInfo != nil, 1))[:])))
 }
 
 // CmdSetRenderingAttachmentLocations wraps vkCmdSetRenderingAttachmentLocations.
@@ -6446,7 +6508,7 @@ func (c *Commands) CmdSetRenderingAttachmentLocations(commandBuffer CommandBuffe
 	if c.cmdSetRenderingAttachmentLocations == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdSetRenderingAttachmentLocations)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pLocationInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdSetRenderingAttachmentLocations)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pLocationInfo, lenIfSet(pLocationInfo != nil, 1))[:])))
 }
 
 // CmdSetRenderingInputAttachmentIndices wraps vkCmdSetRenderingInputAttachmentIndices.
@@ -6454,7 +6516,7 @@ func (c *Commands) CmdSetRenderingInputAttachmentIndices(commandBuffer CommandBu
 	if c.cmdSetRenderingInputAttachmentIndices == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdSetRenderingInputAttachmentIndices)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pInputAttachmentIndexInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdSetRenderingInputAttachmentIndices)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInputAttachmentIndexInfo, lenIfSet(pInputAttachmentIndexInfo != nil, 1))[:])))
 }
 
 // CmdSetDepthClampRangeEXT wraps vkCmdSetDepthClampRangeEXT.
@@ -6470,7 +6532,7 @@ func (c *Commands) GetPhysicalDeviceCooperativeMatrixFlexibleDimensionsPropertie
 	if c.getPhysicalDeviceCooperativeMatrixFlexibleDimensionsPropertiesNV == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getPhysicalDeviceCooperativeMatrixFlexibleDimensionsPropertiesNV)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pPropertyCount)), (*C.uint8_t)(unsafe.Pointer(pProperties)))
+	r := C.gvk_r_hpg(C.uintptr_t(uintptr(c.getPhysicalDeviceCooperativeMatrixFlexibleDimensionsPropertiesNV)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pPropertyCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pProperties, lenIfSet(pProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -6479,7 +6541,7 @@ func (c *Commands) GetMemoryMetalHandleEXT(device Device, pGetMetalHandleInfo *M
 	if c.getMemoryMetalHandleEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getMemoryMetalHandleEXT)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pGetMetalHandleInfo)), (*C.uint8_t)(unsafe.Pointer(pHandle)))
+	r := C.gvk_r_hgg(C.uintptr_t(uintptr(c.getMemoryMetalHandleEXT)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pGetMetalHandleInfo, lenIfSet(pGetMetalHandleInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pHandle, lenIfSet(pHandle != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -6488,7 +6550,7 @@ func (c *Commands) GetMemoryMetalHandlePropertiesEXT(device Device, handleType E
 	if c.getMemoryMetalHandlePropertiesEXT == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hipp(C.uintptr_t(uintptr(c.getMemoryMetalHandlePropertiesEXT)), C.uintptr_t(device), C.uint32_t(handleType), (*C.uint8_t)(unsafe.Pointer(pHandle)), (*C.uint8_t)(unsafe.Pointer(pMemoryMetalHandleProperties)))
+	r := C.gvk_r_hipg(C.uintptr_t(uintptr(c.getMemoryMetalHandlePropertiesEXT)), C.uintptr_t(device), C.uint32_t(handleType), (*C.uint8_t)(unsafe.Pointer(pHandle)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMemoryMetalHandleProperties, lenIfSet(pMemoryMetalHandleProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -6497,7 +6559,7 @@ func (c *Commands) GetPhysicalDeviceCooperativeVectorPropertiesNV(physicalDevice
 	if c.getPhysicalDeviceCooperativeVectorPropertiesNV == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getPhysicalDeviceCooperativeVectorPropertiesNV)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pPropertyCount)), (*C.uint8_t)(unsafe.Pointer(pProperties)))
+	r := C.gvk_r_hpg(C.uintptr_t(uintptr(c.getPhysicalDeviceCooperativeVectorPropertiesNV)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pPropertyCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pProperties, lenIfSet(pProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -6506,7 +6568,7 @@ func (c *Commands) ConvertCooperativeVectorMatrixNV(device Device, pInfo *Conver
 	if c.convertCooperativeVectorMatrixNV == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hp(C.uintptr_t(uintptr(c.convertCooperativeVectorMatrixNV)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	r := C.gvk_r_hg(C.uintptr_t(uintptr(c.convertCooperativeVectorMatrixNV)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -6515,7 +6577,7 @@ func (c *Commands) CmdConvertCooperativeVectorMatrixNV(commandBuffer CommandBuff
 	if c.cmdConvertCooperativeVectorMatrixNV == nil {
 		return
 	}
-	C.gvk_v_hip(C.uintptr_t(uintptr(c.cmdConvertCooperativeVectorMatrixNV)), C.uintptr_t(commandBuffer), C.uint32_t(infoCount), (*C.uint8_t)(unsafe.Pointer(pInfos)))
+	C.gvk_v_hig(C.uintptr_t(uintptr(c.cmdConvertCooperativeVectorMatrixNV)), C.uintptr_t(commandBuffer), C.uint32_t(infoCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfos, lenIfSet(pInfos != nil, int(infoCount)))[:])))
 }
 
 // CmdDispatchTileQCOM wraps vkCmdDispatchTileQCOM.
@@ -6523,7 +6585,7 @@ func (c *Commands) CmdDispatchTileQCOM(commandBuffer CommandBuffer, pDispatchTil
 	if c.cmdDispatchTileQCOM == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdDispatchTileQCOM)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pDispatchTileInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdDispatchTileQCOM)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pDispatchTileInfo, lenIfSet(pDispatchTileInfo != nil, 1))[:])))
 }
 
 // CmdBeginPerTileExecutionQCOM wraps vkCmdBeginPerTileExecutionQCOM.
@@ -6531,7 +6593,7 @@ func (c *Commands) CmdBeginPerTileExecutionQCOM(commandBuffer CommandBuffer, pPe
 	if c.cmdBeginPerTileExecutionQCOM == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdBeginPerTileExecutionQCOM)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pPerTileBeginInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdBeginPerTileExecutionQCOM)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pPerTileBeginInfo, lenIfSet(pPerTileBeginInfo != nil, 1))[:])))
 }
 
 // CmdEndPerTileExecutionQCOM wraps vkCmdEndPerTileExecutionQCOM.
@@ -6539,7 +6601,7 @@ func (c *Commands) CmdEndPerTileExecutionQCOM(commandBuffer CommandBuffer, pPerT
 	if c.cmdEndPerTileExecutionQCOM == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdEndPerTileExecutionQCOM)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pPerTileEndInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdEndPerTileExecutionQCOM)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pPerTileEndInfo, lenIfSet(pPerTileEndInfo != nil, 1))[:])))
 }
 
 // CreateExternalComputeQueueNV wraps vkCreateExternalComputeQueueNV.
@@ -6547,7 +6609,7 @@ func (c *Commands) CreateExternalComputeQueueNV(device Device, pCreateInfo *Exte
 	if c.createExternalComputeQueueNV == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createExternalComputeQueueNV)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pExternalQueue)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createExternalComputeQueueNV)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pExternalQueue)))
 	return Result(r)
 }
 
@@ -6556,7 +6618,7 @@ func (c *Commands) DestroyExternalComputeQueueNV(device Device, externalQueue Ex
 	if c.destroyExternalComputeQueueNV == nil {
 		return
 	}
-	C.gvk_v_hhp(C.uintptr_t(uintptr(c.destroyExternalComputeQueueNV)), C.uintptr_t(device), C.uintptr_t(externalQueue), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hhg(C.uintptr_t(uintptr(c.destroyExternalComputeQueueNV)), C.uintptr_t(device), C.uintptr_t(externalQueue), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // GetExternalComputeQueueDataNV wraps vkGetExternalComputeQueueDataNV.
@@ -6564,7 +6626,7 @@ func (c *Commands) GetExternalComputeQueueDataNV(externalQueue ExternalComputeQu
 	if c.getExternalComputeQueueDataNV == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getExternalComputeQueueDataNV)), C.uintptr_t(externalQueue), (*C.uint8_t)(unsafe.Pointer(params)), (*C.uint8_t)(unsafe.Pointer(pData)))
+	C.gvk_v_hgp(C.uintptr_t(uintptr(c.getExternalComputeQueueDataNV)), C.uintptr_t(externalQueue), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(params, lenIfSet(params != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pData)))
 }
 
 // CreateTensorARM wraps vkCreateTensorARM.
@@ -6572,7 +6634,7 @@ func (c *Commands) CreateTensorARM(device Device, pCreateInfo *TensorCreateInfoA
 	if c.createTensorARM == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createTensorARM)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pTensor)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createTensorARM)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pTensor)))
 	return Result(r)
 }
 
@@ -6581,7 +6643,7 @@ func (c *Commands) DestroyTensorARM(device Device, tensor TensorARM, pAllocator 
 	if c.destroyTensorARM == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyTensorARM)), C.uintptr_t(device), C.uint64_t(tensor), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyTensorARM)), C.uintptr_t(device), C.uint64_t(tensor), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // CreateTensorViewARM wraps vkCreateTensorViewARM.
@@ -6589,7 +6651,7 @@ func (c *Commands) CreateTensorViewARM(device Device, pCreateInfo *TensorViewCre
 	if c.createTensorViewARM == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createTensorViewARM)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pView)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createTensorViewARM)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pView)))
 	return Result(r)
 }
 
@@ -6598,7 +6660,7 @@ func (c *Commands) DestroyTensorViewARM(device Device, tensorView TensorViewARM,
 	if c.destroyTensorViewARM == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyTensorViewARM)), C.uintptr_t(device), C.uint64_t(tensorView), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyTensorViewARM)), C.uintptr_t(device), C.uint64_t(tensorView), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // GetTensorMemoryRequirementsARM wraps vkGetTensorMemoryRequirementsARM.
@@ -6606,7 +6668,7 @@ func (c *Commands) GetTensorMemoryRequirementsARM(device Device, pInfo *TensorMe
 	if c.getTensorMemoryRequirementsARM == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getTensorMemoryRequirementsARM)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pMemoryRequirements)))
+	C.gvk_v_hgg(C.uintptr_t(uintptr(c.getTensorMemoryRequirementsARM)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMemoryRequirements, lenIfSet(pMemoryRequirements != nil, 1))[:])))
 }
 
 // BindTensorMemoryARM wraps vkBindTensorMemoryARM.
@@ -6614,7 +6676,7 @@ func (c *Commands) BindTensorMemoryARM(device Device, bindInfoCount uint32, pBin
 	if c.bindTensorMemoryARM == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hip(C.uintptr_t(uintptr(c.bindTensorMemoryARM)), C.uintptr_t(device), C.uint32_t(bindInfoCount), (*C.uint8_t)(unsafe.Pointer(pBindInfos)))
+	r := C.gvk_r_hig(C.uintptr_t(uintptr(c.bindTensorMemoryARM)), C.uintptr_t(device), C.uint32_t(bindInfoCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pBindInfos, lenIfSet(pBindInfos != nil, int(bindInfoCount)))[:])))
 	return Result(r)
 }
 
@@ -6623,7 +6685,7 @@ func (c *Commands) GetDeviceTensorMemoryRequirementsARM(device Device, pInfo *De
 	if c.getDeviceTensorMemoryRequirementsARM == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getDeviceTensorMemoryRequirementsARM)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pMemoryRequirements)))
+	C.gvk_v_hgg(C.uintptr_t(uintptr(c.getDeviceTensorMemoryRequirementsARM)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMemoryRequirements, lenIfSet(pMemoryRequirements != nil, 1))[:])))
 }
 
 // CmdCopyTensorARM wraps vkCmdCopyTensorARM.
@@ -6631,7 +6693,7 @@ func (c *Commands) CmdCopyTensorARM(commandBuffer CommandBuffer, pCopyTensorInfo
 	if c.cmdCopyTensorARM == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(c.cmdCopyTensorARM)), C.uintptr_t(commandBuffer), (*C.uint8_t)(unsafe.Pointer(pCopyTensorInfo)))
+	C.gvk_v_hg(C.uintptr_t(uintptr(c.cmdCopyTensorARM)), C.uintptr_t(commandBuffer), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCopyTensorInfo, lenIfSet(pCopyTensorInfo != nil, 1))[:])))
 }
 
 // GetTensorOpaqueCaptureDescriptorDataARM wraps vkGetTensorOpaqueCaptureDescriptorDataARM.
@@ -6639,7 +6701,7 @@ func (c *Commands) GetTensorOpaqueCaptureDescriptorDataARM(device Device, pInfo 
 	if c.getTensorOpaqueCaptureDescriptorDataARM == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getTensorOpaqueCaptureDescriptorDataARM)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pData)))
+	r := C.gvk_r_hgp(C.uintptr_t(uintptr(c.getTensorOpaqueCaptureDescriptorDataARM)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pData)))
 	return Result(r)
 }
 
@@ -6648,7 +6710,7 @@ func (c *Commands) GetTensorViewOpaqueCaptureDescriptorDataARM(device Device, pI
 	if c.getTensorViewOpaqueCaptureDescriptorDataARM == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getTensorViewOpaqueCaptureDescriptorDataARM)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pData)))
+	r := C.gvk_r_hgp(C.uintptr_t(uintptr(c.getTensorViewOpaqueCaptureDescriptorDataARM)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pData)))
 	return Result(r)
 }
 
@@ -6657,7 +6719,7 @@ func (c *Commands) GetPhysicalDeviceExternalTensorPropertiesARM(physicalDevice P
 	if c.getPhysicalDeviceExternalTensorPropertiesARM == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getPhysicalDeviceExternalTensorPropertiesARM)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pExternalTensorInfo)), (*C.uint8_t)(unsafe.Pointer(pExternalTensorProperties)))
+	C.gvk_v_hgg(C.uintptr_t(uintptr(c.getPhysicalDeviceExternalTensorPropertiesARM)), C.uintptr_t(physicalDevice), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pExternalTensorInfo, lenIfSet(pExternalTensorInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pExternalTensorProperties, lenIfSet(pExternalTensorProperties != nil, 1))[:])))
 }
 
 // CreateDataGraphPipelinesARM wraps vkCreateDataGraphPipelinesARM.
@@ -6665,7 +6727,7 @@ func (c *Commands) CreateDataGraphPipelinesARM(device Device, deferredOperation 
 	if c.createDataGraphPipelinesARM == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hqqippp(C.uintptr_t(uintptr(c.createDataGraphPipelinesARM)), C.uintptr_t(device), C.uint64_t(deferredOperation), C.uint64_t(pipelineCache), C.uint32_t(createInfoCount), (*C.uint8_t)(unsafe.Pointer(pCreateInfos)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pPipelines)))
+	r := C.gvk_r_hqqiggp(C.uintptr_t(uintptr(c.createDataGraphPipelinesARM)), C.uintptr_t(device), C.uint64_t(deferredOperation), C.uint64_t(pipelineCache), C.uint32_t(createInfoCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfos, lenIfSet(pCreateInfos != nil, int(createInfoCount)))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pPipelines)))
 	return Result(r)
 }
 
@@ -6674,7 +6736,7 @@ func (c *Commands) CreateDataGraphPipelineSessionARM(device Device, pCreateInfo 
 	if c.createDataGraphPipelineSessionARM == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.createDataGraphPipelineSessionARM)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pCreateInfo)), (*C.uint8_t)(unsafe.Pointer(pAllocator)), (*C.uint8_t)(unsafe.Pointer(pSession)))
+	r := C.gvk_r_hggp(C.uintptr_t(uintptr(c.createDataGraphPipelineSessionARM)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCreateInfo, lenIfSet(pCreateInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pSession)))
 	return Result(r)
 }
 
@@ -6683,7 +6745,7 @@ func (c *Commands) GetDataGraphPipelineSessionBindPointRequirementsARM(device De
 	if c.getDataGraphPipelineSessionBindPointRequirementsARM == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.getDataGraphPipelineSessionBindPointRequirementsARM)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pBindPointRequirementCount)), (*C.uint8_t)(unsafe.Pointer(pBindPointRequirements)))
+	r := C.gvk_r_hgpg(C.uintptr_t(uintptr(c.getDataGraphPipelineSessionBindPointRequirementsARM)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pBindPointRequirementCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pBindPointRequirements, lenIfSet(pBindPointRequirements != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -6692,7 +6754,7 @@ func (c *Commands) GetDataGraphPipelineSessionMemoryRequirementsARM(device Devic
 	if c.getDataGraphPipelineSessionMemoryRequirementsARM == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getDataGraphPipelineSessionMemoryRequirementsARM)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pMemoryRequirements)))
+	C.gvk_v_hgg(C.uintptr_t(uintptr(c.getDataGraphPipelineSessionMemoryRequirementsARM)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pMemoryRequirements, lenIfSet(pMemoryRequirements != nil, 1))[:])))
 }
 
 // BindDataGraphPipelineSessionMemoryARM wraps vkBindDataGraphPipelineSessionMemoryARM.
@@ -6700,7 +6762,7 @@ func (c *Commands) BindDataGraphPipelineSessionMemoryARM(device Device, bindInfo
 	if c.bindDataGraphPipelineSessionMemoryARM == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hip(C.uintptr_t(uintptr(c.bindDataGraphPipelineSessionMemoryARM)), C.uintptr_t(device), C.uint32_t(bindInfoCount), (*C.uint8_t)(unsafe.Pointer(pBindInfos)))
+	r := C.gvk_r_hig(C.uintptr_t(uintptr(c.bindDataGraphPipelineSessionMemoryARM)), C.uintptr_t(device), C.uint32_t(bindInfoCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pBindInfos, lenIfSet(pBindInfos != nil, int(bindInfoCount)))[:])))
 	return Result(r)
 }
 
@@ -6709,7 +6771,7 @@ func (c *Commands) DestroyDataGraphPipelineSessionARM(device Device, session Dat
 	if c.destroyDataGraphPipelineSessionARM == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.destroyDataGraphPipelineSessionARM)), C.uintptr_t(device), C.uint64_t(session), (*C.uint8_t)(unsafe.Pointer(pAllocator)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.destroyDataGraphPipelineSessionARM)), C.uintptr_t(device), C.uint64_t(session), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pAllocator, lenIfSet(pAllocator != nil, 1))[:])))
 }
 
 // CmdDispatchDataGraphARM wraps vkCmdDispatchDataGraphARM.
@@ -6717,7 +6779,7 @@ func (c *Commands) CmdDispatchDataGraphARM(commandBuffer CommandBuffer, session 
 	if c.cmdDispatchDataGraphARM == nil {
 		return
 	}
-	C.gvk_v_hqp(C.uintptr_t(uintptr(c.cmdDispatchDataGraphARM)), C.uintptr_t(commandBuffer), C.uint64_t(session), (*C.uint8_t)(unsafe.Pointer(pInfo)))
+	C.gvk_v_hqg(C.uintptr_t(uintptr(c.cmdDispatchDataGraphARM)), C.uintptr_t(commandBuffer), C.uint64_t(session), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])))
 }
 
 // GetDataGraphPipelineAvailablePropertiesARM wraps vkGetDataGraphPipelineAvailablePropertiesARM.
@@ -6725,7 +6787,7 @@ func (c *Commands) GetDataGraphPipelineAvailablePropertiesARM(device Device, pPi
 	if c.getDataGraphPipelineAvailablePropertiesARM == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hppp(C.uintptr_t(uintptr(c.getDataGraphPipelineAvailablePropertiesARM)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pPipelineInfo)), (*C.uint8_t)(unsafe.Pointer(pPropertiesCount)), (*C.uint8_t)(unsafe.Pointer(pProperties)))
+	r := C.gvk_r_hgpp(C.uintptr_t(uintptr(c.getDataGraphPipelineAvailablePropertiesARM)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pPipelineInfo, lenIfSet(pPipelineInfo != nil, 1))[:])), (*C.uint8_t)(unsafe.Pointer(pPropertiesCount)), (*C.uint8_t)(unsafe.Pointer(pProperties)))
 	return Result(r)
 }
 
@@ -6734,7 +6796,7 @@ func (c *Commands) GetDataGraphPipelinePropertiesARM(device Device, pPipelineInf
 	if c.getDataGraphPipelinePropertiesARM == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpip(C.uintptr_t(uintptr(c.getDataGraphPipelinePropertiesARM)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pPipelineInfo)), C.uint32_t(propertiesCount), (*C.uint8_t)(unsafe.Pointer(pProperties)))
+	r := C.gvk_r_hgig(C.uintptr_t(uintptr(c.getDataGraphPipelinePropertiesARM)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pPipelineInfo, lenIfSet(pPipelineInfo != nil, 1))[:])), C.uint32_t(propertiesCount), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pProperties, lenIfSet(pProperties != nil, int(propertiesCount)))[:])))
 	return Result(r)
 }
 
@@ -6743,7 +6805,7 @@ func (c *Commands) GetPhysicalDeviceQueueFamilyDataGraphPropertiesARM(physicalDe
 	if c.getPhysicalDeviceQueueFamilyDataGraphPropertiesARM == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hipp(C.uintptr_t(uintptr(c.getPhysicalDeviceQueueFamilyDataGraphPropertiesARM)), C.uintptr_t(physicalDevice), C.uint32_t(queueFamilyIndex), (*C.uint8_t)(unsafe.Pointer(pQueueFamilyDataGraphPropertyCount)), (*C.uint8_t)(unsafe.Pointer(pQueueFamilyDataGraphProperties)))
+	r := C.gvk_r_hipg(C.uintptr_t(uintptr(c.getPhysicalDeviceQueueFamilyDataGraphPropertiesARM)), C.uintptr_t(physicalDevice), C.uint32_t(queueFamilyIndex), (*C.uint8_t)(unsafe.Pointer(pQueueFamilyDataGraphPropertyCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pQueueFamilyDataGraphProperties, lenIfSet(pQueueFamilyDataGraphProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -6752,7 +6814,7 @@ func (c *Commands) GetPhysicalDeviceQueueFamilyDataGraphProcessingEngineProperti
 	if c.getPhysicalDeviceQueueFamilyDataGraphProcessingEnginePropertiesARM == nil {
 		return
 	}
-	C.gvk_v_hpp(C.uintptr_t(uintptr(c.getPhysicalDeviceQueueFamilyDataGraphProcessingEnginePropertiesARM)), C.uintptr_t(physicalDevice), (*C.uint8_t)(unsafe.Pointer(pQueueFamilyDataGraphProcessingEngineInfo)), (*C.uint8_t)(unsafe.Pointer(pQueueFamilyDataGraphProcessingEngineProperties)))
+	C.gvk_v_hgg(C.uintptr_t(uintptr(c.getPhysicalDeviceQueueFamilyDataGraphProcessingEnginePropertiesARM)), C.uintptr_t(physicalDevice), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pQueueFamilyDataGraphProcessingEngineInfo, lenIfSet(pQueueFamilyDataGraphProcessingEngineInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pQueueFamilyDataGraphProcessingEngineProperties, lenIfSet(pQueueFamilyDataGraphProcessingEngineProperties != nil, 1))[:])))
 }
 
 // GetNativeBufferPropertiesOHOS wraps vkGetNativeBufferPropertiesOHOS.
@@ -6760,7 +6822,7 @@ func (c *Commands) GetNativeBufferPropertiesOHOS(device Device, buffer *OH_Nativ
 	if c.getNativeBufferPropertiesOHOS == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getNativeBufferPropertiesOHOS)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(buffer)), (*C.uint8_t)(unsafe.Pointer(pProperties)))
+	r := C.gvk_r_hpg(C.uintptr_t(uintptr(c.getNativeBufferPropertiesOHOS)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(buffer)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pProperties, lenIfSet(pProperties != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -6769,7 +6831,7 @@ func (c *Commands) GetMemoryNativeBufferOHOS(device Device, pInfo *MemoryGetNati
 	if c.getMemoryNativeBufferOHOS == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hpp(C.uintptr_t(uintptr(c.getMemoryNativeBufferOHOS)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(pInfo)), (*C.uint8_t)(unsafe.Pointer(pBuffer)))
+	r := C.gvk_r_hgg(C.uintptr_t(uintptr(c.getMemoryNativeBufferOHOS)), C.uintptr_t(device), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pInfo, lenIfSet(pInfo != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pBuffer, lenIfSet(pBuffer != nil, 1))[:])))
 	return Result(r)
 }
 
@@ -6805,6 +6867,6 @@ func (c *Commands) EnumeratePhysicalDeviceQueueFamilyPerformanceCountersByRegion
 	if c.enumeratePhysicalDeviceQueueFamilyPerformanceCountersByRegionARM == nil {
 		return ErrorInitializationFailed
 	}
-	r := C.gvk_r_hippp(C.uintptr_t(uintptr(c.enumeratePhysicalDeviceQueueFamilyPerformanceCountersByRegionARM)), C.uintptr_t(physicalDevice), C.uint32_t(queueFamilyIndex), (*C.uint8_t)(unsafe.Pointer(pCounterCount)), (*C.uint8_t)(unsafe.Pointer(pCounters)), (*C.uint8_t)(unsafe.Pointer(pCounterDescriptions)))
+	r := C.gvk_r_hipgg(C.uintptr_t(uintptr(c.enumeratePhysicalDeviceQueueFamilyPerformanceCountersByRegionARM)), C.uintptr_t(physicalDevice), C.uint32_t(queueFamilyIndex), (*C.uint8_t)(unsafe.Pointer(pCounterCount)), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCounters, lenIfSet(pCounters != nil, 1))[:])), unsafe.Pointer(unsafe.SliceData(unsafe.Slice(pCounterDescriptions, lenIfSet(pCounterDescriptions != nil, 1))[:])))
 	return Result(r)
 }

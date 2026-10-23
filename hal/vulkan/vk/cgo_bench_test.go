@@ -1,6 +1,10 @@
 package vk_test
 
 import (
+	"fmt"
+	"os"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/roffe/gowgpu/hal/vulkan/vk"
@@ -8,7 +12,7 @@ import (
 )
 
 func cmds() *vk.Commands {
-	return vk.NoopCommands(vknoop.Draw(), vknoop.Bind(), vknoop.Create(), vknoop.Scissor(), vknoop.Pipeline())
+	return vk.NoopCommands(vknoop.Draw(), vknoop.Bind(), vknoop.Create(), vknoop.Scissor(), vknoop.Pipeline(), vknoop.Submit())
 }
 
 func BenchmarkCmdDraw(b *testing.B) {
@@ -63,13 +67,64 @@ func BenchmarkCreateBuffer(b *testing.B) {
 
 var heapInfo *vk.BufferCreateInfo
 
-// A heap create info pointing at heap memory: cgocheck must not object.
+// A heap create info pointing at pinned heap memory: cgocheck must not
+// object.
 func TestCreateBufferHeapInfo(t *testing.T) {
 	c := cmds()
+	var pins runtime.Pinner
+	defer pins.Unpin()
 	families := new([4]uint32)
-	heapInfo = &vk.BufferCreateInfo{SType: vk.StructureTypeBufferCreateInfo, Size: 64, QueueFamilyIndexCount: 1, PQueueFamilyIndices: &families[0]}
+	heapInfo = &vk.BufferCreateInfo{SType: vk.StructureTypeBufferCreateInfo, Size: 64, QueueFamilyIndexCount: 1, PQueueFamilyIndices: vk.Pin(&pins, &families[0])}
 	var buf vk.Buffer
 	if r := c.CreateBuffer(1, heapInfo, nil, &buf); r != vk.Success || buf != 2 {
 		t.Fatalf("CreateBuffer = %d, %d", r, buf)
 	}
+}
+
+var (
+	heapFamilies *[4]uint32
+	heapCmds     *[1]vk.CommandBuffer
+)
+
+// TestCgocheckSeesUnpinnedPointers hands the wrappers Go memory that points
+// at unpinned heap memory, in a create info on the stack or the heap and in
+// the second of two submits, which cgocheck has to refuse.
+func TestCgocheckSeesUnpinnedPointers(t *testing.T) {
+	if strings.Contains(os.Getenv("GODEBUG"), "cgocheck=0") {
+		t.Skip("cgocheck is off")
+	}
+	c := cmds()
+	heapFamilies, heapCmds = new([4]uint32), new([1]vk.CommandBuffer)
+	refused := func(t *testing.T, call func()) {
+		t.Helper()
+		defer func() {
+			if r := recover(); r == nil || !strings.Contains(fmt.Sprint(r), "unpinned Go pointer") {
+				t.Fatalf("got %v, want cgocheck's unpinned Go pointer panic", r)
+			}
+		}()
+		call()
+	}
+	var buf vk.Buffer
+	t.Run("stack create info", func(t *testing.T) {
+		info := vk.BufferCreateInfo{SType: vk.StructureTypeBufferCreateInfo, Size: 64, QueueFamilyIndexCount: 1, PQueueFamilyIndices: &heapFamilies[0]}
+		refused(t, func() { c.CreateBuffer(1, &info, nil, &buf) })
+	})
+	t.Run("heap create info", func(t *testing.T) {
+		heapInfo = &vk.BufferCreateInfo{SType: vk.StructureTypeBufferCreateInfo, Size: 64, QueueFamilyIndexCount: 1, PQueueFamilyIndices: &heapFamilies[0]}
+		refused(t, func() { c.CreateBuffer(1, heapInfo, nil, &buf) })
+	})
+	t.Run("second submit", func(t *testing.T) {
+		cb := vk.CommandBuffer(1)
+		submits := [2]vk.SubmitInfo{
+			{SType: vk.StructureTypeSubmitInfo, CommandBufferCount: 1, PCommandBuffers: &cb},
+			{SType: vk.StructureTypeSubmitInfo, CommandBufferCount: 1, PCommandBuffers: &heapCmds[0]},
+		}
+		refused(t, func() { c.QueueSubmit(1, 2, &submits[0], 0) })
+		var pins runtime.Pinner
+		defer pins.Unpin()
+		vk.Pin(&pins, heapCmds)
+		if r := c.QueueSubmit(1, 2, &submits[0], 0); r != vk.Success {
+			t.Fatalf("QueueSubmit with the memory pinned = %d", r)
+		}
+	})
 }
