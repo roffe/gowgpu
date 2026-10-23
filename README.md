@@ -2,7 +2,7 @@
 
 WebGPU for Go. One API over Vulkan, Metal, DirectX 12 and OpenGL, and over the browser's own WebGPU when you build for wasm.
 
-It started out as a fork of [gogpu/wgpu](https://github.com/gogpu/wgpu) v0.34.5 and went its own way. Native calls go through cgo instead of goffi, the Rust and software backends are gone, and the only dependencies left are [naga](https://github.com/gogpu/naga), the shader compiler, and `golang.org/x/sys`.
+It started out as a fork of [gogpu/wgpu](https://github.com/gogpu/wgpu) v0.34.5 and went its own way. Native calls go through cgo instead of goffi, the Rust and software backends are gone, and the only dependencies left are [naga](https://github.com/roffe/naga), the shader compiler (my fork of gogpu/naga), and `golang.org/x/sys`.
 
 It's what draws everything in the WebGPU painter of [fyne](https://github.com/roffe/fyne/tree/wgpu), so that's where it gets its mileage.
 
@@ -94,7 +94,7 @@ OpenGL is registered but not part of the default instance. Ask for it when nothi
 instance, err := wgpu.CreateInstance(&wgpu.InstanceDescriptor{Backends: gputypes.BackendsGL})
 ```
 
-fyne does exactly that: it tries Vulkan, Metal and DX12 first, and goes for GL only when none of them can draw the window. On Linux that's desktop GL 3.3, or GLES 3.0 when that's all EGL offers.
+fyne does exactly that: it tries Vulkan, Metal and DX12 first, and goes for GL only when none of them can draw the window. On Linux that's the newest desktop GL the driver makes, from 4.6 down to 3.3, or GLES 3.0 when that's all EGL offers. Compute needs GL 4.3 or GLES 3.1.
 
 No GPU at all? DX12 picks WARP, Microsoft's CPU renderer, when there's no hardware adapter, so Windows VMs and CI runners just work. On Linux install Mesa's lavapipe (`vulkan-swrast` on Arch, `mesa-vulkan-drivers` on Debian and Ubuntu) and it shows up as a CPU Vulkan adapter.
 
@@ -122,28 +122,33 @@ fyne needs cgo anyway for GLFW and its mobile drivers, so there it costs nothing
 
 | Platform | Backend | On |
 |---|---|---|
-| Linux | Vulkan | NVIDIA RTX 4080 SUPER, Mesa lavapipe |
-| Linux | GL | NVIDIA through EGL, Wayland and X11 |
-| Windows | DX12 | a Windows VM, and WARP on GitHub Actions under `-race` |
-| Windows | Vulkan | wine (winevulkan) |
+| Linux | Vulkan | NVIDIA RTX 4080 SUPER, Mesa lavapipe, and a linux/386 build on NVIDIA's 32-bit driver |
+| Linux | GL | NVIDIA through EGL (Wayland, X11 and headless), Mesa llvmpipe |
+| Windows | DX12 | a Windows VM, WARP on GitHub Actions under `-race`, and wine with its own vkd3d and with GE-Proton's vkd3d-proton |
+| Windows | Vulkan | wine (winevulkan), amd64 and 386 |
+| Windows | GL | wine (WGL on NVIDIA) |
 | macOS | Metal | Apple M2 Pro, GitHub Actions macos-15 |
 | iOS | Metal | the simulator |
 | Android 12 | Vulkan, GLES | Lenovo Tab M10, Mali-G52 |
+| Browser | WebGPU | Firefox 158 and Chrome 156 on Linux |
 
-Not run yet: the browser backend, the BSDs, GL on Windows and a real iOS device. If you try one of those, open an issue and tell me how it went.
+Not run yet: the BSDs, GL on Windows itself, a real iOS device and 32-bit Android. If you try one of those, open an issue and tell me how it went.
+
+The fixes from the vet on 2026-10-23 (see the [CHANGELOG](CHANGELOG.md)) have only run on Linux, under wine and in the two browsers. Metal, Android and Windows itself haven't run them yet, the [roadmap](ROADMAP.md) has what to check there.
 
 ## Known issues
 
-- The DXIL compute test in `hal/dx12` (`TestComputePairSumIntegration/DXIL`) fails under wine: vkd3d takes FXC blobs, not naga's DXIL, so `CreateComputePipelineState` returns E_FAIL there. Run it on Windows.
-- A storage buffer with a dynamic offset on DX12: `arrayLength()` on it counts to the end of the buffer, not of the binding, as in Rust's wgpu, and with `GOGPU_DX12_DXIL=1` the offset is ignored, naga's DXIL backend doesn't add it.
-- On DX12 and Metal a shader module's bindings are numbered for the whole module: DX12 compiles it once, for the layout of the first pipeline made from it, and Metal counts every binding the module declares. A pipeline without a `Layout` only gets the bindings its own entry points use, so when a module declares bindings a pipeline doesn't use (a module with several entry points often does), give its pipelines one explicit layout that has all of them.
 - naga keeps identifiers that start with `gl_` when it writes GLSL, and strict drivers like Mali refuse them. Don't name things `gl_*` in WGSL.
-- On GL a `texture_depth_2d` only works with a comparison sampler: naga declares it `sampler2DShadow`, so `textureSample` with a plain sampler and `textureLoad` on it don't compile.
-- On GL, new depth, multisampled and compressed textures start with whatever the memory held, so clear them in their first render pass or write all of them. Every other new texture starts zeroed, and on Vulkan, DX12 and Metal all of them do. One catch on Metal with an Apple GPU: a `WriteTexture` into part of a new depth or stencil texture before its first `Submit` gets the zeroing clear on top of it.
-- GL binds bind groups and vertex buffers against the pipeline set at the time, so set the pipeline first; integer vertex formats, index base vertex, `CopyBufferToTexture` row pitch and anything but 2D textures are not done on GL.
-- Desktop GL compiles compute shaders as GLSL 3.30, where naga declares a storage buffer as a `uniform` block, so a compute shader that writes one fails to compile (`assignment to uniform`). The desktop examples show it with `-backend gl`.
-- Render bundles crash on Vulkan in `vkBeginCommandBuffer`.
-- Metal has no compressed texture formats yet, so it doesn't offer `TextureCompressionBC`. It used to offer it, and a BC texture aborted the app.
+- A storage buffer with a dynamic offset on DX12: `arrayLength()` on it counts from the bind group's offset to the end of the buffer, not to the end of the binding, as in Rust's wgpu.
+- Usage is tracked per mip level and array layer but not per aspect, as in wgpu-core: a pass that writes the depth of a depth/stencil texture can't sample its stencil, or the other way round.
+- On Vulkan `frag_depth` is clamped to the viewport's depth range through a push constant, so a pipeline whose layout has push constants of its own writes it unclamped. Only HAL users can make one, the root package has no push constant ranges.
+- Integer vertex formats don't work on GL: every attribute goes through `glVertexAttribPointer`, which hands the shader floats.
+- GL without texture views (desktop GL below 4.3 without `GL_ARB_texture_view`, GLES without `OES_` or `EXT_texture_view`): a bind group refuses a view of some of a texture's layers, or of another dimension, to sample or to store to more than one layer, and a dispatch that samples one mip level of a texture and stores to another stores nothing.
+- GL has no views in another format, so it offers neither `DownlevelFlagsViewFormats` nor surface view formats, and it reads no compressed texture back: `CopyTextureToBuffer` of one logs an error and copies nothing, as in wgpu-hal. GLES reads no depth or stencil back either, and refuses a write into the stencil of a combined depth/stencil texture.
+- On GL a depth, multisampled or compressed texture a pass discarded isn't zeroed again for a later submit.
+- Timestamp queries only work on desktop GL. Vulkan, DX12 and Metal don't offer `FeatureTimestampQuery` yet.
+- Metal has no compressed texture formats yet, so it doesn't offer `TextureCompressionBC`.
+- In the browser a texture descriptor's height, depth, mip level count or sample count of 0 is taken as 1, where native builds return an error, and the 16-bit normalized formats can't be used, as gputypes has no `texture-formats-tier1` feature to ask for.
 - `examples/browser-compute` doesn't build, it was written against an older API.
 
 What's next is in [ROADMAP.md](ROADMAP.md).
@@ -152,8 +157,8 @@ What's next is in [ROADMAP.md](ROADMAP.md).
 
 | Variable | What it does |
 |---|---|
-| `GOGPU_DX12_DXIL=1` | DX12 compiles shaders to DXIL with naga instead of going HLSL through FXC (`d3dcompiler_47.dll`) |
-| `GOGPU_DX12_DXIL_VALIDATE=1` | runs the DXC validator on every DXIL blob, so the real error ends up in the log |
+| `GOGPU_DX12_DXIL=1` | DX12 compiles shaders to DXIL with naga instead of going HLSL through FXC (`d3dcompiler_47.dll`). An adapter without shader model 6.0 stays on FXC, with a warning |
+| `GOGPU_DX12_DXIL_VALIDATE=1` | runs the DXC validator on every DXIL blob, so the real error ends up in the log, and writes a rejected blob to the temp directory |
 | `GOGPU_DX12_FORCE_HWND=1` | skips DirectComposition so RenderDoc can capture, at the cost of premultiplied alpha |
 | `DISABLE_RTSS_LAYER` | gowgpu sets it to 1 on Windows before creating a Vulkan instance, unless it's already set. It switches off RivaTuner's Vulkan layer, which crashed `vkCreateDevice` |
 
@@ -166,6 +171,9 @@ Picking a backend is up to the app. fyne reads `FYNE_WGPU_BACKEND=vulkan|dx12|me
 - `gputypes` lives in this module now, as `github.com/roffe/gowgpu/gputypes`.
 - OpenGL is back in `hal/allbackends` as an opt-in fallback, and it works on Android too.
 - DX12 falls back to WARP when there's no GPU.
+- naga is my fork, [github.com/roffe/naga](https://github.com/roffe/naga): gogpu/naga v0.20.3 with shader translator fixes, which are on their way upstream (gogpu/naga#118 to #126 so far, more to come).
+- GPU handles are `uint64`, so 32-bit builds keep Vulkan's 64-bit handles whole, and the Vulkan bindings are laid out as C lays them out on 386 and arm.
+- A correctness vet against Rust's wgpu, Dawn and the API specs confirmed 239 defects in core and the backends, and the fixes are in: render bundles work on every backend, textures are tracked per mip level and layer, native error scopes capture errors, much more of WebGPU's validation runs before a call reaches the driver, and a lot of smaller things per backend. What's left of it is under known issues.
 - Fixes along the way: GL presenting into the window and uploading textures at an offset, the EGL config for X11 windows on NVIDIA, Vulkan surface formats after an Android app comes back to the foreground, Metal triangle strips, depth bias and iOS display sync, draws with a non-zero first instance, and DX12 under `-race`.
 
 All of it is in the [CHANGELOG](CHANGELOG.md).

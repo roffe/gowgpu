@@ -4,15 +4,18 @@ Where gowgpu is and what comes next. No dates, just the order i'd take things in
 
 ## Where it is
 
-gowgpu runs fyne's WebGPU painter on Linux, Windows, macOS, iOS and Android, through Vulkan, DX12, Metal and GL. The [README](README.md) has the table of what has run on what hardware, and the known issues.
+gowgpu runs fyne's WebGPU painter on Linux, Windows, macOS, iOS and Android, through Vulkan, DX12, Metal and GL, and its browser backend has run in Firefox and Chrome. The [README](README.md) has the table of what has run on what hardware, and the known issues.
 
 ## Next
 
-1. **`gl_` names in GLSL.** naga keeps WGSL identifiers that start with `gl_`, which GLSL reserves. Rename them on the way out, either in naga or before the GLSL reaches the driver.
-2. **Vulkan image layouts.** The validation layer reports layout errors from the state tracking gogpu wrote, and every queue write starts from `UNDEFINED`, which allows a driver to throw away what's in the texture.
-3. **What the vet left open.** GL still needs to zero depth, multisampled and compressed textures. Render bundles crash on Vulkan.
-4. **A real iOS device.** Every test passes on Metal on an M2 Pro Mac, but iOS has only run in the simulator.
-5. **The browser backend.** Get `examples/browser-compute` building against the current API again and run it in a browser.
+1. **Run the vet fixes where they haven't run.** Everything from 2026-10-23 has run on Linux (NVIDIA, lavapipe, llvmpipe), under wine and in Firefox and Chrome, and nowhere else.
+   - Mac: `go test ./hal/metal/... .` with the new Metal tests, once with `MTL_DEBUG_LAYER=1`, then fyne: drawing, startup time now that each stage compiles its own MSL, frame pacing now that Mailbox keeps vsync, a minimised or covered window with an animation running, live resize, and fmw's zero-copy video. Pipeline constants, the `frag_depth` clamp, vertex pulling and `FeatureIndirectFirstInstance` have only been type checked. Then the iOS simulator and a real iOS device.
+   - Windows: the root suite and `./hal/dx12` on real DX12 with the debug layer, through FXC and with `GOGPU_DX12_DXIL=1`, then fyne for resize, Mailbox pacing with three buffers, vsync and tearing. Indirect draws that read `vertex_index` or `instance_index` and stencil copies have only run under vkd3d-proton, GL through WGL only under wine, and windows/arm64 not at all.
+   - Android: the tablet on Vulkan and GLES with fyne and fmw, and the root suite built with the NDK. On GLES: readback, sRGB window surfaces, multisampled renderbuffers, ETC2 and ASTC, texture views on Mali, zeroing at creation, and the base vertex and indirect draw paths.
+2. **The naga fixes upstream.** The first ones are open as gogpu/naga#118 to #126, the later rounds follow, and the fork goes once they're all in.
+3. **`gl_` names in GLSL.** naga keeps WGSL identifiers that start with `gl_`, which GLSL reserves. Rename them on the way out, either in naga or before the GLSL reaches the driver.
+4. **What the vet left open.** Integer vertex formats on GL, zeroing a texture a pass discarded on GL, timestamp queries on Vulkan, DX12 and Metal, BC formats on Metal, and tracking the aspects of a depth/stencil texture apart. The rest of the known issues are in the [README](README.md).
+5. **The browser backend.** Get `examples/browser-compute` building against the current API again.
 6. **The lint backlog**, then a first tagged release.
 
 ## Not planned
