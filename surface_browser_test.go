@@ -5,6 +5,7 @@ package wgpu
 import (
 	"errors"
 	"slices"
+	"syscall/js"
 	"testing"
 
 	"github.com/roffe/gowgpu/gputypes"
@@ -51,5 +52,26 @@ func TestBrowserSurfaceCapabilitiesOfferPremultipliedAlpha(t *testing.T) {
 	want := []gputypes.CompositeAlphaMode{gputypes.CompositeAlphaModeOpaque, gputypes.CompositeAlphaModePremultiplied}
 	if !slices.Equal(caps.AlphaModes, want) {
 		t.Fatalf("AlphaModes = %v, want %v", caps.AlphaModes, want)
+	}
+}
+
+func TestBrowserConfigurePassesViewFormats(t *testing.T) {
+	canvas := jsEval(`{
+		configured: [],
+		getContext() { return {configure: (c) => this.configured.push(c)} },
+	}`)
+	bs, err := browser.NewSurface(jsEval("undefined"), canvas)
+	if err != nil {
+		t.Fatalf("NewSurface: %v", err)
+	}
+	s := &Surface{browser: bs}
+	d, _ := newFakeDevice(jsEval("new Promise(() => {})"))
+	err = s.Configure(d, &SurfaceConfiguration{Width: 4, Height: 4, Format: gputypes.TextureFormatBGRA8Unorm,
+		Usage: gputypes.TextureUsageRenderAttachment, ViewFormats: []gputypes.TextureFormat{gputypes.TextureFormatBGRA8UnormSrgb}})
+	if err != nil {
+		t.Fatalf("Configure: %v", err)
+	}
+	if got := js.Global().Get("JSON").Call("stringify", canvas.Get("configured").Index(0).Get("viewFormats")).String(); got != `["bgra8unorm-srgb"]` {
+		t.Fatalf("configure viewFormats %s, want [bgra8unorm-srgb]", got)
 	}
 }

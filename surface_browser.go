@@ -147,7 +147,8 @@ func (i *Instance) createSurfaceFromCanvas(canvas js.Value) (*Surface, error) {
 // Configure configures the surface for presentation.
 //
 // Must be called before GetCurrentTexture(). Sets the canvas dimensions and
-// calls GPUCanvasContext.configure() with the device, format, usage, and alpha mode.
+// calls GPUCanvasContext.configure() with the device, format, usage, alpha
+// mode and view formats.
 //
 // On browser, PresentMode is ignored (browser always uses FIFO / VSync).
 //
@@ -178,7 +179,7 @@ func (s *Surface) Configure(device *Device, config *SurfaceConfiguration) error 
 		config.Format,
 		config.Usage,
 		config.AlphaMode,
-		nil, // viewFormats -- SurfaceConfiguration doesn't expose them yet
+		config.ViewFormats,
 	)
 
 	formatStr := browser.TextureFormatToJS(config.Format)
