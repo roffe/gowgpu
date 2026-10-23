@@ -94,11 +94,10 @@ var (
 	symEglGetProcAddress              unsafe.Pointer
 	symEglGetPlatformDisplay          unsafe.Pointer // EGL 1.5, may be nil
 	symEglCreatePlatformWindowSurface unsafe.Pointer // EGL 1.5, may be nil
-	symEglSwapBuffersWithDamageKHR    unsafe.Pointer // EGL_KHR_swap_buffers_with_damage, may be nil
-
-	// hasSwapBuffersWithDamage is true when eglSwapBuffersWithDamageKHR
-	// was successfully loaded (EGL_KHR_swap_buffers_with_damage extension).
-	hasSwapBuffersWithDamage bool
+	// eglSwapBuffersWithDamageKHR and EXT, as eglGetProcAddress gives
+	// them: non-nil also where a display lacks the extension.
+	symEglSwapBuffersWithDamageKHR unsafe.Pointer
+	symEglSwapBuffersWithDamageEXT unsafe.Pointer
 
 	// hasPlatformWindowSurface is true when eglCreatePlatformWindowSurface
 	// was loaded (EGL 1.5 or EGL_EXT_platform_base).
@@ -386,16 +385,11 @@ func GetProcAddress(procname string) unsafe.Pointer {
 	return C.egl_P_p(C.uintptr_t(uintptr(symEglGetProcAddress)), (*C.uint8_t)(unsafe.Pointer(&cname[0])))
 }
 
-// loadOptionalExtensions probes for optional EGL extensions via
-// eglGetProcAddress and prepares their CallInterfaces. Called once
-// during Init after core CIFs are ready.
+// loadOptionalExtensions looks up the optional EGL entry points, after the
+// core ones.
 func loadOptionalExtensions() {
-	// EGL_KHR_swap_buffers_with_damage — allows telling the compositor
-	// which surface regions changed, enabling partial recomposition.
-	if addr := GetProcAddress("eglSwapBuffersWithDamageKHR"); addr != nil {
-		symEglSwapBuffersWithDamageKHR = addr
-		hasSwapBuffersWithDamage = true
-	}
+	symEglSwapBuffersWithDamageKHR = GetProcAddress("eglSwapBuffersWithDamageKHR")
+	symEglSwapBuffersWithDamageEXT = GetProcAddress("eglSwapBuffersWithDamageEXT")
 
 	// EGL 1.5: eglCreatePlatformWindowSurface — spec-correct void* native window.
 	// Loaded from libEGL's symbol table (not via eglGetProcAddress) since it's
@@ -403,27 +397,22 @@ func loadOptionalExtensions() {
 	hasPlatformWindowSurface = symEglCreatePlatformWindowSurface != nil
 }
 
-// HasSwapBuffersWithDamage reports whether the EGL_KHR_swap_buffers_with_damage
-// extension was successfully loaded and is available for use.
-func HasSwapBuffersWithDamage() bool {
-	return hasSwapBuffersWithDamage
+// damageSwap is the swap with damage of a display with the extensions
+// exts, khr or ext as the display lists EGL_KHR_ or
+// EGL_EXT_swap_buffers_with_damage, nil when it lists neither.
+func damageSwap(exts string, khr, ext unsafe.Pointer) unsafe.Pointer {
+	switch {
+	case khr != nil && hasExtension(exts, "EGL_KHR_swap_buffers_with_damage"):
+		return khr
+	case ext != nil && hasExtension(exts, "EGL_EXT_swap_buffers_with_damage"):
+		return ext
+	}
+	return nil
 }
 
-// SwapBuffersWithDamage presents the EGL surface with damage rectangle hints.
-// rects is a packed array of int32 quadruples {x, y, width, height} using
-// bottom-left origin (EGL convention — caller must Y-flip from top-left).
-// nRects is the number of rectangles (NOT the number of ints).
-// Returns False on failure.
-//
-// Falls back to SwapBuffers when EGL_KHR_swap_buffers_with_damage is
-// not available or nRects is 0.
-func SwapBuffersWithDamage(dpy EGLDisplay, surface EGLSurface, rects *int32, nRects int32) EGLBoolean {
-	if !hasSwapBuffersWithDamage || nRects == 0 {
-		return SwapBuffers(dpy, surface)
-	}
-	var result EGLBoolean
-	result = EGLBoolean(C.egl_i_uupi(C.uintptr_t(uintptr(symEglSwapBuffersWithDamageKHR)), C.uintptr_t(dpy), C.uintptr_t(surface), (*C.uint8_t)(unsafe.Pointer(rects)), C.uint32_t(nRects)))
-	return result
+// swapBuffersWithDamage calls fn, an eglSwapBuffersWithDamage.
+func swapBuffersWithDamage(fn unsafe.Pointer, dpy EGLDisplay, surface EGLSurface, rects *int32, nRects int32) EGLBoolean {
+	return EGLBoolean(C.egl_i_uupi(C.uintptr_t(uintptr(fn)), C.uintptr_t(dpy), C.uintptr_t(surface), (*C.uint8_t)(unsafe.Pointer(rects)), C.uint32_t(nRects)))
 }
 
 // goString copies a NUL-terminated string EGL returned, "" for NULL.

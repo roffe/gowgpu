@@ -24,6 +24,9 @@ type Context struct {
 	cfg          ContextConfig // what made the context, for NewShared
 	shared       bool          // made by NewShared: borrows the display
 	displayOwner *DisplayOwner // owns native display connection (X11); closed after eglTerminate
+	// swapWithDamage is the display's eglSwapBuffersWithDamage, nil when
+	// it has none.
+	swapWithDamage unsafe.Pointer
 }
 
 // ContextConfig holds configuration options for creating an EGL context.
@@ -144,6 +147,8 @@ func NewContext(config ContextConfig) (*Context, error) {
 		minor:        minor,
 		extensions:   displayExts,
 		displayOwner: displayOwner,
+
+		swapWithDamage: damageSwap(displayExts, symEglSwapBuffersWithDamageKHR, symEglSwapBuffersWithDamageEXT),
 	}, nil
 }
 
@@ -192,6 +197,21 @@ func hasExtension(exts, name string) bool {
 		}
 	}
 	return false
+}
+
+// HasSwapBuffersWithDamage reports whether the display takes damage
+// rectangles with a swap, with EGL_KHR_ or EGL_EXT_swap_buffers_with_damage.
+func (c *Context) HasSwapBuffersWithDamage() bool { return c.swapWithDamage != nil }
+
+// SwapBuffersWithDamage posts surface's color buffer with damage rectangle
+// hints, or as eglSwapBuffers does when the display has no swap with damage
+// or nRects is 0. rects is nRects packed {x, y, width, height} int32s with
+// a bottom-left origin, as EGL has it.
+func (c *Context) SwapBuffersWithDamage(surface EGLSurface, rects *int32, nRects int32) EGLBoolean {
+	if c.swapWithDamage == nil || nRects == 0 {
+		return SwapBuffers(c.display, surface)
+	}
+	return swapBuffersWithDamage(c.swapWithDamage, c.display, surface, rects, nRects)
 }
 
 // SupportsGLColorspace reports whether surfaces on the display can be made
@@ -416,7 +436,7 @@ func (c *Context) NewShared() (*Context, error) {
 		}
 	}
 	return &Context{display: c.display, config: c.config, context: ctx, pbuffer: pbuffer, windowKind: c.windowKind,
-		major: c.major, minor: c.minor, extensions: c.extensions, cfg: c.cfg, shared: true}, nil
+		major: c.major, minor: c.minor, extensions: c.extensions, cfg: c.cfg, shared: true, swapWithDamage: c.swapWithDamage}, nil
 }
 
 // EGLContext returns the EGL context handle.

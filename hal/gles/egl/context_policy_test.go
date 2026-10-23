@@ -5,6 +5,7 @@ package egl
 import (
 	"slices"
 	"testing"
+	"unsafe"
 )
 
 func TestSelectWindowKindHonorsExplicitTarget(t *testing.T) {
@@ -70,5 +71,30 @@ func TestContextAttribs(t *testing.T) {
 		if err != nil || !slices.Equal(got, test.want) {
 			t.Errorf("%s: %v, %v, want %v", test.name, got, err, test.want)
 		}
+	}
+}
+
+// eglGetProcAddress gives a swap with damage also for a display without
+// the extension, so the display's extensions pick it, KHR before EXT.
+func TestDamageSwapFollowsTheDisplay(t *testing.T) {
+	var k, e byte
+	khr, ext := unsafe.Pointer(&k), unsafe.Pointer(&e)
+	tests := []struct {
+		exts string
+		want unsafe.Pointer
+	}{
+		{"EGL_KHR_surfaceless_context EGL_KHR_gl_colorspace", nil},
+		{"EGL_KHR_swap_buffers_with_damage", khr},
+		{"EGL_EXT_swap_buffers_with_damage", ext},
+		{"EGL_EXT_swap_buffers_with_damage EGL_KHR_swap_buffers_with_damage", khr},
+		{"EGL_KHR_swap_buffers_with_damagefoo", nil},
+	}
+	for _, test := range tests {
+		if got := damageSwap(test.exts, khr, ext); got != test.want {
+			t.Errorf("%q: %p, want %p", test.exts, got, test.want)
+		}
+	}
+	if got := damageSwap("EGL_KHR_swap_buffers_with_damage EGL_EXT_swap_buffers_with_damage", nil, ext); got != ext {
+		t.Errorf("without the KHR entry point: %p, want the EXT one %p", got, ext)
 	}
 }

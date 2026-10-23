@@ -173,10 +173,11 @@ func (q *Queue) WriteTexture(dst *hal.ImageCopyTexture, data []byte, layout *hal
 //
 // damageRects is an optional list of rectangles (physical pixels, top-left
 // origin) indicating which surface regions changed this frame. When non-empty
-// and EGL_KHR_swap_buffers_with_damage is available, the rects are passed to
-// eglSwapBuffersWithDamageKHR as compositor hints. EGL uses bottom-left
-// origin, so Y coordinates are flipped here. When the extension is unavailable
-// or no rects are provided, the standard eglSwapBuffers path is used.
+// and the display has EGL_KHR_ or EGL_EXT_swap_buffers_with_damage, the rects
+// are passed to eglSwapBuffersWithDamage as compositor hints. EGL uses
+// bottom-left origin, so Y coordinates are flipped here. When the display
+// has neither or no rects are provided, the standard eglSwapBuffers path is
+// used.
 //
 // A window surface EGL reports gone gives hal.ErrSurfaceLost, and its EGL
 // surface is destroyed, for the next Configure to make a new one.
@@ -229,7 +230,7 @@ func (q *Queue) present(surf *Surface, damageRects []image.Rectangle) error {
 	}
 
 	// Use damage-aware swap when the extension is available and rects provided.
-	if len(damageRects) > 0 && egl.HasSwapBuffersWithDamage() {
+	if eglCtx := q.ctx.EGL(); len(damageRects) > 0 && eglCtx.HasSwapBuffersWithDamage() {
 		// Convert image.Rectangle (top-left origin) to EGL packed int32 array
 		// (bottom-left origin). Each rect is {x, y, width, height}.
 		// Stack-allocate for up to 8 rects (8 * 4 = 32 ints).
@@ -246,8 +247,8 @@ func (q *Queue) present(surf *Surface, damageRects []image.Rectangle) error {
 				int32(r.Dy()),
 			)
 		}
-		if egl.SwapBuffersWithDamage(surf.eglDisplay, surf.eglSurface, &ints[0], int32(len(damageRects))) == egl.False {
-			return lostError(egl.LastError("eglSwapBuffersWithDamageKHR"))
+		if eglCtx.SwapBuffersWithDamage(surf.eglSurface, &ints[0], int32(len(damageRects))) == egl.False {
+			return lostError(egl.LastError("eglSwapBuffersWithDamage"))
 		}
 		return nil
 	}
