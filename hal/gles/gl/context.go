@@ -134,6 +134,7 @@ type Context struct {
 	glBlendEquation         uintptr
 	glBlendEquationSeparate uintptr
 	glBlendColor            uintptr
+	glSampleMaski           uintptr
 
 	// Per draw buffer blending and masks (GL 4.0, ES 3.2,
 	// OES/EXT_draw_buffers_indexed)
@@ -340,6 +341,7 @@ func (c *Context) Load(getProcAddr ProcAddressFunc) error {
 	c.glBlendEquation = getProcAddr("glBlendEquation")
 	c.glBlendEquationSeparate = getProcAddr("glBlendEquationSeparate")
 	c.glBlendColor = getProcAddr("glBlendColor")
+	c.glSampleMaski = getProcAddr("glSampleMaski")
 	c.glEnablei = getProcAddr("glEnablei")
 	c.glDisablei = getProcAddr("glDisablei")
 	c.glBlendFuncSeparatei = getProcAddr("glBlendFuncSeparatei")
@@ -1159,6 +1161,12 @@ func boolGL(b bool) uintptr {
 }
 
 // BlendColor sets the constant blend color.
+// SampleMaski sets which samples GL_SAMPLE_MASK lets a draw write (GL 3.2,
+// ES 3.1).
+func (c *Context) SampleMaski(maskNumber, mask uint32) {
+	syscall.SyscallN(c.glSampleMaski, uintptr(maskNumber), uintptr(mask))
+}
+
 func (c *Context) BlendColor(r, g, b, a float32) {
 	syscall.SyscallN(c.glBlendColor,
 		uintptr(*(*uint32)(unsafe.Pointer(&r))),

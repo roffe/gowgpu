@@ -131,6 +131,7 @@ func (d *Device) createRenderPipeline(glCtx *gl.Context, desc *RenderPipelineDes
 		depthClamp:        d.depthClamp,
 		unclippedDepth:    desc.Primitive.UnclippedDepth,
 		multisample:       desc.Multisample,
+		sampleMask:        sampleMaskFor(d.sampleMask, desc.Multisample.Mask),
 		colorTargets:      colorTargets,
 		perTargetBlend:    perTarget,
 		vertexBuffers:     desc.Vertex.Buffers,
@@ -227,6 +228,19 @@ func (d *Device) createComputePipeline(glCtx *gl.Context, desc *ComputePipelineD
 		glCtx:          glCtx,
 		samplerBindMap: samplerBindMapFor(layout, computeTranslationInfo),
 	}, nil
+}
+
+// sampleMaskFor is the GL sample mask of a pipeline's mask, all samples for
+// 0 as on the other backends, and 0 on a context without sample masks: ES
+// 3.0 has none, and GL_SAMPLE_MASK is no enum there.
+func sampleMaskFor(contextHasMasks bool, mask uint64) uint32 {
+	switch {
+	case !contextHasMasks:
+		return 0
+	case uint32(mask) == 0:
+		return 0xFFFFFFFF
+	}
+	return uint32(mask)
 }
 
 // compileFragmentShader compiles a fragment shader from WGSL source via GLSL.

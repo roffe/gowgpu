@@ -369,6 +369,7 @@ type RenderPipeline struct {
 	frontFace         gputypes.FrontFace
 	depthStencil      *hal.DepthStencilState
 	multisample       gputypes.MultisampleState
+	sampleMask        uint32 // as SetPipelineStateCommand's
 
 	// unclippedDepth turns GL_DEPTH_CLAMP on, on a context that has it
 	// (depthClamp).

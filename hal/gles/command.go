@@ -533,15 +533,17 @@ func (e *RenderPassEncoder) SetPipeline(pipeline hal.RenderPipeline) {
 	e.encoder.commands = append(e.encoder.commands,
 		st.programs.put(UseProgramCommand{programID: p.programID}),
 		st.pipelineStates.put(SetPipelineStateCommand{
-			topology:       p.primitiveTopology,
-			cullMode:       p.cullMode,
-			frontFace:      p.frontFace,
-			depthStencil:   p.depthStencil,
-			depthClamp:     p.depthClamp,
-			unclippedDepth: p.unclippedDepth,
-			colorTargets:   p.colorTargets,
-			perTarget:      p.perTargetBlend,
-			stencilRef:     e.stencilRef,
+			topology:        p.primitiveTopology,
+			cullMode:        p.cullMode,
+			frontFace:       p.frontFace,
+			depthStencil:    p.depthStencil,
+			depthClamp:      p.depthClamp,
+			unclippedDepth:  p.unclippedDepth,
+			colorTargets:    p.colorTargets,
+			perTarget:       p.perTargetBlend,
+			stencilRef:      e.stencilRef,
+			alphaToCoverage: p.multisample.AlphaToCoverageEnabled,
+			sampleMask:      p.sampleMask,
 		}),
 	)
 	// The vertex attributes are set from the pipeline's layout when a vertex
@@ -1134,15 +1136,17 @@ func (c *UseProgramCommand) Execute(ctx *gl.Context) {
 
 // SetPipelineStateCommand sets pipeline state (culling, depth, stencil, blending, color mask).
 type SetPipelineStateCommand struct {
-	topology       gputypes.PrimitiveTopology
-	cullMode       gputypes.CullMode
-	frontFace      gputypes.FrontFace
-	depthStencil   *hal.DepthStencilState
-	depthClamp     bool // the context has GL_DEPTH_CLAMP
-	unclippedDepth bool
-	colorTargets   []ColorTargetDesc // per-target blend/write-mask for MRT
-	perTarget      bool              // the targets differ, each set on its own
-	stencilRef     uint32
+	topology        gputypes.PrimitiveTopology
+	cullMode        gputypes.CullMode
+	frontFace       gputypes.FrontFace
+	depthStencil    *hal.DepthStencilState
+	depthClamp      bool // the context has GL_DEPTH_CLAMP
+	unclippedDepth  bool
+	colorTargets    []ColorTargetDesc // per-target blend/write-mask for MRT
+	perTarget       bool              // the targets differ, each set on its own
+	stencilRef      uint32
+	alphaToCoverage bool
+	sampleMask      uint32 // the samples a draw writes, 0 for a context without sample masks
 }
 
 func (c *SetPipelineStateCommand) Execute(ctx *gl.Context) {
@@ -1184,6 +1188,20 @@ func (c *SetPipelineStateCommand) Execute(ctx *gl.Context) {
 		}
 	}
 
+	if c.alphaToCoverage {
+		ctx.Enable(gl.SAMPLE_ALPHA_TO_COVERAGE)
+	} else {
+		ctx.Disable(gl.SAMPLE_ALPHA_TO_COVERAGE)
+	}
+	switch c.sampleMask {
+	case 0:
+	case 0xFFFFFFFF:
+		ctx.Disable(gl.SAMPLE_MASK)
+	default:
+		ctx.Enable(gl.SAMPLE_MASK)
+		ctx.SampleMaski(0, c.sampleMask)
+	}
+
 	// Color targets (blend + write mask).
 	c.applyColorTargets(ctx)
 	ctx.Shadow.Pipeline = c
@@ -1193,7 +1211,8 @@ func (c *SetPipelineStateCommand) Execute(ctx *gl.Context) {
 // there is nothing for c to send. The topology is not GL state, the draws
 // carry it.
 func (c *SetPipelineStateCommand) sameState(o *SetPipelineStateCommand) bool {
-	if c.cullMode != o.cullMode || c.frontFace != o.frontFace || c.stencilRef != o.stencilRef || c.unclippedDepth != o.unclippedDepth {
+	if c.cullMode != o.cullMode || c.frontFace != o.frontFace || c.stencilRef != o.stencilRef || c.unclippedDepth != o.unclippedDepth ||
+		c.alphaToCoverage != o.alphaToCoverage || c.sampleMask != o.sampleMask {
 		return false
 	}
 	if (c.depthStencil == nil) != (o.depthStencil == nil) || (c.depthStencil != nil && *c.depthStencil != *o.depthStencil) {

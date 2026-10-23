@@ -44,6 +44,9 @@ const (
 	CULL_FACE   = 0x0B44
 	DEPTH_CLAMP = 0x864F
 
+	SAMPLE_ALPHA_TO_COVERAGE = 0x809E
+	SAMPLE_MASK              = 0x8E51 // GL 3.2, ES 3.1
+
 	// Primitive restart at the index type's largest value (ES 3.0, GL 4.3,
 	// ARB_ES3_compatibility), or at the glPrimitiveRestartIndex (GL 3.1).
 	PRIMITIVE_RESTART_FIXED_INDEX = 0x8D69

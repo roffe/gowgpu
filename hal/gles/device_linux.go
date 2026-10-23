@@ -33,6 +33,7 @@ type Device struct {
 	// ES 3.2, OES/EXT_draw_buffers_indexed).
 	independentBlend bool
 	anisotropy       bool // TEXTURE_MAX_ANISOTROPY
+	sampleMask       bool // GL_SAMPLE_MASK, glSampleMaski (GL 3.2, ES 3.1)
 	// fixedIndexRestart is primitive restart at the largest index (ES 3.0,
 	// GL 4.3, ARB_ES3_compatibility); without it strips restart through
 	// glPrimitiveRestartIndex.
