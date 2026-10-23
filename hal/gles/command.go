@@ -44,6 +44,7 @@ type CommandEncoder struct {
 
 	fixedIndexRestart bool // as the Device's
 	drawIndirect      bool // as the Device's
+	baseVertex        bool // as the Device's
 
 	// arena holds the current recording's pooled commands. spareArena and
 	// spareCommands are what ResetAll took back from command buffers that
@@ -711,6 +712,7 @@ func (e *RenderPassEncoder) DrawIndexed(args gputypes.DrawIndexedArgs) {
 		indexFormat:   e.indexFormat,
 		topology:      e.topology(),
 		fixedRestart:  e.encoder.fixedIndexRestart,
+		baseVertexOK:  e.encoder.baseVertex,
 	}))
 	e.endInstanceBuffers(args.FirstInstance, baseInstance)
 }
@@ -782,7 +784,7 @@ func (e *RenderPassEncoder) DrawIndexedIndirect(buffer hal.Buffer, offset uint64
 	}
 	draw := &DrawIndexedCommand{
 		pipeline: e.pipeline, indexOffset: e.indexOffset, indexFormat: e.indexFormat,
-		topology: e.topology(), fixedRestart: e.encoder.fixedIndexRestart,
+		topology: e.topology(), fixedRestart: e.encoder.fixedIndexRestart, baseVertexOK: e.encoder.baseVertex,
 	}
 	for i := range uint64(drawCount) {
 		e.encoder.commands = append(e.encoder.commands, &DrawIndirectCommand{
@@ -1687,9 +1689,7 @@ func (c *DrawCommand) Execute(ctx *gl.Context) {
 }
 
 // DrawIndexedCommand executes an indexed draw. indexOffset is where the bound
-// index buffer starts, from SetIndexBuffer. BaseVertex is not applied:
-// glDrawElementsBaseVertex is GL 3.2 / ES 3.2, which this backend does not
-// require.
+// index buffer starts, from SetIndexBuffer.
 type DrawIndexedCommand struct {
 	indexCount, instanceCount uint32
 	firstIndex                uint32
@@ -1701,6 +1701,7 @@ type DrawIndexedCommand struct {
 	indexFormat               gputypes.IndexFormat
 	topology                  gputypes.PrimitiveTopology
 	fixedRestart              bool // the context has GL_PRIMITIVE_RESTART_FIXED_INDEX
+	baseVertexOK              bool // the context has base vertex draws
 }
 
 func (c *DrawIndexedCommand) Execute(ctx *gl.Context) {
@@ -1715,12 +1716,26 @@ func (c *DrawIndexedCommand) Execute(ctx *gl.Context) {
 	switch {
 	case c.instanceCount == 0:
 		// Nothing to draw, as in WebGPU; GL would draw one instance.
+	case c.baseVertex != 0 && !c.baseVertexOK:
+		// ES 3.0 and 3.1 without the extensions have no base vertex, and
+		// the adapter doesn't offer DownlevelFlagsBaseVertex there. The
+		// draw is refused rather than drawn from the wrong vertices.
+		baseVertexOnce.Do(func() {
+			hal.Logger().Error("gles: DrawIndexed with a base vertex needs DownlevelFlagsBaseVertex, which this context lacks; the draw is skipped")
+		})
+	case c.baseVertex != 0 && c.baseInstance != 0:
+		ctx.DrawElementsInstancedBaseVertexBaseInstance(mode, int32(c.indexCount), indexType, offset, int32(c.instanceCount), c.baseVertex, c.baseInstance)
+	case c.baseVertex != 0:
+		ctx.DrawElementsInstancedBaseVertex(mode, int32(c.indexCount), indexType, offset, int32(c.instanceCount), c.baseVertex)
 	case c.baseInstance != 0:
 		ctx.DrawElementsInstancedBaseInstance(mode, int32(c.indexCount), indexType, offset, int32(c.instanceCount), c.baseInstance)
 	default:
 		ctx.DrawElementsInstanced(mode, int32(c.indexCount), indexType, offset, int32(c.instanceCount))
 	}
 }
+
+// baseVertexOnce guards the one error a refused base vertex draw logs.
+var baseVertexOnce sync.Once
 
 // indexType is the GL type of the draw's indices and their size.
 func (c *DrawIndexedCommand) indexType() (uint32, uintptr) {

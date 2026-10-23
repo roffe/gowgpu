@@ -185,6 +185,10 @@ type Context struct {
 	glDrawArraysInstancedBaseInstance   uintptr
 	glDrawElementsInstancedBaseInstance uintptr
 
+	// Base vertex (GL 3.2), and with a base instance (GL 4.2)
+	glDrawElementsInstancedBaseVertex             uintptr
+	glDrawElementsInstancedBaseVertexBaseInstance uintptr
+
 	// Compute shaders (GL 4.3+ / ES 3.1+)
 	glDispatchCompute         uintptr
 	glBindImageTexture        uintptr
@@ -390,6 +394,8 @@ func (c *Context) Load(getProcAddr ProcAddressFunc) error {
 	c.glPrimitiveRestartIndex = getProcAddr("glPrimitiveRestartIndex")
 	c.glDrawArraysInstancedBaseInstance = getProcAddr("glDrawArraysInstancedBaseInstance")
 	c.glDrawElementsInstancedBaseInstance = getProcAddr("glDrawElementsInstancedBaseInstance")
+	c.glDrawElementsInstancedBaseVertex = getProcAddr("glDrawElementsInstancedBaseVertex")
+	c.glDrawElementsInstancedBaseVertexBaseInstance = getProcAddr("glDrawElementsInstancedBaseVertexBaseInstance")
 
 	// Compute shaders (optional - may be nil on older GL versions)
 	c.glDispatchCompute = getProcAddr("glDispatchCompute")
@@ -1299,6 +1305,20 @@ func (c *Context) PrimitiveRestartIndex(index uint32) {
 func (c *Context) DrawArraysInstancedBaseInstance(mode uint32, first, count, instanceCount int32, baseInstance uint32) {
 	syscall.SyscallN(c.glDrawArraysInstancedBaseInstance, uintptr(mode), uintptr(first),
 		uintptr(count), uintptr(instanceCount), uintptr(baseInstance))
+}
+
+// DrawElementsInstancedBaseVertex is DrawElementsInstanced with baseVertex
+// added to every index.
+func (c *Context) DrawElementsInstancedBaseVertex(mode uint32, count int32, typ uint32, indices uintptr, instanceCount, baseVertex int32) {
+	syscall.SyscallN(c.glDrawElementsInstancedBaseVertex, uintptr(mode), uintptr(count),
+		uintptr(typ), indices, uintptr(instanceCount), uintptr(baseVertex))
+}
+
+// DrawElementsInstancedBaseVertexBaseInstance is DrawElementsInstancedBaseVertex
+// from instance baseInstance.
+func (c *Context) DrawElementsInstancedBaseVertexBaseInstance(mode uint32, count int32, typ uint32, indices uintptr, instanceCount, baseVertex int32, baseInstance uint32) {
+	syscall.SyscallN(c.glDrawElementsInstancedBaseVertexBaseInstance, uintptr(mode), uintptr(count),
+		uintptr(typ), indices, uintptr(instanceCount), uintptr(baseVertex), uintptr(baseInstance))
 }
 
 // DrawElementsInstancedBaseInstance is DrawElementsInstanced with the

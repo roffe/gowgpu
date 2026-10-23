@@ -37,6 +37,9 @@ type Device struct {
 	fixedIndexRestart bool
 	// drawIndirect is glDraw*Indirect (GL 4.0, ARB_draw_indirect, ES 3.1).
 	drawIndirect bool
+	// baseVertex is glDrawElementsInstancedBaseVertex (GL 3.2, ES 3.2,
+	// OES/EXT_draw_elements_base_vertex).
+	baseVertex bool
 
 	// glslVersion is the target GLSL version for shader compilation, detected
 	// from the adapter's GL_SHADING_LANGUAGE_VERSION at Open time.
@@ -335,6 +338,7 @@ func (d *Device) CreateCommandEncoder(_ *CommandEncoderDescriptor) (hal.CommandE
 		maxTextureUnits:   d.maxTextureUnits,
 		fixedIndexRestart: d.fixedIndexRestart,
 		drawIndirect:      d.drawIndirect,
+		baseVertex:        d.baseVertex,
 	}, nil
 }
 

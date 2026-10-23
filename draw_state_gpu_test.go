@@ -687,3 +687,118 @@ func TestIndirectDraws(t *testing.T) {
 	expectPixels(t, "the top row", at(1, 0), 255, 0, 0, 255)
 	assertNoValidation(t, h)
 }
+
+// baseVertexShader places each vertex from its buffer and turns it green
+// when vertex_index is the index the buffer gives it, blue otherwise.
+const baseVertexShader = `
+struct VSOut { @builtin(position) pos: vec4<f32>, @location(0) color: vec4<f32> }
+@vertex fn vs_main(@builtin(vertex_index) vi: u32, @location(0) v: vec3<f32>) -> VSOut {
+	var out: VSOut;
+	out.pos = vec4<f32>(v.xy, 0.0, 1.0);
+	out.color = select(vec4<f32>(0.0, 0.0, 1.0, 1.0), vec4<f32>(0.0, 1.0, 0.0, 1.0), u32(v.z) == vi);
+	return out;
+}
+@fragment fn fs_main(in: VSOut) -> @location(0) vec4<f32> { return in.color; }
+`
+
+// TestDrawIndexedFromBaseVertex draws one triangle of a vertex buffer of
+// three a pass, through indices 0-2 from base vertices 3 and 6 and through
+// indices 3-5 from base vertex -3: with DrawIndexed, from an indirect
+// record, and from one with the index buffer bound past its start. Each
+// vertex has to come from its index plus the base vertex, and vertex_index
+// has to be that too. GL ignored the base vertex of the direct draws and
+// drew the triangle the indices alone name.
+func TestDrawIndexedFromBaseVertex(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	if !device.core.DownlevelCapabilitiesRef().Flags.Contains(gputypes.DownlevelFlagsBaseVertex) {
+		t.Skip("the adapter has no base vertex draws")
+	}
+	module, err := device.CreateShaderModule(&ShaderModuleDescriptor{Label: "base-vertex", WGSL: baseVertexShader})
+	if err != nil {
+		t.Fatalf("CreateShaderModule: %v", err)
+	}
+	defer module.Release()
+	pipe, err := device.CreateRenderPipeline(&RenderPipelineDescriptor{
+		Label: "base-vertex",
+		Vertex: VertexState{Module: module, EntryPoint: "vs_main", Buffers: []gputypes.VertexBufferLayout{{
+			ArrayStride: 12, StepMode: gputypes.VertexStepModeVertex,
+			Attributes: []gputypes.VertexAttribute{{Format: gputypes.VertexFormatFloat32x3, ShaderLocation: 0}},
+		}}},
+		Primitive: gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList},
+		Fragment: &FragmentState{Module: module, EntryPoint: "fs_main",
+			Targets: []gputypes.ColorTargetState{{Format: gputypes.TextureFormatRGBA8Unorm, WriteMask: gputypes.ColorWriteMaskAll}}},
+	})
+	if err != nil {
+		t.Fatalf("CreateRenderPipeline: %v", err)
+	}
+	defer pipe.Release()
+	newBuffer := func(label string, usage gputypes.BufferUsage, data []byte) *Buffer {
+		buf, err := device.CreateBuffer(&BufferDescriptor{Label: label, Size: uint64(len(data)), Usage: usage | BufferUsageCopyDst})
+		if err != nil {
+			t.Fatalf("CreateBuffer: %v", err)
+		}
+		if err := device.Queue().WriteBuffer(buf, 0, data); err != nil {
+			t.Fatalf("WriteBuffer: %v", err)
+		}
+		return buf
+	}
+	vertices := []float32{
+		-1, -1, 0, -1, 1, 1, -0.5, -1, 2, // left
+		0.5, -1, 3, 1, 1, 4, 1, -1, 5, // right
+		-0.5, -1, 6, 0, 1, 7, 0.5, -1, 8, // middle
+	}
+	vb := newBuffer("base-vertex-vertices", BufferUsageVertex, unsafe.Slice((*byte)(unsafe.Pointer(&vertices[0])), 4*len(vertices)))
+	defer vb.Release()
+	indices := []uint16{0, 1, 2, 0, 3, 4, 5, 0}
+	ib := newBuffer("base-vertex-indices", BufferUsageIndex, unsafe.Slice((*byte)(unsafe.Pointer(&indices[0])), 2*len(indices)))
+	defer ib.Release()
+	minus3 := int32(-3)
+	records := []uint32{
+		3, 1, 0, 6, 0, // the middle triangle
+		3, 1, 0, uint32(minus3), 0, // the left one, through indices 3-5
+	}
+	args := newBuffer("base-vertex-args", BufferUsageIndirect, unsafe.Slice((*byte)(unsafe.Pointer(&records[0])), 4*len(records)))
+	defer args.Release()
+
+	// at is the bottom pixel of the left, middle and right triangles.
+	at := func(pix []byte, triangle int) []byte {
+		x := []int{0, 1, 3}[triangle]
+		return pix[(3*pixSide+x)*4 : (3*pixSide+x)*4+4]
+	}
+	const left, middle, right = 0, 1, 2
+	tex, view := pixTexture(t, device, "base-vertex", TextureUsageRenderAttachment|TextureUsageCopySrc)
+	defer releaseTextureView(tex, view)
+	for _, tc := range []struct {
+		name        string
+		indexOffset uint64
+		draw        func(*RenderPassEncoder)
+		want, wrong int
+	}{
+		{"DrawIndexed", 0, func(p *RenderPassEncoder) {
+			p.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: 3, InstanceCount: 1, BaseVertex: 3})
+		}, right, left},
+		{"DrawIndexedIndirect", 0, func(p *RenderPassEncoder) { p.DrawIndexedIndirect(args, 0) }, middle, left},
+		{"DrawIndexedIndirect past the index buffer's start", 8, func(p *RenderPassEncoder) { p.DrawIndexedIndirect(args, 20) }, left, right},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			st := readbackBuffer(t, device, "base-vertex-st")
+			enc, err := device.CreateCommandEncoder(nil)
+			if err != nil {
+				t.Fatalf("CreateCommandEncoder: %v", err)
+			}
+			clearPass(t, enc, view, gputypes.LoadOpClear, red, func(p *RenderPassEncoder) {
+				p.SetPipeline(pipe)
+				p.SetVertexBuffer(0, vb, 0)
+				p.SetIndexBuffer(ib, gputypes.IndexFormatUint16, tc.indexOffset)
+				tc.draw(p)
+			})
+			copyOut(enc, tex, st)
+			finishAndSubmit(t, device, enc)
+			device.Poll(PollWait)
+			pix := readback(t, st)
+			expectPixels(t, "the triangle the base vertex picks", at(pix, tc.want), 0, 255, 0, 255)
+			expectPixels(t, "the triangle the indices alone pick", at(pix, tc.wrong), 255, 0, 0, 255)
+		})
+	}
+	assertNoValidation(t, h)
+}

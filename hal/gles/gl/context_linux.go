@@ -290,6 +290,11 @@ type Context struct {
 	glDrawArraysInstancedBaseInstance   unsafe.Pointer
 	glDrawElementsInstancedBaseInstance unsafe.Pointer
 
+	// Base vertex (GL 3.2, ES 3.2, OES/EXT_draw_elements_base_vertex), and
+	// with a base instance (GL 4.2, EXT_base_instance)
+	glDrawElementsInstancedBaseVertex             unsafe.Pointer
+	glDrawElementsInstancedBaseVertexBaseInstance unsafe.Pointer
+
 	// Compute shaders (GL 4.3+ / ES 3.1+)
 	glDispatchCompute         unsafe.Pointer
 	glBindImageTexture        unsafe.Pointer
@@ -526,9 +531,13 @@ func (c *Context) Load(getProcAddr ProcAddressFunc, isGLES ...bool) error {
 	if gles {
 		c.glDrawArraysInstancedBaseInstance = getProcAddr("glDrawArraysInstancedBaseInstanceEXT")
 		c.glDrawElementsInstancedBaseInstance = getProcAddr("glDrawElementsInstancedBaseInstanceEXT")
+		c.glDrawElementsInstancedBaseVertex = getIndexedProcAddr(getProcAddr, "glDrawElementsInstancedBaseVertex")
+		c.glDrawElementsInstancedBaseVertexBaseInstance = getProcAddr("glDrawElementsInstancedBaseVertexBaseInstanceEXT")
 	} else {
 		c.glDrawArraysInstancedBaseInstance = getProcAddr("glDrawArraysInstancedBaseInstance")
 		c.glDrawElementsInstancedBaseInstance = getProcAddr("glDrawElementsInstancedBaseInstance")
+		c.glDrawElementsInstancedBaseVertex = getProcAddr("glDrawElementsInstancedBaseVertex")
+		c.glDrawElementsInstancedBaseVertexBaseInstance = getProcAddr("glDrawElementsInstancedBaseVertexBaseInstance")
 	}
 
 	// Compute shaders (optional - may be nil on older GL versions)
@@ -1435,6 +1444,18 @@ func (c *Context) DrawArraysInstancedBaseInstance(mode uint32, first, count, ins
 // instance the per-instance attributes are fetched from first.
 func (c *Context) DrawElementsInstancedBaseInstance(mode uint32, count int32, typ uint32, indices uintptr, instanceCount int32, baseInstance uint32) {
 	C.gl_v_iiiuii(C.uintptr_t(uintptr(c.glDrawElementsInstancedBaseInstance)), C.uint32_t(mode), C.uint32_t(count), C.uint32_t(typ), C.uintptr_t(indices), C.uint32_t(instanceCount), C.uint32_t(baseInstance))
+}
+
+// DrawElementsInstancedBaseVertex is DrawElementsInstanced with baseVertex
+// added to every index.
+func (c *Context) DrawElementsInstancedBaseVertex(mode uint32, count int32, typ uint32, indices uintptr, instanceCount, baseVertex int32) {
+	C.gl_v_iiiuii(C.uintptr_t(uintptr(c.glDrawElementsInstancedBaseVertex)), C.uint32_t(mode), C.uint32_t(count), C.uint32_t(typ), C.uintptr_t(indices), C.uint32_t(instanceCount), C.uint32_t(baseVertex))
+}
+
+// DrawElementsInstancedBaseVertexBaseInstance is DrawElementsInstancedBaseVertex
+// from instance baseInstance.
+func (c *Context) DrawElementsInstancedBaseVertexBaseInstance(mode uint32, count int32, typ uint32, indices uintptr, instanceCount, baseVertex int32, baseInstance uint32) {
+	C.gl_v_iiiuiii(C.uintptr_t(uintptr(c.glDrawElementsInstancedBaseVertexBaseInstance)), C.uint32_t(mode), C.uint32_t(count), C.uint32_t(typ), C.uintptr_t(indices), C.uint32_t(instanceCount), C.uint32_t(baseVertex), C.uint32_t(baseInstance))
 }
 
 // SupportsBaseInstance reports whether draws can start at an instance other

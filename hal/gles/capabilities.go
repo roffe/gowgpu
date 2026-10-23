@@ -570,7 +570,8 @@ func queryDownlevelFlags(glCtx *gl.Context, caps *AdapterCapabilities) gputypes.
 		}
 	}
 
-	if glVersionAtLeast(glMajor, glMinor, isES, [2]int{3, 2}, [2]int{3, 2}) {
+	if glVersionAtLeast(glMajor, glMinor, isES, [2]int{3, 2}, [2]int{3, 2}) ||
+		hasExtension(exts, "GL_OES_draw_elements_base_vertex", "GL_EXT_draw_elements_base_vertex") {
 		flags |= gputypes.DownlevelFlagsBaseVertex
 	}
 
