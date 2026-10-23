@@ -752,34 +752,46 @@ func buildDepthStencilDesc(ds *hal.DepthStencilState) d3d12.D3D12_DEPTH_STENCIL_
 	}
 
 	// Stencil operations
-	hasStencil := ds.StencilFront.Compare != gputypes.CompareFunctionAlways ||
-		ds.StencilFront.FailOp != hal.StencilOperationKeep ||
-		ds.StencilFront.DepthFailOp != hal.StencilOperationKeep ||
-		ds.StencilFront.PassOp != hal.StencilOperationKeep ||
-		ds.StencilBack.Compare != gputypes.CompareFunctionAlways ||
-		ds.StencilBack.FailOp != hal.StencilOperationKeep ||
-		ds.StencilBack.DepthFailOp != hal.StencilOperationKeep ||
-		ds.StencilBack.PassOp != hal.StencilOperationKeep
-
-	if hasStencil {
+	if stencilEnabled(ds) {
 		desc.StencilEnable = 1
-
-		desc.FrontFace = d3d12.D3D12_DEPTH_STENCILOP_DESC{
-			StencilFailOp:      stencilOpToD3D12(ds.StencilFront.FailOp),
-			StencilDepthFailOp: stencilOpToD3D12(ds.StencilFront.DepthFailOp),
-			StencilPassOp:      stencilOpToD3D12(ds.StencilFront.PassOp),
-			StencilFunc:        compareFunctionToD3D12(ds.StencilFront.Compare),
-		}
-
-		desc.BackFace = d3d12.D3D12_DEPTH_STENCILOP_DESC{
-			StencilFailOp:      stencilOpToD3D12(ds.StencilBack.FailOp),
-			StencilDepthFailOp: stencilOpToD3D12(ds.StencilBack.DepthFailOp),
-			StencilPassOp:      stencilOpToD3D12(ds.StencilBack.PassOp),
-			StencilFunc:        compareFunctionToD3D12(ds.StencilBack.Compare),
-		}
+		desc.FrontFace = stencilFaceToD3D12(ds.StencilFront)
+		desc.BackFace = stencilFaceToD3D12(ds.StencilBack)
 	}
 
 	return desc
+}
+
+// stencilEnabled reports whether the stencil test does anything, as Rust's
+// wgpu-types StencilState::is_enabled does: a face that is not the ignore
+// state, and a mask to read or write through.
+func stencilEnabled(ds *hal.DepthStencilState) bool {
+	if stencilFaceIgnored(ds.StencilFront) && stencilFaceIgnored(ds.StencilBack) {
+		return false
+	}
+	return ds.StencilReadMask != 0 || ds.StencilWriteMask != 0
+}
+
+// stencilFaceIgnored reports a face that passes every fragment and keeps
+// the stencil value. Undefined values are WebGPU's defaults, Always and Keep.
+func stencilFaceIgnored(face hal.StencilFaceState) bool {
+	keeps := func(op gputypes.StencilOperation) bool {
+		return op == gputypes.StencilOperationUndefined || op == hal.StencilOperationKeep
+	}
+	return (face.Compare == gputypes.CompareFunctionUndefined || face.Compare == gputypes.CompareFunctionAlways) &&
+		keeps(face.FailOp) && keeps(face.DepthFailOp) && keeps(face.PassOp)
+}
+
+func stencilFaceToD3D12(face hal.StencilFaceState) d3d12.D3D12_DEPTH_STENCILOP_DESC {
+	compare := face.Compare
+	if compare == gputypes.CompareFunctionUndefined {
+		compare = gputypes.CompareFunctionAlways
+	}
+	return d3d12.D3D12_DEPTH_STENCILOP_DESC{
+		StencilFailOp:      stencilOpToD3D12(face.FailOp),
+		StencilDepthFailOp: stencilOpToD3D12(face.DepthFailOp),
+		StencilPassOp:      stencilOpToD3D12(face.PassOp),
+		StencilFunc:        compareFunctionToD3D12(compare),
+	}
 }
 
 // buildRenderTargetBlendDesc builds a D3D12_RENDER_TARGET_BLEND_DESC from a color target state.
