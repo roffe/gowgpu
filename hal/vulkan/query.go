@@ -4,6 +4,7 @@ package vulkan
 
 import (
 	"fmt"
+	"sync/atomic"
 
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/vulkan/vk"
@@ -15,6 +16,17 @@ type QuerySet struct {
 	device    *Device
 	queryType hal.QueryType
 	count     uint32
+	// written are the queries a command buffer has written, which a
+	// resolve copies; the rest resolve to zero, as Dawn does. A query is
+	// reset ahead of each write, so the others are never initialised.
+	written []atomic.Bool
+}
+
+// write records that query index is written.
+func (q *QuerySet) write(index uint32) {
+	if index < uint32(len(q.written)) {
+		q.written[index].Store(true)
+	}
 }
 
 // Destroy releases the Vulkan query pool.
@@ -58,14 +70,12 @@ func (d *Device) CreateQuerySet(desc *hal.QuerySetDescriptor) (hal.QuerySet, err
 		return nil, fmt.Errorf("vulkan: vkCreateQueryPool failed: %d", result)
 	}
 
-	// Reset the query pool so it can be used immediately.
-	d.cmds.ResetQueryPool(d.handle, pool, 0, desc.Count)
-
 	qs := &QuerySet{
 		pool:      pool,
 		device:    d,
 		queryType: desc.Type,
 		count:     desc.Count,
+		written:   make([]atomic.Bool, desc.Count),
 	}
 	d.live.queryPools.add(pool)
 	if desc.Label != "" {

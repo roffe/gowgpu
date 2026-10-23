@@ -8,6 +8,7 @@ package vulkan
 import (
 	"fmt"
 	"runtime"
+	"sync/atomic"
 
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
@@ -1095,14 +1096,36 @@ func (e *CommandEncoder) CopyExternalBuffer(src uintptr, bytesPerRow uint32, dst
 // ResolveQuerySet copies query results from a query set into a destination buffer.
 // For timestamp queries, each result is a uint64 (8 bytes).
 // This uses vkCmdCopyQueryPoolResults under the hood.
+//
+// The copy waits for the queries it copies (VK_QUERY_RESULT_WAIT_BIT), so
+// it copies only the ones written; the range is zeroed first when any of
+// it was not, as Dawn does, and WebGPU resolves those to zero.
 func (e *CommandEncoder) ResolveQuerySet(querySet hal.QuerySet, firstQuery, queryCount uint32, destination hal.Buffer, destinationOffset uint64) {
 	qs, ok := querySet.(*QuerySet)
-	if !ok || qs.pool == 0 || e.active == 0 {
+	if !ok || qs.pool == 0 || e.active == 0 || queryCount == 0 || uint64(firstQuery)+uint64(queryCount) > uint64(len(qs.written)) {
 		return
 	}
 	buf, ok := destination.(*Buffer)
 	if !ok || buf.handle == 0 {
 		return
+	}
+	const stride = 8 // sizeof(uint64)
+	transfer := vk.PipelineStageFlags(vk.PipelineStageTransferBit)
+
+	written := qs.written[firstQuery : firstQuery+queryCount]
+	if !allWritten(written) {
+		vkCmdFillBuffer(e.device.cmds, e.active, buf.handle, vk.DeviceSize(destinationOffset), vk.DeviceSize(queryCount)*stride, 0)
+		fill := vk.BufferMemoryBarrier{
+			SType:               vk.StructureTypeBufferMemoryBarrier,
+			SrcAccessMask:       vk.AccessFlags(vk.AccessTransferWriteBit),
+			DstAccessMask:       vk.AccessFlags(vk.AccessTransferWriteBit),
+			SrcQueueFamilyIndex: vk.QueueFamilyIgnored,
+			DstQueueFamilyIndex: vk.QueueFamilyIgnored,
+			Buffer:              buf.handle,
+			Offset:              vk.DeviceSize(destinationOffset),
+			Size:                vk.DeviceSize(queryCount) * stride,
+		}
+		vkCmdPipelineBarrier(e.device.cmds, e.active, transfer, transfer, 0, 0, nil, 1, &fill, 0, nil)
 	}
 
 	// Pipeline barrier: ensure timestamps are written before copy.
@@ -1115,27 +1138,44 @@ func (e *CommandEncoder) ResolveQuerySet(querySet hal.QuerySet, firstQuery, quer
 		e.device.cmds,
 		e.active,
 		vk.PipelineStageFlags(vk.PipelineStageAllCommandsBit),
-		vk.PipelineStageFlags(vk.PipelineStageTransferBit),
+		transfer,
 		0,
 		1, &memBarrier,
 		0, nil,
 		0, nil,
 	)
 
-	// Use vkCmdCopyQueryPoolResults to copy timestamp values to the buffer.
-	// Stride is 8 bytes per timestamp (uint64).
-	// Flags: VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT.
-	vkCmdCopyQueryPoolResults(
-		e.device.cmds,
-		e.active,
-		qs.pool,
-		firstQuery,
-		queryCount,
-		buf.handle,
-		destinationOffset,
-		8, // stride: sizeof(uint64)
-		vk.QueryResultFlags(vk.QueryResult64Bit|vk.QueryResultWaitBit),
-	)
+	for start := uint32(0); start < queryCount; {
+		if !written[start].Load() {
+			start++
+			continue
+		}
+		end := start + 1
+		for end < queryCount && written[end].Load() {
+			end++
+		}
+		vkCmdCopyQueryPoolResults(
+			e.device.cmds,
+			e.active,
+			qs.pool,
+			firstQuery+start,
+			end-start,
+			buf.handle,
+			destinationOffset+uint64(start)*stride,
+			stride,
+			vk.QueryResultFlags(vk.QueryResult64Bit|vk.QueryResultWaitBit),
+		)
+		start = end
+	}
+}
+
+func allWritten(written []atomic.Bool) bool {
+	for i := range written {
+		if !written[i].Load() {
+			return false
+		}
+	}
+	return true
 }
 
 // renderAreaView returns the attachment view that defines a pass's render
@@ -1440,6 +1480,7 @@ func (e *CommandEncoder) BeginComputePass(desc *hal.ComputePassDescriptor) hal.C
 		if qs, ok := desc.TimestampWrites.QuerySet.(*QuerySet); ok && qs.pool != 0 {
 			if desc.TimestampWrites.BeginningOfPassWriteIndex != nil && e.active != 0 {
 				idx := *desc.TimestampWrites.BeginningOfPassWriteIndex
+				qs.write(idx)
 				e.device.cmds.CmdResetQueryPool(e.active, qs.pool, idx, 1)
 				e.device.cmds.CmdWriteTimestamp(
 					e.active,
@@ -1847,6 +1888,7 @@ func (e *ComputePassEncoder) End() {
 		if qs, ok := e.timestampWrites.QuerySet.(*QuerySet); ok && qs.pool != 0 {
 			if e.timestampWrites.EndOfPassWriteIndex != nil {
 				idx := *e.timestampWrites.EndOfPassWriteIndex
+				qs.write(idx)
 				e.encoder.device.cmds.CmdResetQueryPool(e.encoder.active, qs.pool, idx, 1)
 				e.encoder.device.cmds.CmdWriteTimestamp(
 					e.encoder.active,

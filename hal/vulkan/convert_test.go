@@ -56,6 +56,11 @@ func TestBufferUsageToVk(t *testing.T) {
 			expect: vk.BufferUsageFlags(vk.BufferUsageIndirectBufferBit),
 		},
 		{
+			name:   "QueryResolve",
+			usage:  gputypes.BufferUsageQueryResolve,
+			expect: vk.BufferUsageFlags(vk.BufferUsageTransferDstBit),
+		},
+		{
 			name:  "Multiple flags",
 			usage: gputypes.BufferUsageVertex | gputypes.BufferUsageIndex,
 			expect: vk.BufferUsageFlags(vk.BufferUsageVertexBufferBit) |

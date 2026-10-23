@@ -347,8 +347,10 @@ func (d *Device) CreateBuffer(desc *hal.BufferDescriptor) (hal.Buffer, error) {
 		return nil, fmt.Errorf("BUG: buffer descriptor is nil in Vulkan.CreateBuffer — core validation gap")
 	}
 
-	// Convert usage flags
-	vkUsage := bufferUsageToVk(desc.Usage)
+	// Every buffer can be a copy destination, as in Dawn and wgpu-core: the
+	// core zeroes and clears buffers whatever their usage, and a buffer that
+	// is only mapped would have no usage at all.
+	vkUsage := bufferUsageToVk(desc.Usage) | vk.BufferUsageFlags(vk.BufferUsageTransferDstBit)
 
 	// Create VkBuffer (without memory)
 	createInfo := vk.BufferCreateInfo{

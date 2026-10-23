@@ -18,7 +18,7 @@ func bufferUsageToVk(usage gputypes.BufferUsage) vk.BufferUsageFlags {
 	if usage&gputypes.BufferUsageCopySrc != 0 {
 		flags |= vk.BufferUsageFlags(vk.BufferUsageTransferSrcBit)
 	}
-	if usage&gputypes.BufferUsageCopyDst != 0 {
+	if usage&(gputypes.BufferUsageCopyDst|gputypes.BufferUsageQueryResolve) != 0 {
 		flags |= vk.BufferUsageFlags(vk.BufferUsageTransferDstBit)
 	}
 	if usage&gputypes.BufferUsageIndex != 0 {
