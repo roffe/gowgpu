@@ -182,3 +182,55 @@ func TestStencilClearValue(t *testing.T) {
 		})
 	}
 }
+
+// beyondFarShader draws a full-screen triangle at depth 1.5, past the far
+// plane, in green.
+const beyondFarShader = `
+@vertex fn vs_main(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
+	return vec4<f32>(f32(i32(vi & 1u) * 4 - 1), f32(i32(vi >> 1u) * 4 - 1), 1.5, 1.0);
+}
+@fragment fn fs_main() -> @location(0) vec4<f32> { return vec4<f32>(0.0, 1.0, 0.0, 1.0); }
+`
+
+// TestUnclippedDepth draws a triangle past the far plane with depth
+// clipping and without: GL clipped it either way, GL_DEPTH_CLAMP never set
+// although depth-clip-control was offered.
+func TestUnclippedDepth(t *testing.T) {
+	device, _ := newValidatedDeviceWith(t, gputypes.Features(gputypes.FeatureDepthClipControl))
+	module, err := device.CreateShaderModule(&ShaderModuleDescriptor{Label: "beyond-far", WGSL: beyondFarShader})
+	if err != nil {
+		t.Fatalf("CreateShaderModule: %v", err)
+	}
+	defer module.Release()
+	for _, unclipped := range []bool{true, false} {
+		pipe, err := device.CreateRenderPipeline(&RenderPipelineDescriptor{
+			Label:     "beyond-far",
+			Vertex:    VertexState{Module: module, EntryPoint: "vs_main"},
+			Primitive: gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList, UnclippedDepth: unclipped},
+			Fragment: &FragmentState{Module: module, EntryPoint: "fs_main",
+				Targets: []gputypes.ColorTargetState{{Format: gputypes.TextureFormatRGBA8Unorm, WriteMask: gputypes.ColorWriteMaskAll}}},
+		})
+		if err != nil {
+			t.Fatalf("CreateRenderPipeline: %v", err)
+		}
+		tex, view := pixTexture(t, device, "beyond-far", TextureUsageRenderAttachment|TextureUsageCopySrc)
+		st := readbackBuffer(t, device, "beyond-far-st")
+		enc, err := device.CreateCommandEncoder(nil)
+		if err != nil {
+			t.Fatalf("CreateCommandEncoder: %v", err)
+		}
+		clearPass(t, enc, view, gputypes.LoadOpClear, red, func(p *RenderPassEncoder) {
+			p.SetPipeline(pipe)
+			p.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1})
+		})
+		copyOut(enc, tex, st)
+		finishAndSubmit(t, device, enc)
+		if unclipped {
+			expectPixels(t, "unclipped depth", readback(t, st), 0, 255, 0, 255)
+		} else {
+			expectPixels(t, "clipped depth", readback(t, st), 255, 0, 0, 255)
+		}
+		releaseTextureView(tex, view)
+		pipe.Release()
+	}
+}

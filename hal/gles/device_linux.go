@@ -29,6 +29,7 @@ type Device struct {
 	maxTextureUnits int32         // GL_MAX_TEXTURE_IMAGE_UNITS (queried at init)
 	maxMSAA         int32         // GL_MAX_SAMPLES (validate MSAA in CreateTexture)
 	formats         formatCaps
+	depthClamp      bool // GL_DEPTH_CLAMP, which unclippedDepth turns on
 
 	// glslVersion is the target GLSL version for shader compilation, detected
 	// from the adapter's GL_SHADING_LANGUAGE_VERSION at Open time.

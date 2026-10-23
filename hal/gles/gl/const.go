@@ -42,6 +42,7 @@ const (
 	// Capabilities
 	BLEND               = 0x0BE2
 	CULL_FACE           = 0x0B44
+	DEPTH_CLAMP         = 0x864F
 	DEPTH_TEST          = 0x0B71
 	DITHER              = 0x0BD0
 	FRAMEBUFFER_SRGB    = 0x8DB9

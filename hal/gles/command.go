@@ -540,12 +540,14 @@ func (e *RenderPassEncoder) SetPipeline(pipeline hal.RenderPipeline) {
 	e.encoder.commands = append(e.encoder.commands,
 		st.programs.put(UseProgramCommand{programID: p.programID}),
 		st.pipelineStates.put(SetPipelineStateCommand{
-			topology:     p.primitiveTopology,
-			cullMode:     p.cullMode,
-			frontFace:    p.frontFace,
-			depthStencil: p.depthStencil,
-			colorTargets: p.colorTargets,
-			stencilRef:   e.stencilRef,
+			topology:       p.primitiveTopology,
+			cullMode:       p.cullMode,
+			frontFace:      p.frontFace,
+			depthStencil:   p.depthStencil,
+			depthClamp:     p.depthClamp,
+			unclippedDepth: p.unclippedDepth,
+			colorTargets:   p.colorTargets,
+			stencilRef:     e.stencilRef,
 		}),
 	)
 	// The vertex attributes are set from the pipeline's layout when a vertex
@@ -1120,12 +1122,14 @@ func (c *UseProgramCommand) Execute(ctx *gl.Context) {
 
 // SetPipelineStateCommand sets pipeline state (culling, depth, stencil, blending, color mask).
 type SetPipelineStateCommand struct {
-	topology     gputypes.PrimitiveTopology
-	cullMode     gputypes.CullMode
-	frontFace    gputypes.FrontFace
-	depthStencil *hal.DepthStencilState
-	colorTargets []ColorTargetDesc // per-target blend/write-mask for MRT
-	stencilRef   uint32
+	topology       gputypes.PrimitiveTopology
+	cullMode       gputypes.CullMode
+	frontFace      gputypes.FrontFace
+	depthStencil   *hal.DepthStencilState
+	depthClamp     bool // the context has GL_DEPTH_CLAMP
+	unclippedDepth bool
+	colorTargets   []ColorTargetDesc // per-target blend/write-mask for MRT
+	stencilRef     uint32
 }
 
 func (c *SetPipelineStateCommand) Execute(ctx *gl.Context) {
@@ -1158,6 +1162,14 @@ func (c *SetPipelineStateCommand) Execute(ctx *gl.Context) {
 
 	// Depth and stencil
 	c.applyDepthStencilState(ctx)
+	if c.depthClamp {
+		// Clamping depth is what turns its clipping off, as in wgpu-hal.
+		if c.unclippedDepth {
+			ctx.Enable(gl.DEPTH_CLAMP)
+		} else {
+			ctx.Disable(gl.DEPTH_CLAMP)
+		}
+	}
 
 	// Color targets (blend + write mask).
 	// Matches Rust wgpu-hal GLES SetColorTarget (queue.rs:1483-1559):
@@ -1172,7 +1184,7 @@ func (c *SetPipelineStateCommand) Execute(ctx *gl.Context) {
 // there is nothing for c to send. The topology is not GL state, the draws
 // carry it.
 func (c *SetPipelineStateCommand) sameState(o *SetPipelineStateCommand) bool {
-	if c.cullMode != o.cullMode || c.frontFace != o.frontFace || c.stencilRef != o.stencilRef {
+	if c.cullMode != o.cullMode || c.frontFace != o.frontFace || c.stencilRef != o.stencilRef || c.unclippedDepth != o.unclippedDepth {
 		return false
 	}
 	if (c.depthStencil == nil) != (o.depthStencil == nil) || (c.depthStencil != nil && *c.depthStencil != *o.depthStencil) {

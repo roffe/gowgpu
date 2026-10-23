@@ -319,8 +319,9 @@ func queryFeatures(exts map[string]bool, glMajor, glMinor int, isES bool, glCtx 
 	// TextureAdapterSpecificFormatFeatures -- always reported
 	features.Insert(gputypes.FeatureTextureAdapterSpecificFormatFeatures)
 
-	// Depth clip control: GL_EXT_depth_clamp or GL_ARB_depth_clamp
-	if hasExtension(exts, "GL_EXT_depth_clamp", "GL_ARB_depth_clamp") {
+	// Depth clip control: GL_DEPTH_CLAMP, core in desktop GL 3.2,
+	// GL_EXT_depth_clamp on ES
+	if !isES || hasExtension(exts, "GL_EXT_depth_clamp", "GL_ARB_depth_clamp") {
 		features.Insert(gputypes.FeatureDepthClipControl)
 	}
 

@@ -314,6 +314,10 @@ type RenderPipeline struct {
 	depthStencil      *hal.DepthStencilState
 	multisample       gputypes.MultisampleState
 
+	// unclippedDepth turns GL_DEPTH_CLAMP on, on a context that has it
+	// (depthClamp).
+	depthClamp, unclippedDepth bool
+
 	// Per-target blend and write mask state for MRT.
 	// Matches Rust wgpu-hal GLES RenderPipeline.color_targets (mod.rs:798).
 	// When len == 1, uniform blend/mask is applied globally.

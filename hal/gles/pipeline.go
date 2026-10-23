@@ -138,6 +138,8 @@ func (d *Device) createRenderPipeline(glCtx *gl.Context, desc *RenderPipelineDes
 		cullMode:          desc.Primitive.CullMode,
 		frontFace:         desc.Primitive.FrontFace,
 		depthStencil:      desc.DepthStencil,
+		depthClamp:        d.depthClamp,
+		unclippedDepth:    desc.Primitive.UnclippedDepth,
 		multisample:       desc.Multisample,
 		colorTargets:      colorTargets,
 		vertexBuffers:     desc.Vertex.Buffers,
