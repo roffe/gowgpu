@@ -499,3 +499,19 @@ func TestSurfaceTextureViewFormat(t *testing.T) {
 		}
 	}
 }
+
+// An image's allocation is whole pages of bufferImageGranularity, where it
+// is bigger than the image's alignment.
+func TestImageAllocation(t *testing.T) {
+	for _, tc := range []struct{ size, alignment, granularity, wantSize, wantAlignment uint64 }{
+		{1000, 1024, 1024, 1024, 1024},
+		{4096, 1024, 65536, 65536, 65536},
+		{70000, 1024, 65536, 131072, 65536},
+		{1000, 4096, 1024, 4096, 4096},
+	} {
+		size, alignment := imageAllocation(tc.size, tc.alignment, tc.granularity)
+		if size != tc.wantSize || alignment != tc.wantAlignment {
+			t.Errorf("imageAllocation(%d, %d, %d) = %d, %d; want %d, %d", tc.size, tc.alignment, tc.granularity, size, alignment, tc.wantSize, tc.wantAlignment)
+		}
+	}
+}

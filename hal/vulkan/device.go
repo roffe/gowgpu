@@ -117,6 +117,10 @@ type Device struct {
 	// AMD/NVIDIA vary. Queried during initAllocator.
 	timestampPeriod float32
 
+	// bufferImageGranularity is VkPhysicalDeviceLimits'. Queried during
+	// initAllocator.
+	bufferImageGranularity uint64
+
 	// mappedMemory tracks persistently mapped VkDeviceMemory objects.
 	// Vulkan only allows one active vkMapMemory per VkDeviceMemory;
 	// with suballocation multiple buffers share the same VkDeviceMemory,
@@ -316,6 +320,7 @@ func (d *Device) queryNonCoherentAtomSize() {
 	if d.timestampPeriod <= 0 {
 		d.timestampPeriod = 1.0
 	}
+	d.bufferImageGranularity = uint64(props.Limits.BufferImageGranularity)
 
 	hal.Logger().Debug("vulkan: device limits queried",
 		"nonCoherentAtomSize", atomSize,
@@ -679,9 +684,10 @@ func (d *Device) CreateTexture(desc *hal.TextureDescriptor) (hal.Texture, error)
 	d.cmds.GetImageMemoryRequirements(d.handle, image, &memReqs)
 
 	// Allocate memory (textures always use device-local)
+	size, alignment := imageAllocation(uint64(memReqs.Size), uint64(memReqs.Alignment), d.bufferImageGranularity)
 	memBlock, err := d.allocator.Alloc(memory.AllocationRequest{
-		Size:           uint64(memReqs.Size),
-		Alignment:      uint64(memReqs.Alignment),
+		Size:           size,
+		Alignment:      alignment,
 		Usage:          memory.UsageFastDeviceAccess,
 		MemoryTypeBits: memReqs.MemoryTypeBits,
 	})
@@ -718,6 +724,16 @@ func (d *Device) CreateTexture(desc *hal.TextureDescriptor) (hal.Texture, error)
 		d.setObjectName(vk.ObjectTypeImage, uint64(image), "Texture")
 	}
 	return t, nil
+}
+
+// imageAllocation is the size and alignment to allocate an optimally tiled
+// image of size and alignment with: both a multiple of the device's
+// bufferImageGranularity, so no buffer shares a page of that size with it,
+// which Vulkan counts as aliasing. Buffers and images share the allocator's
+// blocks; Dawn aligns its sub-allocations the same way.
+func imageAllocation(size, alignment, granularity uint64) (uint64, uint64) {
+	alignment = max(alignment, granularity, 1)
+	return (size + alignment - 1) / alignment * alignment, alignment
 }
 
 // DestroyTexture destroys a GPU texture.
