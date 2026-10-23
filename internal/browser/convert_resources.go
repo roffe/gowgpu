@@ -743,6 +743,7 @@ type RenderPassDepthStencilAttachmentJS struct {
 	StencilStoreOp    string // "store" or "discard"
 	StencilClearValue uint32
 	StencilReadOnly   bool
+	Format            gputypes.TextureFormat
 }
 
 // BuildRenderPassDescriptor constructs a JS GPURenderPassDescriptor.
@@ -785,12 +786,13 @@ func BuildRenderPassDescriptor(
 	}
 	desc.Set("colorAttachments", arr)
 
-	// Depth-stencil attachment (optional).
+	// Depth-stencil attachment (optional). WebGPU rejects the load and store
+	// ops of an aspect that is read-only or that the format does not have.
 	if depthStencil != nil {
 		ds := newJSObject()
 		ds.Set("view", depthStencil.View)
 
-		if !depthStencil.DepthReadOnly {
+		if depthStencil.Format.HasDepth() && !depthStencil.DepthReadOnly {
 			ds.Set("depthLoadOp", depthStencil.DepthLoadOp)
 			ds.Set("depthStoreOp", depthStencil.DepthStoreOp)
 			if depthStencil.DepthLoadOp == "clear" {
@@ -799,7 +801,7 @@ func BuildRenderPassDescriptor(
 		}
 		ds.Set("depthReadOnly", depthStencil.DepthReadOnly)
 
-		if !depthStencil.StencilReadOnly {
+		if depthStencil.Format.HasStencil() && !depthStencil.StencilReadOnly {
 			ds.Set("stencilLoadOp", depthStencil.StencilLoadOp)
 			ds.Set("stencilStoreOp", depthStencil.StencilStoreOp)
 			if depthStencil.StencilLoadOp == "clear" {

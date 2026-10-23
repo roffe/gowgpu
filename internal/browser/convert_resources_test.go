@@ -3,6 +3,7 @@
 package browser
 
 import (
+	"slices"
 	"syscall/js"
 	"testing"
 
@@ -44,5 +45,47 @@ func TestBuildImageCopyTextureAspect(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("aspect %v: got %q, want %q", tc.aspect, got, tc.want)
 		}
+	}
+}
+
+func TestBuildRenderPassDescriptorDepthStencilOpsFollowTheFormat(t *testing.T) {
+	keys := []string{"depthLoadOp", "depthStoreOp", "depthClearValue", "stencilLoadOp", "stencilStoreOp", "stencilClearValue"}
+	tests := []struct {
+		name            string
+		format          gputypes.TextureFormat
+		depthReadOnly   bool
+		stencilReadOnly bool
+		want            []string
+	}{
+		{"depth only", gputypes.TextureFormatDepth24Plus, false, false, keys[:3]},
+		{"stencil only", gputypes.TextureFormatStencil8, false, false, keys[3:]},
+		{"depth and stencil", gputypes.TextureFormatDepth24PlusStencil8, false, false, keys},
+		{"read-only depth", gputypes.TextureFormatDepth32Float, true, false, nil},
+		{"read-only stencil", gputypes.TextureFormatDepth32FloatStencil8, false, true, keys[:3]},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			desc := BuildRenderPassDescriptor("", nil, &RenderPassDepthStencilAttachmentJS{
+				View:            js.Undefined(),
+				Format:          tc.format,
+				DepthLoadOp:     "clear",
+				DepthStoreOp:    "store",
+				DepthClearValue: 1,
+				DepthReadOnly:   tc.depthReadOnly,
+				StencilLoadOp:   "clear",
+				StencilStoreOp:  "store",
+				StencilReadOnly: tc.stencilReadOnly,
+			})
+			ds := desc.Get("depthStencilAttachment")
+			var got []string
+			for _, key := range keys {
+				if !ds.Get(key).IsUndefined() {
+					got = append(got, key)
+				}
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("members %v, want %v", got, tc.want)
+			}
+		})
 	}
 }

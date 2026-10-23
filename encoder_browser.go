@@ -225,6 +225,9 @@ func buildRenderPassDescriptorJS(desc *RenderPassDescriptor) js.Value {
 		}
 		if dsa.View != nil && dsa.View.browser != nil {
 			ds.View = dsa.View.browser.Ref()
+			if dsa.View.texture != nil {
+				ds.Format = dsa.View.texture.format
+			}
 		} else {
 			ds.View = js.Undefined()
 		}
