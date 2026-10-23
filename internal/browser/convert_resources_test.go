@@ -123,3 +123,13 @@ func TestMultisampleMaskIsSentAs32Bits(t *testing.T) {
 		t.Fatalf("mask = %v, want 0xFFFFFFFF", got)
 	}
 }
+
+func TestBuildExtent3DSendsAZeroHeight(t *testing.T) {
+	obj := BuildExtent3D(64, 0, 0)
+	if h := obj.Get("height"); h.IsUndefined() || h.Int() != 0 {
+		t.Fatalf("height = %v, want 0 rather than the dictionary default of 1", h)
+	}
+	if d := obj.Get("depthOrArrayLayers"); !d.IsUndefined() {
+		t.Fatalf("depthOrArrayLayers = %v, want it left to the default of 1", d)
+	}
+}

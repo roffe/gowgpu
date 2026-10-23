@@ -877,13 +877,12 @@ func BuildImageCopyTexture(texture js.Value, mipLevel uint32, originX, originY, 
 	return obj
 }
 
-// BuildExtent3D constructs a JS GPUExtent3DDict.
+// BuildExtent3D constructs a JS GPUExtent3DDict. A depthOrArrayLayers of 0
+// is left to the dictionary's default of 1, as native copies take it.
 func BuildExtent3D(width, height, depthOrArrayLayers uint32) js.Value {
 	obj := newJSObject()
 	obj.Set("width", width)
-	if height > 0 {
-		obj.Set("height", height)
-	}
+	obj.Set("height", height)
 	if depthOrArrayLayers > 0 {
 		obj.Set("depthOrArrayLayers", depthOrArrayLayers)
 	}
