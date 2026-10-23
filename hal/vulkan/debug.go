@@ -30,7 +30,7 @@ typedef struct {
 	const char *pMessage;
 } gvk_debug_data;
 
-enum { GVK_DEBUG_SLOTS = 32, GVK_DEBUG_ID = 128, GVK_DEBUG_MSG = 1024 };
+enum { GVK_DEBUG_SLOTS = 256, GVK_DEBUG_ID = 128, GVK_DEBUG_MSG = 1024 };
 
 typedef struct {
 	uint32_t severity, types;
@@ -87,6 +87,16 @@ static int gvk_debug_pop(gvk_debug_entry *out) {
 	gvk_debug_release();
 	return ok;
 }
+
+// gvk_debug_take_dropped returns how many messages found the ring full
+// since the last call.
+static uint32_t gvk_debug_take_dropped(void) {
+	gvk_debug_acquire();
+	uint32_t n = gvk_debug_dropped;
+	gvk_debug_dropped = 0;
+	gvk_debug_release();
+	return n;
+}
 */
 import "C"
 
@@ -113,6 +123,9 @@ func drainDebugMessages() {
 				for C.gvk_debug_pop(&e) != 0 {
 					logDebugMessage(uint32(e.severity), uint32(e.types),
 						C.GoString(&e.id[0]), C.GoString(&e.msg[0]))
+				}
+				if n := C.gvk_debug_take_dropped(); n != 0 {
+					hal.Logger().Error("vulkan: Validation layer messages lost, the debug messenger's ring was full", "count", uint32(n))
 				}
 			}
 		}()
