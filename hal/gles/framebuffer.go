@@ -52,6 +52,17 @@ func (f *framebuffers) destroy(ctx *gl.Context) {
 	*f = framebuffers{}
 }
 
+// withFramebuffer runs fn with a framebuffer of its own bound to target,
+// deleted after: for work with none of the queue's at hand, such as texture
+// creation and queue writes.
+func withFramebuffer(ctx *gl.Context, target uint32, fn func()) {
+	fbo := ctx.GenFramebuffers(1)
+	ctx.BindFramebuffer(target, fbo)
+	fn()
+	ctx.BindFramebuffer(target, 0)
+	ctx.DeleteFramebuffers(fbo)
+}
+
 // attach attaches a to the framebuffer bound to target at attachment, a
 // texture level, an array or 3D texture's layer, or a cube map's face; a
 // without a texture detaches what is there.

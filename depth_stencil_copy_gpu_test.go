@@ -104,11 +104,11 @@ func TestDepthCopyWithoutAspect(t *testing.T) {
 // stencil texel is one byte: Vulkan took four for the row length, so only
 // the first row of an upload arrived, and the readback's rows landed a
 // quarter of bytesPerRow apart. CopyBufferToTexture also dropped the aspect.
+// GL refused the stencil of a combined format, which it writes only with
+// the depth beside it.
 func TestStencilAspectUploads(t *testing.T) {
 	device, h := newValidatedDevice(t)
-	if h.backend == gputypes.BackendGL {
-		t.Skip("the GL backend writes no stencil aspect of a combined depth/stencil texture")
-	}
+	skipStencilWritesOnGLES(t, device, h)
 	skipStencilCopiesOnVkd3d(t, h)
 	rows := make([]byte, pixSide*pixSide)
 	for y := range pixSide {
@@ -172,6 +172,16 @@ func skipStencilCopiesOnVkd3d(t *testing.T, h *captureHandler) {
 	t.Helper()
 	if h.backend == gputypes.BackendDX12 && upstreamVkd3d() {
 		t.Skip("vkd3d copies plane 1 through an R8_UINT footprint as the colour of array layer 1, not the stencil")
+	}
+}
+
+// skipStencilWritesOnGLES skips a test that writes the stencil of a
+// combined depth/stencil texture on GL without depth and stencil copies:
+// ES reads no depth or stencil back, which GL needs to write the stencil.
+func skipStencilWritesOnGLES(t *testing.T, device *Device, h *captureHandler) {
+	t.Helper()
+	if h.backend == gputypes.BackendGL && !device.core.DownlevelCapabilitiesRef().Flags.Contains(gputypes.DownlevelFlagsDepthTextureAndBufferCopies) {
+		t.Skip("GL ES writes no stencil of a combined depth/stencil texture")
 	}
 }
 

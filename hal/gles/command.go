@@ -2039,6 +2039,11 @@ func (c *CopyBufferToTextureCommand) Execute(ctx *gl.Context) {
 		return
 	}
 
+	if tex.stencilBesideDepth(r.TextureBase.Aspect) {
+		c.uploadStencil(ctx)
+		return
+	}
+
 	// Bind source buffer as pixel unpack buffer (PBO), and the texture.
 	ctx.BindBuffer(gl.PIXEL_UNPACK_BUFFER, c.srcBuffer.id)
 	ctx.BindTexture(tex.target, tex.id)
@@ -2089,6 +2094,34 @@ func (c *CopyBufferToTextureCommand) Execute(ctx *gl.Context) {
 	}
 }
 
+// uploadStencil copies the stencil of a texture that holds depth beside it,
+// which writeStencil writes from the buffer's bytes read back.
+func (c *CopyBufferToTextureCommand) uploadStencil(ctx *gl.Context) {
+	if ctx.IsGLES() {
+		stencilCopyOnce.Do(func() { hal.Logger().Error("gles: CopyBufferToTexture skipped", "error", errStencilWriteES) })
+		return
+	}
+	r := &c.region
+	width, height, layers := r.Size.Width, r.Size.Height, max(1, r.Size.DepthOrArrayLayers)
+	pitch, rows := max(width, r.BufferLayout.BytesPerRow), max(height, r.BufferLayout.RowsPerImage)
+	n := int((uint64(layers-1)*uint64(rows)+uint64(height-1))*uint64(pitch) + uint64(width))
+	data := make([]byte, n)
+	ctx.BindBuffer(gl.COPY_READ_BUFFER, c.srcBuffer.id)
+	p := ctx.MapBufferRange(gl.COPY_READ_BUFFER, int(r.BufferLayout.Offset), n, gl.MAP_READ_BIT)
+	if p != 0 {
+		copy(data, unsafe.Slice(*(**byte)(unsafe.Pointer(&p)), n))
+		ctx.UnmapBuffer(gl.COPY_READ_BUFFER)
+	}
+	ctx.BindBuffer(gl.COPY_READ_BUFFER, 0)
+	if p == 0 {
+		return
+	}
+	_ = writeStencil(ctx, c.dstTex, r.TextureBase.MipLevel, r.TextureBase.Origin, width, height, layers, func(layer, y uint32) []byte {
+		at := (int(layer)*int(rows) + int(y)) * int(pitch)
+		return data[at : at+int(width)]
+	}) // refuses only ES
+}
+
 // uploadBlocks copies a compressed region from the bound pixel unpack
 // buffer, a layer at a time, and a row of blocks at a time when the
 // buffer's rows are padded: ES has no row length for compressed uploads.
@@ -2131,8 +2164,9 @@ func (c *CopyBufferToTextureCommand) uploadBlocks(ctx *gl.Context) {
 }
 
 // compressedReadbackOnce and esReadbackOnce guard the one error a readback
-// of a compressed texture, or of a format ES can't read, logs.
-var compressedReadbackOnce, esReadbackOnce sync.Once
+// of a compressed texture, or of a format ES can't read, logs, and
+// stencilCopyOnce the one a stencil copy ES refuses logs.
+var compressedReadbackOnce, esReadbackOnce, stencilCopyOnce sync.Once
 
 // CopyTextureToTextureCommand copies pixels between textures: the source
 // level and layer attached to the read framebuffer, glCopyTexSubImage into

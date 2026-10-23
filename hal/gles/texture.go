@@ -6,6 +6,7 @@
 package gles
 
 import (
+	"errors"
 	"fmt"
 	"unsafe"
 
@@ -240,9 +241,12 @@ func writeTexture(glCtx *gl.Context, tex *Texture, dst *hal.ImageCopyTexture, da
 	depth := max(1, size.DepthOrArrayLayers)
 	glCtx.BindTexture(tex.target, tex.id)
 	var err error
-	if tex.glf.compressed() {
+	switch {
+	case tex.glf.compressed():
 		err = writeBlocks(glCtx, tex, dst, data, l, size.Width, size.Height, depth)
-	} else {
+	case tex.stencilBesideDepth(dst.Aspect):
+		err = writeStencilData(glCtx, tex, dst, data, l, size.Width, size.Height, depth)
+	default:
 		err = writePixels(glCtx, tex, dst, data, l, size.Width, size.Height, depth)
 	}
 	glCtx.BindTexture(tex.target, 0)
@@ -332,6 +336,65 @@ func writePixels(glCtx *gl.Context, tex *Texture, dst *hal.ImageCopyTexture, dat
 		// TexImage2D reallocates storage on every call; TexSubImage2D updates in-place.
 		glCtx.TexSubImage2D(tex.target, mip, x, y, int32(width), int32(height), f.format, f.typ, unsafe.Pointer(&data[0]))
 	}
+	return nil
+}
+
+// stencilBesideDepth reports whether a copy of aspect into t moves only
+// stencil into storage that holds depth beside it: the stencil aspect of a
+// combined format, or a Stencil8 texture made as one.
+func (t *Texture) stencilBesideDepth(aspect gputypes.TextureAspect) bool {
+	return t.glf.format == gl.DEPTH_STENCIL && (aspect == gputypes.TextureAspectStencilOnly || t.format == gputypes.TextureFormatStencil8)
+}
+
+// errStencilWriteES refuses a write of the stencil beside depth on ES, which
+// writeStencil needs to read back and ES reads no depth or stencil.
+var errStencilWriteES = errors.New("gles: ES can't write the stencil of a texture that also holds depth, as it reads no depth or stencil back")
+
+// writeStencilData writes the stencil bytes of data, at the layout's
+// pitches, into tex at dst, whose stencil is stored beside depth.
+func writeStencilData(glCtx *gl.Context, tex *Texture, dst *hal.ImageCopyTexture, data []byte, l hal.ImageDataLayout, width, height, depth uint32) error {
+	rows, pitch := max(height, l.RowsPerImage), max(width, l.BytesPerRow)
+	if err := checkData(data, width, height, depth, pitch, rows); err != nil {
+		return err
+	}
+	return writeStencil(glCtx, tex, dst.MipLevel, dst.Origin, width, height, depth, func(layer, y uint32) []byte {
+		at := (int(layer)*int(rows) + int(y)) * int(pitch)
+		return data[at : at+int(width)]
+	})
+}
+
+// writeStencil writes the stencil of a width by height region of tex at mip
+// and origin, of layers layers from origin.Z on, whose rows row returns.
+// GL writes no stencil alone into storage that holds depth beside it, so
+// each layer's depth and stencil are read, the stencil replaced and the
+// pair written back; ES, which reads neither, refuses it.
+func writeStencil(ctx *gl.Context, tex *Texture, mip uint32, origin hal.Origin3D, width, height, layers uint32, row func(layer, y uint32) []byte) error {
+	if ctx.IsGLES() {
+		return errStencilWriteES
+	}
+	f := tex.glf
+	texel := pixelSize(f.format, f.typ)
+	var stencil uint32 // the byte of a texel the stencil is: the low one of its word
+	if f.typ == gl.FLOAT_32_UNSIGNED_INT_24_8_REV {
+		stencil = 4
+	}
+	pixels := make([]byte, width*height*texel)
+	withFramebuffer(ctx, gl.READ_FRAMEBUFFER, func() {
+		ctx.ReadBuffer(gl.NONE)
+		ctx.BindTexture(tex.target, tex.id)
+		for z := range layers {
+			attach(ctx, gl.READ_FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT, fbAttachment{tex: tex, mip: mip, layer: origin.Z + z})
+			ctx.ReadPixels(int32(origin.X), int32(origin.Y), int32(width), int32(height), f.format, f.typ, unsafe.Pointer(&pixels[0]))
+			for y := range height {
+				for x, s := range row(z, y) {
+					pixels[(y*width+uint32(x))*texel+stencil] = s
+				}
+			}
+			at := hal.ImageCopyTexture{MipLevel: mip, Origin: hal.Origin3D{X: origin.X, Y: origin.Y, Z: origin.Z + z}}
+			_ = writePixels(ctx, tex, &at, pixels, hal.ImageDataLayout{}, width, height, 1)
+		}
+		ctx.BindTexture(tex.target, 0)
+	})
 	return nil
 }
 

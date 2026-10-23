@@ -7,6 +7,7 @@ package gles
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 	"unsafe"
 
@@ -448,4 +449,106 @@ func TestWriteTextureRefusesShortData(t *testing.T) {
 	if err := q.WriteTexture(&hal.ImageCopyTexture{Texture: tex}, make([]byte, 64), &hal.ImageDataLayout{Offset: 100, BytesPerRow: 256}, &size); err == nil {
 		t.Error("a write from past the end of its data went through")
 	}
+}
+
+// A write into the stencil of a combined depth/stencil texture keeps its
+// depth: GL writes that stencil only together with the depth, which is read
+// and written back. A Stencil8 texture is one where the context has no
+// stencil-only textures. ES, which reads neither back, refuses the write.
+func TestStencilWriteKeepsDepth(t *testing.T) {
+	for _, tc := range []struct {
+		format     gputypes.TextureFormat
+		aspect     gputypes.TextureAspect
+		noStencil8 bool
+	}{
+		{gputypes.TextureFormatDepth24PlusStencil8, gputypes.TextureAspectStencilOnly, false},
+		{gputypes.TextureFormatDepth32FloatStencil8, gputypes.TextureAspectStencilOnly, false},
+		{gputypes.TextureFormatStencil8, gputypes.TextureAspectAll, true},
+	} {
+		t.Run(tc.format.String(), func(t *testing.T) {
+			ctx := newTestAdapterContext(t)
+			t.Cleanup(ctx.Destroy)
+			dev := openTestDevice(t, ctx)
+			if tc.noStencil8 {
+				dev.formats.stencil8 = false
+			}
+			const side = 8
+			tex, err := dev.CreateTexture(&hal.TextureDescriptor{
+				Size: hal.Extent3D{Width: side, Height: side, DepthOrArrayLayers: 1}, MipLevelCount: 1, SampleCount: 1,
+				Dimension: gputypes.TextureDimension2D, Format: tc.format,
+				Usage: gputypes.TextureUsageRenderAttachment | gputypes.TextureUsageCopyDst | gputypes.TextureUsageCopySrc,
+			})
+			if err != nil {
+				t.Fatalf("CreateTexture: %v", err)
+			}
+			t.Cleanup(func() { dev.DestroyTexture(tex) })
+			glTex := tex.(*Texture)
+			texel := int(pixelSize(glTex.glf.format, glTex.glf.typ))
+			stencilAt := 0
+			if texel == 8 {
+				stencilAt = 4
+			}
+			read := func() []byte {
+				glCtx := ctx.Lock()
+				defer ctx.Unlock()
+				pixels := make([]byte, side*side*texel)
+				withFramebuffer(glCtx, gl.READ_FRAMEBUFFER, func() {
+					attach(glCtx, gl.READ_FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT, fbAttachment{tex: glTex})
+					glCtx.ReadPixels(0, 0, side, side, glTex.glf.format, glTex.glf.typ, unsafe.Pointer(&pixels[0]))
+				})
+				return pixels
+			}
+			glCtx := ctx.Lock()
+			withFramebuffer(glCtx, gl.FRAMEBUFFER, func() {
+				attach(glCtx, gl.FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT, fbAttachment{tex: glTex})
+				glCtx.Disable(gl.SCISSOR_TEST)
+				glCtx.DepthMask(true)
+				glCtx.ClearDepth(0.25)
+				glCtx.Clear(gl.DEPTH_BUFFER_BIT)
+			})
+			ctx.Unlock()
+			before := read()
+
+			stencil := make([]byte, side*side)
+			for i := range stencil {
+				stencil[i] = byte(3*i + 1)
+			}
+			q := &Queue{ctx: ctx}
+			if err := q.WriteTexture(&hal.ImageCopyTexture{Texture: tex, Aspect: tc.aspect}, stencil,
+				&hal.ImageDataLayout{BytesPerRow: side}, &hal.Extent3D{Width: side, Height: side, DepthOrArrayLayers: 1}); err != nil {
+				t.Fatalf("WriteTexture: %v", err)
+			}
+			after := read()
+			for i := range side * side {
+				for b := range texel {
+					want := before[i*texel+b]
+					if b == stencilAt {
+						want = stencil[i]
+					}
+					if got := after[i*texel+b]; got != want && (texel == 4 || b < 5) {
+						t.Fatalf("texel %d byte %d = %#x, want %#x (before % x, after % x)", i, b, got, want, before[i*texel:(i+1)*texel], after[i*texel:(i+1)*texel])
+					}
+				}
+			}
+		})
+	}
+	t.Run("es", func(t *testing.T) {
+		ctx := newTestESAdapterContext(t)
+		t.Cleanup(ctx.Destroy)
+		dev := openTestDevice(t, ctx)
+		tex, err := dev.CreateTexture(&hal.TextureDescriptor{
+			Size: hal.Extent3D{Width: 8, Height: 8, DepthOrArrayLayers: 1}, MipLevelCount: 1, SampleCount: 1,
+			Dimension: gputypes.TextureDimension2D, Format: gputypes.TextureFormatDepth24PlusStencil8,
+			Usage: gputypes.TextureUsageRenderAttachment | gputypes.TextureUsageCopyDst,
+		})
+		if err != nil {
+			t.Fatalf("CreateTexture: %v", err)
+		}
+		t.Cleanup(func() { dev.DestroyTexture(tex) })
+		err = (&Queue{ctx: ctx}).WriteTexture(&hal.ImageCopyTexture{Texture: tex, Aspect: gputypes.TextureAspectStencilOnly}, make([]byte, 64),
+			&hal.ImageDataLayout{BytesPerRow: 8}, &hal.Extent3D{Width: 8, Height: 8, DepthOrArrayLayers: 1})
+		if !errors.Is(err, errStencilWriteES) {
+			t.Errorf("WriteTexture on ES: %v, want errStencilWriteES", err)
+		}
+	})
 }
