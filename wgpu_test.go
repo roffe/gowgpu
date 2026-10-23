@@ -1590,6 +1590,29 @@ func TestTextureFormatConstants(t *testing.T) {
 
 // --- VAL-003: Deferred nil error tests ---
 
+// testColorView returns the view of a small RGBA8 render target for a pass
+// a test needs only to have some attachment.
+func testColorView(t *testing.T, device *wgpu.Device) *wgpu.TextureView {
+	t.Helper()
+	tex, err := device.CreateTexture(&wgpu.TextureDescriptor{
+		Label: "test-target", Size: wgpu.Extent3D{Width: 4, Height: 4, DepthOrArrayLayers: 1},
+		MipLevelCount: 1, SampleCount: 1, Dimension: gputypes.TextureDimension2D,
+		Format: gputypes.TextureFormatRGBA8Unorm, Usage: gputypes.TextureUsageRenderAttachment,
+	})
+	if err != nil {
+		t.Fatalf("CreateTexture: %v", err)
+	}
+	view, err := device.CreateTextureView(tex, nil)
+	if err != nil {
+		t.Fatalf("CreateTextureView: %v", err)
+	}
+	t.Cleanup(func() {
+		view.Release()
+		tex.Release()
+	})
+	return view
+}
+
 // newEncoderWithRenderPass creates a device, command encoder, and begins a render pass.
 // Returns the device, encoder, and render pass. Requires HAL.
 func newEncoderWithRenderPass(t *testing.T) (*wgpu.Device, *wgpu.CommandEncoder, *wgpu.RenderPassEncoder) {
@@ -1606,6 +1629,7 @@ func newEncoderWithRenderPass(t *testing.T) (*wgpu.Device, *wgpu.CommandEncoder,
 		Label: "test-pass",
 		ColorAttachments: []wgpu.RenderPassColorAttachment{
 			{
+				View:       testColorView(t, device),
 				LoadOp:     gputypes.LoadOpClear,
 				StoreOp:    gputypes.StoreOpStore,
 				ClearValue: gputypes.Color{R: 0, G: 0, B: 0, A: 1},
@@ -1754,6 +1778,7 @@ func TestRenderPassMultiDrawIndirectRangeValidation(t *testing.T) {
 	pass, err := encoder.BeginRenderPass(&wgpu.RenderPassDescriptor{
 		Label: "test-pass",
 		ColorAttachments: []wgpu.RenderPassColorAttachment{{
+			View:   testColorView(t, device),
 			LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore,
 			ClearValue: gputypes.Color{R: 0, G: 0, B: 0, A: 1},
 		}},
@@ -1812,6 +1837,7 @@ func TestRenderPassDrawIndexedIndirectCountRangeValidation(t *testing.T) {
 			pass, err = encoder.BeginRenderPass(&wgpu.RenderPassDescriptor{
 				Label: "test-pass",
 				ColorAttachments: []wgpu.RenderPassColorAttachment{{
+					View:   testColorView(t, device),
 					LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore,
 					ClearValue: gputypes.Color{R: 0, G: 0, B: 0, A: 1},
 				}},
@@ -1869,6 +1895,7 @@ func TestRenderPassDrawIndexedIndirectCountMany(t *testing.T) {
 	pass, err := encoder.BeginRenderPass(&wgpu.RenderPassDescriptor{
 		Label: "test-pass",
 		ColorAttachments: []wgpu.RenderPassColorAttachment{{
+			View:   testColorView(t, device),
 			LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore,
 			ClearValue: gputypes.Color{R: 0, G: 0, B: 0, A: 1},
 		}},

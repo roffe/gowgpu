@@ -70,8 +70,7 @@ func TestDepthWriteThenReadOnlyPass(t *testing.T) {
 			}
 			pass, err = enc.BeginRenderPass(&RenderPassDescriptor{
 				DepthStencilAttachment: &RenderPassDepthStencilAttachment{
-					View: view, DepthLoadOp: gputypes.LoadOpLoad, DepthStoreOp: gputypes.StoreOpStore,
-					DepthReadOnly: true, StencilReadOnly: true,
+					View: view, DepthReadOnly: true, StencilReadOnly: true,
 				},
 			})
 			if err != nil {
@@ -315,8 +314,7 @@ func TestDepthReadOnlyAttachedAndSampled(t *testing.T) {
 			pass, err := enc.BeginRenderPass(&RenderPassDescriptor{
 				ColorAttachments: []RenderPassColorAttachment{{View: dstView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore, ClearValue: black}},
 				DepthStencilAttachment: &RenderPassDepthStencilAttachment{
-					View: depthView, DepthLoadOp: gputypes.LoadOpLoad, DepthStoreOp: gputypes.StoreOpStore,
-					DepthReadOnly: true, StencilReadOnly: true,
+					View: depthView, DepthReadOnly: true, StencilReadOnly: true,
 				},
 			})
 			if err != nil {

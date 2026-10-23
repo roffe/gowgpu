@@ -51,6 +51,7 @@ func newEncoderWithRenderPassForDevice(t *testing.T, device *wgpu.Device) (*wgpu
 		Label: "feature-gate-pass",
 		ColorAttachments: []wgpu.RenderPassColorAttachment{
 			{
+				View:       testColorView(t, device),
 				LoadOp:     gputypes.LoadOpClear,
 				StoreOp:    gputypes.StoreOpStore,
 				ClearValue: gputypes.Color{R: 0, G: 0, B: 0, A: 1},

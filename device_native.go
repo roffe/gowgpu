@@ -206,8 +206,8 @@ func (d *Device) CreateTextureView(texture *Texture, desc *TextureViewDescriptor
 	// such view shares (surface textures come and go every frame, so not
 	// theirs).
 	if desc == nil && texture.surface == nil {
-		if hv := texture.sharedDefaultView(halDevice, halTexture); hv != nil {
-			return &TextureView{hal: hv, device: d, texture: texture}, nil
+		if hv, viewDesc := texture.sharedDefaultView(halDevice, halTexture); hv != nil {
+			return &TextureView{hal: hv, device: d, texture: texture, desc: viewDesc}, nil
 		}
 	}
 
@@ -239,7 +239,7 @@ func (d *Device) CreateTextureView(texture *Texture, desc *TextureViewDescriptor
 		hal:          halView,
 		device:       d,
 		texture:      texture,
-		baseMipLevel: halDesc.BaseMipLevel,
+		desc:         *halDesc,
 		surface:      texture.surface,
 		surfaceLease: texture.surfaceLease,
 	}

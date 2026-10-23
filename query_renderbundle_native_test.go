@@ -74,6 +74,24 @@ func newCaptureDevice(h *captureDevice) *Device {
 	return &Device{core: core.NewDevice(h, nil, 0, limits, "query-render-bundle-test")}
 }
 
+// captureAttachments is the color attachment of a pass on a capture device,
+// a pass needing one.
+func captureAttachments(t *testing.T, device *Device) []RenderPassColorAttachment {
+	t.Helper()
+	tex, err := device.CreateTexture(&TextureDescriptor{
+		Size: Extent3D{Width: 4, Height: 4, DepthOrArrayLayers: 1}, MipLevelCount: 1, SampleCount: 1,
+		Dimension: TextureDimension2D, Format: TextureFormatRGBA8Unorm, Usage: TextureUsageRenderAttachment,
+	})
+	if err != nil {
+		t.Fatalf("CreateTexture: %v", err)
+	}
+	view, err := device.CreateTextureView(tex, nil)
+	if err != nil {
+		t.Fatalf("CreateTextureView: %v", err)
+	}
+	return []RenderPassColorAttachment{{View: view, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore}}
+}
+
 func newTestQuerySet(raw hal.QuerySet, device *Device) *QuerySet {
 	return &QuerySet{
 		core:   core.NewQuerySet(raw, device.core, hal.QueryTypeTimestamp, 4, "test query set"),
@@ -185,7 +203,7 @@ func TestBeginRenderPassTimestampWrites(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			pass, err := encoder.BeginRenderPass(&RenderPassDescriptor{TimestampWrites: tt.writes})
+			pass, err := encoder.BeginRenderPass(&RenderPassDescriptor{ColorAttachments: captureAttachments(t, device), TimestampWrites: tt.writes})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -352,7 +370,7 @@ func TestResolveQuerySetAndExecuteBundles(t *testing.T) {
 		t.Fatalf("ResolveQuerySet delegation = (%d, %v, %v)", command.resolved, command.querySet, command.buffer)
 	}
 
-	renderPass, err := encoder.BeginRenderPass(&RenderPassDescriptor{})
+	renderPass, err := encoder.BeginRenderPass(&RenderPassDescriptor{ColorAttachments: captureAttachments(t, device)})
 	if err != nil {
 		t.Fatalf("BeginRenderPass() error = %v", err)
 	}
@@ -509,7 +527,7 @@ func TestExecuteBundlesWithoutRawPass(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateCommandEncoder() error = %v", err)
 	}
-	renderPass, err := encoder.BeginRenderPass(&RenderPassDescriptor{})
+	renderPass, err := encoder.BeginRenderPass(&RenderPassDescriptor{ColorAttachments: captureAttachments(t, device)})
 	if err != nil {
 		t.Fatalf("BeginRenderPass() error = %v", err)
 	}

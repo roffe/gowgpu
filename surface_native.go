@@ -684,11 +684,9 @@ func (st *SurfaceTexture) CreateView(desc *TextureViewDescriptor) (*TextureView,
 		return nil, ErrReleased
 	}
 
-	var halDesc *hal.TextureViewDescriptor
-	label := ""
+	var halDesc hal.TextureViewDescriptor
 	if desc != nil {
-		label = desc.Label
-		halDesc = &hal.TextureViewDescriptor{
+		halDesc = hal.TextureViewDescriptor{
 			Label:           desc.Label,
 			Format:          desc.Format,
 			Dimension:       desc.Dimension,
@@ -699,13 +697,20 @@ func (st *SurfaceTexture) CreateView(desc *TextureViewDescriptor) (*TextureView,
 			ArrayLayerCount: desc.ArrayLayerCount,
 		}
 	}
+	if st.coreTexture != nil {
+		resolved, err := core.ResolveTextureViewDescriptor(st.coreTexture, nil, &halDesc)
+		if err != nil {
+			return nil, fmt.Errorf("wgpu: SurfaceTexture.CreateView: %w", err)
+		}
+		halDesc = resolved
+	}
 
-	halView, err := halDevice.CreateTextureView(st.hal, halDesc)
+	halView, err := halDevice.CreateTextureView(st.hal, &halDesc)
 	if err != nil {
 		return nil, fmt.Errorf("wgpu: failed to create surface texture view: %w", err)
 	}
 
 	texture := &Texture{hal: st.hal, device: st.device, surface: st.surface.core, surfaceLease: st.lease, coreTexture: st.coreTexture}
-	view := &TextureView{hal: halView, device: st.device, texture: texture, surface: st.surface.core, surfaceLease: st.lease}
-	return view.withRef(label), nil
+	view := &TextureView{hal: halView, device: st.device, texture: texture, desc: halDesc, surface: st.surface.core, surfaceLease: st.lease}
+	return view.withRef(halDesc.Label), nil
 }

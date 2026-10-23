@@ -41,32 +41,33 @@ type Texture struct {
 	// descriptor: one per texture, shared by every TextureView made that way
 	// and destroyed with the texture. A view a frame of the same texture is
 	// then no new HAL view, and on Vulkan no new framebuffer.
-	viewMu      sync.Mutex
-	defaultView hal.TextureView
-	viewDestroy viewDestroy
+	viewMu          sync.Mutex
+	defaultView     hal.TextureView
+	defaultViewDesc hal.TextureViewDescriptor
+	viewDestroy     viewDestroy
 }
 
 // sharedDefaultView returns the texture's default HAL view, making it the
 // first time. nil means it could not be made, and the caller makes its own.
-func (t *Texture) sharedDefaultView(dev hal.Device, raw hal.Texture) hal.TextureView {
+func (t *Texture) sharedDefaultView(dev hal.Device, raw hal.Texture) (hal.TextureView, hal.TextureViewDescriptor) {
 	t.viewMu.Lock()
 	defer t.viewMu.Unlock()
 	if t.defaultView == nil && !t.released {
-		desc := &hal.TextureViewDescriptor{}
+		var desc hal.TextureViewDescriptor
 		if t.coreTexture != nil {
 			resolved, err := core.ResolveTextureViewDescriptor(t.coreTexture, t.viewFormats, nil)
 			if err != nil {
-				return nil
+				return nil, desc
 			}
-			desc = &resolved
+			desc = resolved
 		}
-		v, err := dev.CreateTextureView(raw, desc)
+		v, err := dev.CreateTextureView(raw, &desc)
 		if err != nil {
-			return nil
+			return nil, desc
 		}
-		t.defaultView = v
+		t.defaultView, t.defaultViewDesc = v, desc
 	}
-	return t.defaultView
+	return t.defaultView, t.defaultViewDesc
 }
 
 // resolveHAL is the single boundary from a public texture wrapper to HAL.
@@ -169,10 +170,12 @@ func releaseTextureTracking(ct *core.Texture) {
 
 // TextureView represents a view into a texture.
 type TextureView struct {
-	hal          hal.TextureView
-	device       *Device
-	texture      *Texture
-	baseMipLevel uint32
+	hal     hal.TextureView
+	device  *Device
+	texture *Texture
+	// desc is the view's descriptor with WebGPU's defaults resolved, as the
+	// HAL got it; zero for a view of a texture core does not know.
+	desc         hal.TextureViewDescriptor
 	released     bool
 	surface      *core.Surface
 	surfaceLease uint64

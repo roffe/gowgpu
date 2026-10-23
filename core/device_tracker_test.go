@@ -818,9 +818,9 @@ func TestBarrierCBFromAllTransitions_BothTypes(t *testing.T) {
 // =============================================================================
 
 // TestBeginRenderPass_TextureConflict_Error verifies that one texture used
-// with incompatible usages INSIDE one render pass (here as color attachment
-// and as depth/stencil attachment) is a usage-scope conflict, detected
-// before the HAL render pass begins.
+// as color attachment and as depth/stencil attachment of one render pass is
+// refused before the HAL render pass begins: by the attachment checks, as
+// no format is both.
 func TestBeginRenderPass_TextureConflict_Error(t *testing.T) {
 	t.Parallel()
 
@@ -831,6 +831,8 @@ func TestBeginRenderPass_TextureConflict_Error(t *testing.T) {
 	td := track.NewTrackingData(alloc)
 	tex := &Texture{
 		raw:          NewSnatchable[hal.Texture](nil),
+		format:       gputypes.TextureFormatRGBA8Unorm,
+		usage:        gputypes.TextureUsageRenderAttachment | gputypes.TextureUsageTextureBinding,
 		device:       device,
 		trackingData: td,
 	}
@@ -853,9 +855,9 @@ func TestBeginRenderPass_TextureConflict_Error(t *testing.T) {
 		},
 	}
 	_, passErr := enc.BeginRenderPass(desc)
-	var conflict *track.TextureUsageConflictError
-	if !errors.As(passErr, &conflict) {
-		t.Fatalf("BeginRenderPass = %v, want TextureUsageConflictError", passErr)
+	var invalid *RenderPassValidationError
+	if !errors.As(passErr, &invalid) {
+		t.Fatalf("BeginRenderPass = %v, want RenderPassValidationError", passErr)
 	}
 	if len(halEncoder.events) != 0 {
 		t.Errorf("conflicting pass reached the HAL encoder: %v", halEncoder.events)
@@ -932,6 +934,8 @@ func TestBeginRenderPass_EarlierUsageIsTransitionedNotConflict(t *testing.T) {
 		td := track.NewTrackingData(device.TrackerIndices().Textures())
 		tex := &Texture{
 			raw:          NewSnatchable[hal.Texture](&noopTexture{}),
+			format:       gputypes.TextureFormatRGBA8Unorm,
+			usage:        gputypes.TextureUsageRenderAttachment | gputypes.TextureUsageTextureBinding,
 			device:       device,
 			trackingData: td,
 		}
@@ -999,6 +1003,8 @@ func TestBeginRenderPass_FirstPassIsNotSplit(t *testing.T) {
 	td := track.NewTrackingData(device.TrackerIndices().Textures())
 	tex := &Texture{
 		raw:          NewSnatchable[hal.Texture](&noopTexture{}),
+		format:       gputypes.TextureFormatRGBA8Unorm,
+		usage:        gputypes.TextureUsageRenderAttachment | gputypes.TextureUsageTextureBinding,
 		device:       device,
 		trackingData: td,
 	}
@@ -1049,6 +1055,8 @@ func TestRecordPassTextureUsage_RenderPassTransitionsAheadOfPass(t *testing.T) {
 	newTex := func() *Texture {
 		return &Texture{
 			raw:          NewSnatchable[hal.Texture](&noopTexture{}),
+			format:       gputypes.TextureFormatRGBA8Unorm,
+			usage:        gputypes.TextureUsageRenderAttachment | gputypes.TextureUsageTextureBinding,
 			device:       device,
 			trackingData: track.NewTrackingData(device.TrackerIndices().Textures()),
 		}
@@ -1123,6 +1131,8 @@ func TestRecordPassTextureUsage_ComputePassTransitionsInline(t *testing.T) {
 	device := NewDevice(halDevice, &Adapter{}, gputypes.Features(0), gputypes.DefaultLimits(), "TestDevice")
 	tex := &Texture{
 		raw:          NewSnatchable[hal.Texture](&noopTexture{}),
+		format:       gputypes.TextureFormatRGBA8Unorm,
+		usage:        gputypes.TextureUsageRenderAttachment | gputypes.TextureUsageTextureBinding,
 		device:       device,
 		trackingData: track.NewTrackingData(device.TrackerIndices().Textures()),
 	}
@@ -1197,7 +1207,7 @@ func TestRenderPass_VertexBufferScopeIsPerPass(t *testing.T) {
 	// An earlier copy wrote the buffer.
 	enc.Mutable().BufferScope().SetSingle(idx, track.BufferUsesCopyDst)
 
-	pass, err := enc.BeginRenderPass(&RenderPassDescriptor{})
+	pass, err := enc.BeginRenderPass(testPass(""))
 	if err != nil {
 		t.Fatalf("BeginRenderPass: %v", err)
 	}
@@ -1231,6 +1241,8 @@ func TestBeginRenderPass_NoConflict_SameUsage(t *testing.T) {
 
 	tex := &Texture{
 		raw:          NewSnatchable[hal.Texture](nil),
+		format:       gputypes.TextureFormatRGBA8Unorm,
+		usage:        gputypes.TextureUsageRenderAttachment | gputypes.TextureUsageTextureBinding,
 		device:       device,
 		trackingData: td,
 	}

@@ -87,3 +87,58 @@ func TestCreateTextureViewResolvesAndChecksTheDescriptor(t *testing.T) {
 	}
 	assertNoValidation(t, h)
 }
+
+// A render pass checks its attachments by their views: the default view of
+// a texture with two mip levels is no attachment, a view of one of them is.
+func TestBeginRenderPassChecksAttachmentViews(t *testing.T) {
+	device, h := newValidatedDevice(t)
+
+	tex, err := device.CreateTexture(&TextureDescriptor{
+		Label: "attachment-mips", Size: Extent3D{Width: 8, Height: 8, DepthOrArrayLayers: 1},
+		MipLevelCount: 2, SampleCount: 1, Dimension: TextureDimension2D,
+		Format: TextureFormatRGBA8Unorm, Usage: TextureUsageRenderAttachment,
+	})
+	if err != nil {
+		t.Fatalf("CreateTexture: %v", err)
+	}
+	defer tex.Release()
+	all, err := device.CreateTextureView(tex, nil)
+	if err != nil {
+		t.Fatalf("CreateTextureView: %v", err)
+	}
+	defer all.Release()
+	one, err := device.CreateTextureView(tex, &TextureViewDescriptor{BaseMipLevel: 1, MipLevelCount: 1})
+	if err != nil {
+		t.Fatalf("CreateTextureView(mip 1): %v", err)
+	}
+	defer one.Release()
+
+	for _, tc := range []struct {
+		view  *TextureView
+		valid bool
+	}{{all, false}, {one, true}} {
+		enc, err := device.CreateCommandEncoder(nil)
+		if err != nil {
+			t.Fatalf("CreateCommandEncoder: %v", err)
+		}
+		pass, err := enc.BeginRenderPass(&RenderPassDescriptor{ColorAttachments: []RenderPassColorAttachment{{
+			View: tc.view, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore,
+		}}})
+		var rpve *core.RenderPassValidationError
+		switch {
+		case tc.valid && err != nil:
+			t.Errorf("view of one mip level: %v", err)
+		case !tc.valid && !errors.As(err, &rpve):
+			t.Errorf("view of two mip levels: %v, want a RenderPassValidationError", err)
+		}
+		if err == nil {
+			if err := pass.End(); err != nil {
+				t.Fatalf("End: %v", err)
+			}
+			finishAndSubmit(t, device, enc)
+		} else {
+			enc.DiscardEncoding()
+		}
+	}
+	assertNoValidation(t, h)
+}

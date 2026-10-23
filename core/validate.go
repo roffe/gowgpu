@@ -1069,9 +1069,9 @@ func (ctx *RenderPassContext) CheckCompatible(pipeline *RenderPassContext, pipel
 //
 // Reference: Rust wgpu-core command/render.rs begin_render_pass_inner → fill_arc_desc
 // and command/render.rs encode_render_pass → add_view + sample_count checks.
-func ValidateRenderPassDescriptor(desc *RenderPassDescriptor, limits gputypes.Limits) (*RenderPassContext, error) {
+func ValidateRenderPassDescriptor(desc *RenderPassDescriptor, limits gputypes.Limits, features gputypes.Features) (*RenderPassContext, error) {
 	ctx := new(RenderPassContext)
-	if err := validateRenderPassDescriptor(desc, limits, ctx); err != nil {
+	if err := validateRenderPassDescriptor(desc, limits, features, ctx); err != nil {
 		return nil, err
 	}
 	return ctx, nil
@@ -1079,7 +1079,7 @@ func ValidateRenderPassDescriptor(desc *RenderPassDescriptor, limits gputypes.Li
 
 // validateRenderPassDescriptor is ValidateRenderPassDescriptor filling ctx,
 // which BeginRenderPass keeps inside the pass instead of allocating one.
-func validateRenderPassDescriptor(desc *RenderPassDescriptor, limits gputypes.Limits, ctx *RenderPassContext) error {
+func validateRenderPassDescriptor(desc *RenderPassDescriptor, limits gputypes.Limits, features gputypes.Features, ctx *RenderPassContext) error {
 	if desc == nil {
 		return fmt.Errorf("render pass descriptor is nil")
 	}
@@ -1093,6 +1093,10 @@ func validateRenderPassDescriptor(desc *RenderPassDescriptor, limits gputypes.Li
 			Given: uint32(len(desc.ColorAttachments)), //nolint:gosec // len bounded by spec
 			Limit: maxCA,
 		}
+	}
+
+	if err := validateRenderPassAttachments(desc, features); err != nil {
+		return err
 	}
 
 	// Resolve the pass context from actual attachments.
@@ -1121,7 +1125,7 @@ func validateRenderPassDescriptor(desc *RenderPassDescriptor, limits gputypes.Li
 		}
 
 		tex := ca.View.Parent
-		ctx.ColorFormats[i] = tex.Format()
+		ctx.ColorFormats[i] = ca.View.ViewFormat()
 		texWidth, texHeight := renderExtent(ca.View)
 		texSamples := tex.SampleCount()
 
@@ -1193,7 +1197,7 @@ func validateDepthStencilAttachment(
 	}
 
 	dsTex := desc.DepthStencilAttachment.View.Parent
-	ctx.DepthStencilFormat = dsTex.Format()
+	ctx.DepthStencilFormat = desc.DepthStencilAttachment.View.ViewFormat()
 	dsWidth, dsHeight := renderExtent(desc.DepthStencilAttachment.View)
 	dsSamples := dsTex.SampleCount()
 

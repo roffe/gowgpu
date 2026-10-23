@@ -630,7 +630,7 @@ func (e *CoreCommandEncoder) BeginRenderPass(desc *RenderPassDescriptor) (*CoreR
 	// for draw-time pipeline compatibility checks.
 	pass := &e.pass
 	*pass = CoreRenderPassEncoder{encoder: e, device: e.device}
-	if valErr := validateRenderPassDescriptor(desc, e.device.Limits, &pass.passCtx); valErr != nil {
+	if valErr := validateRenderPassDescriptor(desc, e.device.Limits, e.device.Features, &pass.passCtx); valErr != nil {
 		e.setError(valErr)
 		return nil, valErr
 	}
@@ -1300,6 +1300,14 @@ func (h *halPassDescriptor) fill(e *CoreCommandEncoder, desc *RenderPassDescript
 			StencilStoreOp:    ds.StencilStoreOp,
 			StencilClearValue: ds.StencilClearValue,
 			StencilReadOnly:   ds.StencilReadOnly,
+		}
+		// A read-only channel takes no ops; the backends load and keep it,
+		// as wgpu-core's ResolvedPassChannel::ReadOnly does.
+		if ds.DepthReadOnly {
+			h.depth.DepthLoadOp, h.depth.DepthStoreOp = gputypes.LoadOpLoad, gputypes.StoreOpStore
+		}
+		if ds.StencilReadOnly {
+			h.depth.StencilLoadOp, h.depth.StencilStoreOp = gputypes.LoadOpLoad, gputypes.StoreOpStore
 		}
 		if ds.View != nil {
 			h.depth.View = ds.View.HAL

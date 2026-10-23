@@ -1047,6 +1047,18 @@ const (
 	// different width/height. All attachment textures must match dimensions.
 	// WebGPU spec: https://www.w3.org/TR/webgpu/#render-pass-encoder-creation
 	RenderPassErrorDimensionMismatch
+
+	// RenderPassErrorInvalidAttachment indicates an attachment WebGPU does
+	// not allow, Reason says why: a view that is not renderable, a format
+	// of the wrong kind, a missing or forbidden load or store op, a resolve
+	// target that does not fit, or no attachment at all.
+	// WebGPU spec: https://www.w3.org/TR/webgpu/#abstract-opdef-gpurenderpasscolorattachment-gpurenderpasscolorattachment-valid-usage
+	RenderPassErrorInvalidAttachment
+
+	// RenderPassErrorNoAttachments indicates a render pass without any
+	// color or depth/stencil attachment.
+	// WebGPU spec: https://www.w3.org/TR/webgpu/#abstract-opdef-gpurenderpassdescriptor-valid-usage
+	RenderPassErrorNoAttachments
 )
 
 // RenderPassValidationError represents a validation error during render pass creation.
@@ -1069,6 +1081,10 @@ type RenderPassValidationError struct {
 	ExpectedHeight uint32
 	ActualWidth    uint32
 	ActualHeight   uint32
+
+	// For InvalidAttachment, with AttachmentIndex (-1 is the depth/stencil
+	// attachment):
+	Reason string
 }
 
 // Error implements the error interface.
@@ -1091,6 +1107,13 @@ func (e *RenderPassValidationError) Error() string {
 		return fmt.Sprintf(
 			"render pass %q: color attachment [%d] has dimensions %dx%d, but attachment [%d] has dimensions %dx%d; all attachments must have the same dimensions (WebGPU spec §10.1)",
 			label, e.AttachmentIndex, e.ActualWidth, e.ActualHeight, e.ReferenceIndex, e.ExpectedWidth, e.ExpectedHeight)
+	case RenderPassErrorInvalidAttachment:
+		if e.AttachmentIndex < 0 {
+			return fmt.Sprintf("render pass %q: depth/stencil attachment: %s", label, e.Reason)
+		}
+		return fmt.Sprintf("render pass %q: color attachment [%d]: %s", label, e.AttachmentIndex, e.Reason)
+	case RenderPassErrorNoAttachments:
+		return fmt.Sprintf("render pass %q has no attachment", label)
 	default:
 		return fmt.Sprintf("render pass %q: unknown validation error", label)
 	}

@@ -166,16 +166,7 @@ func TestCoreCommandEncoder_BeginRenderPass(t *testing.T) {
 		t.Fatalf("CreateCommandEncoder failed: %v", err)
 	}
 
-	desc := &RenderPassDescriptor{
-		Label: "TestPass",
-		ColorAttachments: []RenderPassColorAttachment{
-			{
-				LoadOp:     gputypes.LoadOpClear,
-				StoreOp:    gputypes.StoreOpStore,
-				ClearValue: gputypes.Color{R: 0, G: 0, B: 0, A: 1},
-			},
-		},
-	}
+	desc := testPass("TestPass")
 
 	pass, err := encoder.BeginRenderPass(desc)
 	if err != nil {
@@ -210,11 +201,11 @@ func TestCoreCommandEncoder_BeginRenderPass_WhileLocked(t *testing.T) {
 
 	encoder, _ := device.CreateCommandEncoder("TestEncoder")
 
-	desc := &RenderPassDescriptor{Label: "Pass1"}
+	desc := testPass("Pass1")
 	_, _ = encoder.BeginRenderPass(desc)
 
 	// Try to begin another pass while locked
-	_, err := encoder.BeginRenderPass(&RenderPassDescriptor{Label: "Pass2"})
+	_, err := encoder.BeginRenderPass(testPass("Pass2"))
 	if err == nil {
 		t.Fatal("Expected error when beginning pass while locked")
 	}
@@ -232,7 +223,7 @@ func TestCoreRenderPassEncoder_End(t *testing.T) {
 	device := NewDevice(halDevice, &Adapter{}, gputypes.Features(0), gputypes.DefaultLimits(), "TestDevice")
 
 	encoder, _ := device.CreateCommandEncoder("TestEncoder")
-	pass, _ := encoder.BeginRenderPass(&RenderPassDescriptor{Label: "TestPass"})
+	pass, _ := encoder.BeginRenderPass(testPass("TestPass"))
 
 	err := pass.End()
 	if err != nil {
@@ -248,7 +239,7 @@ func TestCoreRenderPassEncoder_End_Idempotent(t *testing.T) {
 	device := NewDevice(halDevice, &Adapter{}, gputypes.Features(0), gputypes.DefaultLimits(), "TestDevice")
 
 	encoder, _ := device.CreateCommandEncoder("TestEncoder")
-	pass, _ := encoder.BeginRenderPass(&RenderPassDescriptor{Label: "TestPass"})
+	pass, _ := encoder.BeginRenderPass(testPass("TestPass"))
 
 	// First End() should succeed
 	err := pass.End()
@@ -367,7 +358,7 @@ func TestCoreCommandEncoder_Finish_WhileLocked(t *testing.T) {
 	device := NewDevice(halDevice, &Adapter{}, gputypes.Features(0), gputypes.DefaultLimits(), "TestDevice")
 
 	encoder, _ := device.CreateCommandEncoder("TestEncoder")
-	_, _ = encoder.BeginRenderPass(&RenderPassDescriptor{Label: "TestPass"})
+	_, _ = encoder.BeginRenderPass(testPass("TestPass"))
 
 	// Try to finish while locked
 	_, err := encoder.Finish()
@@ -443,7 +434,7 @@ func TestCoreRenderPassEncoder_SetViewport(t *testing.T) {
 	device := NewDevice(halDevice, &Adapter{}, gputypes.Features(0), gputypes.DefaultLimits(), "TestDevice")
 
 	encoder, _ := device.CreateCommandEncoder("TestEncoder")
-	pass, _ := encoder.BeginRenderPass(&RenderPassDescriptor{Label: "TestPass"})
+	pass, _ := encoder.BeginRenderPass(testPass("TestPass"))
 
 	// Should not panic
 	pass.SetViewport(gputypes.Viewport{X: 0, Y: 0, Width: 800, Height: 600, MinDepth: 0.0, MaxDepth: 1.0})
@@ -454,7 +445,7 @@ func TestCoreRenderPassEncoder_SetScissorRect(t *testing.T) {
 	device := NewDevice(halDevice, &Adapter{}, gputypes.Features(0), gputypes.DefaultLimits(), "TestDevice")
 
 	encoder, _ := device.CreateCommandEncoder("TestEncoder")
-	pass, _ := encoder.BeginRenderPass(&RenderPassDescriptor{Label: "TestPass"})
+	pass, _ := encoder.BeginRenderPass(testPass("TestPass"))
 
 	// Should not panic
 	pass.SetScissorRect(gputypes.ScissorRect{X: 0, Y: 0, Width: 800, Height: 600})
@@ -465,7 +456,7 @@ func TestCoreRenderPassEncoder_SetBlendConstant(t *testing.T) {
 	device := NewDevice(halDevice, &Adapter{}, gputypes.Features(0), gputypes.DefaultLimits(), "TestDevice")
 
 	encoder, _ := device.CreateCommandEncoder("TestEncoder")
-	pass, _ := encoder.BeginRenderPass(&RenderPassDescriptor{Label: "TestPass"})
+	pass, _ := encoder.BeginRenderPass(testPass("TestPass"))
 
 	// Should not panic
 	pass.SetBlendConstant(&gputypes.Color{R: 1, G: 1, B: 1, A: 1})
@@ -476,7 +467,7 @@ func TestCoreRenderPassEncoder_SetStencilReference(t *testing.T) {
 	device := NewDevice(halDevice, &Adapter{}, gputypes.Features(0), gputypes.DefaultLimits(), "TestDevice")
 
 	encoder, _ := device.CreateCommandEncoder("TestEncoder")
-	pass, _ := encoder.BeginRenderPass(&RenderPassDescriptor{Label: "TestPass"})
+	pass, _ := encoder.BeginRenderPass(testPass("TestPass"))
 
 	// Should not panic
 	pass.SetStencilReference(1)
@@ -487,7 +478,7 @@ func TestCoreRenderPassEncoder_Draw(t *testing.T) {
 	device := NewDevice(halDevice, &Adapter{}, gputypes.Features(0), gputypes.DefaultLimits(), "TestDevice")
 
 	encoder, _ := device.CreateCommandEncoder("TestEncoder")
-	pass, _ := encoder.BeginRenderPass(&RenderPassDescriptor{Label: "TestPass"})
+	pass, _ := encoder.BeginRenderPass(testPass("TestPass"))
 
 	// Should not panic
 	pass.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1})
@@ -498,7 +489,7 @@ func TestCoreRenderPassEncoder_DrawIndexed(t *testing.T) {
 	device := NewDevice(halDevice, &Adapter{}, gputypes.Features(0), gputypes.DefaultLimits(), "TestDevice")
 
 	encoder, _ := device.CreateCommandEncoder("TestEncoder")
-	pass, _ := encoder.BeginRenderPass(&RenderPassDescriptor{Label: "TestPass"})
+	pass, _ := encoder.BeginRenderPass(testPass("TestPass"))
 
 	// Should not panic
 	pass.DrawIndexed(gputypes.DrawIndexedArgs{IndexCount: 6, InstanceCount: 1})
@@ -509,7 +500,7 @@ func TestCoreRenderPassEncoder_AfterEnd(t *testing.T) {
 	device := NewDevice(halDevice, &Adapter{}, gputypes.Features(0), gputypes.DefaultLimits(), "TestDevice")
 
 	encoder, _ := device.CreateCommandEncoder("TestEncoder")
-	pass, _ := encoder.BeginRenderPass(&RenderPassDescriptor{Label: "TestPass"})
+	pass, _ := encoder.BeginRenderPass(testPass("TestPass"))
 	_ = pass.End()
 
 	// All methods should silently return after End

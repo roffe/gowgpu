@@ -312,8 +312,6 @@ func TestBeginRenderPass_PopulatesTextureScope_DepthReadOnly(t *testing.T) {
 		Label: "ReadOnlyDepthPass",
 		DepthStencilAttachment: &RenderPassDepthStencilAttachment{
 			View:            &TextureView{HAL: mockTextureView{}, Parent: depthTex},
-			DepthLoadOp:     gputypes.LoadOpLoad,
-			DepthStoreOp:    gputypes.StoreOpStore,
 			DepthReadOnly:   true,
 			StencilReadOnly: true,
 		},
@@ -586,16 +584,12 @@ func TestBeginRenderPass_NilView_Skipped(t *testing.T) {
 	}
 
 	// Nil view should not crash.
-	desc := &RenderPassDescriptor{
-		Label: "NilViewPass",
-		ColorAttachments: []RenderPassColorAttachment{
-			{
-				View:    nil,
-				LoadOp:  gputypes.LoadOpClear,
-				StoreOp: gputypes.StoreOpStore,
-			},
-		},
-	}
+	desc := testPass("NilViewPass")
+	desc.ColorAttachments = append(desc.ColorAttachments, RenderPassColorAttachment{
+		View:    nil,
+		LoadOp:  gputypes.LoadOpClear,
+		StoreOp: gputypes.StoreOpStore,
+	})
 
 	pass, err := encoder.BeginRenderPass(desc)
 	if err != nil {

@@ -1066,6 +1066,24 @@ type TextureView struct {
 	// pass draws into that level's extent, which its attachments must agree
 	// on.
 	BaseMipLevel uint32
+
+	// Format, Dimension, Aspect, MipLevelCount and ArrayLayerCount are the
+	// view's resolved descriptor, what render pass validation checks an
+	// attachment by. Zero is not known: Parent's format, all aspects, one
+	// level and one layer.
+	Format          gputypes.TextureFormat
+	Dimension       gputypes.TextureViewDimension
+	Aspect          gputypes.TextureAspect
+	MipLevelCount   uint32
+	ArrayLayerCount uint32
+}
+
+// ViewFormat returns the format of the view, its parent's unless it says.
+func (v *TextureView) ViewFormat() gputypes.TextureFormat {
+	if v.Format == gputypes.TextureFormatUndefined && v.Parent != nil {
+		return v.Parent.Format()
+	}
+	return v.Format
 }
 
 // Sampler represents a texture sampler with HAL integration.

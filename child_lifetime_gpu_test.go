@@ -228,7 +228,8 @@ func TestSubmitRefusesReleasedTimestampQuerySet(t *testing.T) {
 		t.Fatalf("CreateCommandEncoder: %v", err)
 	}
 	pass, err := enc.BeginRenderPass(&RenderPassDescriptor{
-		TimestampWrites: &RenderPassTimestampWrites{QuerySet: qs, BeginningOfPassWriteIndex: &begin, EndOfPassWriteIndex: &end},
+		ColorAttachments: captureAttachments(t, device),
+		TimestampWrites:  &RenderPassTimestampWrites{QuerySet: qs, BeginningOfPassWriteIndex: &begin, EndOfPassWriteIndex: &end},
 	})
 	if err != nil {
 		t.Fatalf("BeginRenderPass: %v", err)

@@ -2410,6 +2410,7 @@ func TestValidateRenderPipelineDescriptor_Stencil8_NoDepthOps(t *testing.T) {
 func testTexture(format gputypes.TextureFormat, width, height, sampleCount uint32) *Texture {
 	return &Texture{
 		format:      format,
+		usage:       gputypes.TextureUsageRenderAttachment,
 		size:        gputypes.Extent3D{Width: width, Height: height, DepthOrArrayLayers: 1},
 		sampleCount: sampleCount,
 	}
@@ -2418,6 +2419,15 @@ func testTexture(format gputypes.TextureFormat, width, height, sampleCount uint3
 // testView creates a TextureView backed by the given Texture.
 func testView(tex *Texture) *TextureView {
 	return &TextureView{Parent: tex}
+}
+
+// testPass is a render pass descriptor with one color attachment, for tests
+// of what happens around a pass rather than of its attachments.
+func testPass(label string) *RenderPassDescriptor {
+	return &RenderPassDescriptor{Label: label, ColorAttachments: []RenderPassColorAttachment{{
+		View:   testView(testTexture(gputypes.TextureFormatRGBA8Unorm, 4, 4, 1)),
+		LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore,
+	}}}
 }
 
 func TestValidateRenderPassDescriptor_Valid_SingleColorAttachment(t *testing.T) {
@@ -2429,7 +2439,7 @@ func TestValidateRenderPassDescriptor_Valid_SingleColorAttachment(t *testing.T) 
 		},
 	}
 
-	ctx, err := ValidateRenderPassDescriptor(desc, gputypes.DefaultLimits())
+	ctx, err := ValidateRenderPassDescriptor(desc, gputypes.DefaultLimits(), 0)
 	if err != nil {
 		t.Fatalf("expected nil error, got: %v", err)
 	}
@@ -2460,7 +2470,7 @@ func TestValidateRenderPassDescriptor_Valid_MultipleSameDimensions(t *testing.T)
 		},
 	}
 
-	ctx, err := ValidateRenderPassDescriptor(desc, gputypes.DefaultLimits())
+	ctx, err := ValidateRenderPassDescriptor(desc, gputypes.DefaultLimits(), 0)
 	if err != nil {
 		t.Fatalf("expected nil error for valid MRT, got: %v", err)
 	}
@@ -2480,7 +2490,7 @@ func TestValidateRenderPassDescriptor_Valid_MSAA(t *testing.T) {
 		},
 	}
 
-	ctx, err := ValidateRenderPassDescriptor(desc, gputypes.DefaultLimits())
+	ctx, err := ValidateRenderPassDescriptor(desc, gputypes.DefaultLimits(), 0)
 	if err != nil {
 		t.Fatalf("expected nil error for valid MSAA MRT, got: %v", err)
 	}
@@ -2508,7 +2518,7 @@ func TestValidateRenderPassDescriptor_TooManyColorAttachments(t *testing.T) {
 		ColorAttachments: attachments,
 	}
 
-	_, err := ValidateRenderPassDescriptor(desc, limits)
+	_, err := ValidateRenderPassDescriptor(desc, limits, 0)
 	if err == nil {
 		t.Fatal("expected error for too many color attachments")
 	}
@@ -2539,7 +2549,7 @@ func TestValidateRenderPassDescriptor_SampleCountMismatch(t *testing.T) {
 		},
 	}
 
-	_, err := ValidateRenderPassDescriptor(desc, gputypes.DefaultLimits())
+	_, err := ValidateRenderPassDescriptor(desc, gputypes.DefaultLimits(), 0)
 	if err == nil {
 		t.Fatal("expected error for sample count mismatch")
 	}
@@ -2576,7 +2586,7 @@ func TestValidateRenderPassDescriptor_DimensionMismatch(t *testing.T) {
 		},
 	}
 
-	_, err := ValidateRenderPassDescriptor(desc, gputypes.DefaultLimits())
+	_, err := ValidateRenderPassDescriptor(desc, gputypes.DefaultLimits(), 0)
 	if err == nil {
 		t.Fatal("expected error for dimension mismatch")
 	}
@@ -2610,7 +2620,7 @@ func TestValidateRenderPassDescriptor_WidthOnlyMismatch(t *testing.T) {
 		},
 	}
 
-	_, err := ValidateRenderPassDescriptor(desc, gputypes.DefaultLimits())
+	_, err := ValidateRenderPassDescriptor(desc, gputypes.DefaultLimits(), 0)
 	if err == nil {
 		t.Fatal("expected error for width mismatch")
 	}
@@ -2634,7 +2644,7 @@ func TestValidateRenderPassDescriptor_HeightOnlyMismatch(t *testing.T) {
 		},
 	}
 
-	_, err := ValidateRenderPassDescriptor(desc, gputypes.DefaultLimits())
+	_, err := ValidateRenderPassDescriptor(desc, gputypes.DefaultLimits(), 0)
 	if err == nil {
 		t.Fatal("expected error for height mismatch")
 	}
@@ -2666,12 +2676,12 @@ func TestValidateRenderPassDescriptor_MipLevelExtents(t *testing.T) {
 			DepthStoreOp: gputypes.StoreOpStore,
 		},
 	}
-	if _, err := ValidateRenderPassDescriptor(desc, gputypes.DefaultLimits()); err != nil {
+	if _, err := ValidateRenderPassDescriptor(desc, gputypes.DefaultLimits(), 0); err != nil {
 		t.Fatalf("mip 1 of 1024x768 next to 512x384: %v", err)
 	}
 
 	desc.DepthStencilAttachment.View.BaseMipLevel = 0
-	_, err := ValidateRenderPassDescriptor(desc, gputypes.DefaultLimits())
+	_, err := ValidateRenderPassDescriptor(desc, gputypes.DefaultLimits(), 0)
 	var rpve *RenderPassValidationError
 	if !errors.As(err, &rpve) || rpve.Kind != RenderPassErrorDimensionMismatch {
 		t.Fatalf("mip 0 of the depth texture next to 512x384: got %v, want DimensionMismatch", err)
@@ -2697,7 +2707,7 @@ func TestValidateRenderPassDescriptor_NilView_Skipped(t *testing.T) {
 		},
 	}
 
-	ctx, err := ValidateRenderPassDescriptor(desc, gputypes.DefaultLimits())
+	ctx, err := ValidateRenderPassDescriptor(desc, gputypes.DefaultLimits(), 0)
 	if err != nil {
 		t.Fatalf("expected nil error (nil views are valid sparse slots), got: %v", err)
 	}
@@ -2718,11 +2728,13 @@ func TestValidateRenderPassDescriptor_DepthStencil_SampleCountMismatch(t *testin
 			{View: testView(colorTex), LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore},
 		},
 		DepthStencilAttachment: &RenderPassDepthStencilAttachment{
-			View: testView(dsTex),
+			View:        testView(dsTex),
+			DepthLoadOp: gputypes.LoadOpClear, DepthStoreOp: gputypes.StoreOpStore,
+			StencilLoadOp: gputypes.LoadOpClear, StencilStoreOp: gputypes.StoreOpStore,
 		},
 	}
 
-	_, err := ValidateRenderPassDescriptor(desc, gputypes.DefaultLimits())
+	_, err := ValidateRenderPassDescriptor(desc, gputypes.DefaultLimits(), 0)
 	if err == nil {
 		t.Fatal("expected error for depth/stencil sample count mismatch")
 	}
@@ -2747,11 +2759,13 @@ func TestValidateRenderPassDescriptor_DepthStencil_DimensionMismatch(t *testing.
 			{View: testView(colorTex), LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore},
 		},
 		DepthStencilAttachment: &RenderPassDepthStencilAttachment{
-			View: testView(dsTex),
+			View:        testView(dsTex),
+			DepthLoadOp: gputypes.LoadOpClear, DepthStoreOp: gputypes.StoreOpStore,
+			StencilLoadOp: gputypes.LoadOpClear, StencilStoreOp: gputypes.StoreOpStore,
 		},
 	}
 
-	_, err := ValidateRenderPassDescriptor(desc, gputypes.DefaultLimits())
+	_, err := ValidateRenderPassDescriptor(desc, gputypes.DefaultLimits(), 0)
 	if err == nil {
 		t.Fatal("expected error for depth/stencil dimension mismatch")
 	}
@@ -2770,17 +2784,15 @@ func TestValidateRenderPassDescriptor_EmptyAttachments(t *testing.T) {
 		ColorAttachments: nil,
 	}
 
-	ctx, err := ValidateRenderPassDescriptor(desc, gputypes.DefaultLimits())
-	if err != nil {
-		t.Fatalf("expected nil error for empty attachments, got: %v", err)
-	}
-	if ctx.SampleCount != 1 {
-		t.Errorf("expected default sample count 1, got %d", ctx.SampleCount)
+	_, err := ValidateRenderPassDescriptor(desc, gputypes.DefaultLimits(), 0)
+	var rpve *RenderPassValidationError
+	if !errors.As(err, &rpve) || rpve.Kind != RenderPassErrorNoAttachments {
+		t.Fatalf("a pass without attachments: %v, want RenderPassErrorNoAttachments", err)
 	}
 }
 
 func TestValidateRenderPassDescriptor_NilDescriptor(t *testing.T) {
-	_, err := ValidateRenderPassDescriptor(nil, gputypes.DefaultLimits())
+	_, err := ValidateRenderPassDescriptor(nil, gputypes.DefaultLimits(), 0)
 	if err == nil {
 		t.Fatal("expected error for nil descriptor")
 	}

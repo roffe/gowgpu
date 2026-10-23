@@ -1332,7 +1332,15 @@ func (c *corePassDescriptor) release() {
 // Texture is the authority for the current handle, a borrowed surface
 // texture shares one core Texture across the swapchain images.
 func coreTextureViewFrom(v *TextureView) core.TextureView {
-	cv := core.TextureView{HAL: v.resolveHAL(), BaseMipLevel: v.baseMipLevel}
+	cv := core.TextureView{
+		HAL:             v.resolveHAL(),
+		BaseMipLevel:    v.desc.BaseMipLevel,
+		Format:          v.desc.Format,
+		Dimension:       v.desc.Dimension,
+		Aspect:          v.desc.Aspect,
+		MipLevelCount:   v.desc.MipLevelCount,
+		ArrayLayerCount: v.desc.ArrayLayerCount,
+	}
 	if v.texture != nil && v.texture.coreTexture != nil {
 		cv.Parent = v.texture.coreTexture
 		cv.Texture = v.texture.resolveHAL()
