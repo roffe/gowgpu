@@ -1286,3 +1286,22 @@ func TestZeroableTexture(t *testing.T) {
 		}
 	}
 }
+
+// A texture leaves the zero list at Submit only when a pass clearing it is
+// its first use in the submit's command buffers.
+func TestForgetClearsLocked(t *testing.T) {
+	cleared, readFirst, untouched := &Texture{}, &Texture{}, &Texture{}
+	pw := &pendingWrites{zero: map[*Texture]struct{}{cleared: {}, readFirst: {}, untouched: {}}}
+	reader := &CommandBuffer{usedTextures: []*Texture{readFirst}}
+	clearer := &CommandBuffer{usedTextures: []*Texture{cleared, readFirst}, clearsFirst: []*Texture{cleared, readFirst}}
+	pw.forgetClearsLocked([]*CommandBuffer{reader, clearer})
+	for _, tc := range []struct {
+		name string
+		tex  *Texture
+		want bool
+	}{{"cleared first", cleared, false}, {"read before the clear", readFirst, true}, {"not used", untouched, true}} {
+		if _, got := pw.zero[tc.tex]; got != tc.want {
+			t.Errorf("%s: on the zero list = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}

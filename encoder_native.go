@@ -85,6 +85,10 @@ type CommandEncoder struct {
 	// passes write timestamps into, for submit-time validation: a released
 	// one fails the submit.
 	usedQuerySets []*QuerySet
+
+	// clearsFirst are the textures still to be zeroed that a render pass of
+	// this encoder clears whole before the encoder uses them any other way.
+	clearsFirst []*Texture
 }
 
 // encoderSerials hands out CommandEncoder serials. Zero is never handed out,
@@ -104,6 +108,7 @@ func (e *CommandEncoder) recycle() {
 	e.pooled = false
 	e.core, e.device, e.halEncoder = nil, nil, nil
 	e.trackedRefs, e.usedBuffers, e.usedTextures, e.usedBindGroups, e.usedQuerySets = nil, nil, nil, nil, nil
+	e.clearsFirst = nil
 	e.passSerial = 0
 	e.cb = CommandBuffer{}
 	cmdEncoderObjPool.Put(e)
@@ -587,6 +592,7 @@ func (e *CommandEncoder) BeginRenderPass(desc *RenderPassDescriptor) (*RenderPas
 			return nil, errForeign("BeginRenderPass", "an attachment or the timestamp query set")
 		}
 	}
+	e.noteClears(desc)
 	trackRenderPassTextureViews(e, desc)
 
 	// Core reads the descriptor and keeps none of it, so it comes from a pool
@@ -597,7 +603,6 @@ func (e *CommandEncoder) BeginRenderPass(desc *RenderPassDescriptor) (*RenderPas
 	if err != nil {
 		return nil, err
 	}
-	forgetClearedTextures(e.device, desc)
 
 	// The pass is a usage scope of its own: the bind groups it binds put
 	// their textures in it once each.
@@ -606,30 +611,45 @@ func (e *CommandEncoder) BeginRenderPass(desc *RenderPassDescriptor) (*RenderPas
 	return &e.pass, nil
 }
 
-// forgetClearedTextures takes the textures this pass clears whole off the list
-// of new textures to zero: the clear does it.
-// ponytail: decided when the pass is recorded, not when it runs, so a command
-// buffer submitted before this one that samples the texture still sees old
-// memory.
-func forgetClearedTextures(d *Device, desc *RenderPassDescriptor) {
+// noteClears adds to clearsFirst the textures still to be zeroed that the
+// pass of desc clears and stores whole, a color attachment or every aspect
+// of a depth/stencil one, when the encoder hasn't used them before. Submit
+// takes them off the zero list when the command buffer is the first of the
+// submit to use them, so a clear decides nothing for a command buffer that
+// is dropped or runs after another that reads the texture.
+//
+// Reference: wgpu-core command/render.rs (Clear with Store is an implicit
+// init) and device/queue.rs (init actions applied in submission order)
+func (e *CommandEncoder) noteClears(desc *RenderPassDescriptor) {
+	d := e.device
 	if desc == nil || d == nil || d.queue == nil || d.queue.pending == nil {
 		return
 	}
-	forget := func(t *Texture) {
-		if ct := t.coreTexture; ct != nil && ct.MipLevelCount() <= 1 && ct.Size().DepthOrArrayLayers <= 1 {
-			d.queue.pending.forgetZero(t)
+	note := func(t *Texture) {
+		ct := t.coreTexture
+		if ct == nil || ct.MipLevelCount() > 1 || ct.Size().DepthOrArrayLayers > 1 || t.mark.last.Load() == e.id() ||
+			!d.queue.pending.zeroing(t) {
+			return
 		}
+		for _, g := range e.usedBindGroups {
+			if slices.Contains(g.boundTextures, t) {
+				return
+			}
+		}
+		e.clearsFirst = append(e.clearsFirst, t)
 	}
 	for _, ca := range desc.ColorAttachments {
-		if ca.LoadOp == gputypes.LoadOpClear && ca.View != nil && ca.View.texture != nil {
-			forget(ca.View.texture)
+		if ca.LoadOp == gputypes.LoadOpClear && ca.StoreOp == gputypes.StoreOpStore && ca.View != nil && ca.View.texture != nil {
+			note(ca.View.texture)
 		}
 	}
-	// A depth/stencil attachment, when the pass clears each aspect it has.
 	if ds := desc.DepthStencilAttachment; ds != nil && ds.View != nil && ds.View.texture != nil {
 		f := ds.View.texture.format
-		if (!f.HasDepth() || ds.DepthLoadOp == gputypes.LoadOpClear) && (!f.HasStencil() || ds.StencilLoadOp == gputypes.LoadOpClear) {
-			forget(ds.View.texture)
+		clears := func(has bool, load gputypes.LoadOp, store gputypes.StoreOp) bool {
+			return !has || load == gputypes.LoadOpClear && store == gputypes.StoreOpStore
+		}
+		if clears(f.HasDepth(), ds.DepthLoadOp, ds.DepthStoreOp) && clears(f.HasStencil(), ds.StencilLoadOp, ds.StencilStoreOp) {
+			note(ds.View.texture)
 		}
 	}
 }
@@ -1326,6 +1346,7 @@ func (e *CommandEncoder) Finish() (_ *CommandBuffer, err error) {
 		usedTextures:   e.usedTextures,
 		usedBindGroups: e.usedBindGroups,
 		usedQuerySets:  e.usedQuerySets,
+		clearsFirst:    e.clearsFirst,
 		enc:            e,
 		serial:         e.id(),
 	}
@@ -1335,6 +1356,7 @@ func (e *CommandEncoder) Finish() (_ *CommandBuffer, err error) {
 	e.usedTextures = nil   // ownership transferred
 	e.usedBindGroups = nil // ownership transferred
 	e.usedQuerySets = nil  // ownership transferred
+	e.clearsFirst = nil
 	return cb, nil
 }
 
@@ -1502,6 +1524,9 @@ type CommandBuffer struct {
 	// passes write timestamps into, validated at Submit time: a released one
 	// causes an error.
 	usedQuerySets []*QuerySet
+
+	// clearsFirst is the encoder's clearsFirst, for Submit.
+	clearsFirst []*Texture
 
 	// submitted is set to true after this command buffer has been submitted
 	// to a queue. A command buffer cannot be submitted twice.

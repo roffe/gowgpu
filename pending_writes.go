@@ -4,6 +4,7 @@ package wgpu
 
 import (
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/roffe/gowgpu/core"
@@ -910,11 +911,57 @@ func (pw *pendingWrites) queueZero(t *Texture) {
 	pw.zero[t] = struct{}{}
 }
 
-// forgetZero takes t off the list: it was released, or a pass cleared all of it.
+// forgetZero takes t off the list: it was released.
 func (pw *pendingWrites) forgetZero(t *Texture) {
 	pw.mu.Lock()
 	defer pw.mu.Unlock()
 	delete(pw.zero, t)
+}
+
+// zeroing reports whether t is on the list of textures to zero.
+func (pw *pendingWrites) zeroing(t *Texture) bool {
+	pw.mu.Lock()
+	defer pw.mu.Unlock()
+	_, ok := pw.zero[t]
+	return ok
+}
+
+// forgetClearsLocked takes off the zero list the textures that a pass of
+// one of cbs, a submit's command buffers in order, clears whole as their
+// first use there: the pass sets every texel before anything reads them. A
+// texture an earlier command buffer of the submit uses stays on the list,
+// to be zeroed ahead of it. pw.mu is held.
+func (pw *pendingWrites) forgetClearsLocked(cbs []*CommandBuffer) {
+	if len(pw.zero) == 0 || !slices.ContainsFunc(cbs, func(cb *CommandBuffer) bool { return len(cb.clearsFirst) > 0 }) {
+		return
+	}
+	var used map[*Texture]bool
+	for _, cb := range cbs {
+		for _, t := range cb.clearsFirst {
+			if !used[t] {
+				delete(pw.zero, t)
+			}
+		}
+		if len(pw.zero) == 0 {
+			return
+		}
+		mark := func(t *Texture) {
+			if _, ok := pw.zero[t]; ok {
+				if used == nil {
+					used = make(map[*Texture]bool)
+				}
+				used[t] = true
+			}
+		}
+		for _, t := range cb.usedTextures {
+			mark(t)
+		}
+		for _, g := range cb.usedBindGroups {
+			for _, t := range g.boundTextures {
+				mark(t)
+			}
+		}
+	}
 }
 
 // coversTexture reports whether a write of size at dst sets every texel of t.

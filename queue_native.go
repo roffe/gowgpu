@@ -114,6 +114,7 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (_ uint64, err error) {
 
 	if q.pending != nil {
 		q.pending.mu.Lock()
+		q.pending.forgetClearsLocked(commandBuffers)
 		var err error
 		pendingCmdBuf, flushedEncoder, flushedDstTextures, flushedDstBuffers, err = q.pending.flush()
 		q.pending.mu.Unlock()
