@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/gogpu/naga/ir"
+	"github.com/roffe/gowgpu/hal"
 )
 
 // TestMetalComputePipelineCreation tests MTLComputePipelineState creation.
@@ -503,5 +504,38 @@ func TestWorkgroupSizeDefaultFallback(t *testing.T) {
 				t.Errorf("Depth = %d, want 1 (default)", got.Depth)
 			}
 		})
+	}
+}
+
+// TestComputePipelineRefusesWorkgroupsPastItsLimit makes a kernel with a
+// workgroup larger than its compute pipeline state takes: pipeline
+// creation fails, where dispatching it would be undefined.
+func TestComputePipelineRefusesWorkgroupsPastItsLimit(t *testing.T) {
+	device, _ := newMetalTextureCopyTestDevice(t)
+	layout, err := device.CreatePipelineLayout(&hal.PipelineLayoutDescriptor{})
+	if err != nil {
+		t.Fatalf("CreatePipelineLayout failed: %v", err)
+	}
+	for _, test := range []struct {
+		size string
+		ok   bool
+	}{{"64", true}, {"4096", false}} {
+		module, err := device.CreateShaderModule(&hal.ShaderModuleDescriptor{Source: hal.ShaderSource{WGSL: `
+@compute @workgroup_size(` + test.size + `) fn main() {}
+`}})
+		if err != nil {
+			t.Fatalf("CreateShaderModule failed: %v", err)
+		}
+		pipeline, err := device.CreateComputePipeline(&hal.ComputePipelineDescriptor{
+			Layout:  layout,
+			Compute: hal.ComputeState{Module: module, EntryPoint: "main"},
+		})
+		if (err == nil) != test.ok {
+			t.Errorf("@workgroup_size(%s): err %v, want ok %v", test.size, err, test.ok)
+		}
+		if pipeline != nil {
+			pipeline.Destroy()
+		}
+		module.Destroy()
 	}
 }

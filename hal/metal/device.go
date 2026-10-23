@@ -1091,6 +1091,15 @@ func (d *Device) CreateComputePipeline(desc *hal.ComputePipelineDescriptor) (hal
 	// Get workgroup size from shader module metadata
 	workgroupSize := getWorkgroupSize(computeModule, desc.Compute.EntryPoint)
 
+	// A pipeline may take fewer threads a threadgroup than the device, as
+	// the registers of its kernel allow: a dispatch of more is undefined.
+	invocations := uint64(workgroupSize.Width) * uint64(workgroupSize.Height) * uint64(workgroupSize.Depth)
+	if limit := uint64(MsgSendUint(pipelineState, Sel("maxTotalThreadsPerThreadgroup"))); invocations > limit {
+		Release(pipelineState)
+		return nil, fmt.Errorf("metal: compute pipeline %q takes %d invocations a workgroup, its workgroup has %d",
+			desc.Compute.EntryPoint, limit, invocations)
+	}
+
 	hal.Logger().Debug("metal: compute pipeline created",
 		"entryPoint", desc.Compute.EntryPoint,
 		"workgroupSize", fmt.Sprintf("%dx%dx%d", workgroupSize.Width, workgroupSize.Height, workgroupSize.Depth),
