@@ -164,6 +164,9 @@ func validateSetBindGroup(passName string, index uint32, group *BindGroup, offse
 	if group == nil {
 		return fmt.Errorf("wgpu: %s.SetBindGroup: bind group is nil", passName)
 	}
+	if group.released != nil && group.released.Load() {
+		return fmt.Errorf("wgpu: %s.SetBindGroup: bind group is released: %w", passName, ErrReleased)
+	}
 	if index >= MaxBindGroups {
 		return fmt.Errorf("wgpu: %s.SetBindGroup: index %d >= MaxBindGroups (%d)", passName, index, MaxBindGroups)
 	}

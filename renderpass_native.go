@@ -70,6 +70,10 @@ func (p *RenderPassEncoder) SetPipeline(pipeline *RenderPipeline) {
 		p.encoder.setError(fmt.Errorf("wgpu: RenderPass.SetPipeline: pipeline is nil"))
 		return
 	}
+	if pipeline.released {
+		p.encoder.setError(fmt.Errorf("wgpu: RenderPass.SetPipeline: pipeline is released: %w", ErrReleased))
+		return
+	}
 	p.currentPipelineBindGroupCount = pipeline.bindGroupCount
 	p.pipelineSet = true
 	p.requiredVertexBuffers = pipeline.requiredVertexBuffers

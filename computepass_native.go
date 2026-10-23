@@ -58,6 +58,10 @@ func (p *ComputePassEncoder) SetPipeline(pipeline *ComputePipeline) {
 		p.encoder.setError(fmt.Errorf("wgpu: ComputePass.SetPipeline: pipeline is nil"))
 		return
 	}
+	if pipeline.released {
+		p.encoder.setError(fmt.Errorf("wgpu: ComputePass.SetPipeline: pipeline is released: %w", ErrReleased))
+		return
+	}
 	p.currentPipelineBindGroupCount = pipeline.bindGroupCount
 	p.pipelineSet = true
 	p.currentPipeline = pipeline
