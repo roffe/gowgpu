@@ -158,6 +158,30 @@ func assignBindingsAfterLink(glCtx *gl.Context, program uint32, layout *Pipeline
 		}
 	}
 
+	// A texture the shaders only load from (textureLoad, textureDimensions)
+	// pairs with no sampler, so naga's TextureMappings leave it out: every
+	// texture of the layout is looked up by the name naga gives it.
+	for group, bgl := range layout.bindGroupLayouts {
+		if bgl == nil {
+			continue
+		}
+		for _, entry := range bgl.entries {
+			if c := classifyBindGroupEntry(entry); c != bindingClassTexture && c != bindingClassImage {
+				continue
+			}
+			slot, ok := layout.bindingMap[glsl.BindingMapKey{Group: uint32(group), Binding: entry.Binding}]
+			if !ok {
+				continue
+			}
+			for _, stage := range [...]string{"vs", "fs", "cs"} {
+				name := fmt.Sprintf("_group_%d_binding_%d_%s", group, entry.Binding, stage)
+				if location := glCtx.GetUniformLocation(program, name); location >= 0 {
+					glCtx.Uniform1i(location, int32(slot))
+				}
+			}
+		}
+	}
+
 	return nil
 }
 

@@ -150,3 +150,101 @@ func loadPixelsWith(t *testing.T, device *Device, view *TextureView, dimension g
 	}
 	return out
 }
+
+// sampleAndLoadShader samples ta with s and loads tb, and shows tb: ta only
+// stays in the shader.
+const sampleAndLoadShader = `
+@group(0) @binding(0) var ta: texture_2d<f32>;
+@group(0) @binding(1) var tb: texture_2d<f32>;
+@group(0) @binding(2) var s: sampler;
+@vertex fn vs_main(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
+	let x = f32(i32(vi & 1u) * 4 - 1);
+	let y = f32(i32(vi >> 1u) * 4 - 1);
+	return vec4<f32>(x, y, 0.5, 1.0);
+}
+@fragment fn fs_main(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
+	let a = textureSample(ta, s, pos.xy / 4.0);
+	let b = textureLoad(tb, vec2<i32>(pos.xy), 0);
+	return vec4<f32>(b.rgb + a.rgb * 0.0, 1.0);
+}
+`
+
+// TestTextureLoadedWithoutSampler loads a texture that has no sampler next
+// to one sampled with a sampler. Below GLSL 4.20, where the texture units are
+// set after linking, GL set only the sampled textures', so the loaded one
+// read texture unit 0, the sampled texture.
+func TestTextureLoadedWithoutSampler(t *testing.T) {
+	device, _ := newValidatedDevice(t)
+	tex := func(c gputypes.Color) (*Texture, *TextureView) {
+		t.Helper()
+		tx, view := pixTexture(t, device, "texture", TextureUsageRenderAttachment|TextureUsageTextureBinding)
+		enc, err := device.CreateCommandEncoder(nil)
+		if err != nil {
+			t.Fatalf("CreateCommandEncoder: %v", err)
+		}
+		clearPass(t, enc, view, gputypes.LoadOpClear, c, nil)
+		finishAndSubmit(t, device, enc)
+		return tx, view
+	}
+	ta, taView := tex(red)
+	defer releaseTextureView(ta, taView)
+	tb, tbView := tex(green)
+	defer releaseTextureView(tb, tbView)
+	sampler, err := device.CreateSampler(&SamplerDescriptor{MagFilter: gputypes.FilterModeNearest, MinFilter: gputypes.FilterModeNearest, LodMaxClamp: 32})
+	if err != nil {
+		t.Fatalf("CreateSampler: %v", err)
+	}
+	defer sampler.Release()
+	layout, err := device.CreateBindGroupLayout(&BindGroupLayoutDescriptor{Entries: []gputypes.BindGroupLayoutEntry{
+		{Binding: 0, Visibility: ShaderStageFragment, Texture: &gputypes.TextureBindingLayout{SampleType: gputypes.TextureSampleTypeFloat, ViewDimension: gputypes.TextureViewDimension2D}},
+		{Binding: 1, Visibility: ShaderStageFragment, Texture: &gputypes.TextureBindingLayout{SampleType: gputypes.TextureSampleTypeFloat, ViewDimension: gputypes.TextureViewDimension2D}},
+		{Binding: 2, Visibility: ShaderStageFragment, Sampler: &gputypes.SamplerBindingLayout{Type: gputypes.SamplerBindingTypeFiltering}},
+	}})
+	if err != nil {
+		t.Fatalf("CreateBindGroupLayout: %v", err)
+	}
+	defer layout.Release()
+	pl, err := device.CreatePipelineLayout(&PipelineLayoutDescriptor{BindGroupLayouts: []*BindGroupLayout{layout}})
+	if err != nil {
+		t.Fatalf("CreatePipelineLayout: %v", err)
+	}
+	defer pl.Release()
+	module, err := device.CreateShaderModule(&ShaderModuleDescriptor{Label: "sample-and-load", WGSL: sampleAndLoadShader})
+	if err != nil {
+		t.Fatalf("CreateShaderModule: %v", err)
+	}
+	defer module.Release()
+	pipe, err := device.CreateRenderPipeline(&RenderPipelineDescriptor{
+		Label: "sample-and-load", Layout: pl,
+		Vertex:    VertexState{Module: module, EntryPoint: "vs_main"},
+		Primitive: gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList},
+		Fragment: &FragmentState{Module: module, EntryPoint: "fs_main",
+			Targets: []gputypes.ColorTargetState{{Format: gputypes.TextureFormatRGBA8Unorm, WriteMask: gputypes.ColorWriteMaskAll}}},
+	})
+	if err != nil {
+		t.Fatalf("CreateRenderPipeline: %v", err)
+	}
+	defer pipe.Release()
+	group, err := device.CreateBindGroup(&BindGroupDescriptor{Layout: layout, Entries: []BindGroupEntry{
+		{Binding: 0, TextureView: taView}, {Binding: 1, TextureView: tbView}, {Binding: 2, Sampler: sampler},
+	}})
+	if err != nil {
+		t.Fatalf("CreateBindGroup: %v", err)
+	}
+	defer group.Release()
+	target, view := pixTexture(t, device, "target", TextureUsageRenderAttachment|TextureUsageCopySrc)
+	defer releaseTextureView(target, view)
+	st := readbackBuffer(t, device, "target-staging")
+	enc, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	clearPass(t, enc, view, gputypes.LoadOpClear, gputypes.Color{}, func(p *RenderPassEncoder) {
+		p.SetPipeline(pipe)
+		p.SetBindGroup(0, group, nil)
+		p.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1})
+	})
+	copyOut(enc, target, st)
+	finishAndSubmit(t, device, enc)
+	expectPixels(t, "the loaded texture", readback(t, st), 0, 255, 0, 255)
+}
