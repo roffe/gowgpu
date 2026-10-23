@@ -288,15 +288,22 @@ func normalizedCopyLayout(texture *Texture, plane uint32, layout hal.ImageDataLa
 	} else if uint64(rowPitch) < minRowBytes64 || rowPitch%d3d12TexturePitchAlignment != 0 {
 		return textureBlockInfo{}, 0, 0, false
 	}
-	rowsPerImage := layout.RowsPerImage
-	if rowsPerImage == 0 {
-		rowsPerImage = size.Height
-	}
-	if rowsPerImage < size.Height {
+	blockRows, ok := imageBlockRows(info, layout, size)
+	if !ok {
 		return textureBlockInfo{}, 0, 0, false
 	}
-	blockRows := (rowsPerImage + info.height - 1) / info.height
 	return info, rowPitch, blockRows, true
+}
+
+// imageBlockRows is the layout's rowsPerImage, which counts rows of blocks
+// as in WebGPU, or the copy's own block rows when it is 0. It fails when an
+// image of the layout has fewer rows than the copy.
+func imageBlockRows(info textureBlockInfo, layout hal.ImageDataLayout, size hal.Extent3D) (uint32, bool) {
+	copyRows := (size.Height + info.height - 1) / info.height
+	if layout.RowsPerImage == 0 {
+		return copyRows, true
+	}
+	return layout.RowsPerImage, layout.RowsPerImage >= copyRows
 }
 
 func textureWriteSourceOffset(base uint64, sourceBytesPerRow, blockRows, slice, row uint32) uint64 {
@@ -332,15 +339,11 @@ func writeTextureNativeLayout(texture *Texture, aspect gputypes.TextureAspect, l
 	}
 	nativeLayout := layout
 	nativeLayout.BytesPerRow = nativeRowPitch
-	sourceRowsPerImage := layout.RowsPerImage
-	if sourceRowsPerImage == 0 {
-		sourceRowsPerImage = size.Height
-	}
-	if sourceRowsPerImage < size.Height {
+	sourceBlockRows, ok := imageBlockRows(info, layout, size)
+	if !ok {
 		return textureBlockInfo{}, hal.ImageDataLayout{}, 0, 0, false
 	}
-	sourceBlockRows := (sourceRowsPerImage + info.height - 1) / info.height
-	nativeLayout.RowsPerImage = size.Height
+	nativeLayout.RowsPerImage = (size.Height + info.height - 1) / info.height
 	if _, _, _, valid := normalizedCopyLayout(texture, plane, nativeLayout, size); !valid {
 		return textureBlockInfo{}, hal.ImageDataLayout{}, 0, 0, false
 	}

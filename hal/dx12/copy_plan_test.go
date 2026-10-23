@@ -103,7 +103,7 @@ func TestPlanBufferTextureCopiesZeroPitchUsesNativeAlignment(t *testing.T) {
 
 func TestTextureWriteSourceOffsetUsesBlockRows(t *testing.T) {
 	// BC1's four texel rows occupy one source block row. A two-layer upload
-	// with RowsPerImage=4 must therefore advance by one row pitch per layer.
+	// with RowsPerImage=1 must therefore advance by one row pitch per layer.
 	if got := textureWriteSourceOffset(16, 256, 1, 1, 0); got != 272 {
 		t.Fatalf("BC layer offset = %d, want 272", got)
 	}
@@ -122,8 +122,8 @@ func TestWriteTextureNativeLayoutRepacksUnalignedSourcePitch(t *testing.T) {
 
 func TestWriteTextureNativeLayoutKeepsSourcePaddingOutOfStaging(t *testing.T) {
 	texture := testTexture(gputypes.TextureFormatBC1RGBAUnorm, gputypes.TextureDimension2D, 8, 8, 2, 1)
-	_, native, _, sourceBlockRows, ok := writeTextureNativeLayout(texture, gputypes.TextureAspectAll, hal.ImageDataLayout{BytesPerRow: 300, RowsPerImage: 8}, hal.Extent3D{Width: 8, Height: 4, DepthOrArrayLayers: 2})
-	if !ok || sourceBlockRows != 2 || native.RowsPerImage != 4 {
+	_, native, _, sourceBlockRows, ok := writeTextureNativeLayout(texture, gputypes.TextureAspectAll, hal.ImageDataLayout{BytesPerRow: 300, RowsPerImage: 2}, hal.Extent3D{Width: 8, Height: 4, DepthOrArrayLayers: 2})
+	if !ok || sourceBlockRows != 2 || native.RowsPerImage != 1 {
 		t.Fatalf("native layout = %#v, source block rows = %d, ok=%v", native, sourceBlockRows, ok)
 	}
 }

@@ -350,7 +350,7 @@ func TestPlanBufferTextureCopiesUsesBlockRowsForCompressedLayers(t *testing.T) {
 	}, hal.ImageDataLayout{
 		Offset:       512,
 		BytesPerRow:  256,
-		RowsPerImage: 4,
+		RowsPerImage: 1,
 	}, hal.Extent3D{Width: 4, Height: 4, DepthOrArrayLayers: 2})
 
 	want := []bufferTextureCopyPlan{
@@ -420,7 +420,7 @@ func TestPlanBufferTextureCopiesKeepsMinimum3DBufferBounds(t *testing.T) {
 		wantEnd      uint64
 	}{
 		{name: "rgba8", format: gputypes.TextureFormatRGBA8Unorm, width: 1, height: 1, rowsPerImage: 2, rowBytes: 4, wantEnd: 1028},
-		{name: "bc1", format: gputypes.TextureFormatBC1RGBAUnorm, width: 4, height: 4, rowsPerImage: 8, rowBytes: 8, wantEnd: 1032},
+		{name: "bc1", format: gputypes.TextureFormatBC1RGBAUnorm, width: 4, height: 4, rowsPerImage: 2, rowBytes: 8, wantEnd: 1032},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
