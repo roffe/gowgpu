@@ -311,7 +311,7 @@ func (d *ID3D12DeviceRemovedExtendedData1) GetAutoBreadcrumbsOutput1(output *D3D
 		uintptr(unsafe.Pointer(output)),
 		0,
 	)
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return HRESULTError(ret)
 	}
 	return nil
@@ -326,7 +326,7 @@ func (d *ID3D12DeviceRemovedExtendedData1) GetPageFaultAllocationOutput1(output 
 		uintptr(unsafe.Pointer(output)),
 		0,
 	)
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return HRESULTError(ret)
 	}
 	return nil
@@ -348,7 +348,7 @@ func (d *ID3D12Device) QueryDRED1() *ID3D12DeviceRemovedExtendedData1 {
 		uintptr(unsafe.Pointer(&IID_ID3D12DeviceRemovedExtendedData1)),
 		uintptr(unsafe.Pointer(&dred)),
 	)
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil
 	}
 	return dred

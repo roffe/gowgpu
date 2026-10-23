@@ -21,7 +21,7 @@ func (p *ID3D12PipelineState) GetCachedBlob() ([]byte, error) {
 		uintptr(unsafe.Pointer(&blob)),
 		0,
 	)
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, HRESULTError(ret)
 	}
 	if blob == nil {

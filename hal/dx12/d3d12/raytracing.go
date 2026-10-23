@@ -300,7 +300,7 @@ func (d *ID3D12Device) QueryDevice5() *ID3D12Device5 {
 		uintptr(unsafe.Pointer(&IID_ID3D12Device5)),
 		uintptr(unsafe.Pointer(&dev5)),
 	)
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil
 	}
 	return dev5
@@ -411,7 +411,7 @@ func (c *ID3D12GraphicsCommandList) QueryCommandList4() *ID3D12GraphicsCommandLi
 		uintptr(unsafe.Pointer(&IID_ID3D12GraphicsCommandList4)),
 		uintptr(unsafe.Pointer(&list4)),
 	)
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil
 	}
 	return list4

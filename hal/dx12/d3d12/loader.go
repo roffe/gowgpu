@@ -66,7 +66,7 @@ func (lib *D3D12Lib) CreateDevice(adapter unsafe.Pointer, minFeatureLevel D3D_FE
 		uintptr(unsafe.Pointer(&device)),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, HRESULTError(ret)
 	}
 	return device, nil
@@ -81,7 +81,7 @@ func (lib *D3D12Lib) GetDebugInterface() (*ID3D12Debug, error) {
 		uintptr(unsafe.Pointer(&debug)),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, HRESULTError(ret)
 	}
 	return debug, nil
@@ -96,7 +96,7 @@ func (lib *D3D12Lib) GetDebugInterface1() (*ID3D12Debug1, error) {
 		uintptr(unsafe.Pointer(&debug)),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, HRESULTError(ret)
 	}
 	return debug, nil
@@ -111,7 +111,7 @@ func (lib *D3D12Lib) GetDebugInterface3() (*ID3D12Debug3, error) {
 		uintptr(unsafe.Pointer(&debug)),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, HRESULTError(ret)
 	}
 	return debug, nil
@@ -128,7 +128,7 @@ func (lib *D3D12Lib) GetDREDSettings() (*ID3D12DeviceRemovedExtendedDataSettings
 		uintptr(unsafe.Pointer(&settings)),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, HRESULTError(ret)
 	}
 	return settings, nil
@@ -149,7 +149,7 @@ func (lib *D3D12Lib) SerializeRootSignature(
 		uintptr(unsafe.Pointer(&errorBlob)),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, errorBlob, HRESULTError(ret)
 	}
 	return blob, nil, nil

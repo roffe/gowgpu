@@ -66,7 +66,7 @@ func (d *ID3D12Device) CheckFeatureSupport(feature D3D12_FEATURE, featureData un
 		0, 0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return HRESULTError(ret)
 	}
 	return nil
@@ -86,7 +86,7 @@ func (d *ID3D12Device) CreateCommandQueue(desc *D3D12_COMMAND_QUEUE_DESC) (*ID3D
 		0, 0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, HRESULTError(ret)
 	}
 	return queue, nil
@@ -106,7 +106,7 @@ func (d *ID3D12Device) CreateCommandAllocator(listType D3D12_COMMAND_LIST_TYPE) 
 		0, 0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, HRESULTError(ret)
 	}
 	return allocator, nil
@@ -126,7 +126,7 @@ func (d *ID3D12Device) CreateGraphicsPipelineState(desc *D3D12_GRAPHICS_PIPELINE
 		0, 0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, HRESULTError(ret)
 	}
 	return pso, nil
@@ -146,7 +146,7 @@ func (d *ID3D12Device) CreateComputePipelineState(desc *D3D12_COMPUTE_PIPELINE_S
 		0, 0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, HRESULTError(ret)
 	}
 	return pso, nil
@@ -174,7 +174,7 @@ func (d *ID3D12Device) CreateCommandList(
 		0, 0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, HRESULTError(ret)
 	}
 	return cmdList, nil
@@ -194,7 +194,7 @@ func (d *ID3D12Device) CreateDescriptorHeap(desc *D3D12_DESCRIPTOR_HEAP_DESC) (*
 		0, 0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, HRESULTError(ret)
 	}
 	return heap, nil
@@ -231,7 +231,7 @@ func (d *ID3D12Device) CreateRootSignature(
 		uintptr(unsafe.Pointer(&rootSig)),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, HRESULTError(ret)
 	}
 	return rootSig, nil
@@ -389,7 +389,7 @@ func (d *ID3D12Device) CreateCommittedResource(
 		0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, HRESULTError(ret)
 	}
 	return resource, nil
@@ -409,7 +409,7 @@ func (d *ID3D12Device) CreateHeap(desc *D3D12_HEAP_DESC) (*ID3D12Heap, error) {
 		0, 0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, HRESULTError(ret)
 	}
 	return heap, nil
@@ -439,7 +439,7 @@ func (d *ID3D12Device) CreatePlacedResource(
 		0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, HRESULTError(ret)
 	}
 	return resource, nil
@@ -460,7 +460,7 @@ func (d *ID3D12Device) CreateFence(initialValue uint64, flags D3D12_FENCE_FLAGS)
 		0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, HRESULTError(ret)
 	}
 	return fence, nil
@@ -475,7 +475,7 @@ func (d *ID3D12Device) GetDeviceRemovedReason() error {
 		0, 0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return HRESULTError(ret)
 	}
 	return nil
@@ -495,7 +495,7 @@ func (d *ID3D12Device) CreateQueryHeap(desc *D3D12_QUERY_HEAP_DESC) (*ID3D12Quer
 		0, 0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, HRESULTError(ret)
 	}
 	return heap, nil
@@ -519,7 +519,7 @@ func (d *ID3D12Device) CreateCommandSignature(
 		0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, HRESULTError(ret)
 	}
 	return sig, nil
@@ -581,7 +581,7 @@ func (q *ID3D12CommandQueue) Signal(fence *ID3D12Fence, value uint64) error {
 		uintptr(value),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return HRESULTError(ret)
 	}
 	return nil
@@ -597,7 +597,7 @@ func (q *ID3D12CommandQueue) Wait(fence *ID3D12Fence, value uint64) error {
 		uintptr(value),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return HRESULTError(ret)
 	}
 	return nil
@@ -615,7 +615,7 @@ func (q *ID3D12CommandQueue) GetTimestampFrequency() (uint64, error) {
 		0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return 0, HRESULTError(ret)
 	}
 	return frequency, nil
@@ -661,7 +661,7 @@ func (a *ID3D12CommandAllocator) Reset() error {
 		0, 0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return HRESULTError(ret)
 	}
 	return nil
@@ -691,7 +691,7 @@ func (c *ID3D12GraphicsCommandList) Close() error {
 		0, 0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return HRESULTError(ret)
 	}
 	return nil
@@ -707,7 +707,7 @@ func (c *ID3D12GraphicsCommandList) Reset(allocator *ID3D12CommandAllocator, ini
 		uintptr(unsafe.Pointer(initialState)),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return HRESULTError(ret)
 	}
 	return nil
@@ -1174,7 +1174,7 @@ func (f *ID3D12Fence) SetEventOnCompletion(value uint64, hEvent uintptr) error {
 		hEvent,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return HRESULTError(ret)
 	}
 	return nil
@@ -1190,7 +1190,7 @@ func (f *ID3D12Fence) Signal(value uint64) error {
 		0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return HRESULTError(ret)
 	}
 	return nil
@@ -1236,7 +1236,7 @@ func (r *ID3D12Resource) Map(subresource uint32, readRange *D3D12_RANGE) (unsafe
 		0, 0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, HRESULTError(ret)
 	}
 	return data, nil
@@ -1597,7 +1597,7 @@ func (d *ID3D12Device) QueryInfoQueue() *ID3D12InfoQueue {
 		uintptr(unsafe.Pointer(&IID_ID3D12InfoQueue)),
 		uintptr(unsafe.Pointer(&infoQueue)),
 	)
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil
 	}
 	return infoQueue

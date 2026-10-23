@@ -101,7 +101,7 @@ func (d *idcompositionDevice) Release() {
 // Commit commits all pending DirectComposition commands.
 func (d *idcompositionDevice) Commit() error {
 	ret, _, _ := syscall.SyscallN(d.vtbl.Commit, uintptr(unsafe.Pointer(d)))
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return d3d12.HRESULTError(ret)
 	}
 	return nil
@@ -125,7 +125,7 @@ func (d *idcompositionDevice) CreateTargetForHwnd(hwnd uintptr, topmost bool) (*
 		uintptr(unsafe.Pointer(&target)),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, d3d12.HRESULTError(ret)
 	}
 	return target, nil
@@ -141,7 +141,7 @@ func (d *idcompositionDevice) CreateVisual() (*idcompositionVisual, error) {
 		uintptr(unsafe.Pointer(&visual)),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, d3d12.HRESULTError(ret)
 	}
 	return visual, nil
@@ -185,7 +185,7 @@ func (t *idcompositionTarget) SetRoot(visual *idcompositionVisual) error {
 		uintptr(unsafe.Pointer(visual)),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return d3d12.HRESULTError(ret)
 	}
 	return nil
@@ -252,7 +252,7 @@ func (v *idcompositionVisual) setContent(content unsafe.Pointer) error {
 		uintptr(content),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return d3d12.HRESULTError(ret)
 	}
 	return nil
@@ -287,7 +287,7 @@ func (s *dcompState) init(hwnd uintptr) error {
 		uintptr(unsafe.Pointer(&iidIDCompositionDevice)),
 		uintptr(unsafe.Pointer(&device)),
 	)
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return fmt.Errorf("DCompositionCreateDevice2: %w", d3d12.HRESULTError(ret))
 	}
 	s.device = device

@@ -59,7 +59,7 @@ func (lib *DXGILib) CreateFactory1() (*IDXGIFactory1, error) {
 		uintptr(unsafe.Pointer(&factory)),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, d3d12.HRESULTError(ret)
 	}
 	return factory, nil
@@ -76,7 +76,7 @@ func (lib *DXGILib) CreateFactory2(flags uint32) (*IDXGIFactory6, error) {
 		uintptr(unsafe.Pointer(&factory)),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, d3d12.HRESULTError(ret)
 	}
 	return factory, nil
@@ -92,7 +92,7 @@ func (lib *DXGILib) CreateFactory4(flags uint32) (*IDXGIFactory4, error) {
 		uintptr(unsafe.Pointer(&factory)),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, d3d12.HRESULTError(ret)
 	}
 	return factory, nil
@@ -125,7 +125,7 @@ func (f *IDXGIFactory1) EnumAdapters1(index uint32) (*IDXGIAdapter1, error) {
 		uintptr(unsafe.Pointer(&adapter)),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, d3d12.HRESULTError(ret)
 	}
 	return adapter, nil
@@ -158,7 +158,7 @@ func (f *IDXGIFactory4) EnumAdapters1(index uint32) (*IDXGIAdapter1, error) {
 		uintptr(unsafe.Pointer(&adapter)),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, d3d12.HRESULTError(ret)
 	}
 	return adapter, nil
@@ -178,7 +178,7 @@ func (f *IDXGIFactory4) EnumAdapterByLuid(luid LUID) (*IDXGIAdapter1, error) {
 		0, 0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, d3d12.HRESULTError(ret)
 	}
 	return adapter, nil
@@ -196,7 +196,7 @@ func (f *IDXGIFactory4) EnumWarpAdapter() (*IDXGIAdapter1, error) {
 		uintptr(unsafe.Pointer(&adapter)),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, d3d12.HRESULTError(ret)
 	}
 	return adapter, nil
@@ -212,7 +212,7 @@ func (f *IDXGIFactory4) MakeWindowAssociation(hwnd uintptr, flags DXGI_MWA) erro
 		uintptr(flags),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return d3d12.HRESULTError(ret)
 	}
 	return nil
@@ -241,7 +241,7 @@ func (f *IDXGIFactory4) CreateSwapChainForHwnd(
 		0, 0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, d3d12.HRESULTError(ret)
 	}
 	return swapChain, nil
@@ -274,7 +274,7 @@ func (f *IDXGIFactory6) EnumAdapters1(index uint32) (*IDXGIAdapter1, error) {
 		uintptr(unsafe.Pointer(&adapter)),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, d3d12.HRESULTError(ret)
 	}
 	return adapter, nil
@@ -298,7 +298,7 @@ func (f *IDXGIFactory6) EnumAdapterByGpuPreference(
 		0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, d3d12.HRESULTError(ret)
 	}
 	return adapter, nil
@@ -318,7 +318,7 @@ func (f *IDXGIFactory6) EnumAdapterByLuid(luid LUID) (*IDXGIAdapter4, error) {
 		0, 0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, d3d12.HRESULTError(ret)
 	}
 	return adapter, nil
@@ -336,7 +336,7 @@ func (f *IDXGIFactory6) EnumWarpAdapter() (*IDXGIAdapter4, error) {
 		uintptr(unsafe.Pointer(&adapter)),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, d3d12.HRESULTError(ret)
 	}
 	return adapter, nil
@@ -352,7 +352,7 @@ func (f *IDXGIFactory6) MakeWindowAssociation(hwnd uintptr, flags DXGI_MWA) erro
 		uintptr(flags),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return d3d12.HRESULTError(ret)
 	}
 	return nil
@@ -381,7 +381,7 @@ func (f *IDXGIFactory6) CreateSwapChainForHwnd(
 		0, 0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, d3d12.HRESULTError(ret)
 	}
 	return swapChain, nil
@@ -412,7 +412,7 @@ func (f *IDXGIFactory6) CreateSwapChainForComposition(
 		0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, d3d12.HRESULTError(ret)
 	}
 	return swapChain, nil
@@ -430,7 +430,7 @@ func (f *IDXGIFactory6) CheckFeatureSupport(feature DXGI_FEATURE, featureData un
 		0, 0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return d3d12.HRESULTError(ret)
 	}
 	return nil
@@ -463,7 +463,7 @@ func (a *IDXGIAdapter1) GetDesc1() (DXGI_ADAPTER_DESC1, error) {
 		0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return desc, d3d12.HRESULTError(ret)
 	}
 	return desc, nil
@@ -481,7 +481,7 @@ func (a *IDXGIAdapter1) EnumOutputs(index uint32) (*IDXGIOutput, error) {
 		uintptr(unsafe.Pointer(&output)),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, d3d12.HRESULTError(ret)
 	}
 	return output, nil
@@ -500,7 +500,7 @@ func (a *IDXGIAdapter1) CheckInterfaceSupport(interfaceName *GUID) (int64, error
 		uintptr(unsafe.Pointer(&version)),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return 0, d3d12.HRESULTError(ret)
 	}
 	return version, nil
@@ -533,7 +533,7 @@ func (a *IDXGIAdapter4) GetDesc1() (DXGI_ADAPTER_DESC1, error) {
 		0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return desc, d3d12.HRESULTError(ret)
 	}
 	return desc, nil
@@ -551,7 +551,7 @@ func (a *IDXGIAdapter4) GetDesc3() (DXGI_ADAPTER_DESC3, error) {
 		0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return desc, d3d12.HRESULTError(ret)
 	}
 	return desc, nil
@@ -569,7 +569,7 @@ func (a *IDXGIAdapter4) EnumOutputs(index uint32) (*IDXGIOutput, error) {
 		uintptr(unsafe.Pointer(&output)),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, d3d12.HRESULTError(ret)
 	}
 	return output, nil
@@ -587,7 +587,7 @@ func (a *IDXGIAdapter4) CheckInterfaceSupport(interfaceName *GUID) (int64, error
 		uintptr(unsafe.Pointer(&version)),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return 0, d3d12.HRESULTError(ret)
 	}
 	return version, nil
@@ -620,7 +620,7 @@ func (o *IDXGIOutput) GetDesc() (DXGI_OUTPUT_DESC, error) {
 		0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return desc, d3d12.HRESULTError(ret)
 	}
 	return desc, nil
@@ -635,7 +635,7 @@ func (o *IDXGIOutput) WaitForVBlank() error {
 		0, 0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return d3d12.HRESULTError(ret)
 	}
 	return nil
@@ -668,7 +668,7 @@ func (s *IDXGISwapChain1) QueryInterface() (*IDXGISwapChain4, error) {
 		uintptr(unsafe.Pointer(&swapchain4)),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, d3d12.HRESULTError(ret)
 	}
 	return swapchain4, nil
@@ -684,7 +684,7 @@ func (s *IDXGISwapChain1) Present(syncInterval, flags uint32) error {
 		uintptr(flags),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return d3d12.HRESULTError(ret)
 	}
 	return nil
@@ -704,7 +704,7 @@ func (s *IDXGISwapChain1) GetBuffer(index uint32, riid *GUID) (unsafe.Pointer, e
 		0, 0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, d3d12.HRESULTError(ret)
 	}
 	return resource, nil
@@ -723,7 +723,7 @@ func (s *IDXGISwapChain1) ResizeBuffers(bufferCount, width, height uint32, forma
 		uintptr(flags),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return d3d12.HRESULTError(ret)
 	}
 	return nil
@@ -741,7 +741,7 @@ func (s *IDXGISwapChain1) GetDesc1() (DXGI_SWAP_CHAIN_DESC1, error) {
 		0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return desc, d3d12.HRESULTError(ret)
 	}
 	return desc, nil
@@ -757,7 +757,7 @@ func (s *IDXGISwapChain1) SetFullscreenState(fullscreen int32, target *IDXGIOutp
 		uintptr(unsafe.Pointer(target)),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return d3d12.HRESULTError(ret)
 	}
 	return nil
@@ -776,7 +776,7 @@ func (s *IDXGISwapChain1) GetFullscreenState() (bool, *IDXGIOutput, error) {
 		uintptr(unsafe.Pointer(&target)),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return false, nil, d3d12.HRESULTError(ret)
 	}
 	return fullscreen != 0, target, nil
@@ -807,7 +807,7 @@ func (s *IDXGISwapChain3) Present(syncInterval, flags uint32) error {
 		uintptr(flags),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return d3d12.HRESULTError(ret)
 	}
 	return nil
@@ -827,7 +827,7 @@ func (s *IDXGISwapChain3) GetBuffer(index uint32, riid *GUID) (unsafe.Pointer, e
 		0, 0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, d3d12.HRESULTError(ret)
 	}
 	return resource, nil
@@ -846,7 +846,7 @@ func (s *IDXGISwapChain3) ResizeBuffers(bufferCount, width, height uint32, forma
 		uintptr(flags),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return d3d12.HRESULTError(ret)
 	}
 	return nil
@@ -875,7 +875,7 @@ func (s *IDXGISwapChain3) GetDesc1() (DXGI_SWAP_CHAIN_DESC1, error) {
 		0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return desc, d3d12.HRESULTError(ret)
 	}
 	return desc, nil
@@ -891,7 +891,7 @@ func (s *IDXGISwapChain3) SetMaximumFrameLatency(maxLatency uint32) error {
 		0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return d3d12.HRESULTError(ret)
 	}
 	return nil
@@ -933,7 +933,7 @@ func (s *IDXGISwapChain4) Present(syncInterval, flags uint32) error {
 		uintptr(flags),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return d3d12.HRESULTError(ret)
 	}
 	return nil
@@ -956,7 +956,7 @@ func (s *IDXGISwapChain4) Present1(syncInterval, flags uint32, params *DXGI_PRES
 		0, 0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return d3d12.HRESULTError(ret)
 	}
 	return nil
@@ -976,7 +976,7 @@ func (s *IDXGISwapChain4) GetBuffer(index uint32, riid *GUID) (unsafe.Pointer, e
 		0, 0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return nil, d3d12.HRESULTError(ret)
 	}
 	return resource, nil
@@ -995,7 +995,7 @@ func (s *IDXGISwapChain4) ResizeBuffers(bufferCount, width, height uint32, forma
 		uintptr(flags),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return d3d12.HRESULTError(ret)
 	}
 	return nil
@@ -1024,7 +1024,7 @@ func (s *IDXGISwapChain4) GetDesc1() (DXGI_SWAP_CHAIN_DESC1, error) {
 		0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return desc, d3d12.HRESULTError(ret)
 	}
 	return desc, nil
@@ -1040,7 +1040,7 @@ func (s *IDXGISwapChain4) SetMaximumFrameLatency(maxLatency uint32) error {
 		0,
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return d3d12.HRESULTError(ret)
 	}
 	return nil
@@ -1067,7 +1067,7 @@ func (s *IDXGISwapChain4) SetFullscreenState(fullscreen int32, target *IDXGIOutp
 		uintptr(unsafe.Pointer(target)),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return d3d12.HRESULTError(ret)
 	}
 	return nil
@@ -1086,7 +1086,7 @@ func (s *IDXGISwapChain4) GetFullscreenState() (bool, *IDXGIOutput, error) {
 		uintptr(unsafe.Pointer(&target)),
 	)
 
-	if ret != 0 {
+	if int32(ret) < 0 {
 		return false, nil, d3d12.HRESULTError(ret)
 	}
 	return fullscreen != 0, target, nil
