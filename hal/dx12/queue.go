@@ -804,12 +804,9 @@ func (q *Queue) Present(surface hal.Surface, texture hal.SurfaceTexture, damageR
 			presentFlags |= uint32(dxgi.DXGI_PRESENT_ALLOW_TEARING)
 		}
 	case hal.PresentModeMailbox:
-		// VSync with triple buffering (latest frame wins)
-		// Mailbox is simulated with syncInterval=0 + triple buffer
+		// Mailbox is syncInterval=0 without tearing: the compositor shows
+		// the latest frame each vblank.
 		syncInterval = 0
-		if dx12Surface.allowTearing {
-			presentFlags |= uint32(dxgi.DXGI_PRESENT_ALLOW_TEARING)
-		}
 	case hal.PresentModeFifo, hal.PresentModeFifoRelaxed:
 		// VSync enabled
 		syncInterval = 1

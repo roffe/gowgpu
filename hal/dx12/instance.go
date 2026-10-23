@@ -463,11 +463,14 @@ func (s *Surface) Configure(device hal.Device, config *hal.SurfaceConfiguration)
 		return fmt.Errorf("dx12: device is not a DX12 device")
 	}
 
-	// If we already have a swapchain with the same device, resize it —
-	// UNLESS the alpha mode changed (Opaque↔Premultiplied requires a
-	// different swap chain creation path: HWND vs DirectComposition).
+	// If we already have a swapchain with the same device, resize it,
+	// unless the configuration needs a swap chain ResizeBuffers can't make
+	// of it: another creation path (HWND or DirectComposition), the
+	// ALLOW_TEARING flag added or dropped, or another swap effect.
 	if s.swapchain != nil && s.device == dx12Device {
-		if useDComp(config) == (s.dcomp != nil) {
+		tears := swapchainTears(s.instance.allowTearing, config)
+		if useDComp(config) == (s.dcomp != nil) && tears == s.allowTearing &&
+			(config.EnableDamagePresent && !tears) == s.damagePresent {
 			return s.resizeSwapchain(config)
 		}
 	}

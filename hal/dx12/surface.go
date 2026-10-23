@@ -44,11 +44,9 @@ func (s *Surface) createSwapchain(device *Device, config *hal.SurfaceConfigurati
 
 	// Determine swapchain flags
 	var swapchainFlags uint32
-	if s.instance.allowTearing && config.PresentMode == hal.PresentModeImmediate {
+	s.allowTearing = swapchainTears(s.instance.allowTearing, config)
+	if s.allowTearing {
 		swapchainFlags |= uint32(dxgi.DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING)
-		s.allowTearing = true
-	} else {
-		s.allowTearing = false
 	}
 	// Add frame latency waitable object flag for better frame pacing
 	swapchainFlags |= uint32(dxgi.DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT)
@@ -208,6 +206,16 @@ func (s *Surface) createSwapchain(device *Device, config *hal.SurfaceConfigurati
 	}
 
 	return nil
+}
+
+// swapchainTears reports whether the swap chain of a configuration is
+// created with ALLOW_TEARING. ResizeBuffers can neither add nor drop the
+// flag, so it goes on whenever the system supports it, as in wgpu-hal, and
+// Present asks to tear for Immediate only. Damage present needs
+// FLIP_SEQUENTIAL, which is kept off swap chains that tear, so outside
+// Immediate it wins over the flag.
+func swapchainTears(supported bool, config *hal.SurfaceConfiguration) bool {
+	return supported && (config.PresentMode == hal.PresentModeImmediate || !config.EnableDamagePresent)
 }
 
 // useDComp reports whether a configuration takes a DirectComposition swap
