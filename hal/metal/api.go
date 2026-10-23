@@ -7,6 +7,8 @@ package metal
 
 import (
 	"fmt"
+	"math"
+	"runtime"
 
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
@@ -89,6 +91,15 @@ func (i *Instance) EnumerateAdapters(surfaceHint hal.Surface) []hal.ExposedAdapt
 		}
 
 		maxBuf := DeviceMaxBufferLength(device)
+		family := gpuFamilyLimits(device)
+		sampledTextures := family.textureEntries * 3 / 4
+		interStage := family.fragmentInputs - 4
+		if DeviceSupportsFamily(device, MTLGPUFamilyApple1) {
+			interStage = min(family.fragmentInputs, family.fragmentInputComponents/4)
+		}
+		// naga's bounds checks and `_buffer_sizes` take a binding's size as a
+		// u32.
+		storageBinding := min(maxBuf, math.MaxUint32&^3)
 
 		hal.Logger().Info("metal: adapter found",
 			"name", deviceName,
@@ -115,8 +126,8 @@ func (i *Instance) EnumerateAdapters(surfaceHint hal.Surface) []hal.ExposedAdapt
 			Features: features,
 			Capabilities: hal.Capabilities{
 				Limits: gputypes.Limits{
-					MaxTextureDimension1D:                     16384,
-					MaxTextureDimension2D:                     16384,
+					MaxTextureDimension1D:                     family.textureSize,
+					MaxTextureDimension2D:                     family.textureSize,
 					MaxTextureDimension3D:                     2048,
 					MaxTextureArrayLayers:                     2048,
 					MaxBindGroups:                             4,
@@ -124,13 +135,13 @@ func (i *Instance) EnumerateAdapters(surfaceHint hal.Surface) []hal.ExposedAdapt
 					MaxBindingsPerBindGroup:                   1000,
 					MaxDynamicUniformBuffersPerPipelineLayout: 12,
 					MaxDynamicStorageBuffersPerPipelineLayout: 4,
-					MaxSampledTexturesPerShaderStage:          128,
+					MaxSampledTexturesPerShaderStage:          sampledTextures,
 					MaxSamplersPerShaderStage:                 16,
 					MaxStorageBuffersPerShaderStage:           8,
-					MaxStorageTexturesPerShaderStage:          8,
+					MaxStorageTexturesPerShaderStage:          family.textureEntries - sampledTextures,
 					MaxUniformBuffersPerShaderStage:           12,
 					MaxUniformBufferBindingSize:               maxBuf,
-					MaxStorageBufferBindingSize:               maxBuf,
+					MaxStorageBufferBindingSize:               storageBinding,
 					MinUniformBufferOffsetAlignment:           256,
 					MinStorageBufferOffsetAlignment:           256,
 					MaxVertexBuffers:                          vertexBuffersLimit,
@@ -138,14 +149,14 @@ func (i *Instance) EnumerateAdapters(surfaceHint hal.Surface) []hal.ExposedAdapt
 					MaxVertexAttributes:                       31,
 					MaxVertexBufferArrayStride:                2048,
 
-					MaxInterStageShaderVariables:      60,
-					MaxColorAttachments:               8,
-					MaxColorAttachmentBytesPerSample:  128,
-					MaxComputeWorkgroupStorageSize:    32768,
-					MaxComputeInvocationsPerWorkgroup: 1024,
-					MaxComputeWorkgroupSizeX:          1024,
-					MaxComputeWorkgroupSizeY:          1024,
-					MaxComputeWorkgroupSizeZ:          1024,
+					MaxInterStageShaderVariables:      interStage,
+					MaxColorAttachments:               family.colorTargets,
+					MaxColorAttachmentBytesPerSample:  family.renderTargetBytes,
+					MaxComputeWorkgroupStorageSize:    family.threadgroupMemory,
+					MaxComputeInvocationsPerWorkgroup: family.threadsPerThreadgroup,
+					MaxComputeWorkgroupSizeX:          family.threadsPerThreadgroup,
+					MaxComputeWorkgroupSizeY:          family.threadsPerThreadgroup,
+					MaxComputeWorkgroupSizeZ:          family.threadsPerThreadgroup,
 					MaxComputeWorkgroupsPerDimension:  65535,
 				},
 				AlignmentsMask: hal.Alignments{
@@ -170,6 +181,51 @@ func (i *Instance) EnumerateAdapters(surfaceHint hal.Surface) []hal.ExposedAdapt
 	}
 
 	return adapters
+}
+
+// familyLimits are the limits that differ between GPU families: the
+// entries of a function's texture argument table, threads and memory of a
+// threadgroup, a fragment function's inputs and input components, the 1D
+// and 2D texture size, color render targets and the bytes a sample of
+// them all may take.
+type familyLimits struct {
+	textureEntries, threadsPerThreadgroup, threadgroupMemory uint32
+	fragmentInputs, fragmentInputComponents                  uint32
+	textureSize, colorTargets, renderTargetBytes             uint32
+}
+
+// familyTable is the Metal feature set tables as Dawn has them, by family,
+// the first one a device supports picked: on macOS Mac2, which Apple silicon
+// Macs support too.
+var familyTable = []struct {
+	family MTLGPUFamily
+	familyLimits
+}{
+	{MTLGPUFamilyMac2, familyLimits{128, 1024, 32768, 32, 124, 16384, 8, 128}},
+	{MTLGPUFamilyApple9, familyLimits{128, 1024, 32768, 124, 124, 16384, 8, 64}},
+	{MTLGPUFamilyApple8, familyLimits{128, 1024, 32768, 124, 124, 16384, 8, 64}},
+	{MTLGPUFamilyApple7, familyLimits{128, 1024, 32768, 124, 124, 16384, 8, 64}},
+	{MTLGPUFamilyApple6, familyLimits{128, 1024, 32768, 124, 124, 16384, 8, 64}},
+	{MTLGPUFamilyApple5, familyLimits{96, 1024, 32768, 124, 124, 16384, 8, 64}},
+	{MTLGPUFamilyApple4, familyLimits{96, 1024, 32768, 124, 124, 16384, 8, 64}},
+	{MTLGPUFamilyApple3, familyLimits{31, 512, 16384, 60, 60, 16384, 8, 32}},
+	{MTLGPUFamilyApple2, familyLimits{31, 512, 16352, 60, 60, 8192, 8, 32}},
+	{MTLGPUFamilyApple1, familyLimits{31, 512, 16352, 60, 60, 8192, 4, 16}},
+}
+
+// gpuFamilyLimits returns the familyLimits of device.
+//
+// Reference: Dawn native/metal/PhysicalDeviceMTL.mm InitializeSupportedLimitsImpl.
+func gpuFamilyLimits(device ID) familyLimits {
+	for _, f := range familyTable {
+		if f.family == MTLGPUFamilyMac2 && runtime.GOOS != "darwin" {
+			continue
+		}
+		if DeviceSupportsFamily(device, f.family) {
+			return f.familyLimits
+		}
+	}
+	return familyTable[0].familyLimits
 }
 
 // Destroy releases the instance.
