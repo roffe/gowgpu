@@ -218,13 +218,10 @@ func (d *Device) vkFormat(format gputypes.TextureFormat) vk.Format {
 	return textureFormatToVk(format)
 }
 
-// initAllocator initializes the memory allocator for this device.
-func (d *Device) initAllocator() error {
-	// Get physical device memory properties
+// memoryProperties returns the memory types and heaps of the device.
+func (d *Device) memoryProperties() memory.DeviceMemoryProperties {
 	var vkProps vk.PhysicalDeviceMemoryProperties
 	d.instance.cmds.GetPhysicalDeviceMemoryProperties(d.physicalDevice, &vkProps)
-
-	// Convert to our format
 	props := memory.DeviceMemoryProperties{
 		MemoryTypes: make([]memory.MemoryType, vkProps.MemoryTypeCount),
 		MemoryHeaps: make([]memory.MemoryHeap, vkProps.MemoryHeapCount),
@@ -243,6 +240,12 @@ func (d *Device) initAllocator() error {
 			Flags: vkProps.MemoryHeaps[i].Flags,
 		}
 	}
+	return props
+}
+
+// initAllocator initializes the memory allocator for this device.
+func (d *Device) initAllocator() error {
+	props := d.memoryProperties()
 
 	// Query maxMemoryAllocationSize (Vulkan 1.1 core, BUG-VK-001).
 	// This prevents SIGSEGV from vkAllocateMemory silently failing

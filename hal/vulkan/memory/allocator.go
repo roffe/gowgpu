@@ -5,6 +5,7 @@ package memory
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/roffe/gowgpu/hal/vulkan/vk"
@@ -25,8 +26,10 @@ type AllocatorConfig struct {
 	// Default: 32MB.
 	DedicatedThreshold uint64
 
-	// MaxBlocksPerHeap limits memory blocks per heap.
-	// Default: 8 (512MB per heap with 64MB blocks).
+	// MaxBlocksPerHeap is how many blocks a memory type's pool keeps. A pool
+	// grows past it when its blocks are full, and while it has more blocks
+	// than this it frees each block that empties.
+	// Default: 8.
 	MaxBlocksPerHeap int
 }
 
@@ -301,12 +304,6 @@ func (a *GpuAllocator) allocPooled(size uint64, memTypeIndex uint32) (*MemoryBlo
 		}
 	}
 
-	// Need to allocate a new block
-	if len(pool.blocks) >= pool.maxBlocks {
-		// Too many blocks, try dedicated allocation
-		return a.allocDedicated(size, memTypeIndex)
-	}
-
 	// Blocks start small and double up to the configured size, so an app
 	// that needs a few MB of each memory type does not commit 64 MB of it
 	// up front. A request bigger than the next block gets a block that fits.
@@ -400,7 +397,7 @@ func (a *GpuAllocator) freePooled(block *MemoryBlock) error {
 	pool := a.pools[block.memoryTypeIndex]
 
 	// Find the pool block containing this allocation
-	for _, poolBlock := range pool.blocks {
+	for i, poolBlock := range pool.blocks {
 		if poolBlock.memory != block.Memory {
 			continue
 		}
@@ -415,6 +412,13 @@ func (a *GpuAllocator) freePooled(block *MemoryBlock) error {
 		a.stats.PooledAllocations--
 		a.stats.AllocationCount--
 
+		if len(pool.blocks) > pool.maxBlocks && poolBlock.buddy.Stats().AllocationCount == 0 {
+			a.vulkanFree(poolBlock.memory)
+			pool.blocks = slices.Delete(pool.blocks, i, i+1)
+			pool.stats.BlockCount--
+			pool.stats.TotalSize -= poolBlock.size
+			a.stats.TotalAllocated -= poolBlock.size
+		}
 		return nil
 	}
 
