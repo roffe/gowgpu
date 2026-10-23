@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"runtime"
 	"sync/atomic"
+	"unsafe"
 
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
@@ -1318,6 +1319,7 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 	rpe.renderPass = 0
 	rpe.framebuffer = 0
 	rpe.begun = false
+	rpe.depthRange = [2]float32{0, 1}
 
 	if e.active == 0 {
 		return rpe
@@ -1577,6 +1579,9 @@ type RenderPassEncoder struct {
 	// because BeginRenderPass returns an encoder either way.
 	begun  bool
 	groups bindGroups
+	// depthRange is the viewport's depth range, which fragment shaders
+	// clamp the depth they write to (shaderOptions).
+	depthRange [2]float32
 }
 
 // maxBindGroupSlots is how many bind group slots a pass has (WebGPU's
@@ -1677,6 +1682,17 @@ func (e *RenderPassEncoder) SetPipeline(pipeline hal.RenderPipeline) {
 	}
 	e.pipeline = p
 	vkCmdBindPipeline(e.encoder.device.cmds, e.encoder.active, vk.PipelineBindPointGraphics, p.handle)
+	e.pushDepthRange()
+}
+
+// pushDepthRange pushes the viewport's depth range to the fragment shaders
+// of the pipeline set.
+func (e *RenderPassEncoder) pushDepthRange() {
+	if e.pipeline == nil {
+		return
+	}
+	e.encoder.device.cmds.CmdPushConstants(e.encoder.active, e.pipeline.layout.handle,
+		vk.ShaderStageFlags(vk.ShaderStageFragmentBit), fragDepthRangeOffset, 8, (*uintptr)(unsafe.Pointer(&e.depthRange[0])))
 }
 
 // SetBindGroup sets a bind group, which the next draw binds.
@@ -1750,6 +1766,8 @@ func (e *RenderPassEncoder) SetViewport(vp gputypes.Viewport) {
 	}
 
 	vkCmdSetViewport(e.encoder.device.cmds, e.encoder.active, 0, 1, &viewport)
+	e.depthRange = [2]float32{vp.MinDepth, vp.MaxDepth}
+	e.pushDepthRange()
 }
 
 // SetScissorRect sets the scissor rectangle.

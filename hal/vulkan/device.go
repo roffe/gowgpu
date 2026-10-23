@@ -1319,7 +1319,7 @@ func (d *Device) CreatePipelineLayout(desc *hal.PipelineLayoutDescriptor) (hal.P
 	}
 
 	// Convert push constant ranges
-	pushConstantRanges := make([]vk.PushConstantRange, 0, len(desc.PushConstantRanges))
+	pushConstantRanges := make([]vk.PushConstantRange, 0, len(desc.PushConstantRanges)+1)
 	for _, pcr := range desc.PushConstantRanges {
 		pushConstantRanges = append(pushConstantRanges, vk.PushConstantRange{
 			StageFlags: shaderStagesToVk(pcr.Stages),
@@ -1327,6 +1327,11 @@ func (d *Device) CreatePipelineLayout(desc *hal.PipelineLayoutDescriptor) (hal.P
 			Size:       pcr.Range.End - pcr.Range.Start,
 		})
 	}
+	pushConstantRanges = append(pushConstantRanges, vk.PushConstantRange{
+		StageFlags: vk.ShaderStageFlags(vk.ShaderStageFragmentBit),
+		Offset:     fragDepthRangeOffset,
+		Size:       8,
+	})
 
 	createInfo := vk.PipelineLayoutCreateInfo{
 		SType:          vk.StructureTypePipelineLayoutCreateInfo,
@@ -1479,7 +1484,10 @@ func (d *Device) compileWGSL(module *ir.Module, opts naga.OverrideOptions) ([]ui
 // index, a buffer access and an image load in bounds, which WGSL requires
 // and robustBufferAccess does not give for function, private and workgroup
 // arrays or image fetches, loops that cannot hang the GPU, and a point size
-// of 1, which a point list pipeline needs written.
+// of 1, which a point list pipeline needs written. As in Dawn, a fragment
+// shader clamps the depth it writes to the viewport's depth range, which
+// the render pass pushes at fragDepthRangeOffset: WebGPU clamps it, Vulkan
+// doesn't.
 func shaderOptions(apiVersion uint32) spirv.Options {
 	version := spirv.Version1_3
 	if apiVersion < vkMakeVersion(1, 1, 0) {
@@ -1494,8 +1502,15 @@ func shaderOptions(apiVersion uint32) spirv.Options {
 		},
 		ForcePointSize:    true,
 		ForceLoopBounding: true,
+		ClampFragDepth:    &spirv.ClampFragDepth{Offset: fragDepthRangeOffset},
 	}
 }
+
+// fragDepthRangeOffset is where the push constants hold the depth range of
+// the frag_depth clamp, two floats in every pipeline layout.
+// ponytail: offset 0, since the device offers no push constants of its own
+// (FeaturePushConstants); with them, it goes after the layout's ranges.
+const fragDepthRangeOffset = 0
 
 func (d *Device) createVkShaderModule(code []uint32) (vk.ShaderModule, error) {
 	createInfo := vk.ShaderModuleCreateInfo{
