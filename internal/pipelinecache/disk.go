@@ -119,14 +119,3 @@ func VulkanAdapterKey(vendorID, deviceID, driverVersion uint32, uuid [16]byte) s
 	copy(buf[12:28], uuid[:])
 	return HexKey(buf[:])
 }
-
-// DX12AdapterKey identifies a DXGI adapter for cache scoping.
-func DX12AdapterKey(luidLow uint32, luidHigh int32, vendorID, deviceID, revision uint32) string {
-	var buf [20]byte
-	binary.LittleEndian.PutUint32(buf[0:4], luidLow)
-	binary.LittleEndian.PutUint32(buf[4:8], uint32(luidHigh)) //nolint:gosec // LUID high half stored as raw bits
-	binary.LittleEndian.PutUint32(buf[8:12], vendorID)
-	binary.LittleEndian.PutUint32(buf[12:16], deviceID)
-	binary.LittleEndian.PutUint32(buf[16:20], revision)
-	return HexKey(buf[:])
-}

@@ -169,15 +169,6 @@ func TestAdapterKeysDeterministic(t *testing.T) {
 	if VulkanAdapterKey(0x10DE, 0x2204, 998, uuid) == k1 {
 		t.Fatal("driver version should affect VulkanAdapterKey")
 	}
-
-	d1 := DX12AdapterKey(1, 2, 0x1002, 0x73FF, 0xC1)
-	d2 := DX12AdapterKey(1, 2, 0x1002, 0x73FF, 0xC1)
-	if d1 != d2 {
-		t.Fatalf("DX12AdapterKey not deterministic: %q vs %q", d1, d2)
-	}
-	if DX12AdapterKey(1, 2, 0x1002, 0x73FF, 0xC2) == d1 {
-		t.Fatal("revision should affect DX12AdapterKey")
-	}
 }
 
 // TestLoadBlobRejectsPartialBlobs saves a blob and loads it back cut short,
