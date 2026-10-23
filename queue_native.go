@@ -176,12 +176,16 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (_ uint64, err error) {
 	// would defer its destroy at 0, to run while earlier work is still on the
 	// GPU. Keep the last real index and just do the housekeeping below.
 	subIdx := q.lastSubmissionIndex.Load()
+	var submitErr error
 	if len(allBuffers) > 0 {
 		var err error
 		subIdx, err = q.hal.Submit(allBuffers)
-		if err != nil {
+		if err != nil && subIdx == 0 {
 			q.cancelSubmit(pendingCmdBuf, flushedEncoder, flushedDstTextures)
 			return 0, fmt.Errorf("wgpu: submit failed: %w", err)
+		}
+		if err != nil {
+			submitErr = fmt.Errorf("wgpu: submit: %w", err)
 		}
 		// Track the latest submission index for deferred resource destruction.
 		q.lastSubmissionIndex.Store(subIdx)
@@ -234,7 +238,7 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (_ uint64, err error) {
 		q.device.core.PollMaps(completed)
 	}
 
-	return subIdx, nil
+	return subIdx, submitErr
 }
 
 // cancelSubmit gives back what Submit set up before it failed: the flushed

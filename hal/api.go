@@ -278,6 +278,9 @@ type Queue interface {
 	// Returns a monotonically increasing submission index that can be used
 	// with PollCompleted to determine when the GPU has finished the work.
 	// The HAL manages its own internal fences/synchronization.
+	// An error with a nonzero index means the GPU has the command buffers
+	// and something after failed: they complete at that index like any
+	// other submission.
 	Submit(commandBuffers []CommandBuffer) (submissionIndex uint64, err error)
 
 	// PollCompleted returns the highest submission index known to be completed
