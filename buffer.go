@@ -19,10 +19,9 @@ import (
 // itself — runtime.AddCleanup requires the callback argument to be independent
 // of the cleaned-up object to avoid preventing garbage collection.
 type bufferCleanupRef struct {
-	label     string
-	released  *atomic.Bool
-	ref       *core.ResourceRef // for Ref.Drop() in GC path
-	destroyFn func()            // fallback if no ResourceRef
+	label    string
+	released *atomic.Bool
+	core     *core.Buffer
 }
 
 // Buffer represents a GPU buffer.
@@ -281,29 +280,31 @@ func (b *Buffer) halBuffer() hal.Buffer {
 
 // registerBufferCleanup registers a runtime.AddCleanup handler on the buffer.
 // When GC collects the buffer without an explicit Release(), the cleanup
-// schedules deferred destruction via DestroyQueue — the same path as Release().
+// releases it the way Release does. A buffer still mapped is kept, mapping and
+// all: the slices MappedRange.Bytes handed out point into the mapping without
+// keeping the buffer reachable, so one may still be in use.
 //
-// The cleanup ref struct captures only the label, released flag, DestroyQueue,
-// and core destroy function — NOT the Buffer pointer itself. This is a Go 1.24
-// runtime.AddCleanup requirement: the callback argument must not reference the
-// object being cleaned up.
+// The cleanup ref struct captures only the label, released flag and core
+// buffer, not the Buffer itself: runtime.AddCleanup requires the callback
+// argument not to reference the object being cleaned up.
 func registerBufferCleanup(buf *Buffer, _ *Device, coreBuf *core.Buffer, label string) runtime.Cleanup {
 	return runtime.AddCleanup(buf, func(ref bufferCleanupRef) {
 		if !ref.released.CompareAndSwap(false, true) {
 			return
 		}
+		if ref.core.CurrentMapState() == core.BufferMapStateMapped {
+			slog.Warn("wgpu: Buffer collected by GC while mapped, kept (missing Unmap and Release)", "label", ref.label)
+			return
+		}
 		slog.Warn("wgpu: Buffer released by GC (missing explicit Release)", "label", ref.label)
-		if ref.ref != nil {
-			ref.ref.Drop()
+		if ref.core.Ref != nil {
+			ref.core.Ref.Drop()
 		} else {
-			ref.destroyFn()
+			ref.core.Destroy()
 		}
 	}, bufferCleanupRef{
 		label:    label,
 		released: buf.released,
-		ref:      coreBuf.Ref,
-		destroyFn: func() {
-			coreBuf.Destroy()
-		},
+		core:     coreBuf,
 	})
 }

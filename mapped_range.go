@@ -54,9 +54,10 @@ func acquireMappedRange() *MappedRange {
 
 // Bytes returns the underlying byte slice for the mapped range.
 //
-// The slice is valid until the owning buffer is unmapped; after Unmap
-// the generation counter advances and Bytes() returns nil. Callers
-// should NOT cache the returned slice past Unmap.
+// The slice points into the buffer's mapping and is valid until the
+// owning buffer is unmapped or released; after Unmap the generation
+// counter advances and Bytes() returns nil. Callers should NOT use the
+// returned slice past Unmap or Release.
 //
 // Bytes() is safe to call concurrently with itself but not with Unmap
 // on the same buffer — that is the caller's responsibility to
