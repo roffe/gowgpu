@@ -1204,9 +1204,7 @@ func (pw *pendingWrites) zeroTextureLocked(t *Texture) error {
 				size := hal.Extent3D{Width: w, Height: min(n*bh, h-y), DepthOrArrayLayers: 1}
 				var err error
 				if zeroBuf != nil {
-					// RowsPerImage 0: the copy is one image, and the HALs
-					// don't count the rows of a compressed format alike.
-					err = pw.copyToTextureLocked(t, &dst, zeroBuf, 0, bytesPerRow, 0, &size)
+					err = pw.copyToTextureLocked(t, &dst, zeroBuf, 0, bytesPerRow, n, &size)
 				} else {
 					layout := hal.ImageDataLayout{BytesPerRow: bytesPerRow, RowsPerImage: n}
 					err = pw.writeTextureLocked(t, &dst, pw.zeros[:bytesPerRow*n], &layout, &size)
