@@ -51,8 +51,11 @@ func (e *RenderBundleEncoder) DrawIndexed(args gputypes.DrawIndexedArgs) {
 
 // Finish completes recording and returns the reusable render bundle.
 func (e *RenderBundleEncoder) Finish(desc *RenderBundleDescriptor) (_ *RenderBundle, err error) {
+	if e == nil {
+		return nil, fmt.Errorf("wgpu: RenderBundleEncoder.Finish: %w", ErrReleased)
+	}
 	defer e.device.reportError(&err)
-	if e == nil || e.finished.Swap(true) {
+	if e.finished.Swap(true) {
 		return nil, fmt.Errorf("wgpu: RenderBundleEncoder.Finish: %w", ErrReleased)
 	}
 

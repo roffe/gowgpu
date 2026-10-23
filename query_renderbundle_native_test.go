@@ -223,6 +223,15 @@ func TestRenderBundleEncoderFinish(t *testing.T) {
 	}
 }
 
+// TestNilRenderBundleEncoderFinish: Finish on a nil encoder returns
+// ErrReleased, as on a finished one.
+func TestNilRenderBundleEncoderFinish(t *testing.T) {
+	var encoder *RenderBundleEncoder
+	if bundle, err := encoder.Finish(nil); bundle != nil || !errors.Is(err, ErrReleased) {
+		t.Fatalf("Finish() on a nil encoder = (%v, %v), want (nil, ErrReleased)", bundle, err)
+	}
+}
+
 func TestDeviceCreateRenderBundleEncoder(t *testing.T) {
 	tests := []struct {
 		name       string
