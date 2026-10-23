@@ -1060,3 +1060,18 @@ func TestTransitionBufferKeepsUnorderedAccessForStorageWrites(t *testing.T) {
 		t.Fatal("a repeated copy destination needs no UAV barrier")
 	}
 }
+
+func TestShaderResourceStateTakesCopySourceOnNVIDIA(t *testing.T) {
+	const srv = d3d12.D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | d3d12.D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
+	nvidia := &Texture{device: &Device{vendorID: nvidiaVendorID}}
+	amd := &Texture{device: &Device{vendorID: 0x1002}}
+	if got := textureBarrierState(nvidia, gputypes.TextureUsageTextureBinding, 0); got != srv|d3d12.D3D12_RESOURCE_STATE_COPY_SOURCE {
+		t.Errorf("NVIDIA sampled state = %#x, want the shader resource states and COPY_SOURCE", got)
+	}
+	if got := textureBarrierState(amd, gputypes.TextureUsageTextureBinding, 0); got != srv {
+		t.Errorf("AMD sampled state = %#x, want the shader resource states", got)
+	}
+	if got := textureBarrierState(nvidia, gputypes.TextureUsageRenderAttachment, 0); got != d3d12.D3D12_RESOURCE_STATE_RENDER_TARGET {
+		t.Errorf("NVIDIA render target state = %#x, want RENDER_TARGET alone", got)
+	}
+}

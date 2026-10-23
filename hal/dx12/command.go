@@ -1399,7 +1399,7 @@ func (e *CommandEncoder) bindGroupStatePlans(bg *BindGroup, plans []stateBarrier
 	}
 	for _, view := range bg.sampledTextures {
 		for _, subresource := range textureViewSubresources(view) {
-			if before, target, needsBarrier := e.stateTracker.transitionTextureRead(view.texture, subresource, d3d12.D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE|d3d12.D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE); needsBarrier {
+			if before, target, needsBarrier := e.stateTracker.transitionTextureRead(view.texture, subresource, expandShaderResourceState(view.texture, d3d12.D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE|d3d12.D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)); needsBarrier {
 				plans = append(plans, stateBarrierPlan{resource: view.texture, subresource: subresource, before: before, after: target})
 			}
 		}
@@ -1489,7 +1489,7 @@ func (e *CommandEncoder) setupDepthStencilAttachment(dsa *hal.RenderPassDepthSte
 	plans := make([]stateBarrierPlan, 0)
 	for _, subresource := range textureViewPhysicalSubresourcePlanes(view) {
 		shaderReadable := view.hasSRV && subresource.plane == srvPlane
-		state := depthStencilPlaneState(subresource.plane, depthReadOnly, stencilReadOnly, shaderReadable)
+		state := expandShaderResourceState(view.texture, depthStencilPlaneState(subresource.plane, depthReadOnly, stencilReadOnly, shaderReadable))
 		if before, needsBarrier := e.stateTracker.transitionTexture(view.texture, subresource.subresource, state); needsBarrier {
 			plans = append(plans, stateBarrierPlan{resource: view.texture, subresource: subresource.subresource, before: before, after: state})
 		}
@@ -1656,6 +1656,22 @@ func textureBarrierState(tex *Texture, usage gputypes.TextureUsage, uses hal.Tex
 			depth = d3d12.D3D12_RESOURCE_STATE_DEPTH_READ
 		}
 		state = state&^d3d12.D3D12_RESOURCE_STATE_RENDER_TARGET | depth
+	}
+	return expandShaderResourceState(tex, state)
+}
+
+// nvidiaVendorID is the PCI vendor id of NVIDIA.
+const nvidiaVendorID = 0x10DE
+
+// expandShaderResourceState adds COPY_SOURCE to a texture's shader
+// resource state on NVIDIA, as Dawn does by default there
+// (d3d12_expand_shader_resource_state_transitions_to_copy_source): a
+// transition to the shader resource states alone misses cache flushes on
+// NVIDIA and corrupts a texture rendered to and sampled in turn.
+func expandShaderResourceState(tex *Texture, state d3d12.D3D12_RESOURCE_STATES) d3d12.D3D12_RESOURCE_STATES {
+	const shaderResource = d3d12.D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | d3d12.D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
+	if tex != nil && tex.device != nil && tex.device.vendorID == nvidiaVendorID && state&shaderResource != 0 {
+		state |= d3d12.D3D12_RESOURCE_STATE_COPY_SOURCE
 	}
 	return state
 }

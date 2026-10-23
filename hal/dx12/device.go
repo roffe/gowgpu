@@ -93,6 +93,7 @@ type Device struct {
 
 	// Feature level and capabilities.
 	featureLevel d3d12.D3D_FEATURE_LEVEL
+	vendorID     uint32
 
 	// Shared empty root signature for pipelines without bind groups.
 	// DX12 requires a valid root signature for every PSO, even if the shader
@@ -290,6 +291,7 @@ func newDevice(instance *Instance, adapterPtr unsafe.Pointer, adapterDesc *dxgi.
 		raw:          rawDevice,
 		instance:     instance,
 		featureLevel: featureLevel,
+		vendorID:     adapterDesc.VendorID,
 	}
 
 	// Create the direct (graphics) command queue

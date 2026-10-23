@@ -740,7 +740,7 @@ func (q *Queue) WriteTexture(dst *hal.ImageCopyTexture, data []byte, layout *hal
 	}
 	regions := []hal.BufferTextureCopy{{BufferLayout: nativeLayout, TextureBase: *dst, Size: *size}}
 	encoder.copyBufferToTexture(stagingBuf, dstTex, regions)
-	after := d3d12.D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | d3d12.D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
+	after := expandShaderResourceState(dstTex, d3d12.D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE|d3d12.D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
 	for _, plan := range planBufferTextureCopies(dstTex, *dst, nativeLayout, *size) {
 		if before, barrier := encoder.stateTracker.transitionTexture(dstTex, plan.subresource, after); barrier {
 			encoder.emitStateBarrierPlans([]stateBarrierPlan{{resource: dstTex, subresource: plan.subresource, before: before, after: after}})
