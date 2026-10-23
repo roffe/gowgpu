@@ -590,6 +590,9 @@ func (d *Device) CreateTexture(desc *hal.TextureDescriptor) (hal.Texture, error)
 
 	// Convert parameters
 	vkFormat := d.vkFormat(desc.Format)
+	if vkFormat == vk.FormatUndefined {
+		return nil, fmt.Errorf("vulkan: texture format %v has no Vulkan format", desc.Format)
+	}
 	vkUsage := textureUsageToVk(desc.Usage)
 	imageType := textureDimensionToVkImageType(desc.Dimension)
 
@@ -822,6 +825,9 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 	}
 
 	vkFormat := d.vkFormat(format)
+	if vkFormat == vk.FormatUndefined {
+		return nil, fmt.Errorf("vulkan: texture view format %v has no Vulkan format", format)
+	}
 	createInfo := vk.ImageViewCreateInfo{
 		SType:    vk.StructureTypeImageViewCreateInfo,
 		Image:    imageHandle,

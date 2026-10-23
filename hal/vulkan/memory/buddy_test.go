@@ -5,6 +5,8 @@ package memory
 import (
 	"errors"
 	"testing"
+
+	"github.com/roffe/gowgpu/hal/vulkan/vk"
 )
 
 func TestNewBuddyAllocator(t *testing.T) {
@@ -651,5 +653,24 @@ func TestLog2(t *testing.T) {
 		if got := log2(tt.n); got != tt.want {
 			t.Errorf("log2(%d) = %d, want %d", tt.n, got, tt.want)
 		}
+	}
+}
+
+// A zero-size request fails before a pool is looked at: it made a block for
+// every attempt, which the buddy allocator then refused.
+func TestAllocZeroSize(t *testing.T) {
+	props := DeviceMemoryProperties{
+		MemoryTypes: []MemoryType{{PropertyFlags: vk.MemoryPropertyFlags(vk.MemoryPropertyDeviceLocalBit)}},
+		MemoryHeaps: []MemoryHeap{{Size: 1 << 30}},
+	}
+	a, err := NewGpuAllocator(0, &vk.Commands{}, props, 0, DefaultConfig())
+	if err != nil {
+		t.Fatalf("NewGpuAllocator: %v", err)
+	}
+	if _, err := a.Alloc(AllocationRequest{Size: 0, Alignment: 256, Usage: UsageFastDeviceAccess, MemoryTypeBits: 1}); !errors.Is(err, ErrInvalidSize) {
+		t.Fatalf("Alloc(0) = %v, want ErrInvalidSize", err)
+	}
+	if s := a.Stats(); s.TotalAllocated != 0 {
+		t.Errorf("Alloc(0) allocated %d bytes", s.TotalAllocated)
 	}
 }

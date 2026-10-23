@@ -134,6 +134,8 @@ var textureFormatMap = map[gputypes.TextureFormat]vk.Format{
 	gputypes.TextureFormatR8Sint:  vk.FormatR8Sint,
 
 	// 16-bit formats
+	gputypes.TextureFormatR16Unorm: vk.FormatR16Unorm,
+	gputypes.TextureFormatR16Snorm: vk.FormatR16Snorm,
 	gputypes.TextureFormatR16Uint:  vk.FormatR16Uint,
 	gputypes.TextureFormatR16Sint:  vk.FormatR16Sint,
 	gputypes.TextureFormatR16Float: vk.FormatR16Sfloat,
@@ -146,6 +148,8 @@ var textureFormatMap = map[gputypes.TextureFormat]vk.Format{
 	gputypes.TextureFormatR32Uint:        vk.FormatR32Uint,
 	gputypes.TextureFormatR32Sint:        vk.FormatR32Sint,
 	gputypes.TextureFormatR32Float:       vk.FormatR32Sfloat,
+	gputypes.TextureFormatRG16Unorm:      vk.FormatR16g16Unorm,
+	gputypes.TextureFormatRG16Snorm:      vk.FormatR16g16Snorm,
 	gputypes.TextureFormatRG16Uint:       vk.FormatR16g16Uint,
 	gputypes.TextureFormatRG16Sint:       vk.FormatR16g16Sint,
 	gputypes.TextureFormatRG16Float:      vk.FormatR16g16Sfloat,
@@ -167,6 +171,8 @@ var textureFormatMap = map[gputypes.TextureFormat]vk.Format{
 	gputypes.TextureFormatRG32Uint:    vk.FormatR32g32Uint,
 	gputypes.TextureFormatRG32Sint:    vk.FormatR32g32Sint,
 	gputypes.TextureFormatRG32Float:   vk.FormatR32g32Sfloat,
+	gputypes.TextureFormatRGBA16Unorm: vk.FormatR16g16b16a16Unorm,
+	gputypes.TextureFormatRGBA16Snorm: vk.FormatR16g16b16a16Snorm,
 	gputypes.TextureFormatRGBA16Uint:  vk.FormatR16g16b16a16Uint,
 	gputypes.TextureFormatRGBA16Sint:  vk.FormatR16g16b16a16Sint,
 	gputypes.TextureFormatRGBA16Float: vk.FormatR16g16b16a16Sfloat,

@@ -202,6 +202,9 @@ func NewGpuAllocator(device vk.Device, cmds *vk.Commands, props DeviceMemoryProp
 // VkDeviceMemory. For smaller allocations, suballocates from a pool
 // using buddy allocation.
 func (a *GpuAllocator) Alloc(req AllocationRequest) (*MemoryBlock, error) {
+	if req.Size == 0 {
+		return nil, ErrInvalidSize
+	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -324,6 +327,11 @@ func (a *GpuAllocator) allocPooled(size uint64, memTypeIndex uint32) (*MemoryBlo
 		a.vulkanFree(memory)
 		return nil, err
 	}
+	buddyBlock, err := buddy.Alloc(size)
+	if err != nil {
+		a.vulkanFree(memory)
+		return nil, err
+	}
 
 	newBlock := &poolBlock{
 		memory: memory,
@@ -334,12 +342,6 @@ func (a *GpuAllocator) allocPooled(size uint64, memTypeIndex uint32) (*MemoryBlo
 	pool.stats.BlockCount++
 	pool.stats.TotalSize += blockSize
 	a.stats.TotalAllocated += blockSize
-
-	// Allocate from the new block
-	buddyBlock, err := buddy.Alloc(size)
-	if err != nil {
-		return nil, err
-	}
 
 	memBlock := &MemoryBlock{
 		Memory:          memory,
