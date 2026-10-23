@@ -60,7 +60,7 @@ type Queue struct {
 	barrierScratch  core.BarrierScratch
 
 	// Scratch for presentSurfaces, under mu: the surface textures the
-	// pending writes flushed wrote, the tracker indices of the ones taken to
+	// flushed pending writes wrote, the tracker indices of the ones taken to
 	// their present state, and the transitions and barriers there.
 	writtenSurfaces    []*Texture
 	presentIndices     []track.TrackerIndex
@@ -195,6 +195,23 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (_ uint64, err error) {
 	return subIdx, submitErr
 }
 
+// flushForPresent submits the queue writes ahead of the present of t, a
+// surface texture, as wgpu-core submits them at present, and with them the
+// zeroing of t when nothing set it.
+func (q *Queue) flushForPresent(t *Texture) error {
+	if q.pending == nil {
+		return nil
+	}
+	if err := q.pending.zeroForPresent(t); err != nil {
+		return err
+	}
+	if !q.pending.recording() {
+		return nil
+	}
+	_, err := q.Submit()
+	return err
+}
+
 // usable returns the error the queue refuses work with: ErrReleased once
 // its device is released, the error that lost it once it is lost.
 func (q *Queue) usable() error {
@@ -247,12 +264,13 @@ func (q *Queue) flushWrites(commandBuffers []*CommandBuffer) (flushedWrites, [][
 	q.pending.mu.Lock()
 	defer q.pending.mu.Unlock()
 	q.pending.forgetClearsLocked(commandBuffers)
+	q.writtenSurfaces = q.pending.writtenSurfacesLocked(q.writtenSurfaces[:0])
 	var err error
 	f.cmdBuf, f.encoder, f.textures, f.buffers, err = q.pending.flush()
 	if err != nil {
+		clear(q.writtenSurfaces)
 		return f, nil, err
 	}
-	q.writtenSurfaces = append(q.writtenSurfaces[:0], q.pending.flushedSurfaces...)
 	return f, q.pending.queueDiscardedLocked(commandBuffers), nil
 }
 

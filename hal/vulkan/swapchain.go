@@ -55,11 +55,10 @@ type Swapchain struct {
 	acquireFence      vk.Fence // Post-acquire fence for frame pacing (Rust wgpu pattern)
 
 	// imageLayouts is the layout each image is left in by the commands
-	// recorded since its acquire, in the order they were recorded: a pass
-	// that loads an image nothing used clears it instead, and the present
-	// of an image no barrier took to PRESENT_SRC_KHR transitions it from
-	// there. The barriers of the core, which tracks the image in the order
-	// the work runs in, go from its own states. UNDEFINED on acquire.
+	// recorded since its acquire, in the order they were recorded: the
+	// present of an image no barrier took to PRESENT_SRC_KHR transitions it
+	// from there. The barriers of the core, which tracks the image in the
+	// order the work runs in, go from its own states. UNDEFINED on acquire.
 	imageLayouts []vk.ImageLayout
 	// presentReady reports whether the last barrier recorded on the current
 	// image took it to PRESENT_SRC_KHR: the core does at the end of every
@@ -1489,12 +1488,6 @@ func (sc *Swapchain) SetImageLayout(imageIndex uint32, layout vk.ImageLayout) {
 	if int(imageIndex) < len(sc.imageLayouts) {
 		sc.imageLayouts[imageIndex] = layout
 	}
-}
-
-// currentImageUndefined reports whether the image acquired last is in
-// UNDEFINED as far as the commands recorded so far go: nothing drew it.
-func (sc *Swapchain) currentImageUndefined() bool {
-	return sc != nil && int(sc.currentImage) < len(sc.imageLayouts) && sc.imageLayouts[sc.currentImage] == vk.ImageLayoutUndefined
 }
 
 // ensurePresentLayout transitions the swapchain image to PRESENT_SRC_KHR if needed.

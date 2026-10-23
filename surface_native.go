@@ -74,6 +74,10 @@ type Surface struct {
 	// viewFormats are the configuration's view formats, which
 	// SurfaceTexture.CreateView takes besides its format.
 	viewFormats []gputypes.TextureFormat
+
+	// frame is the texture of the surface texture acquired last, until its
+	// frame ends.
+	frame *Texture
 }
 
 // CreateSurface creates a rendering surface from legacy platform-specific
@@ -348,56 +352,84 @@ func (s *Surface) GetCurrentTexture() (*SurfaceTexture, bool, error) {
 	if err != nil {
 		return nil, false, err
 	}
-
-	// Reuse the cached core.Texture for TrackerIndex stability. A swapchain
-	// has a bounded number of images (typically 2-3), and they all share a
-	// single TrackerIndex because the swapchain serializes image access.
-	// Without caching, a new core.Texture (with a new TrackerIndex) was
-	// created every frame, causing monotonic index growth and unbounded
-	// memory consumption (#307).
-	//
-	// The coreTexture is shared with any Texture/TextureView wrappers
-	// created from this SurfaceTexture. Its TrackerIndex is what a render
-	// pass's usage scope records the surface texture's usage under, for
-	// barrier generation.
-	//
-	// It has the size of the swapchain's images, which on Vulkan is the
-	// compositor's current extent rather than the configured size where the
-	// two differ, and which a PrepareFrame hook changes without a Configure:
-	// render passes compare their other attachments with it.
-	if cfg := s.core.Config(); cfg != nil && s.device != nil && s.device.core != nil {
-		size := gputypes.Extent3D{Width: cfg.Width, Height: cfg.Height, DepthOrArrayLayers: 1}
-		if w, h := s.ActualExtent(); w != 0 && h != 0 {
-			size.Width, size.Height = w, h
-		}
-		if s.swapchainTexture != nil && s.swapchainTexture.Size() != size {
-			s.destroySwapchainTexture()
-		}
-		if s.swapchainTexture == nil {
-			s.swapchainTexture = core.NewTexture(
-				acquired.Texture, s.device.core,
-				cfg.Format,
-				gputypes.TextureDimension2D,
-				cfg.Usage,
-				size,
-				1, 1, "surface",
-			)
-		}
-		// The image just acquired is in no state the GPU knows: the device
-		// tracker starts it from there, and the barriers of the submits that
-		// use it go from that.
-		if td := s.swapchainTexture.TrackingData(); td != nil && td.Index().IsValid() && s.device.core.Tracker() != nil {
-			s.device.core.Tracker().InsertTexture(td.Index(), track.TextureUsesUninitialized)
-		}
-	}
-
-	return &SurfaceTexture{
+	s.endFrame()
+	st := &SurfaceTexture{
 		hal:         acquired.Texture,
 		surface:     s,
 		device:      s.device,
 		lease:       lease,
-		coreTexture: s.swapchainTexture,
-	}, acquired.Suboptimal, nil
+		coreTexture: s.coreTextureOf(acquired.Texture),
+	}
+	st.texture = s.startFrame(st)
+	return st, acquired.Suboptimal, nil
+}
+
+// coreTextureOf returns the core texture of raw, the image just acquired.
+//
+// The core texture is cached for TrackerIndex stability. A swapchain has a
+// bounded number of images (typically 2-3), and they all share a single
+// TrackerIndex because the swapchain serializes image access. Without
+// caching, a new core.Texture (with a new TrackerIndex) was created every
+// frame, causing monotonic index growth and unbounded memory consumption
+// (#307).
+//
+// It has the size of the swapchain's images, which on Vulkan is the
+// compositor's current extent rather than the configured size where the
+// two differ, and which a PrepareFrame hook changes without a Configure:
+// render passes compare their other attachments with it.
+func (s *Surface) coreTextureOf(raw hal.SurfaceTexture) *core.Texture {
+	cfg := s.core.Config()
+	if cfg == nil || s.device == nil || s.device.core == nil {
+		return s.swapchainTexture
+	}
+	size := gputypes.Extent3D{Width: cfg.Width, Height: cfg.Height, DepthOrArrayLayers: 1}
+	if w, h := s.ActualExtent(); w != 0 && h != 0 {
+		size.Width, size.Height = w, h
+	}
+	if s.swapchainTexture != nil && s.swapchainTexture.Size() != size {
+		s.destroySwapchainTexture()
+	}
+	if s.swapchainTexture == nil {
+		s.swapchainTexture = core.NewTexture(raw, s.device.core, cfg.Format, gputypes.TextureDimension2D, cfg.Usage, size, 1, 1, "surface")
+	}
+	return s.swapchainTexture
+}
+
+// startFrame makes the texture every use of st goes through, which the
+// queue knows it by, and starts it as acquired: in no state the GPU knows,
+// and to be zeroed ahead of a first use that reads it.
+//
+// Reference: wgpu-core present.rs get_current_texture (UNINITIALIZED, an
+// uninitialized texture with a surface clear mode)
+func (s *Surface) startFrame(st *SurfaceTexture) *Texture {
+	t := &Texture{hal: st.hal, device: st.device, viewFormats: s.viewFormats, surface: s.core, surfaceLease: st.lease, coreTexture: st.coreTexture, zeroable: true}
+	s.frame = t
+	ct := st.coreTexture
+	if ct == nil {
+		return t
+	}
+	t.format = ct.Format()
+	if td := ct.TrackingData(); td != nil && td.Index().IsValid() && s.device.core.Tracker() != nil {
+		s.device.core.Tracker().InsertTexture(td.Index(), track.TextureUsesUninitialized)
+	}
+	if q := s.device.queue; q != nil && q.pending != nil {
+		q.pending.queueZero(t)
+	}
+	return t
+}
+
+// endFrame ends the frame of the surface texture acquired last: the queue
+// forgets it, and its default view goes once the GPU is done with it.
+func (s *Surface) endFrame() {
+	t := s.frame
+	if t == nil {
+		return
+	}
+	s.frame = nil
+	if q := t.device.queue; q != nil && q.pending != nil {
+		q.pending.forgetZero(t)
+	}
+	t.dropDefaultView()
 }
 
 // Present presents a surface texture to the screen.
@@ -431,14 +463,10 @@ func (s *Surface) PresentWithDamage(texture *SurfaceTexture, damageRects []image
 	if texture.surface != s || !texture.isUsable() {
 		return ErrReleased
 	}
-	// Queue writes, into the surface texture among them, run before the
-	// present, as wgpu-core submits them at present.
-	if q := s.device.queue; q.pending != nil && q.pending.recording() {
-		if _, err := q.Submit(); err != nil {
-			return err
-		}
+	if err := s.device.queue.flushForPresent(texture.texture); err != nil {
+		return err
 	}
-
+	defer s.endFrame()
 	return s.core.PresentWithDamage(s.device.queue.hal, damageRects)
 }
 
@@ -504,6 +532,7 @@ func (s *Surface) DiscardTexture() {
 		return
 	}
 	s.core.DiscardTexture()
+	s.endFrame()
 }
 
 func (s *Surface) discardForDevice(device *Device) {
@@ -511,6 +540,7 @@ func (s *Surface) discardForDevice(device *Device) {
 		return
 	}
 	s.core.DiscardTexture()
+	s.endFrame()
 }
 
 func (s *Surface) retireDevice(device *Device) {
@@ -640,6 +670,7 @@ func (s *Surface) Release() {
 // the TrackerIndex. We must NOT call core.Texture.Destroy() which would
 // attempt to destroy the swapchain's HAL image.
 func (s *Surface) destroySwapchainTexture() {
+	s.endFrame()
 	if s.swapchainTexture != nil {
 		releaseTextureTracking(s.swapchainTexture)
 		s.swapchainTexture = nil
@@ -667,6 +698,10 @@ type SurfaceTexture struct {
 	device      *Device
 	lease       uint64
 	coreTexture *core.Texture // for TrackerIndex-based barrier generation
+
+	// texture is the Texture AsTexture returns and the views made by
+	// CreateView are of.
+	texture *Texture
 }
 
 func (st *SurfaceTexture) isUsable() bool {
@@ -678,24 +713,18 @@ func (st *SurfaceTexture) isUsable() bool {
 	return st.surface.core.AcquisitionValid(st.lease)
 }
 
-// AsTexture returns a lightweight Texture wrapper around this surface texture,
-// enabling use with Queue.WriteTexture() for direct CPU pixel upload without a
-// render pass. The surface must be configured with TextureUsageCopyDst.
+// AsTexture returns the surface texture as a Texture, enabling use with
+// Queue.WriteTexture() for direct CPU pixel upload without a render pass,
+// and with copies. The surface must be configured with TextureUsageCopyDst
+// for writes.
 //
-// The returned Texture shares the underlying HAL resource — do not Release() it
-// independently. Its lifetime is tied to this SurfaceTexture.
+// It is the same Texture every call, and lives as long as the acquisition:
+// Release does nothing to it.
 func (st *SurfaceTexture) AsTexture() *Texture {
 	if !st.isUsable() {
 		return nil
 	}
-	return &Texture{
-		hal:          st.hal,
-		device:       st.device,
-		viewFormats:  st.surface.viewFormats,
-		surface:      st.surface.core,
-		surfaceLease: st.lease,
-		coreTexture:  st.coreTexture,
-	}
+	return st.texture
 }
 
 // CreateView creates a texture view of this surface texture.
@@ -734,7 +763,6 @@ func (st *SurfaceTexture) CreateView(desc *TextureViewDescriptor) (*TextureView,
 		return nil, fmt.Errorf("wgpu: failed to create surface texture view: %w", err)
 	}
 
-	texture := &Texture{hal: st.hal, device: st.device, viewFormats: st.surface.viewFormats, surface: st.surface.core, surfaceLease: st.lease, coreTexture: st.coreTexture}
-	view := &TextureView{hal: halView, device: st.device, texture: texture, desc: halDesc, surface: st.surface.core, surfaceLease: st.lease}
+	view := &TextureView{hal: halView, device: st.device, texture: st.texture, desc: halDesc, surface: st.surface.core, surfaceLease: st.lease}
 	return view.withRef(halDesc.Label), nil
 }

@@ -127,10 +127,6 @@ type pendingWrites struct {
 	// done with it.
 	views, flushedViews []hal.TextureView
 
-	// flushedSurfaces are the surface textures the batch flush closed last
-	// writes, which the submit takes to their present state after it.
-	flushedSurfaces []*Texture
-
 	// destroys are the HAL destroys of textures released while the batch
 	// copies into them (holdDestroy), and refs keep the buffers the batch
 	// copies into alive, as a command buffer keeps what it binds. Both run
@@ -1014,16 +1010,28 @@ func (pw *pendingWrites) forgetZero(t *Texture) {
 }
 
 // queueDiscardedLocked looks at the textures whose contents a pass of one
-// of cbs, a submit's command buffers in order, discarded, which read as
-// zeros. It returns, by command buffer, the ones a later command buffer of
-// the submit uses, to zero ahead of it, unless a pass of it clears them
-// first. The ones no later one uses go back on the zero list, which the
+// of cbs, a submit's command buffers in order, discarded, and the surface
+// textures on the zero list, which nothing set since their acquire: they
+// read as zeros. It returns, by command buffer, the ones a command buffer of
+// the submit uses after that, to zero ahead of it, unless a pass of it
+// clears them first. The ones none uses go back on the zero list, which the
 // next submit zeroes unless a pass of it clears them first. pw.mu is held.
 //
 // Reference: wgpu-core command/memory_init.rs (discarded surfaces are
-// initialized again before their next use)
+// initialized again before their next use) and device/queue.rs (init
+// actions applied at submit, in submission order)
 func (pw *pendingWrites) queueDiscardedLocked(cbs []*CommandBuffer) [][]*Texture {
 	var scan discardScan
+	for t := range pw.zero {
+		if t.surface == nil {
+			continue
+		}
+		delete(pw.zero, t)
+		pw.undo.zero = append(pw.undo.zero, t)
+		if t.surface.AcquisitionValid(t.surfaceLease) {
+			scan.discard(t)
+		}
+	}
 	for i, cb := range cbs {
 		if scan.discarded != nil {
 			for _, t := range cb.usedTextures {
@@ -1036,10 +1044,7 @@ func (pw *pendingWrites) queueDiscardedLocked(cbs []*CommandBuffer) [][]*Texture
 			}
 		}
 		for _, t := range cb.discards {
-			if scan.discarded == nil {
-				scan.discarded = make(map[*Texture]bool)
-			}
-			scan.discarded[t] = true
+			scan.discard(t)
 		}
 	}
 	for t, d := range scan.discarded {
@@ -1059,6 +1064,14 @@ func (pw *pendingWrites) queueDiscardedLocked(cbs []*CommandBuffer) [][]*Texture
 type discardScan struct {
 	discarded map[*Texture]bool
 	zeros     [][]*Texture
+}
+
+// discard notes that t reads as zeros from here on.
+func (s *discardScan) discard(t *Texture) {
+	if s.discarded == nil {
+		s.discarded = make(map[*Texture]bool)
+	}
+	s.discarded[t] = true
 }
 
 // use notes that cbs[i] uses t: when an earlier command buffer left t
@@ -1146,6 +1159,14 @@ func (pw *pendingWrites) zeroTextureLocked(t *Texture) error {
 	if raw == nil {
 		return nil
 	}
+	// A surface texture can be zeroed by a pass only, which the GL queue
+	// writes don't record.
+	if t.surface != nil {
+		if !pw.usesBatching {
+			return nil
+		}
+		return pw.clearTextureLocked(t, raw)
+	}
 	// GL writes nothing any other way, a color render target included.
 	cpu := !pw.usesBatching
 	ct := t.coreTexture
@@ -1197,6 +1218,23 @@ func (pw *pendingWrites) zeroTextureLocked(t *Texture) error {
 		}
 	}
 	return nil
+}
+
+// zeroForPresent zeroes t, a surface texture about to be presented, when
+// nothing set it since its acquire, in the batch the present submits.
+// ponytail: GL presents such a texture as it is, its queue writes record
+// no pass; one would need a submit of its own.
+//
+// Reference: wgpu-core device/queue.rs prepare_surface_texture_for_present
+func (pw *pendingWrites) zeroForPresent(t *Texture) error {
+	pw.mu.Lock()
+	defer pw.mu.Unlock()
+	if _, ok := pw.zero[t]; !ok || !pw.usesBatching {
+		return nil
+	}
+	delete(pw.zero, t)
+	pw.undo.zero = append(pw.undo.zero, t)
+	return pw.zeroTextureLocked(t)
 }
 
 // clearTextureLocked zeroes t, a 2D texture, with a render pass per mip level
@@ -1433,23 +1471,7 @@ func (pw *pendingWrites) recording() bool {
 }
 
 func (pw *pendingWrites) flush() (hal.CommandBuffer, hal.CommandEncoder, []hal.Texture, []hal.Buffer, error) {
-	// Textures nothing wrote since they were made are zeroed now, in the
-	// batch that runs ahead of the command buffers that could read them.
-	for t := range pw.zero {
-		pw.undo.zero = append(pw.undo.zero, t)
-		if err := pw.zeroTextureLocked(t); err != nil {
-			Logger().Warn("wgpu: texture keeps its old memory", "err", err)
-		}
-	}
-	clear(pw.zero)
-	for b := range pw.zeroBufs {
-		pw.undo.zeroBufs = append(pw.undo.zeroBufs, b)
-		if err := pw.zeroBufferLocked(b); err != nil {
-			Logger().Warn("wgpu: buffer keeps its old memory", "label", b.Label(), "err", err)
-		}
-	}
-	clear(pw.zeroBufs)
-
+	pw.zeroQueuedLocked()
 	if !pw.isRecording {
 		return nil, nil, nil, nil, nil
 	}
@@ -1546,19 +1568,47 @@ func (pw *pendingWrites) flush() (hal.CommandBuffer, hal.CommandEncoder, []hal.T
 	// buckets, so subsequent inserts in the next batch don't trigger growth allocations.
 	clear(pw.dstBuffers)
 	clear(pw.dstTextures)
-	clear(pw.flushedSurfaces)
-	pw.flushedSurfaces = pw.flushedSurfaces[:0]
-	for _, o := range pw.dstOwners {
-		if o.owner.surface != nil {
-			pw.flushedSurfaces = append(pw.flushedSurfaces, o.owner)
-		}
-	}
 	pw.clearOwners()
 	pw.flushedViews, pw.views = pw.views, nil
 	pw.flushedDestroys, pw.destroys = pw.destroys, nil
 	pw.flushedRefs, pw.refs = pw.refs, nil
 
 	return cmdBuf, flushedEncoder, flushedDstTextures, flushedDstBuffers, nil
+}
+
+// zeroQueuedLocked zeroes the textures and buffers nothing wrote since they
+// were made, in the batch, which runs ahead of the command buffers that
+// could read them. A surface texture waits for the command buffer that
+// reads it first (queueDiscardedLocked). pw.mu is held.
+func (pw *pendingWrites) zeroQueuedLocked() {
+	for t := range pw.zero {
+		if t.surface != nil {
+			continue
+		}
+		delete(pw.zero, t)
+		pw.undo.zero = append(pw.undo.zero, t)
+		if err := pw.zeroTextureLocked(t); err != nil {
+			Logger().Warn("wgpu: texture keeps its old memory", "err", err)
+		}
+	}
+	for b := range pw.zeroBufs {
+		pw.undo.zeroBufs = append(pw.undo.zeroBufs, b)
+		if err := pw.zeroBufferLocked(b); err != nil {
+			Logger().Warn("wgpu: buffer keeps its old memory", "label", b.Label(), "err", err)
+		}
+	}
+	clear(pw.zeroBufs)
+}
+
+// writtenSurfacesLocked appends to dst the surface textures the batch
+// writes. pw.mu is held.
+func (pw *pendingWrites) writtenSurfacesLocked(dst []*Texture) []*Texture {
+	for _, o := range pw.dstOwners {
+		if o.owner.surface != nil {
+			dst = append(dst, o.owner)
+		}
+	}
+	return dst
 }
 
 // clearOwners empties the owner list, keeping its room.

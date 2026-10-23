@@ -344,21 +344,6 @@ func TestRenderPassAttachmentLifetimeValidationCoversEverySlot(t *testing.T) {
 		ColorAttachments:       []RenderPassColorAttachment{{View: color, ResolveTarget: resolve}},
 		DepthStencilAttachment: &RenderPassDepthStencilAttachment{View: depth},
 	}
-	trackRenderPassTextureViews(nil, desc)
-	trackRenderPassTextureViews(&CommandEncoder{}, nil)
-	encoder := &CommandEncoder{}
-	trackRenderPassTextureViews(encoder, desc)
-	if len(encoder.usedTextures) != 3 {
-		t.Fatalf("tracked texture owners = %d, want 3", len(encoder.usedTextures))
-	}
-	if err := validateRenderPassTextureViews(nil); err != nil {
-		t.Fatalf("nil descriptor validation: %v", err)
-	}
-	if err := validateRenderPassTextureViews(desc); err != nil {
-		t.Fatalf("active attachment validation: %v", err)
-	}
-
-	surface.DiscardTexture()
 	tests := []struct {
 		name string
 		desc *RenderPassDescriptor
@@ -376,6 +361,23 @@ func TestRenderPassAttachmentLifetimeValidationCoversEverySlot(t *testing.T) {
 			desc: &RenderPassDescriptor{DepthStencilAttachment: &RenderPassDepthStencilAttachment{View: depth}},
 		},
 	}
+	trackRenderPassTextureViews(nil, desc)
+	trackRenderPassTextureViews(&CommandEncoder{}, nil)
+	for _, test := range tests {
+		encoder := &CommandEncoder{}
+		trackRenderPassTextureViews(encoder, test.desc)
+		if len(encoder.usedTextures) != 1 || encoder.usedTextures[0] != surfaceTexture.AsTexture() {
+			t.Fatalf("%s: tracked textures = %d, want the surface texture", test.name, len(encoder.usedTextures))
+		}
+	}
+	if err := validateRenderPassTextureViews(nil); err != nil {
+		t.Fatalf("nil descriptor validation: %v", err)
+	}
+	if err := validateRenderPassTextureViews(desc); err != nil {
+		t.Fatalf("active attachment validation: %v", err)
+	}
+
+	surface.DiscardTexture()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			if err := validateRenderPassTextureViews(test.desc); !errors.Is(err, ErrReleased) {

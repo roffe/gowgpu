@@ -99,10 +99,9 @@ func (t *Texture) Format() gputypes.TextureFormat { return t.format }
 // that may reference it. This prevents use-after-free on DX12/Vulkan. A Release
 // while another goroutine submits waits for that Submit.
 func (t *Texture) Release() {
-	// Surface textures are borrowed swapchain images. The wrapper never owns
-	// their HAL lifetime, even while the acquisition is still active.
+	// A surface texture's Texture is the acquisition's, which ends at the
+	// present or discard.
 	if t.surface != nil {
-		t.released.Store(true)
 		return
 	}
 	// A Submit holds the queue lock from checking its textures until its
@@ -160,6 +159,26 @@ func (t *Texture) Release() {
 		return
 	}
 	later()
+}
+
+// dropDefaultView destroys the texture's default view, once the GPU is done
+// with the submissions made so far.
+func (t *Texture) dropDefaultView() {
+	t.viewMu.Lock()
+	view := t.defaultView
+	t.defaultView = nil
+	t.viewMu.Unlock()
+	halDevice := t.device.halDevice()
+	if view == nil || halDevice == nil {
+		return
+	}
+	dq := t.device.destroyQueue()
+	if dq == nil {
+		halDevice.DestroyTextureView(view)
+		return
+	}
+	t.viewDestroy = viewDestroy{dev: halDevice, view: view}
+	dq.DeferRelease(t.device.lastSubmissionIndex(), "TextureView", &t.viewDestroy)
 }
 
 // releaseTextureTracking gives a texture's tracker index back, after taking
