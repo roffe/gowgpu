@@ -1751,20 +1751,8 @@ func indexedIndirectRecordOffset(offset uint64, index uint32) (uint64, bool) {
 	return indirect.RecordOffset(offset, uint64(drawIndexedIndirectStride), index)
 }
 
-// ExecuteBundle executes a pre-recorded render bundle.
-func (e *RenderPassEncoder) ExecuteBundle(bundle hal.RenderBundle) {
-	vkBundle, ok := bundle.(*RenderBundle)
-	if !ok || vkBundle == nil || e.encoder.active == 0 || !e.begun {
-		return
-	}
-
-	// Execute the secondary command buffer
-	e.encoder.device.cmds.CmdExecuteCommands(
-		e.encoder.active,
-		1,
-		&vkBundle.commandBuffer,
-	)
-}
+// ExecuteBundle does nothing, there are no HAL render bundles.
+func (e *RenderPassEncoder) ExecuteBundle(hal.RenderBundle) {}
 
 // ComputePassEncoder implements hal.ComputePassEncoder for Vulkan.
 type ComputePassEncoder struct {
