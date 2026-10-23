@@ -31,6 +31,9 @@ type Queue struct {
 func (q *Queue) Submit(commandBuffers []hal.CommandBuffer) (uint64, error) {
 	glCtx := q.ctx.Lock()
 	defer q.ctx.Unlock()
+	if err := q.ctx.Err(); err != nil {
+		return 0, err
+	}
 	glCtx.Shadow = gl.Shadow{} // what ran between submissions is not followed
 
 	// A GL error is only reported through the logger, so the per command
@@ -105,6 +108,9 @@ func (q *Queue) WriteBuffer(buffer hal.Buffer, offset uint64, data []byte) error
 
 	glCtx := q.ctx.Lock()
 	defer q.ctx.Unlock()
+	if err := q.ctx.Err(); err != nil {
+		return err
+	}
 
 	glCtx.BindBuffer(buf.target, buf.id)
 	glCtx.BufferSubData(buf.target, int(offset), len(data), unsafe.Pointer(&data[0]))
@@ -121,6 +127,9 @@ func (q *Queue) WriteTexture(dst *hal.ImageCopyTexture, data []byte, layout *hal
 
 	glCtx := q.ctx.Lock()
 	defer q.ctx.Unlock()
+	if err := q.ctx.Err(); err != nil {
+		return err
+	}
 	return writeTexture(glCtx, tex, dst, data, layout, size)
 }
 
@@ -149,6 +158,9 @@ func (q *Queue) Present(surface hal.Surface, _ hal.SurfaceTexture, _ []image.Rec
 	// MakeCurrent to user window DC for presentation.
 	glCtx := q.ctx.LockForDC(hdc)
 	defer q.ctx.Unlock()
+	if err := q.ctx.Err(); err != nil {
+		return err
+	}
 
 	surf.blitSwapchainToDefaultWith(glCtx)
 
