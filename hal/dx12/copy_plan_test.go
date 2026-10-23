@@ -292,3 +292,29 @@ func TestPlanBufferTextureCopiesSplitsRowsPastThePitch(t *testing.T) {
 		}
 	}
 }
+
+func TestPlanTextureTextureCopiesPairLayersWithSlices(t *testing.T) {
+	array := testTexture(gputypes.TextureFormatRGBA8Unorm, gputypes.TextureDimension2D, 8, 8, 4, 1)
+	volume := testTexture(gputypes.TextureFormatRGBA8Unorm, gputypes.TextureDimension3D, 8, 8, 4, 1)
+	toVolume := planTextureTextureCopies(array, volume, hal.TextureCopy{
+		SrcBase: hal.ImageCopyTexture{Origin: hal.Origin3D{Z: 1}, Aspect: gputypes.TextureAspectAll},
+		DstBase: hal.ImageCopyTexture{Origin: hal.Origin3D{Z: 2}, Aspect: gputypes.TextureAspectAll},
+		Size:    hal.Extent3D{Width: 8, Height: 8, DepthOrArrayLayers: 2},
+	})
+	if len(toVolume) != 2 {
+		t.Fatalf("2D array to 3D plans = %#v, want one per layer", toVolume)
+	}
+	for i, p := range toVolume {
+		if p.srcSubresource != array.subresourceIndex(0, 1+uint32(i)) || p.srcFront != 0 || p.srcBack != 1 || p.dstSubresource != 0 || p.dstZ != 2+uint32(i) {
+			t.Errorf("layer %d plan = %#v", i, p)
+		}
+	}
+	toArray := planTextureTextureCopies(volume, array, hal.TextureCopy{
+		SrcBase: hal.ImageCopyTexture{Origin: hal.Origin3D{Z: 3}, Aspect: gputypes.TextureAspectAll},
+		DstBase: hal.ImageCopyTexture{Origin: hal.Origin3D{Z: 0}, Aspect: gputypes.TextureAspectAll},
+		Size:    hal.Extent3D{Width: 8, Height: 8, DepthOrArrayLayers: 1},
+	})
+	if len(toArray) != 1 || toArray[0].srcSubresource != 0 || toArray[0].srcFront != 3 || toArray[0].srcBack != 4 || toArray[0].dstSubresource != 0 || toArray[0].dstZ != 0 {
+		t.Fatalf("3D to 2D array plans = %#v", toArray)
+	}
+}

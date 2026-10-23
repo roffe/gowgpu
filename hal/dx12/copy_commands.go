@@ -186,7 +186,12 @@ func (e *CommandEncoder) copyTextureToBuffer(src *Texture, dst *Buffer, regions 
 func (e *CommandEncoder) copyTextureToTexture(src, dst *Texture, regions []hal.TextureCopy) {
 	plans := make([]stateBarrierPlan, 0, len(regions)*2)
 	for _, region := range regions {
-		for _, copyPlan := range planTextureTextureCopies(src, dst, region) {
+		copyPlans := planTextureTextureCopies(src, dst, region)
+		if copyPlans == nil {
+			e.fail(fmt.Errorf("dx12: texture copy of %v %v to %v %v from %+v to %+v size %+v cannot be recorded",
+				src.dimension, src.format, dst.dimension, dst.format, region.SrcBase.Origin, region.DstBase.Origin, region.Size))
+		}
+		for _, copyPlan := range copyPlans {
 			if before, barrier := e.stateTracker.transitionTexture(src, copyPlan.srcSubresource, d3d12.D3D12_RESOURCE_STATE_COPY_SOURCE); barrier {
 				plans = append(plans, stateBarrierPlan{resource: src, subresource: copyPlan.srcSubresource, before: before, after: d3d12.D3D12_RESOURCE_STATE_COPY_SOURCE})
 			}

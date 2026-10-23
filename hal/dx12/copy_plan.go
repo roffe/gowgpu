@@ -441,9 +441,11 @@ func validTextureCopyDepth(texture *Texture, origin, depth uint32) bool {
 }
 
 // planTextureTextureCopies applies D3D12's distinct 3D-volume and 2D-array
-// copy models while pairing selected source and destination planes.
+// copy models while pairing selected source and destination planes. A copy
+// between a 2D array and a 3D texture pairs each layer with a depth slice,
+// one copy each, as Dawn does.
 func planTextureTextureCopies(src, dst *Texture, region hal.TextureCopy) []textureTextureCopyPlan {
-	if src == nil || dst == nil || src.dimension != dst.dimension {
+	if src == nil || dst == nil {
 		return nil
 	}
 	depth := region.Size.DepthOrArrayLayers
@@ -464,7 +466,7 @@ func planTextureTextureCopies(src, dst *Texture, region hal.TextureCopy) []textu
 	if region.Size.Width == 0 || region.Size.Height == 0 {
 		return nil
 	}
-	if src.dimension == gputypes.TextureDimension3D {
+	if src.dimension == gputypes.TextureDimension3D && dst.dimension == gputypes.TextureDimension3D {
 		plans := make([]textureTextureCopyPlan, 0, len(srcPlanes))
 		for plane := range srcPlanes {
 			plans = append(plans, textureTextureCopyPlan{
@@ -480,13 +482,21 @@ func planTextureTextureCopies(src, dst *Texture, region hal.TextureCopy) []textu
 	plans := make([]textureTextureCopyPlan, 0, len(srcPlanes)*int(depth))
 	for plane := range srcPlanes {
 		for layer := uint32(0); layer < depth; layer++ {
-			plans = append(plans, textureTextureCopyPlan{
-				srcSubresource: src.subresourceIndexForPlane(region.SrcBase.MipLevel, region.SrcBase.Origin.Z+layer, srcPlanes[plane]),
-				dstSubresource: dst.subresourceIndexForPlane(region.DstBase.MipLevel, region.DstBase.Origin.Z+layer, dstPlanes[plane]),
-				srcFront:       0,
-				srcBack:        1,
-				dstZ:           0,
-			})
+			p := textureTextureCopyPlan{srcBack: 1}
+			srcZ, dstZ := region.SrcBase.Origin.Z+layer, region.DstBase.Origin.Z+layer
+			if src.dimension == gputypes.TextureDimension3D {
+				p.srcSubresource = src.subresourceIndexForPlane(region.SrcBase.MipLevel, 0, srcPlanes[plane])
+				p.srcFront, p.srcBack = srcZ, srcZ+1
+			} else {
+				p.srcSubresource = src.subresourceIndexForPlane(region.SrcBase.MipLevel, srcZ, srcPlanes[plane])
+			}
+			if dst.dimension == gputypes.TextureDimension3D {
+				p.dstSubresource = dst.subresourceIndexForPlane(region.DstBase.MipLevel, 0, dstPlanes[plane])
+				p.dstZ = dstZ
+			} else {
+				p.dstSubresource = dst.subresourceIndexForPlane(region.DstBase.MipLevel, dstZ, dstPlanes[plane])
+			}
+			plans = append(plans, p)
 		}
 	}
 	return plans
