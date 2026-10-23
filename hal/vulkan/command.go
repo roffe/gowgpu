@@ -223,6 +223,18 @@ func (e *CommandEncoder) EndEncoding() (hal.CommandBuffer, error) {
 		e.injectInlinePresentBarrier()
 	}
 
+	// The host reads what a copy or a shader wrote into a mapped buffer
+	// once the submission is done, which only a dependency with the host
+	// as its destination makes visible: a submission's end does not.
+	hostRead := vk.MemoryBarrier{
+		SType:         vk.StructureTypeMemoryBarrier,
+		SrcAccessMask: vk.AccessFlags(vk.AccessTransferWriteBit | vk.AccessShaderWriteBit),
+		DstAccessMask: vk.AccessFlags(vk.AccessHostReadBit),
+	}
+	vkCmdPipelineBarrier(e.device.cmds, e.active,
+		vk.PipelineStageFlags(vk.PipelineStageTransferBit)|shaderStages, vk.PipelineStageFlags(vk.PipelineStageHostBit),
+		0, 1, &hostRead, 0, nil, 0, nil)
+
 	result := vkEndCommandBuffer(e.device.cmds, e.active)
 	if result != vk.Success {
 		return nil, fmt.Errorf("vulkan: vkEndCommandBuffer failed: %d", result)
