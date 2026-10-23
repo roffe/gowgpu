@@ -217,6 +217,11 @@ type BufferMapData struct {
 	// by MappedRange.Bytes().
 	generation atomic.Uint64
 
+	// request numbers the Map requests: BeginMap starts the next one. A
+	// pending-map registration resolves only the request it was made for,
+	// which an Unmap may have canceled and a later request replaced.
+	request uint64
+
 	// pendingMode / pendingOffset / pendingSize describe the active
 	// Map request while mapState is Pending or Mapped. Cleared on Unmap.
 	pendingMode   MapModeInternal
@@ -339,12 +344,21 @@ func (b *Buffer) BeginMap(mode MapModeInternal, offset, size uint64) *BufferMapE
 	}
 
 	// Record pending request and transition to Pending.
+	md.request++
 	md.pendingMode = mode
 	md.pendingOffset = offset
 	md.pendingSize = size
 	md.waiter.Reset()
 	b.mapState = BufferMapStatePending
 	return nil
+}
+
+// mapRequest returns the number of the buffer's latest Map request.
+func (b *Buffer) mapRequest() uint64 {
+	md := b.ensureMapData()
+	md.mu.Lock()
+	defer md.mu.Unlock()
+	return md.request
 }
 
 // ResolveMap transitions a Pending buffer to Mapped and populates the
@@ -357,21 +371,18 @@ func (b *Buffer) BeginMap(mode MapModeInternal, offset, size uint64) *BufferMapE
 // Must be called with a SnatchGuard already held so the HAL buffer
 // pointer cannot be snatched underneath us.
 func (b *Buffer) ResolveMap(guard SnatchGuard, halDevice hal.Device) {
+	b.resolveMap(guard, halDevice, b.mapRequest())
+}
+
+// resolveMap is ResolveMap for Map request number request. A request that
+// is no longer pending, canceled by Unmap or Destroy, which told its
+// waiter, or followed by another one, is left alone.
+func (b *Buffer) resolveMap(guard SnatchGuard, halDevice hal.Device, request uint64) {
 	md := b.ensureMapData()
 	md.mu.Lock()
 
-	if b.mapState != BufferMapStatePending {
-		// Unmapped-during-pending or Destroyed-during-pending — deliver
-		// the appropriate error to any waiter.
-		var err *BufferMapError
-		if b.mapState == BufferMapStateDestroyed {
-			err = &BufferMapError{Kind: BufferMapErrKindDestroyed}
-		} else {
-			err = &BufferMapError{Kind: BufferMapErrKindCancelled}
-		}
-		waiter := md.waiter
+	if request != md.request || b.mapState != BufferMapStatePending {
 		md.mu.Unlock()
-		waiter.Signal(err)
 		return
 	}
 
@@ -450,6 +461,21 @@ func (b *Buffer) UnmapBuffer(guard SnatchGuard, halDevice hal.Device) *BufferMap
 	}
 	md.mu.Unlock()
 	return &BufferMapError{Kind: BufferMapErrKindNotMapped}
+}
+
+// failMap fails Map request number request, if it is still pending, with
+// err.
+func (b *Buffer) failMap(request uint64, err *BufferMapError) {
+	md := b.ensureMapData()
+	md.mu.Lock()
+	if request != md.request || b.mapState != BufferMapStatePending {
+		md.mu.Unlock()
+		return
+	}
+	b.mapState = BufferMapStateIdle
+	waiter := md.waiter
+	md.mu.Unlock()
+	waiter.Signal(err)
 }
 
 // MarkDestroyed transitions the buffer to the terminal Destroyed state,

@@ -229,3 +229,57 @@ func TestHalDeviceHandle_NoHAL(t *testing.T) {
 		t.Error("HalDeviceHandle() should return ok=false for device without HAL")
 	}
 }
+
+// A map request canceled by Unmap leaves its registration behind, and the
+// next request's: the stale one neither maps the buffer early nor reports
+// the new request canceled.
+func TestPollMaps_IgnoresCanceledRequests(t *testing.T) {
+	newMapped := func(t *testing.T) (*Device, *Buffer) {
+		t.Helper()
+		device := NewDevice(&mockHALDevice{}, &Adapter{}, gputypes.Features(0), gputypes.DefaultLimits(), "PollTest")
+		buf := NewBuffer(mockBuffer{}, device, gputypes.BufferUsageMapRead, 256, "buf")
+		if err := buf.BeginMap(MapModeInternalRead, 0, 256); err != nil {
+			t.Fatalf("BeginMap: %v", err)
+		}
+		return device, buf
+	}
+	remap := func(t *testing.T, device *Device, buf *Buffer, first, second uint64) {
+		t.Helper()
+		device.RegisterPendingMap(first, buf)
+		if err := buf.UnmapBuffer(SnatchGuard{}, nil); err != nil {
+			t.Fatalf("UnmapBuffer: %v", err)
+		}
+		if err := buf.BeginMap(MapModeInternalRead, 0, 256); err != nil {
+			t.Fatalf("second BeginMap: %v", err)
+		}
+		device.RegisterPendingMap(second, buf)
+	}
+
+	t.Run("earlier submission", func(t *testing.T) {
+		device, buf := newMapped(t)
+		remap(t, device, buf, 1, 2)
+		device.PollMaps(1)
+		if got := buf.CurrentMapState(); got != BufferMapStatePending {
+			t.Fatalf("state after the canceled request's submission = %v, want Pending", got)
+		}
+		if done, _ := buf.Waiter().Status(); done {
+			t.Fatal("the new request resolved with the canceled one")
+		}
+		device.PollMaps(2)
+		if got := buf.CurrentMapState(); got != BufferMapStateMapped {
+			t.Fatalf("state after its own submission = %v, want Mapped", got)
+		}
+	})
+
+	t.Run("same submission", func(t *testing.T) {
+		device, buf := newMapped(t)
+		remap(t, device, buf, 1, 1)
+		device.PollMaps(1)
+		if got := buf.CurrentMapState(); got != BufferMapStateMapped {
+			t.Fatalf("state = %v, want Mapped", got)
+		}
+		if done, err := buf.Waiter().Status(); !done || err != nil {
+			t.Errorf("waiter = %v, %v, want done without error", done, err)
+		}
+	})
+}

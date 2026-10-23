@@ -35,9 +35,16 @@ import (
 // working set is warm.
 type deviceMapTracker struct {
 	mu          sync.Mutex
-	buckets     map[uint64][]*Buffer // submissionIndex -> waiting buffers
-	free        [][]*Buffer          // recycled empty slices (cap > 0)
-	maxKnownSub uint64               // highest submission index seen via Register
+	buckets     map[uint64][]pendingMap // submissionIndex -> waiting buffers
+	free        [][]pendingMap          // recycled empty slices (cap > 0)
+	maxKnownSub uint64                  // highest submission index seen via Register
+}
+
+// pendingMap is a buffer waiting to be mapped, and the number of the Map
+// request it waits for.
+type pendingMap struct {
+	buf     *Buffer
+	request uint64
 }
 
 // mapTrackerSlot holds an atomic.Pointer[deviceMapTracker]. The outer
@@ -49,7 +56,7 @@ type mapTrackerSlot struct {
 
 func newDeviceMapTracker() *deviceMapTracker {
 	return &deviceMapTracker{
-		buckets: make(map[uint64][]*Buffer, 8),
+		buckets: make(map[uint64][]pendingMap, 8),
 	}
 }
 
@@ -82,6 +89,10 @@ func (d *Device) mapTracker() *deviceMapTracker {
 // Submit call. In that case the caller should follow up with
 // PollMaps(completedIdx=0) or device.Poll which will drain the bucket.
 func (d *Device) RegisterPendingMap(submissionIndex uint64, buf *Buffer) {
+	entry := pendingMap{buf: buf}
+	if buf != nil {
+		entry.request = buf.mapRequest()
+	}
 	t := d.mapTracker()
 	t.mu.Lock()
 	existing, ok := t.buckets[submissionIndex]
@@ -94,7 +105,7 @@ func (d *Device) RegisterPendingMap(submissionIndex uint64, buf *Buffer) {
 			t.free = t.free[:n-1]
 		}
 	}
-	t.buckets[submissionIndex] = append(existing, buf)
+	t.buckets[submissionIndex] = append(existing, entry)
 	if submissionIndex > t.maxKnownSub {
 		t.maxKnownSub = submissionIndex
 	}
@@ -137,18 +148,17 @@ func (d *Device) PollMaps(completedIdx uint64) (didWork bool) {
 	if hd == nil {
 		// Device destroyed — drain everything and signal DeviceLost.
 		t.mu.Lock()
-		for idx, bufs := range t.buckets {
+		for idx, entries := range t.buckets {
 			if idx > completedIdx {
 				continue
 			}
-			for _, buf := range bufs {
-				if buf == nil {
-					continue
+			for _, e := range entries {
+				if e.buf != nil {
+					e.buf.failMap(e.request, &BufferMapError{Kind: BufferMapErrKindDeviceLost})
 				}
-				md := buf.ensureMapData()
-				md.waiter.Signal(&BufferMapError{Kind: BufferMapErrKindDeviceLost})
 			}
-			t.free = append(t.free, bufs[:0])
+			clear(entries)
+			t.free = append(t.free, entries[:0])
 			delete(t.buckets, idx)
 			didWork = true
 		}
@@ -160,14 +170,14 @@ func (d *Device) PollMaps(completedIdx uint64) (didWork bool) {
 	// Drain buckets in a loop: extract one bucket under the lock,
 	// resolve it outside the lock, then recycle its backing slice.
 	for {
-		var bucket []*Buffer
+		var bucket []pendingMap
 		var found bool
 		t.mu.Lock()
-		for idx, bufs := range t.buckets {
+		for idx, entries := range t.buckets {
 			if idx > completedIdx {
 				continue
 			}
-			bucket = bufs
+			bucket = entries
 			delete(t.buckets, idx)
 			found = true
 			break
@@ -176,12 +186,12 @@ func (d *Device) PollMaps(completedIdx uint64) (didWork bool) {
 		if !found {
 			return didWork
 		}
-		for _, buf := range bucket {
-			if buf == nil {
-				continue
+		for _, e := range bucket {
+			if e.buf != nil {
+				e.buf.resolveMap(guard, halDevice, e.request)
 			}
-			buf.ResolveMap(guard, halDevice)
 		}
+		clear(bucket)
 		t.mu.Lock()
 		t.free = append(t.free, bucket[:0])
 		t.mu.Unlock()
