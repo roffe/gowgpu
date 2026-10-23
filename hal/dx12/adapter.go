@@ -254,10 +254,10 @@ func (a *Adapter) Features() gputypes.Features {
 		features |= gputypes.Features(gputypes.FeatureDepth32FloatStencil8)
 	}
 
-	// Shader model 6.0+ enables subgroups
-	if a.capabilities.ShaderModel >= d3d12.D3D_SHADER_MODEL_6_0 {
-		features |= gputypes.Features(gputypes.FeatureShaderF16)
-	}
+	// No FeatureShaderF16: FXC compiles shader model 5.1, where half is a
+	// 32-bit float, and the DXIL path shader model 6.0, which has no 16-bit
+	// types either. Rust's wgpu-hal wants shader model 6.2 and
+	// Native16BitShaderOpsSupported for it.
 
 	return features
 }
