@@ -121,3 +121,23 @@ func TestBrowserCreateTextureNeedsTheFormatsFeature(t *testing.T) {
 		t.Fatalf("CreateTexture(BC1) without the feature = %v, want an error naming TextureCompressionBC", err)
 	}
 }
+
+func TestBrowserDeviceWithoutLimitsGetsTheAdapters(t *testing.T) {
+	adapter := jsEval(`{
+		requested: [],
+		requestDevice(desc) {
+			this.requested.push(desc.requiredLimits)
+			return Promise.resolve({queue: {}, lost: new Promise(() => {})})
+		},
+	}`)
+	a := &Adapter{browser: browser.NewAdapter(adapter), limits: gputypes.Limits{MaxBindGroups: 8, MaxStorageBuffersPerShaderStage: 64}}
+	for _, desc := range []*DeviceDescriptor{nil, {Label: "no limits"}, {RequiredLimits: gputypes.Limits{MaxBindGroups: 6}}} {
+		if _, err := a.RequestDevice(desc); err != nil {
+			t.Fatalf("RequestDevice(%+v): %v", desc, err)
+		}
+	}
+	want := `[{"maxBindGroups":8,"maxStorageBuffersPerShaderStage":64},{"maxBindGroups":8,"maxStorageBuffersPerShaderStage":64},{"maxBindGroups":6}]`
+	if got := js.Global().Get("JSON").Call("stringify", adapter.Get("requested")).String(); got != want {
+		t.Fatalf("requiredLimits %s, want %s", got, want)
+	}
+}

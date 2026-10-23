@@ -52,7 +52,7 @@ func TestRequestDeviceReportsADeviceThatArrivesLost(t *testing.T) {
 	adapter := js.Global().Get("Object").New()
 	adapter.Set("requestDevice", js.Global().Get("Function").New("d", "return Promise.resolve(d)").Call("bind", nil, device))
 
-	d, err := newAdapter(adapter).RequestDevice(js.Undefined())
+	d, err := NewAdapter(adapter).RequestDevice(js.Undefined())
 	if err != nil {
 		t.Fatalf("RequestDevice: %v", err)
 	}

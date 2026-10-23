@@ -22,9 +22,9 @@ type Adapter struct {
 	limits js.Value
 }
 
-// newAdapter constructs an Adapter from a GPUAdapter js.Value.
+// NewAdapter constructs an Adapter from a GPUAdapter js.Value.
 // Pre-caches features and limits to avoid repeated property lookups.
-func newAdapter(ref js.Value) *Adapter {
+func NewAdapter(ref js.Value) *Adapter {
 	return &Adapter{
 		ref_:     ref,
 		features: ref.Get("features"),

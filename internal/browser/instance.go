@@ -62,7 +62,7 @@ func (inst *Instance) RequestAdapter(options js.Value) (*Adapter, error) {
 		return nil, ErrAdapterNotFound
 	}
 
-	return newAdapter(result), nil
+	return NewAdapter(result), nil
 }
 
 // GPU returns the underlying navigator.gpu js.Value.

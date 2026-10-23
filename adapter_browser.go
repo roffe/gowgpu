@@ -4,7 +4,6 @@ package wgpu
 
 import (
 	"fmt"
-	"syscall/js"
 
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/internal/browser"
@@ -43,22 +42,25 @@ func (a *Adapter) DownlevelCapabilities() gputypes.DownlevelCapabilities {
 }
 
 // RequestDevice creates a logical device from this adapter.
-// If desc is nil, default features and limits are used.
+// If desc is nil, no features are enabled. Without RequiredLimits, a nil desc
+// included, the device gets the adapter's limits, as natively.
 func (a *Adapter) RequestDevice(desc *DeviceDescriptor) (*Device, error) {
 	if a.released {
 		return nil, ErrReleased
 	}
 
-	// Build JS descriptor from Go types.
-	var jsDesc js.Value
+	var label string
+	var features gputypes.Features
+	var limits gputypes.Limits
 	if desc != nil {
-		var err error
-		jsDesc, err = browser.BuildDeviceDescriptor(desc.Label, desc.RequiredFeatures, desc.RequiredLimits)
-		if err != nil {
-			return nil, fmt.Errorf("wgpu: RequestDevice: %w", err)
-		}
-	} else {
-		jsDesc = js.Undefined()
+		label, features, limits = desc.Label, desc.RequiredFeatures, desc.RequiredLimits
+	}
+	if limits == (gputypes.Limits{}) {
+		limits = a.limits
+	}
+	jsDesc, err := browser.BuildDeviceDescriptor(label, features, limits)
+	if err != nil {
+		return nil, fmt.Errorf("wgpu: RequestDevice: %w", err)
 	}
 
 	bd, err := a.browser.RequestDevice(jsDesc)
