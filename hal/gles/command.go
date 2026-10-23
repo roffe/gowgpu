@@ -433,25 +433,23 @@ func (e *CommandEncoder) setupOffscreenTarget(desc *hal.RenderPassDescriptor, rp
 	}))
 	e.resetScissor(width, height)
 
-	// Record MSAA resolve target if present (attachment 0 only).
-	if len(desc.ColorAttachments) == 0 {
-		return
-	}
-	ca := desc.ColorAttachments[0]
-	tv, ok := ca.View.(*TextureView)
-	if !ok || tv.texture == nil {
-		return
-	}
-	if resolveView, ok := ca.ResolveTarget.(*TextureView); ok && ca.ResolveTarget != nil {
-		if resolveView.texture != nil {
-			rpe.msaaTexture = tv.texture
-			rpe.resolve = viewAttachment(resolveView)
-			rpe.resolveWidth, rpe.resolveHeight = width, height
-		} else if resolveView.isSurface {
-			rpe.msaaTexture = tv.texture
-			rpe.resolveToSurface = true
-			rpe.resolveWidth, rpe.resolveHeight = width, height
+	// Every colour attachment with a resolve target is resolved at End,
+	// as wgpu-hal does.
+	for i, ca := range desc.ColorAttachments[:min(len(desc.ColorAttachments), maxColorAttachments)] {
+		resolveView, ok := ca.ResolveTarget.(*TextureView)
+		if !ok || cmd.colors[i].tex == nil {
+			continue
 		}
+		r := MSAAResolveCommand{fbs: e.fbs, attachment: uint32(i), width: int32(width), height: int32(height)}
+		switch {
+		case resolveView.texture != nil:
+			r.resolve = viewAttachment(resolveView)
+		case resolveView.isSurface && resolveView.surfaceTex != nil:
+			r.resolveToSurface, r.surface = true, resolveView.surfaceTex.surface
+		default:
+			continue
+		}
+		rpe.resolves = append(rpe.resolves, r)
 	}
 }
 
@@ -501,56 +499,13 @@ type RenderPassEncoder struct {
 	stencilRef    uint32
 	fbHeight      uint32 // Framebuffer height for MSAA resolve blit Y-flip
 
-	// MSAA resolve state: set during BeginRenderPass when ResolveTarget is present.
-	msaaTexture                 *Texture     // The MSAA color texture (source for resolve)
-	resolve                     fbAttachment // The single-sample resolve target (none when resolveToSurface)
-	resolveToSurface            bool         // True when resolve target is the default framebuffer (FBO 0)
-	resolveWidth, resolveHeight uint32
+	// resolves are the MSAA resolves End records, one per colour attachment
+	// with a resolve target.
+	resolves []MSAAResolveCommand
 
 	// End-of-pass timestamp write (deferred to End()).
 	endTimestampQuerySet hal.QuerySet
 	endTimestampIndex    *uint32
-}
-
-// resolveTargetSurface extracts the *Surface owning the resolve target (if the
-// resolve target is a surface texture view). Returns nil otherwise.
-func (e *RenderPassEncoder) resolveTargetSurface() *Surface {
-	if len(e.desc.ColorAttachments) == 0 {
-		return nil
-	}
-	rv, ok := e.desc.ColorAttachments[0].ResolveTarget.(*TextureView)
-	if !ok || rv == nil || rv.surfaceTex == nil {
-		return nil
-	}
-	return rv.surfaceTex.surface
-}
-
-// emitMSAAResolve appends the appropriate MSAAResolveCommand when the pass has
-// an MSAA resolve target. Must only be called when e.msaaTexture != nil.
-func (e *RenderPassEncoder) emitMSAAResolve() {
-	w := int32(e.resolveWidth)
-	h := int32(e.resolveHeight)
-	if e.resolveToSurface {
-		// Resolve into the Surface's swapchain offscreen FBO (not FBO 0).
-		// The Y-flip happens once at Present time (Queue.Present), not here.
-		e.encoder.commands = append(e.encoder.commands, &MSAAResolveCommand{
-			fbs:              e.encoder.fbs,
-			resolveToSurface: true,
-			surface:          e.resolveTargetSurface(),
-			width:            w,
-			height:           h,
-		})
-		return
-	}
-	if e.resolve.tex != nil {
-		// Resolve into an offscreen texture FBO.
-		e.encoder.commands = append(e.encoder.commands, &MSAAResolveCommand{
-			fbs:     e.encoder.fbs,
-			resolve: e.resolve,
-			width:   w,
-			height:  h,
-		})
-	}
 }
 
 // End finishes the render pass.
@@ -558,8 +513,8 @@ func (e *RenderPassEncoder) emitMSAAResolve() {
 // If the pass was rendering to an offscreen FBO, rebinds the default framebuffer
 // so subsequent operations do not accidentally target the offscreen texture.
 func (e *RenderPassEncoder) End() {
-	if e.msaaTexture != nil {
-		e.emitMSAAResolve()
+	for i := range e.resolves {
+		e.encoder.commands = append(e.encoder.commands, &e.resolves[i])
 	}
 
 	// Emit end-of-pass timestamp if requested.
@@ -976,6 +931,7 @@ func (c *AttachDepthStencilToFBOCommand) Execute(ctx *gl.Context) {
 // target, present blit un-flips.
 type MSAAResolveCommand struct {
 	fbs              *framebuffers
+	attachment       uint32       // the colour attachment of the draw framebuffer to resolve
 	resolve          fbAttachment // Single-sample resolve target (none when resolveToSurface)
 	resolveToSurface bool         // True to resolve into the Surface's swapchain FBO
 	surface          *Surface     // Surface owning the swapchain FBO (resolveToSurface only)
@@ -990,6 +946,7 @@ func (c *MSAAResolveCommand) Execute(ctx *gl.Context) {
 	ctx.Disable(gl.SCISSOR_TEST)
 
 	ctx.BindFramebuffer(gl.READ_FRAMEBUFFER, c.fbs.draw)
+	ctx.ReadBuffer(gl.COLOR_ATTACHMENT0 + c.attachment)
 	if c.resolveToSurface {
 		var drawFBO uint32
 		if c.surface != nil {
@@ -1010,6 +967,7 @@ func (c *MSAAResolveCommand) Execute(ctx *gl.Context) {
 	)
 
 	// Restore default framebuffer binding.
+	ctx.ReadBuffer(gl.COLOR_ATTACHMENT0)
 	ctx.BindFramebuffer(gl.READ_FRAMEBUFFER, 0)
 	ctx.BindFramebuffer(gl.DRAW_FRAMEBUFFER, 0)
 }
