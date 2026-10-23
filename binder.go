@@ -5,6 +5,8 @@ package wgpu
 import (
 	"errors"
 	"fmt"
+
+	"github.com/roffe/gowgpu/gputypes"
 )
 
 // lateBufferBinding tracks a single buffer binding that requires late validation.
@@ -152,7 +154,13 @@ func (b *binder) assign(index uint32, layout *BindGroupLayout) {
 
 // validateSetBindGroup performs common validation for SetBindGroup on both
 // render and compute passes. Returns a non-nil error message if validation fails.
-func validateSetBindGroup(passName string, index uint32, group *BindGroup, offsets []uint32, pipelineBGCount uint32) error {
+//
+// The offsets are the group's dynamic offsets, one per dynamic binding,
+// each aligned to the device's limit for its binding type and small enough
+// to keep the binding in its buffer.
+//
+// Reference: wgpu-core binding_model.rs BindGroup::validate_dynamic_bindings
+func validateSetBindGroup(passName string, index uint32, group *BindGroup, offsets []uint32, pipelineBGCount uint32, limits *gputypes.Limits) error {
 	if group == nil {
 		return fmt.Errorf("wgpu: %s.SetBindGroup: bind group is nil", passName)
 	}
@@ -163,9 +171,23 @@ func validateSetBindGroup(passName string, index uint32, group *BindGroup, offse
 		return fmt.Errorf("wgpu: %s.SetBindGroup: group index %d exceeds pipeline layout bind group count %d",
 			passName, index, pipelineBGCount)
 	}
+	if len(offsets) != len(group.dynamicBindings) {
+		return fmt.Errorf("wgpu: %s.SetBindGroup: %d dynamic offsets for group %d, which has %d dynamic bindings",
+			passName, len(offsets), index, len(group.dynamicBindings))
+	}
 	for i, offset := range offsets {
-		if offset%256 != 0 {
-			return fmt.Errorf("wgpu: %s.SetBindGroup: dynamic offset[%d]=%d not aligned to 256", passName, i, offset)
+		b := &group.dynamicBindings[i]
+		alignment := limits.MinUniformBufferOffsetAlignment
+		if b.storage {
+			alignment = limits.MinStorageBufferOffsetAlignment
+		}
+		if alignment != 0 && offset%alignment != 0 {
+			return fmt.Errorf("wgpu: %s.SetBindGroup: dynamic offset[%d]=%d of binding %d not aligned to %d",
+				passName, i, offset, b.binding, alignment)
+		}
+		if uint64(offset) > b.maxOffset {
+			return fmt.Errorf("wgpu: %s.SetBindGroup: dynamic offset[%d]=%d of binding %d runs past its buffer, the most is %d",
+				passName, i, offset, b.binding, b.maxOffset)
 		}
 	}
 	return nil

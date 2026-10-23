@@ -3,7 +3,9 @@
 package wgpu
 
 import (
+	"cmp"
 	"fmt"
+	"slices"
 	"sync/atomic"
 	"time"
 
@@ -503,6 +505,7 @@ func (d *Device) CreateBindGroup(desc *BindGroupDescriptor) (*BindGroup, error) 
 		released:               new(atomic.Bool),
 		layout:                 desc.Layout,
 		lateBufferBindingInfos: lateInfos,
+		dynamicBindings:        buildDynamicBindings(desc.Layout.entries, desc.Entries),
 		ref:                    core.NewResourceRef("BindGroup:"+desc.Label, bgOnZero),
 		boundBuffers:           boundBuffers,
 		boundBufferUses:        boundBufferUses,
@@ -601,6 +604,41 @@ func collectBindGroupResources(layout []gputypes.BindGroupLayoutEntry, entries [
 		}
 	}
 	return buffers, bufferUses, textures, uses
+}
+
+// buildDynamicBindings returns the buffer bindings of entries whose layout
+// entry has a dynamic offset, by binding number.
+//
+// Reference: wgpu-core device/resource.rs create_buffer_binding
+// (dynamic_binding_info, sorted by binding)
+func buildDynamicBindings(layout []gputypes.BindGroupLayoutEntry, entries []BindGroupEntry) []dynamicBinding {
+	var bindings []dynamicBinding
+	for i := range entries {
+		e := &entries[i]
+		if e.Buffer == nil {
+			continue
+		}
+		j := slices.IndexFunc(layout, func(l gputypes.BindGroupLayoutEntry) bool { return l.Binding == e.Binding })
+		if j < 0 || layout[j].Buffer == nil || !layout[j].Buffer.HasDynamicOffset {
+			continue
+		}
+		bufSize := e.Buffer.Size()
+		size := e.Size
+		if size == 0 && e.Offset <= bufSize {
+			size = bufSize - e.Offset
+		}
+		var maxOffset uint64
+		if end := e.Offset + size; end >= e.Offset && end <= bufSize {
+			maxOffset = bufSize - end
+		}
+		bindings = append(bindings, dynamicBinding{
+			binding:   e.Binding,
+			storage:   layout[j].Buffer.Type != gputypes.BufferBindingTypeUniform,
+			maxOffset: maxOffset,
+		})
+	}
+	slices.SortFunc(bindings, func(a, b dynamicBinding) int { return cmp.Compare(a.binding, b.binding) })
+	return bindings
 }
 
 // cloneViewAndSamplerRefs takes a reference on every texture view and

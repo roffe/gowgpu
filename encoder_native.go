@@ -187,6 +187,17 @@ func (e *CommandEncoder) id() uint64 {
 	return e.serial
 }
 
+// fallbackLimits are the limits of an encoder without a device, WebGPU's.
+var fallbackLimits = gputypes.DefaultLimits()
+
+// limits returns the limits of the encoder's device.
+func (e *CommandEncoder) limits() *gputypes.Limits {
+	if e.device != nil && e.device.core != nil {
+		return &e.device.core.Limits
+	}
+	return &fallbackLimits
+}
+
 // setError records a deferred error on the underlying command encoder.
 // This implements the WebGPU deferred error pattern: encoding-phase errors
 // are collected and surfaced when Finish() is called.

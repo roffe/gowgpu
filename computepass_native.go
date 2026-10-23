@@ -72,7 +72,7 @@ func (p *ComputePassEncoder) SetPipeline(pipeline *ComputePipeline) {
 
 // SetBindGroup sets a bind group for the given index.
 func (p *ComputePassEncoder) SetBindGroup(index uint32, group *BindGroup, offsets []uint32) {
-	if err := validateSetBindGroup("ComputePass", index, group, offsets, p.currentPipelineBindGroupCount); err != nil {
+	if err := validateSetBindGroup("ComputePass", index, group, offsets, p.currentPipelineBindGroupCount, p.encoder.limits()); err != nil {
 		p.encoder.setError(err)
 		return
 	}

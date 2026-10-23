@@ -192,6 +192,20 @@ type LateBufferBindingInfo struct {
 	Size uint64
 }
 
+// dynamicBinding is a buffer binding with a dynamic offset, what
+// SetBindGroup checks the offset for it against.
+//
+// Reference: wgpu-core binding_model.rs BindGroupDynamicBindingData
+type dynamicBinding struct {
+	binding uint32
+	// storage is set on a storage buffer binding, whose offsets are aligned
+	// to MinStorageBufferOffsetAlignment, rather than a uniform one's to
+	// MinUniformBufferOffsetAlignment.
+	storage bool
+	// maxOffset is the largest offset that keeps the binding in its buffer.
+	maxOffset uint64
+}
+
 // BindGroup represents bound GPU resources for shader access.
 type BindGroup struct {
 	hal     hal.BindGroup
@@ -209,6 +223,9 @@ type BindGroup struct {
 	// with MinBindingSize == 0. Listed in iteration order of the layout entries,
 	// matching Rust wgpu-core's BindGroup.late_buffer_binding_infos.
 	lateBufferBindingInfos []LateBufferBindingInfo
+	// dynamicBindings are the group's buffer bindings with a dynamic offset,
+	// by binding number, the order SetBindGroup takes their offsets in.
+	dynamicBindings []dynamicBinding
 	// ref is the GPU-aware reference counter for this bind group (Phase 2).
 	// Clone'd when used in a render/compute pass, Drop'd when GPU completes submission.
 	ref *core.ResourceRef
