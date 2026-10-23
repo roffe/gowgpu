@@ -18,13 +18,13 @@ func TestVulkanComputePipelineCreation(t *testing.T) {
 	t.Run("struct fields", func(t *testing.T) {
 		pipeline := &ComputePipeline{
 			handle: vk.Pipeline(12345),
-			layout: vk.PipelineLayout(67890),
+			layout: bindingLayout{handle: vk.PipelineLayout(67890)},
 		}
 		if pipeline.handle != vk.Pipeline(12345) {
 			t.Errorf("handle = %v, want 12345", pipeline.handle)
 		}
-		if pipeline.layout != vk.PipelineLayout(67890) {
-			t.Errorf("layout = %v, want 67890", pipeline.layout)
+		if pipeline.layout.handle != vk.PipelineLayout(67890) {
+			t.Errorf("layout = %v, want 67890", pipeline.layout.handle)
 		}
 	})
 
@@ -185,7 +185,7 @@ func TestVulkanComputeMultipleBindGroups(t *testing.T) {
 	t.Run("SetBindGroup nil group", func(t *testing.T) {
 		cpe := &ComputePassEncoder{
 			encoder:  &CommandEncoder{active: 1},
-			pipeline: &ComputePipeline{handle: vk.Pipeline(100), layout: vk.PipelineLayout(200)},
+			pipeline: &ComputePipeline{handle: vk.Pipeline(100), layout: bindingLayout{handle: vk.PipelineLayout(200)}},
 		}
 		cpe.SetBindGroup(0, nil, nil) // Should not panic
 	})

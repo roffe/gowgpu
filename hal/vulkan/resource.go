@@ -6,6 +6,8 @@
 package vulkan
 
 import (
+	"slices"
+
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal/vulkan/memory"
 	"github.com/roffe/gowgpu/hal/vulkan/vk"
@@ -203,8 +205,32 @@ func (g *BindGroup) Handle() vk.DescriptorSet {
 
 // PipelineLayout implements hal.PipelineLayout for Vulkan.
 type PipelineLayout struct {
-	handle vk.PipelineLayout
+	bindingLayout
 	device *Device
+}
+
+// bindingLayout is what bind groups are bound with: the pipeline layout,
+// and the descriptor set layouts and push constant ranges it was made with,
+// which tell what sets bound with one layout a pipeline of another can use.
+type bindingLayout struct {
+	handle        vk.PipelineLayout
+	sets          []vk.DescriptorSetLayout
+	pushConstants []vk.PushConstantRange
+}
+
+// compatibleSets is how many of the first sets bound with l a pipeline of
+// layout o can use: up to the first descriptor set layout the two differ in,
+// and none when their push constant ranges differ (Vulkan's pipeline layout
+// compatibility).
+func (l *bindingLayout) compatibleSets(o *bindingLayout) int {
+	if l.handle == 0 || !slices.Equal(l.pushConstants, o.pushConstants) {
+		return 0
+	}
+	n := 0
+	for n < len(l.sets) && n < len(o.sets) && l.sets[n] == o.sets[n] {
+		n++
+	}
+	return n
 }
 
 // Destroy releases the pipeline layout.
@@ -222,7 +248,7 @@ func (l *PipelineLayout) Handle() vk.PipelineLayout {
 // RenderPipeline implements hal.RenderPipeline for Vulkan.
 type RenderPipeline struct {
 	handle vk.Pipeline
-	layout vk.PipelineLayout
+	layout bindingLayout
 	device *Device
 }
 
@@ -236,7 +262,7 @@ func (p *RenderPipeline) Destroy() {
 // ComputePipeline implements hal.ComputePipeline for Vulkan.
 type ComputePipeline struct {
 	handle vk.Pipeline
-	layout vk.PipelineLayout
+	layout bindingLayout
 	device *Device
 }
 

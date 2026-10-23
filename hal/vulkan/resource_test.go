@@ -457,3 +457,29 @@ func TestTextureFormats(t *testing.T) {
 		})
 	}
 }
+
+// TestCompatibleSets: sets bound with one pipeline layout stay usable with
+// another up to the first descriptor set layout they differ in, and not at
+// all when the push constant ranges differ or nothing was bound yet.
+func TestCompatibleSets(t *testing.T) {
+	a := bindingLayout{handle: 1, sets: []vk.DescriptorSetLayout{10, 11, 12}}
+	tests := []struct {
+		name  string
+		bound bindingLayout
+		want  int
+	}{
+		{"same sets", bindingLayout{handle: 2, sets: []vk.DescriptorSetLayout{10, 11, 12}}, 3},
+		{"fewer sets", bindingLayout{handle: 2, sets: []vk.DescriptorSetLayout{10}}, 1},
+		{"second differs", bindingLayout{handle: 2, sets: []vk.DescriptorSetLayout{10, 13, 12}}, 1},
+		{"first differs", bindingLayout{handle: 2, sets: []vk.DescriptorSetLayout{13, 11, 12}}, 0},
+		{"push constants differ", bindingLayout{handle: 2, sets: []vk.DescriptorSetLayout{10, 11, 12}, pushConstants: []vk.PushConstantRange{{Size: 16}}}, 0},
+		{"nothing bound", bindingLayout{}, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.bound.compatibleSets(&a); got != tt.want {
+				t.Errorf("compatibleSets = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}

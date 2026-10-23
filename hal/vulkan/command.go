@@ -1442,21 +1442,66 @@ type RenderPassEncoder struct {
 	framebuffer vk.Framebuffer
 	// begun records whether vkCmdBeginRenderPass actually ran, which End needs
 	// because BeginRenderPass returns an encoder either way.
-	begun bool
-	// pending holds the bind groups set before any pipeline, which WebGPU
-	// allows and Vulkan cannot bind without a pipeline layout: SetPipeline
-	// binds them.
-	pending [maxBindGroupSlots]pendingBindGroup
+	begun  bool
+	groups bindGroups
 }
 
 // maxBindGroupSlots is how many bind group slots a pass has (WebGPU's
 // maxBindGroups).
 const maxBindGroupSlots = 8
 
-// pendingBindGroup is a bind group set before the pipeline.
-type pendingBindGroup struct {
+// bindGroups are the bind groups a pass has set. They are bound before the
+// next draw or dispatch, with the layout of the pipeline set then, as Dawn
+// and wgpu-core do: WebGPU keeps bind groups across SetPipeline and takes
+// them before the pipeline, and a set bound with one layout is only usable
+// with another as far as the two are compatible.
+type bindGroups struct {
+	slots  [maxBindGroupSlots]boundGroup
+	dirty  uint8 // slots to bind before the next draw or dispatch
+	layout bindingLayout
+}
+
+type boundGroup struct {
 	group   *BindGroup
 	offsets []uint32
+}
+
+func (b *bindGroups) set(index uint32, group *BindGroup, offsets []uint32) {
+	if index >= maxBindGroupSlots {
+		return
+	}
+	slot := &b.slots[index]
+	slot.group = group
+	slot.offsets = append(slot.offsets[:0], offsets...)
+	b.dirty |= 1 << index
+}
+
+// bind binds the slots that need it with layout, as far as it has sets.
+func (b *bindGroups) bind(cmds *vk.Commands, cmd vk.CommandBuffer, point vk.PipelineBindPoint, layout *bindingLayout) {
+	if layout.handle != b.layout.handle {
+		b.dirty |= 0xFF << b.layout.compatibleSets(layout)
+		b.layout = *layout
+	}
+	for i := range min(len(layout.sets), maxBindGroupSlots) {
+		slot := &b.slots[i]
+		if b.dirty&(1<<i) == 0 || slot.group == nil {
+			continue
+		}
+		var pOffsets *uint32
+		if len(slot.offsets) > 0 {
+			pOffsets = &slot.offsets[0]
+		}
+		vkCmdBindDescriptorSets(cmds, cmd, point, layout.handle, uint32(i), 1, &slot.group.handle, uint32(len(slot.offsets)), pOffsets) //nolint:gosec // slot index
+		b.dirty &^= 1 << i
+	}
+}
+
+func (b *bindGroups) reset() {
+	for i := range b.slots {
+		b.slots[i].group = nil
+	}
+	b.dirty = 0
+	b.layout = bindingLayout{}
 }
 
 const (
@@ -1487,12 +1532,11 @@ func (e *RenderPassEncoder) End() {
 	e.renderPass = 0
 	e.framebuffer = 0
 	e.begun = false
-	e.pending = [maxBindGroupSlots]pendingBindGroup{}
+	e.groups.reset()
 	renderPassPool.Put(e)
 }
 
-// SetPipeline sets the render pipeline, and binds the bind groups set
-// before it.
+// SetPipeline sets the render pipeline.
 func (e *RenderPassEncoder) SetPipeline(pipeline hal.RenderPipeline) {
 	p, ok := pipeline.(*RenderPipeline)
 	if !ok || e.encoder.active == 0 {
@@ -1500,44 +1544,22 @@ func (e *RenderPassEncoder) SetPipeline(pipeline hal.RenderPipeline) {
 	}
 	e.pipeline = p
 	vkCmdBindPipeline(e.encoder.device.cmds, e.encoder.active, vk.PipelineBindPointGraphics, p.handle)
-	for i := range e.pending {
-		if pending := e.pending[i]; pending.group != nil {
-			e.pending[i] = pendingBindGroup{}
-			e.SetBindGroup(uint32(i), pending.group, pending.offsets) //nolint:gosec // slot index
-		}
-	}
 }
 
-// SetBindGroup sets a bind group. Before a pipeline is set there is no
-// layout to bind it with, so it waits for SetPipeline.
+// SetBindGroup sets a bind group, which the next draw binds.
 func (e *RenderPassEncoder) SetBindGroup(index uint32, group hal.BindGroup, offsets []uint32) {
 	bg, ok := group.(*BindGroup)
 	if !ok || e.encoder.active == 0 {
 		return
 	}
-	if e.pipeline == nil {
-		if index < maxBindGroupSlots {
-			e.pending[index] = pendingBindGroup{group: bg, offsets: append([]uint32(nil), offsets...)}
-		}
-		return
-	}
+	e.groups.set(index, bg, offsets)
+}
 
-	var pOffsets *uint32
-	if len(offsets) > 0 {
-		pOffsets = &offsets[0]
+// bindGroups binds the bind groups a draw needs.
+func (e *RenderPassEncoder) bindGroups() {
+	if e.pipeline != nil {
+		e.groups.bind(e.encoder.device.cmds, e.encoder.active, vk.PipelineBindPointGraphics, &e.pipeline.layout)
 	}
-
-	vkCmdBindDescriptorSets(
-		e.encoder.device.cmds,
-		e.encoder.active,
-		vk.PipelineBindPointGraphics,
-		e.pipeline.layout,
-		index,
-		1,
-		&bg.handle,
-		uint32(len(offsets)),
-		pOffsets,
-	)
 }
 
 // SetVertexBuffer sets a vertex buffer.
@@ -1638,6 +1660,7 @@ func (e *RenderPassEncoder) Draw(args gputypes.DrawArgs) {
 	if e.encoder.active == 0 || !e.begun {
 		return
 	}
+	e.bindGroups()
 	vkCmdDraw(e.encoder.device.cmds, e.encoder.active, args.VertexCount, args.InstanceCount, args.FirstVertex, args.FirstInstance)
 }
 
@@ -1646,7 +1669,7 @@ func (e *RenderPassEncoder) DrawIndexed(args gputypes.DrawIndexedArgs) {
 	if e.encoder.active == 0 || !e.begun {
 		return
 	}
-
+	e.bindGroups()
 	vkCmdDrawIndexed(e.encoder.device.cmds, e.encoder.active, args.IndexCount, args.InstanceCount, args.FirstIndex, args.BaseVertex, args.FirstInstance)
 }
 
@@ -1664,6 +1687,7 @@ func (e *RenderPassEncoder) DrawIndirect(buffer hal.Buffer, offset uint64, drawC
 	if !ok {
 		return
 	}
+	e.bindGroups()
 	if batched {
 		vkCmdDrawIndirect(e.encoder.device.cmds, e.encoder.active, buf.handle, vk.DeviceSize(call.offset), call.count, call.stride)
 		return
@@ -1696,7 +1720,7 @@ func (e *RenderPassEncoder) DrawIndexedIndirect(buffer hal.Buffer, offset uint64
 	if !ok {
 		return
 	}
-
+	e.bindGroups()
 	if batched {
 		vkCmdDrawIndexedIndirect(e.encoder.device.cmds, e.encoder.active, buf.handle, vk.DeviceSize(call.offset), call.count, call.stride)
 		return
@@ -1778,9 +1802,7 @@ type ComputePassEncoder struct {
 	encoder         *CommandEncoder
 	pipeline        *ComputePipeline
 	timestampWrites *hal.ComputePassTimestampWrites
-	// pending holds the bind groups set before any pipeline, as in
-	// RenderPassEncoder.
-	pending [maxBindGroupSlots]pendingBindGroup
+	groups          bindGroups
 }
 
 // End finishes the compute pass.
@@ -1834,7 +1856,7 @@ func (e *ComputePassEncoder) End() {
 	e.encoder = nil
 	e.pipeline = nil
 	e.timestampWrites = nil
-	e.pending = [maxBindGroupSlots]pendingBindGroup{}
+	e.groups.reset()
 	computePassPool.Put(e)
 }
 
@@ -1847,44 +1869,15 @@ func (e *ComputePassEncoder) SetPipeline(pipeline hal.ComputePipeline) {
 	e.pipeline = p
 
 	vkCmdBindPipeline(e.encoder.device.cmds, e.encoder.active, vk.PipelineBindPointCompute, p.handle)
-	for i := range e.pending {
-		if pending := e.pending[i]; pending.group != nil {
-			e.pending[i] = pendingBindGroup{}
-			e.SetBindGroup(uint32(i), pending.group, pending.offsets) //nolint:gosec // slot index
-		}
-	}
 }
 
-// SetBindGroup sets a bind group. Before a pipeline is set there is no
-// layout to bind it with, so it waits for SetPipeline.
+// SetBindGroup sets a bind group, which the next dispatch binds.
 func (e *ComputePassEncoder) SetBindGroup(index uint32, group hal.BindGroup, offsets []uint32) {
 	bg, ok := group.(*BindGroup)
 	if !ok || e.encoder.active == 0 {
 		return
 	}
-	if e.pipeline == nil {
-		if index < maxBindGroupSlots {
-			e.pending[index] = pendingBindGroup{group: bg, offsets: append([]uint32(nil), offsets...)}
-		}
-		return
-	}
-
-	var pOffsets *uint32
-	if len(offsets) > 0 {
-		pOffsets = &offsets[0]
-	}
-
-	vkCmdBindDescriptorSets(
-		e.encoder.device.cmds,
-		e.encoder.active,
-		vk.PipelineBindPointCompute,
-		e.pipeline.layout,
-		index,
-		1,
-		&bg.handle,
-		uint32(len(offsets)),
-		pOffsets,
-	)
+	e.groups.set(index, bg, offsets)
 }
 
 // Dispatch dispatches compute work. Without a pipeline bound there is
@@ -1893,7 +1886,7 @@ func (e *ComputePassEncoder) Dispatch(x, y, z uint32) {
 	if e.encoder.active == 0 || e.pipeline == nil {
 		return
 	}
-
+	e.groups.bind(e.encoder.device.cmds, e.encoder.active, vk.PipelineBindPointCompute, &e.pipeline.layout)
 	vkCmdDispatch(e.encoder.device.cmds, e.encoder.active, x, y, z)
 	e.insertComputeBarrier()
 }
@@ -1904,7 +1897,7 @@ func (e *ComputePassEncoder) DispatchIndirect(buffer hal.Buffer, offset uint64) 
 	if !ok || e.encoder.active == 0 || e.pipeline == nil {
 		return
 	}
-
+	e.groups.bind(e.encoder.device.cmds, e.encoder.active, vk.PipelineBindPointCompute, &e.pipeline.layout)
 	vkCmdDispatchIndirect(e.encoder.device.cmds, e.encoder.active, buf.handle, vk.DeviceSize(offset))
 	e.insertComputeBarrier()
 }

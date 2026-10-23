@@ -32,15 +32,11 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		return nil, fmt.Errorf("vulkan: render pipeline layout is required (automatic layouts are not supported)")
 	}
 
-	// Get pipeline layout
-	var pipelineLayout vk.PipelineLayout
-	if desc.Layout != nil {
-		vkLayout, ok := desc.Layout.(*PipelineLayout)
-		if !ok || vkLayout == nil {
-			return nil, fmt.Errorf("vulkan: invalid pipeline layout")
-		}
-		pipelineLayout = vkLayout.handle
+	vkLayout, ok := desc.Layout.(*PipelineLayout)
+	if !ok || vkLayout == nil {
+		return nil, fmt.Errorf("vulkan: invalid pipeline layout")
 	}
+	pipelineLayout := vkLayout.handle
 
 	// Build shader stages
 	var stages []vk.PipelineShaderStageCreateInfo
@@ -347,7 +343,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 
 	rp := &RenderPipeline{
 		handle: pipeline,
-		layout: pipelineLayout,
+		layout: vkLayout.bindingLayout,
 		device: d,
 	}
 	d.live.pipelines.add(pipeline)
@@ -396,15 +392,11 @@ func (d *Device) CreateComputePipeline(desc *hal.ComputePipelineDescriptor) (hal
 		return nil, fmt.Errorf("vulkan: compute pipeline layout is required (automatic layouts are not supported)")
 	}
 
-	// Get pipeline layout
-	var pipelineLayout vk.PipelineLayout
-	if desc.Layout != nil {
-		vkLayout, ok := desc.Layout.(*PipelineLayout)
-		if !ok || vkLayout == nil {
-			return nil, fmt.Errorf("vulkan: invalid pipeline layout")
-		}
-		pipelineLayout = vkLayout.handle
+	vkLayout, ok := desc.Layout.(*PipelineLayout)
+	if !ok || vkLayout == nil {
+		return nil, fmt.Errorf("vulkan: invalid pipeline layout")
 	}
+	pipelineLayout := vkLayout.handle
 
 	// Get compute shader module
 	if desc.Compute.Module == nil {
@@ -449,7 +441,7 @@ func (d *Device) CreateComputePipeline(desc *hal.ComputePipelineDescriptor) (hal
 
 	cp := &ComputePipeline{
 		handle: pipeline,
-		layout: pipelineLayout,
+		layout: vkLayout.bindingLayout,
 		device: d,
 	}
 	d.live.pipelines.add(pipeline)

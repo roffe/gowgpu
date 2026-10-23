@@ -348,3 +348,111 @@ func TestDrawFirstInstance(t *testing.T) {
 	expectPixels(t, "draw from instance 1", readback(t, st), 0, 255, 0, 255)
 	assertNoValidation(t, h)
 }
+
+// layoutChangeShader draws a full-screen triangle in the colour of group 1,
+// reading group 0 too.
+const layoutChangeShader = `
+@group(0) @binding(0) var<uniform> zero: vec4<f32>;
+@group(1) @binding(0) var<uniform> color: vec4<f32>;
+@vertex fn vs_main(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
+	return vec4<f32>(f32(i32(vi & 1u) * 4 - 1), f32(i32(vi >> 1u) * 4 - 1), 0.0, 1.0);
+}
+@fragment fn fs_main() -> @location(0) vec4<f32> { return color + zero; }
+`
+
+// TestBindGroupsAcrossLayouts sets three bind groups before a pipeline whose
+// layout has two, draws the left half, then sets a pipeline whose group 0
+// layout is another one and only group 0 again, and draws the right half
+// with the group 1 set before. Vulkan bound the third group with the first
+// layout, which has no set for it (NVIDIA crashed in vkCmdBindDescriptorSets),
+// and kept group 1 bound with the first layout, which the second does not
+// match below it.
+func TestBindGroupsAcrossLayouts(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	if h.backend == gputypes.BackendGL {
+		t.Skip("GL binds a group against the pipeline set at the time, see the README's known issues")
+	}
+	module, err := device.CreateShaderModule(&ShaderModuleDescriptor{Label: "layout-change", WGSL: layoutChangeShader})
+	if err != nil {
+		t.Fatalf("CreateShaderModule: %v", err)
+	}
+	defer module.Release()
+	uniform := func(visibility gputypes.ShaderStages) *BindGroupLayout {
+		bgl, err := device.CreateBindGroupLayout(&BindGroupLayoutDescriptor{Entries: []gputypes.BindGroupLayoutEntry{
+			{Binding: 0, Visibility: visibility, Buffer: &gputypes.BufferBindingLayout{Type: gputypes.BufferBindingTypeUniform}},
+		}})
+		if err != nil {
+			t.Fatalf("CreateBindGroupLayout: %v", err)
+		}
+		t.Cleanup(bgl.Release)
+		return bgl
+	}
+	zeroA, zeroB, colorLayout := uniform(ShaderStageFragment), uniform(ShaderStageVertex|ShaderStageFragment), uniform(ShaderStageFragment)
+	pipeline := func(zeroLayout *BindGroupLayout) *RenderPipeline {
+		pl, err := device.CreatePipelineLayout(&PipelineLayoutDescriptor{BindGroupLayouts: []*BindGroupLayout{zeroLayout, colorLayout}})
+		if err != nil {
+			t.Fatalf("CreatePipelineLayout: %v", err)
+		}
+		t.Cleanup(pl.Release)
+		pipe, err := device.CreateRenderPipeline(&RenderPipelineDescriptor{
+			Label:     "layout-change",
+			Layout:    pl,
+			Vertex:    VertexState{Module: module, EntryPoint: "vs_main"},
+			Primitive: gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList},
+			Fragment: &FragmentState{Module: module, EntryPoint: "fs_main",
+				Targets: []gputypes.ColorTargetState{{Format: gputypes.TextureFormatRGBA8Unorm, WriteMask: gputypes.ColorWriteMaskAll}}},
+		})
+		if err != nil {
+			t.Fatalf("CreateRenderPipeline: %v", err)
+		}
+		t.Cleanup(pipe.Release)
+		return pipe
+	}
+	pipeA, pipeB := pipeline(zeroA), pipeline(zeroB)
+
+	buf, err := device.CreateBuffer(&BufferDescriptor{Label: "uniforms", Size: 512, Usage: BufferUsageUniform | BufferUsageCopyDst})
+	if err != nil {
+		t.Fatalf("CreateBuffer: %v", err)
+	}
+	defer buf.Release()
+	green := []float32{0, 1, 0, 1}
+	if err := device.Queue().WriteBuffer(buf, 256, unsafe.Slice((*byte)(unsafe.Pointer(&green[0])), 16)); err != nil {
+		t.Fatalf("WriteBuffer: %v", err)
+	}
+	group := func(layout *BindGroupLayout, offset uint64) *BindGroup {
+		g, err := device.CreateBindGroup(&BindGroupDescriptor{Layout: layout, Entries: []BindGroupEntry{{Binding: 0, Buffer: buf, Offset: offset, Size: 16}}})
+		if err != nil {
+			t.Fatalf("CreateBindGroup: %v", err)
+		}
+		t.Cleanup(g.Release)
+		return g
+	}
+	groupA, groupB, colorGroup, extra := group(zeroA, 0), group(zeroB, 0), group(colorLayout, 256), group(colorLayout, 0)
+
+	tex, view := pixTexture(t, device, "layout-change", TextureUsageRenderAttachment|TextureUsageCopySrc)
+	defer releaseTextureView(tex, view)
+	st := readbackBuffer(t, device, "layout-change-st")
+	enc, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	half := float32(pixSide / 2)
+	clearPass(t, enc, view, gputypes.LoadOpClear, gputypes.Color{}, func(p *RenderPassEncoder) {
+		p.SetBindGroup(0, groupA, nil)
+		p.SetBindGroup(1, colorGroup, nil)
+		p.SetBindGroup(2, extra, nil)
+		p.SetPipeline(pipeA)
+		p.SetViewport(gputypes.Viewport{Width: half, Height: pixSide, MaxDepth: 1})
+		p.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1})
+		p.SetPipeline(pipeB)
+		p.SetBindGroup(0, groupB, nil)
+		p.SetViewport(gputypes.Viewport{X: half, Width: half, Height: pixSide, MaxDepth: 1})
+		p.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1})
+	})
+	copyOut(enc, tex, st)
+	finishAndSubmit(t, device, enc)
+	device.Poll(PollWait)
+
+	expectPixels(t, "draws with group 1 across a layout change", readback(t, st), 0, 255, 0, 255)
+	assertNoValidation(t, h)
+}

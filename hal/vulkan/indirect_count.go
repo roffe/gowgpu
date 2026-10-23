@@ -54,6 +54,7 @@ func (e *RenderPassEncoder) drawIndirectCount(
 	if countOffset+4 > bufs.count.size {
 		return
 	}
+	e.bindGroups()
 	if nativeCmd != nil {
 		nativeCmd(e.encoder.active, bufs.indirect.handle, vk.DeviceSize(offset), bufs.count.handle, vk.DeviceSize(countOffset), maxDrawCount)
 		return

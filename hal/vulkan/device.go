@@ -1289,8 +1289,8 @@ func (d *Device) CreatePipelineLayout(desc *hal.PipelineLayoutDescriptor) (hal.P
 	}
 
 	pl := &PipelineLayout{
-		handle: layout,
-		device: d,
+		bindingLayout: bindingLayout{handle: layout, sets: setLayouts, pushConstants: pushConstantRanges},
+		device:        d,
 	}
 	d.live.pipelineLayouts.add(layout)
 	if desc.Label != "" {
