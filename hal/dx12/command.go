@@ -59,6 +59,10 @@ type CommandEncoder struct {
 
 	stateTracker commandStateTracker
 
+	// scratch are the buffers recorded copies go through, kept until the
+	// GPU is done with the command lists (ResetAll).
+	scratch []*Buffer
+
 	// err is the first command that could not be recorded; EndEncoding
 	// returns it in place of a command buffer that lacks the command.
 	err error
@@ -68,6 +72,29 @@ func (e *CommandEncoder) fail(err error) {
 	if e.err == nil {
 		e.err = err
 	}
+}
+
+// scratchBuffer is a new zeroed buffer of size bytes for a copy to go
+// through.
+func (e *CommandEncoder) scratchBuffer(size uint64) (*Buffer, error) {
+	buf, err := e.device.CreateBuffer(&hal.BufferDescriptor{
+		Label: "(wgpu internal) copy scratch",
+		Size:  size,
+		Usage: gputypes.BufferUsageCopySrc | gputypes.BufferUsageCopyDst,
+	})
+	if err != nil {
+		return nil, err
+	}
+	b := buf.(*Buffer)
+	e.scratch = append(e.scratch, b)
+	return b, nil
+}
+
+func (e *CommandEncoder) releaseScratch() {
+	for _, b := range e.scratch {
+		b.Destroy()
+	}
+	e.scratch = e.scratch[:0]
 }
 
 // BeginEncoding begins command recording.
@@ -160,6 +187,7 @@ func (e *CommandEncoder) ResetAll(commandBuffers []hal.CommandBuffer) {
 			hal.Logger().Error("dx12: ID3D12CommandAllocator::Reset failed", "err", err)
 		}
 	}
+	e.releaseScratch()
 }
 
 // Destroy releases the allocator and all pooled command lists.
@@ -177,6 +205,7 @@ func (e *CommandEncoder) Destroy() {
 		e.allocator.Release()
 		e.allocator = nil
 	}
+	e.releaseScratch()
 }
 
 // TransitionBuffers transitions buffer states for synchronization.

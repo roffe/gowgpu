@@ -27,7 +27,92 @@ func (e *CommandEncoder) planRegionCopies(texture *Texture, regions []hal.Buffer
 	return regionPlans
 }
 
+// copyThroughScratch reports a copy of a depth or stencil plane at a buffer
+// offset that is not 512-aligned. D3D12 copies a depth/stencil subresource
+// whole, with no box inside the buffer footprint on devices without
+// programmable sample positions, so such a copy goes through a scratch
+// buffer it starts at offset 0 of, as Dawn and Rust's wgpu-hal do.
+func copyThroughScratch(texture *Texture, layout hal.ImageDataLayout) bool {
+	return texture.format.IsDepthStencil() && layout.Offset%d3d12TexturePlacementAlignment != 0
+}
+
+// copyByteSpan is the number of bytes from the layout's offset a copy of
+// region reads or writes: every row runs the row pitch but the last row of
+// the last image, which runs its blocks only.
+func copyByteSpan(texture *Texture, region hal.BufferTextureCopy) (uint64, bool) {
+	plane, ok := copyPlane(texture, region.TextureBase.Aspect)
+	if !ok {
+		return 0, false
+	}
+	info, rowPitch, blockRows, ok := normalizedCopyLayout(texture, plane, region.BufferLayout, region.Size)
+	if !ok {
+		return 0, false
+	}
+	width, height, ok := copyExtentBlocks(info, region.TextureBase.Origin, region.Size)
+	if !ok {
+		return 0, false
+	}
+	depth := uint64(max(region.Size.DepthOrArrayLayers, 1))
+	return (depth-1)*uint64(blockRows)*uint64(rowPitch) + uint64(height-1)*uint64(rowPitch) + uint64(width)*uint64(info.bytes), true
+}
+
+func (e *CommandEncoder) copyBufferToTextureThroughScratch(src *Buffer, texture *Texture, region hal.BufferTextureCopy) {
+	span, ok := copyByteSpan(texture, region)
+	if !ok {
+		e.fail(fmt.Errorf("dx12: buffer/texture copy of %v with layout %+v cannot be recorded", texture.format, region.BufferLayout))
+		return
+	}
+	scratch, err := e.scratchBuffer(span)
+	if err != nil {
+		e.fail(fmt.Errorf("dx12: buffer/texture copy scratch: %w", err))
+		return
+	}
+	e.transitionCopyBuffers(src, scratch)
+	e.cmdList.CopyBufferRegion(scratch.raw, 0, src.raw, region.BufferLayout.Offset, span)
+	region.BufferLayout.Offset = 0
+	e.copyBufferToTexture(scratch, texture, []hal.BufferTextureCopy{region})
+}
+
+func (e *CommandEncoder) copyTextureToBufferThroughScratch(src *Texture, dst *Buffer, region hal.BufferTextureCopy) {
+	span, ok := copyByteSpan(src, region)
+	if !ok {
+		e.fail(fmt.Errorf("dx12: buffer/texture copy of %v with layout %+v cannot be recorded", src.format, region.BufferLayout))
+		return
+	}
+	scratch, err := e.scratchBuffer(span)
+	if err != nil {
+		e.fail(fmt.Errorf("dx12: buffer/texture copy scratch: %w", err))
+		return
+	}
+	offset := region.BufferLayout.Offset
+	region.BufferLayout.Offset = 0
+	e.copyTextureToBuffer(src, scratch, []hal.BufferTextureCopy{region})
+	e.transitionCopyBuffers(scratch, dst)
+	e.cmdList.CopyBufferRegion(dst.raw, offset, scratch.raw, 0, span)
+}
+
+// transitionCopyBuffers moves src to COPY_SOURCE and dst to COPY_DEST.
+func (e *CommandEncoder) transitionCopyBuffers(src, dst *Buffer) {
+	plans := make([]stateBarrierPlan, 0, 2)
+	if before, barrier := e.stateTracker.transitionBuffer(src, d3d12.D3D12_RESOURCE_STATE_COPY_SOURCE); barrier {
+		plans = append(plans, stateBarrierPlan{resource: src, subresource: d3d12.D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, before: before, after: d3d12.D3D12_RESOURCE_STATE_COPY_SOURCE})
+	}
+	if before, barrier := e.stateTracker.transitionBuffer(dst, d3d12.D3D12_RESOURCE_STATE_COPY_DEST); barrier {
+		plans = append(plans, stateBarrierPlan{resource: dst, subresource: d3d12.D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, before: before, after: d3d12.D3D12_RESOURCE_STATE_COPY_DEST})
+	}
+	e.emitStateBarrierPlans(plans)
+}
+
 func (e *CommandEncoder) copyBufferToTexture(src *Buffer, texture *Texture, regions []hal.BufferTextureCopy) {
+	direct := make([]hal.BufferTextureCopy, 0, len(regions))
+	for _, region := range regions {
+		if copyThroughScratch(texture, region.BufferLayout) {
+			e.copyBufferToTextureThroughScratch(src, texture, region)
+		} else {
+			direct = append(direct, region)
+		}
+	}
+	regions = direct
 	barriers := make([]stateBarrierPlan, 0, 1+len(regions))
 	if before, barrier := e.stateTracker.transitionBuffer(src, d3d12.D3D12_RESOURCE_STATE_COPY_SOURCE); barrier {
 		barriers = append(barriers, stateBarrierPlan{resource: src, subresource: d3d12.D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, before: before, after: d3d12.D3D12_RESOURCE_STATE_COPY_SOURCE})
@@ -59,6 +144,15 @@ func (e *CommandEncoder) copyBufferToTexture(src *Buffer, texture *Texture, regi
 }
 
 func (e *CommandEncoder) copyTextureToBuffer(src *Texture, dst *Buffer, regions []hal.BufferTextureCopy) {
+	direct := make([]hal.BufferTextureCopy, 0, len(regions))
+	for _, region := range regions {
+		if copyThroughScratch(src, region.BufferLayout) {
+			e.copyTextureToBufferThroughScratch(src, dst, region)
+		} else {
+			direct = append(direct, region)
+		}
+	}
+	regions = direct
 	barriers := make([]stateBarrierPlan, 0, 1+len(regions))
 	if before, barrier := e.stateTracker.transitionBuffer(dst, d3d12.D3D12_RESOURCE_STATE_COPY_DEST); barrier {
 		barriers = append(barriers, stateBarrierPlan{resource: dst, subresource: d3d12.D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, before: before, after: d3d12.D3D12_RESOURCE_STATE_COPY_DEST})
