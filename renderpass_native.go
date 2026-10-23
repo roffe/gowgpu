@@ -8,6 +8,7 @@ import (
 
 	"github.com/roffe/gowgpu/core"
 	"github.com/roffe/gowgpu/gputypes"
+	"github.com/roffe/gowgpu/hal"
 )
 
 // RenderPassEncoder records draw commands within a render pass.
@@ -48,6 +49,10 @@ type RenderPassEncoder struct {
 	// blendConstantSet tracks whether SetBlendConstant has been called.
 	// Matches Rust wgpu-core OptionalState for blend_constant.
 	blendConstantSet bool
+	// copies is the buffer the pass's validated indirect draws read their
+	// records from, copiesSize its size and copiesUsed how much is taken.
+	copies                 hal.Buffer
+	copiesSize, copiesUsed uint64
 }
 
 // reset readies p, which lives in its encoder, for a new pass. The binder's
@@ -397,6 +402,11 @@ func (p *RenderPassEncoder) MultiDrawIndirect(buffer *Buffer, offset uint64, dra
 		return
 	}
 	p.encoder.trackBuffer(buffer)
+	if p.validatedIndirect(buffer, nil, offset, drawCount, drawIndirectRecordSize, false, func(raw hal.RenderPassEncoder, dst hal.Buffer, dstOffset uint64, _ hal.Buffer) {
+		raw.DrawIndirect(dst, dstOffset, drawCount)
+	}) {
+		return
+	}
 	p.core.MultiDrawIndirect(buffer.coreBuffer(), offset, drawCount)
 }
 
@@ -471,6 +481,11 @@ func (p *RenderPassEncoder) MultiDrawIndexedIndirect(buffer *Buffer, offset uint
 		return
 	}
 	p.encoder.trackBuffer(buffer)
+	if p.validatedIndirect(buffer, nil, offset, drawCount, drawIndexedIndirectRecordSize, true, func(raw hal.RenderPassEncoder, dst hal.Buffer, dstOffset uint64, _ hal.Buffer) {
+		raw.DrawIndexedIndirect(dst, dstOffset, drawCount)
+	}) {
+		return
+	}
 	p.core.MultiDrawIndexedIndirect(buffer.coreBuffer(), offset, drawCount)
 }
 
@@ -598,4 +613,66 @@ func (p *RenderPassEncoder) validateIndirectCountBuffers(
 // After this call, the encoder cannot be used again.
 func (p *RenderPassEncoder) End() error {
 	return p.core.End()
+}
+
+// validatedIndirect records an indirect draw of drawCount records of
+// recordSize at offset in buffer through the device's validation of
+// indirect draws, when it has one, and reports whether it did: the records
+// are copied into a buffer of the pass's, a record with a first instance
+// with no instances, and draw records the HAL draw from the copy at dst,
+// with count's HAL buffer for a draw with a count buffer.
+func (p *RenderPassEncoder) validatedIndirect(buffer, count *Buffer, offset uint64, drawCount uint32, recordSize uint64, indexed bool,
+	draw func(raw hal.RenderPassEncoder, dst hal.Buffer, dstOffset uint64, count hal.Buffer)) bool {
+	d := p.encoder.device
+	if d == nil || d.core == nil || d.core.IndirectDrawValidation() == nil {
+		return false
+	}
+	v := d.core.IndirectDrawValidation()
+	halDevice, src := d.halDevice(), buffer.halBuffer()
+	if halDevice == nil || src == nil {
+		return false
+	}
+	size := uint64(drawCount) * recordSize
+	dst, dstOffset, err := p.drawCopies(halDevice, size, v.StorageAlign())
+	if err == nil {
+		var group hal.BindGroup
+		if group, err = v.BindGroup(src, offset, dst, dstOffset, size); err == nil {
+			p.encoder.trackedRefs = append(p.encoder.trackedRefs, core.NewResourceRef("IndirectDrawValidation", func() {
+				halDevice.DestroyBindGroup(group)
+			}))
+			var countCore *core.Buffer
+			if count != nil {
+				countCore = count.coreBuffer()
+			}
+			p.core.DrawIndirectValidated(buffer.coreBuffer(), countCore, drawCount, indexed, dst, group,
+				func(raw hal.RenderPassEncoder, count hal.Buffer) { draw(raw, dst, dstOffset, count) })
+			return true
+		}
+	}
+	p.encoder.setError(fmt.Errorf("wgpu: RenderPass: indirect draw validation: %w", err))
+	return true
+}
+
+// drawCopies returns room for size bytes of validated records in the pass's
+// buffer of them, made when the pass has none with that room: the pass's
+// alone, so the validation ahead of it writes no buffer an earlier pass
+// draws from. The buffers go when the GPU is done with the command buffer.
+func (p *RenderPassEncoder) drawCopies(halDevice hal.Device, size, align uint64) (hal.Buffer, uint64, error) {
+	offset := (p.copiesUsed + align - 1) / align * align
+	if p.copies == nil || offset+size > p.copiesSize {
+		n := max(size, 16<<10)
+		buf, err := halDevice.CreateBuffer(&hal.BufferDescriptor{
+			Label: "(wgpu internal) validated indirect draws", Size: n,
+			Usage: gputypes.BufferUsageStorage | gputypes.BufferUsageIndirect,
+		})
+		if err != nil {
+			return nil, 0, err
+		}
+		p.encoder.trackedRefs = append(p.encoder.trackedRefs, core.NewResourceRef("IndirectDrawCopies", func() {
+			halDevice.DestroyBuffer(buf)
+		}))
+		p.copies, p.copiesSize, offset = buf, n, 0
+	}
+	p.copiesUsed = offset + size
+	return p.copies, offset, nil
 }

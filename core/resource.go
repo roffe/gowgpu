@@ -133,6 +133,10 @@ type Device struct {
 	// Thread-safety is provided by ErrorScopeManager's internal mutex.
 	errorScopeManager *ErrorScopeManager
 
+	// indirectDrawValidation checks the records of indirect draws on a
+	// device without FeatureIndirectFirstInstance; nil otherwise.
+	indirectDrawValidation *IndirectDrawValidation
+
 	// indirectValidation holds the GPU resources for validating indirect
 	// dispatch workgroup counts. Created at device init, reused for every
 	// DispatchIndirect call. nil if the device does not support compute
@@ -211,6 +215,9 @@ func NewDevice(
 	// Matches Rust wgpu-core device/resource.rs:445-454.
 	// Returns nil gracefully if shader compilation or resource creation fails.
 	d.indirectValidation = NewIndirectValidation(halDevice, limits)
+	if !features.Contains(gputypes.FeatureIndirectFirstInstance) {
+		d.indirectDrawValidation = newIndirectDrawValidation(halDevice, limits)
+	}
 
 	trackResource(uintptr(unsafe.Pointer(d)), "Device") //nolint:gosec // debug tracking uses pointer as unique ID
 	return d
@@ -299,6 +306,8 @@ func (d *Device) Destroy() {
 		d.indirectValidation.Dispose()
 		d.indirectValidation = nil
 	}
+	d.indirectDrawValidation.Dispose()
+	d.indirectDrawValidation = nil
 
 	if d.snatchLock == nil || d.raw == nil {
 		return
@@ -499,10 +508,10 @@ func (d *Device) CreateBuffer(desc *gputypes.BufferDescriptor) (*Buffer, error) 
 	if !zeroed && !desc.MappedAtCreation {
 		halDesc.Usage |= gputypes.BufferUsageCopyDst
 	}
-	// The indirect dispatch validation reads an indirect buffer as storage,
-	// which Vulkan only allows on a buffer created for it. Rust's wgpu-core
-	// adds STORAGE_READ_ONLY the same way.
-	if d.indirectValidation != nil && desc.Usage.Contains(gputypes.BufferUsageIndirect) {
+	// The indirect dispatch and draw validations read an indirect buffer as
+	// storage, which Vulkan only allows on a buffer created for it. Rust's
+	// wgpu-core adds STORAGE_READ_ONLY the same way.
+	if (d.indirectValidation != nil || d.indirectDrawValidation != nil) && desc.Usage.Contains(gputypes.BufferUsageIndirect) {
 		halDesc.Usage |= gputypes.BufferUsageStorage
 	}
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/roffe/gowgpu/core"
 	"github.com/roffe/gowgpu/gputypes"
+	"github.com/roffe/gowgpu/hal"
 )
 
 type indirectCountDrawConfig struct {
@@ -52,6 +53,17 @@ func (p *RenderPassEncoder) executeIndirectCountDraw(cfg indirectCountDrawConfig
 		return
 	}
 	p.trackIndirectCountBuffers(cfg.indirectBuffer, cfg.countBuffer)
+	indexed := cfg.recordStride == drawIndexedIndirectRecordSize
+	if p.validatedIndirect(cfg.indirectBuffer, cfg.countBuffer, cfg.indirectOffset, cfg.maxDrawCount, cfg.recordStride, indexed,
+		func(raw hal.RenderPassEncoder, dst hal.Buffer, dstOffset uint64, count hal.Buffer) {
+			if indexed {
+				raw.DrawIndexedIndirectCount(dst, dstOffset, count, cfg.countOffset, cfg.maxDrawCount)
+			} else {
+				raw.DrawIndirectCount(dst, dstOffset, count, cfg.countOffset, cfg.maxDrawCount)
+			}
+		}) {
+		return
+	}
 	cfg.record()
 }
 

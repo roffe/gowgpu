@@ -145,6 +145,9 @@ type passScope struct {
 	// split is set on a render pass recorded in a HAL command buffer of its
 	// own, so that the barriers into it can go in one ahead of it.
 	split bool
+	// drawValidations are the validated indirect draws of a render pass,
+	// whose validation goes ahead of it with the barriers.
+	drawValidations []drawValidation
 }
 
 type scopeTexture struct {
@@ -165,6 +168,8 @@ func (p *passScope) clear() {
 	clear(p.texHAL)
 	clear(p.bufHAL)
 	p.texHAL, p.bufHAL = p.texHAL[:0], p.bufHAL[:0]
+	clear(p.drawValidations)
+	p.drawValidations = p.drawValidations[:0]
 	p.clearScratch()
 	p.split = false
 }
@@ -790,7 +795,7 @@ func (e *CoreCommandEncoder) recordPassTransitions() error {
 	scope.texTransitions = append(scope.texTransitions, surfaces...)
 	scope.bufTransitions = m.bufferTracker.SetFromScopeInto(scope.buffers, scope.bufTransitions[:0])
 	defer scope.clearScratch()
-	needed := len(scope.texTransitions) > 0 || len(scope.bufTransitions) > 0
+	needed := len(scope.texTransitions) > 0 || len(scope.bufTransitions) > 0 || len(scope.drawValidations) > 0
 
 	guard := e.device.snatchLock.Read()
 	defer guard.Release()
@@ -818,6 +823,7 @@ func (e *CoreCommandEncoder) recordPassTransitions() error {
 		return err
 	}
 	scope.recordBarriers(*halEncoder)
+	scope.recordDrawValidations(*halEncoder)
 	return e.closeAndSwapLocked(*halEncoder)
 }
 
