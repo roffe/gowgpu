@@ -135,12 +135,6 @@ type Device struct {
 	mappedMemory   map[vk.DeviceMemory]uintptr
 	mappedMemoryMu sync.Mutex // protects mappedMemory map (concurrent CreateBuffer)
 
-	// debugNameBuf is a reusable buffer for null-terminating debug label strings
-	// passed to vkSetDebugUtilsObjectNameEXT. Avoids heap allocation per
-	// Vulkan object creation (PERF-VK-001). Not thread-safe — setObjectName
-	// is only called during resource creation which is single-threaded per device.
-	debugNameBuf []byte
-
 	// configuredSurfaces contains surfaces whose live swapchains belong to this
 	// device. Device teardown retires them before destroying VkDevice.
 	surfaceMu          sync.Mutex

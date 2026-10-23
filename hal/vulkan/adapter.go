@@ -192,6 +192,9 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 		vkDestroyDevice(device, nil)
 		return hal.OpenDevice{}, fmt.Errorf("vulkan: failed to load device commands: %w", err)
 	}
+	if a.instance.debugEnabled {
+		deviceCmds.LoadDebugUtils(&a.instance.cmds)
+	}
 
 	// Get queue handle
 	var queue vk.Queue

@@ -340,6 +340,13 @@ func (c *Commands) HasCreateMetalSurfaceEXT() bool {
 	return c.createMetalSurfaceEXT != nil
 }
 
+// LoadDebugUtils takes vkSetDebugUtilsObjectNameEXT from the commands of
+// the instance, which load it through vkGetInstanceProcAddr when the
+// instance enables VK_EXT_debug_utils.
+func (c *Commands) LoadDebugUtils(instance *Commands) {
+	c.setDebugUtilsObjectNameEXT = instance.setDebugUtilsObjectNameEXT
+}
+
 // HasDebugUtils returns true if vkSetDebugUtilsObjectNameEXT is available.
 // When true, Vulkan objects can be labeled with human-readable names for
 // validation layer messages and GPU debugging tools (RenderDoc, NSight).

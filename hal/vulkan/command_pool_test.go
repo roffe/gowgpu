@@ -10,12 +10,12 @@ import (
 	"github.com/roffe/gowgpu/hal/vulkan/vk"
 )
 
-func openTestDevice(t *testing.T) *Device {
+func openTestDevice(t *testing.T, flags gputypes.InstanceFlags) *Device {
 	t.Helper()
 	if err := vk.Init(); err != nil {
 		t.Skipf("Vulkan not available: %v", err)
 	}
-	instance, err := Backend{}.CreateInstance(&hal.InstanceDescriptor{Backends: gputypes.BackendsVulkan})
+	instance, err := Backend{}.CreateInstance(&hal.InstanceDescriptor{Backends: gputypes.BackendsVulkan, Flags: flags})
 	if err != nil {
 		t.Skipf("CreateInstance: %v", err)
 	}
@@ -36,7 +36,7 @@ func openTestDevice(t *testing.T) *Device {
 // discards one, then ends another: each encoder that takes the recycled
 // pool starts with the command buffers already allocated from it.
 func TestRecycledPoolKeepsCommandBuffers(t *testing.T) {
-	d := openTestDevice(t)
+	d := openTestDevice(t, 0)
 	for i, discard := range []bool{false, true, false} {
 		enc, err := d.CreateCommandEncoder(&hal.CommandEncoderDescriptor{Label: "standalone"})
 		if err != nil {

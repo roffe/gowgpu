@@ -214,38 +214,20 @@ func destroyDebugMessenger(instance *Instance, messenger vk.DebugUtilsMessengerE
 	}
 }
 
-// setObjectName labels a Vulkan object with a human-readable name via
-// vkSetDebugUtilsObjectNameEXT. This eliminates false-positive validation
-// errors where the validation layer's internal handle tracking loses sync
-// with the driver's packed non-dispatchable handles (VK-VAL-002).
-//
-// No-op when VK_EXT_debug_utils is not available (graceful degradation).
-// Reference: Rust wgpu-hal set_object_name() — labels every created object.
+// setObjectName names a Vulkan object for validation messages and GPU
+// debuggers, when the instance enables VK_EXT_debug_utils.
 func (d *Device) setObjectName(objectType vk.ObjectType, handle uint64, name string) {
 	if !d.cmds.HasDebugUtils() || handle == 0 {
 		return
 	}
 
-	// PERF-VK-001: reuse Device.debugNameBuf to avoid heap allocation per
-	// Vulkan object creation. The buffer is grown once and reused for all
-	// subsequent setObjectName calls. Vulkan consumes the name synchronously
-	// in vkSetDebugUtilsObjectNameEXT, so the buffer is safe to reuse after
-	// the call returns. Not thread-safe — resource creation is single-threaded.
-	needed := len(name) + 1 // +1 for null terminator
-	if cap(d.debugNameBuf) < needed {
-		d.debugNameBuf = make([]byte, needed)
-	}
-	d.debugNameBuf = d.debugNameBuf[:needed]
-	copy(d.debugNameBuf, name)
-	d.debugNameBuf[len(name)] = 0
-
+	cname := append([]byte(name), 0)
 	nameInfo := vk.DebugUtilsObjectNameInfoEXT{
 		SType:        vk.StructureTypeDebugUtilsObjectNameInfoExt,
 		ObjectType:   objectType,
 		ObjectHandle: handle,
-		PObjectName:  &d.debugNameBuf[0],
+		PObjectName:  &cname[0],
 	}
-
 	_ = d.cmds.SetDebugUtilsObjectNameEXT(d.handle, &nameInfo)
-	runtime.KeepAlive(d.debugNameBuf)
+	runtime.KeepAlive(cname)
 }
