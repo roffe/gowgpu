@@ -1893,7 +1893,7 @@ func (c *CopyTextureToBufferCommand) Execute(ctx *gl.Context) {
 	// driver, repacked into the texture's texels.
 	format, dataType := tex.copyPair(r.TextureBase.Aspect)
 	var repack func(dst, src []byte)
-	if ctx.IsGLES() && !tex.format.IsDepthStencil() {
+	if ctx.IsGLES() {
 		rb, ok := esReadbackFor(tex.format)
 		if !ok {
 			esReadbackOnce.Do(func() {

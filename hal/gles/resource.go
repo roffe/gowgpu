@@ -656,5 +656,60 @@ func (q *QuerySet) Destroy() {
 	q.queries = nil
 }
 
+// CreateQuerySet creates a query set with GL query objects.
+// Supports QueryTypeTimestamp on desktop GL (GL 3.3, ARB_timer_query).
+// Matches Rust wgpu-hal/src/gles/device.rs create_query_set.
+func (d *Device) CreateQuerySet(desc *hal.QuerySetDescriptor) (hal.QuerySet, error) {
+	if desc == nil {
+		return nil, fmt.Errorf("gles: query set descriptor is nil")
+	}
+
+	glCtx := d.ctx.Lock()
+	defer d.ctx.Unlock()
+
+	// Determine GL query target.
+	var target uint32
+	switch desc.Type {
+	case hal.QueryTypeTimestamp:
+		if !glCtx.SupportsTimestampQueries() {
+			return nil, hal.ErrTimestampsNotSupported
+		}
+		target = gl.TIMESTAMP
+	default:
+		return nil, fmt.Errorf("gles: unsupported query type %d", desc.Type)
+	}
+
+	// Create GL query objects.
+	queries := make([]uint32, desc.Count)
+	for i := uint32(0); i < desc.Count; i++ {
+		q := glCtx.GenQueries(1)
+		if q == 0 {
+			// Clean up already-created queries on failure.
+			for j := uint32(0); j < i; j++ {
+				glCtx.DeleteQueries(1, &queries[j])
+			}
+			return nil, fmt.Errorf("gles: failed to create query object %d/%d", i, desc.Count)
+		}
+		queries[i] = q
+	}
+
+	return &QuerySet{
+		queries: queries,
+		target:  target,
+		glCtx:   glCtx,
+	}, nil
+}
+
+// DestroyQuerySet destroys a query set and releases GL query objects.
+func (d *Device) DestroyQuerySet(qs hal.QuerySet) {
+	q, ok := qs.(*QuerySet)
+	if !ok || q == nil || d.ctx == nil {
+		return
+	}
+	_ = d.ctx.Lock()
+	defer d.ctx.Unlock()
+	q.Destroy()
+}
+
 // NativeHandle returns 0 (no single native handle for a query set).
 func (q *QuerySet) NativeHandle() uintptr { return 0 }

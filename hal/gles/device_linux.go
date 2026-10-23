@@ -320,17 +320,6 @@ func (d *Device) DestroyComputePipeline(pipeline hal.ComputePipeline) {
 	p.Destroy()
 }
 
-// CreateQuerySet creates a query set.
-// TODO: implement using GL_EXT_disjoint_timer_query for timestamp support.
-func (d *Device) CreateQuerySet(_ *hal.QuerySetDescriptor) (hal.QuerySet, error) {
-	return nil, hal.ErrTimestampsNotSupported
-}
-
-// DestroyQuerySet destroys a query set.
-// Stub — add Lock when GL query objects are implemented.
-func (d *Device) DestroyQuerySet(_ hal.QuerySet) {
-}
-
 // CreateCommandEncoder creates a command encoder.
 // VAO is lazily created on first call — ensures it's allocated on the window
 // surface (after Configure), not on the pbuffer (during Open). Mesa d3d12

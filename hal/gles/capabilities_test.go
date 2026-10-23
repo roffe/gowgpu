@@ -150,6 +150,9 @@ func TestInferVendorID(t *testing.T) {
 		{"Apple", vendorIDApple},
 		{"Mesa", vendorIDMesa},
 		{"ImgTec", vendorIDImgTec},
+		{"Imagination Technologies", vendorIDImgTec},
+		{"Advanced Micro Devices, Inc.", vendorIDAMD},
+		{"Microsoft Corporation", 0},
 		{"Unknown Vendor", 0},
 	}
 

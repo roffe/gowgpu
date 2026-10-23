@@ -15,6 +15,7 @@ package gles
 import (
 	"fmt"
 	"strings"
+	"unicode"
 
 	"github.com/gogpu/naga/glsl"
 	"github.com/roffe/gowgpu/gputypes"
@@ -362,8 +363,10 @@ func queryFeatures(exts map[string]bool, glMajor, glMinor int, isES bool, glCtx 
 		features.Insert(gputypes.FeatureFloat32Filterable)
 	}
 
-	// Timestamp queries (GL_ARB_timer_query, desktop GL 3.3+)
-	if hasExtension(exts, "GL_ARB_timer_query") || glCtx.SupportsTimestampQueries() {
+	// Timestamp queries: glQueryCounter is desktop GL 3.3 and
+	// ARB_timer_query; ES has only EXT_disjoint_timer_query's
+	// glQueryCounterEXT, which isn't loaded.
+	if !isES && glCtx.SupportsTimestampQueries() {
 		features.Insert(gputypes.FeatureTimestampQuery)
 	}
 
@@ -552,13 +555,9 @@ func queryDownlevelFlags(glCtx *gl.Context, caps *AdapterCapabilities) gputypes.
 			flags |= gputypes.DownlevelFlagsFragmentStorage
 		}
 
-		if !isES {
-			var maxVertSSBO int32
-			glCtx.GetIntegerv(gl.MAX_VERTEX_SHADER_STORAGE_BLOCKS, &maxVertSSBO)
-			if maxVertSSBO > 0 {
-				flags |= gputypes.DownlevelFlagsVertexStorage
-			}
-		} else if supportsStorage {
+		var maxVertSSBO int32
+		glCtx.GetIntegerv(gl.MAX_VERTEX_SHADER_STORAGE_BLOCKS, &maxVertSSBO)
+		if maxVertSSBO > 0 {
 			flags |= gputypes.DownlevelFlagsVertexStorage
 		}
 	}
@@ -623,7 +622,6 @@ func queryDownlevelFlags(glCtx *gl.Context, caps *AdapterCapabilities) gputypes.
 		flags |= gputypes.DownlevelFlagsBufferBindingsNot16ByteAligned
 		flags |= gputypes.DownlevelFlagsUnrestrictedIndexBuffer
 		flags |= gputypes.DownlevelFlagsFullDrawIndexUint32
-		flags |= gputypes.DownlevelFlagsReadOnlyDepthStencil
 		flags |= gputypes.DownlevelFlagsNonblockingQueryResolve
 		flags |= gputypes.DownlevelFlagsLinearInterpolation
 	}
@@ -699,33 +697,36 @@ const (
 	vendorIDApple    uint32 = 0x106B
 )
 
-// inferVendorID returns a PCI vendor ID based on the GL_VENDOR string.
-// Order matters: "nvidia corporation" contains "ati" as a substring, so
-// NVIDIA must be checked before ATI/AMD.
+// inferVendorID returns a PCI vendor ID based on the GL_VENDOR string, by
+// its words: "ati" is in "Imagination" and "Corporation" too.
 func inferVendorID(vendor string) uint32 {
 	v := strings.ToLower(vendor)
-	switch {
-	case strings.Contains(v, "nvidia"):
-		return vendorIDNVIDIA
-	case strings.Contains(v, "amd") || strings.Contains(v, "ati"):
+	if strings.Contains(v, "advanced micro devices") {
 		return vendorIDAMD
-	case strings.Contains(v, "imgtec"):
-		return vendorIDImgTec
-	case strings.Contains(v, "qualcomm"):
-		return vendorIDQualcomm
-	case strings.Contains(v, "intel"):
-		return vendorIDIntel
-	case strings.Contains(v, "arm"):
-		return vendorIDARM
-	case strings.Contains(v, "broadcom"):
-		return vendorIDBroadcom
-	case strings.Contains(v, "mesa"):
-		return vendorIDMesa
-	case strings.Contains(v, "apple"):
-		return vendorIDApple
-	default:
-		return 0
 	}
+	for _, w := range strings.FieldsFunc(v, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }) {
+		switch w {
+		case "nvidia":
+			return vendorIDNVIDIA
+		case "amd", "ati":
+			return vendorIDAMD
+		case "imgtec", "imagination":
+			return vendorIDImgTec
+		case "qualcomm":
+			return vendorIDQualcomm
+		case "intel":
+			return vendorIDIntel
+		case "arm":
+			return vendorIDARM
+		case "broadcom":
+			return vendorIDBroadcom
+		case "mesa":
+			return vendorIDMesa
+		case "apple":
+			return vendorIDApple
+		}
+	}
+	return 0
 }
 
 // ---------------------------------------------------------------------------

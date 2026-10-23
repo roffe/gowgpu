@@ -3,6 +3,8 @@
 package wgpu
 
 import (
+	"encoding/binary"
+	"math"
 	"testing"
 
 	"github.com/roffe/gowgpu/gputypes"
@@ -232,5 +234,71 @@ func TestUnclippedDepth(t *testing.T) {
 		}
 		releaseTextureView(tex, view)
 		pipe.Release()
+	}
+}
+
+// TestDepthAndStencilCopyToBuffer clears a depth or stencil attachment and
+// copies the aspect to a buffer, which GL advertises on desktop contexts.
+func TestDepthAndStencilCopyToBuffer(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	for _, tc := range []struct {
+		format gputypes.TextureFormat
+		aspect gputypes.TextureAspect
+		want   func([]byte) bool
+	}{
+		{gputypes.TextureFormatDepth32Float, gputypes.TextureAspectDepthOnly, func(b []byte) bool {
+			return binary.LittleEndian.Uint32(b) == math.Float32bits(0.5)
+		}},
+		{gputypes.TextureFormatDepth16Unorm, gputypes.TextureAspectDepthOnly, func(b []byte) bool {
+			v := binary.LittleEndian.Uint16(b)
+			return v == 32767 || v == 32768
+		}},
+		{gputypes.TextureFormatStencil8, gputypes.TextureAspectStencilOnly, func(b []byte) bool { return b[0] == 7 }},
+		{gputypes.TextureFormatDepth24PlusStencil8, gputypes.TextureAspectStencilOnly, func(b []byte) bool { return b[0] == 7 }},
+	} {
+		t.Run(tc.format.String(), func(t *testing.T) {
+			tex, err := device.CreateTexture(&TextureDescriptor{
+				Size: Extent3D{Width: pixSide, Height: pixSide, DepthOrArrayLayers: 1}, Format: tc.format,
+				Usage: TextureUsageRenderAttachment | TextureUsageCopySrc, MipLevelCount: 1, SampleCount: 1, Dimension: TextureDimension2D,
+			})
+			if err != nil {
+				t.Fatalf("CreateTexture: %v", err)
+			}
+			defer tex.Release()
+			view, err := device.CreateTextureView(tex, nil)
+			if err != nil {
+				t.Fatalf("CreateTextureView: %v", err)
+			}
+			defer view.Release()
+			ds := &RenderPassDepthStencilAttachment{View: view}
+			if tc.format.HasDepth() {
+				ds.DepthLoadOp, ds.DepthStoreOp, ds.DepthClearValue = gputypes.LoadOpClear, gputypes.StoreOpStore, 0.5
+			}
+			if tc.format.HasStencil() {
+				ds.StencilLoadOp, ds.StencilStoreOp, ds.StencilClearValue = gputypes.LoadOpClear, gputypes.StoreOpStore, 7
+			}
+			enc, err := device.CreateCommandEncoder(nil)
+			if err != nil {
+				t.Fatalf("CreateCommandEncoder: %v", err)
+			}
+			pass, err := enc.BeginRenderPass(&RenderPassDescriptor{DepthStencilAttachment: ds})
+			if err != nil {
+				t.Fatalf("BeginRenderPass: %v", err)
+			}
+			if err := pass.End(); err != nil {
+				t.Fatalf("End: %v", err)
+			}
+			st := readbackBuffer(t, device, "depth-copy")
+			enc.CopyTextureToBuffer(tex, st, []BufferTextureCopy{{
+				BufferLayout: ImageDataLayout{BytesPerRow: pixRow, RowsPerImage: pixSide},
+				TextureBase:  ImageCopyTexture{Texture: tex, Aspect: tc.aspect},
+				Size:         Extent3D{Width: pixSide, Height: pixSide, DepthOrArrayLayers: 1},
+			}})
+			finishAndSubmit(t, device, enc)
+			if got := readback(t, st); !tc.want(got) {
+				t.Errorf("copied % x", got[:8])
+			}
+			assertNoValidation(t, h)
+		})
 	}
 }

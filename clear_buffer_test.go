@@ -5,6 +5,7 @@ package wgpu
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"testing"
 	"time"
 
@@ -213,6 +214,60 @@ func TestMapWriteKeepsBufferContents(t *testing.T) {
 	want := append(bytes.Repeat([]byte{0xcd}, 16), bytes.Repeat([]byte{0xab}, size-16)...)
 	if got := rng.Bytes(); !bytes.Equal(got, want) {
 		t.Errorf("buffer holds % x..., byte 100 is %#x, want 0xab", got[:20], got[100])
+	}
+	if err := st.Unmap(); err != nil {
+		t.Fatalf("Unmap: %v", err)
+	}
+	assertNoValidation(t, h)
+}
+
+// TestTimestampWritesResolve writes timestamps at the start and end of a
+// render pass and resolves them: GL on Linux offered timestamp queries and
+// failed every query set.
+func TestTimestampWritesResolve(t *testing.T) {
+	device, h := newValidatedDeviceWith(t, gputypes.Features(gputypes.FeatureTimestampQuery))
+	qs, err := device.CreateQuerySet(&QuerySetDescriptor{Label: "timestamps", Type: QueryTypeTimestamp, Count: 2})
+	if err != nil {
+		t.Fatalf("CreateQuerySet: %v", err)
+	}
+	defer qs.Release()
+	resolved := clearTestBuffer(t, device, BufferUsageQueryResolve|BufferUsageCopySrc, 256)
+	st := clearTestBuffer(t, device, BufferUsageCopyDst|BufferUsageMapRead, 256)
+	tex, view := pixTexture(t, device, "timestamps", TextureUsageRenderAttachment)
+	defer releaseTextureView(tex, view)
+	enc, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	begin, end := uint32(0), uint32(1)
+	pass, err := enc.BeginRenderPass(&RenderPassDescriptor{
+		ColorAttachments: []RenderPassColorAttachment{{View: view, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore, ClearValue: red}},
+		TimestampWrites:  &RenderPassTimestampWrites{QuerySet: qs, BeginningOfPassWriteIndex: &begin, EndOfPassWriteIndex: &end},
+	})
+	if err != nil {
+		t.Fatalf("BeginRenderPass: %v", err)
+	}
+	if err := pass.End(); err != nil {
+		t.Fatalf("End: %v", err)
+	}
+	enc.ResolveQuerySet(qs, 0, 2, resolved, 0)
+	enc.CopyBufferToBuffer(resolved, 0, st, 0, 256)
+	finishAndSubmit(t, device, enc)
+	device.Poll(PollWait)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := st.Map(ctx, MapModeRead, 0, 16); err != nil {
+		t.Fatalf("Map: %v", err)
+	}
+	rng, err := st.MappedRange(0, 16)
+	if err != nil {
+		t.Fatalf("MappedRange: %v", err)
+	}
+	b := rng.Bytes()
+	t0, t1 := binary.LittleEndian.Uint64(b), binary.LittleEndian.Uint64(b[8:])
+	if t0 == 0 || t1 < t0 {
+		t.Errorf("timestamps %d, %d: want a start and an end at or after it", t0, t1)
 	}
 	if err := st.Unmap(); err != nil {
 		t.Fatalf("Unmap: %v", err)
