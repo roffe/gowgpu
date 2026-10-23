@@ -7,6 +7,7 @@ package wgl
 
 import (
 	"fmt"
+	"runtime"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -105,27 +106,54 @@ func registerHiddenWindowClass() error {
 	return regErr
 }
 
-// HiddenWindow holds a hidden 1×1 window used to host the GL context.
-// Created on the calling thread (not a goroutine) because Windows HWND/HDC
-// handles are thread-safe but CS_OWNDC gives a persistent DC tied to the window.
-// Follows Rust wgpu-hal wgl.rs:344-446 (InstanceDevice pattern).
-//
-// Rust uses a dedicated OS thread because Rust threads = OS threads.
-// In Go, goroutines migrate between OS threads, so we create the hidden window
-// on the caller's thread instead. The window has no message pump — it exists
+// HiddenWindow holds a hidden 1×1 window used to host the GL context, on
+// a thread of its own that keeps it until Destroy, as wgpu-hal's WGL
+// instance thread does: only the thread that made a window can destroy
+// it, and Windows destroys it when that thread exits, which in Go any
+// goroutine's thread may do. The window has no message pump — it exists
 // solely to own a DC for the GL context.
 type HiddenWindow struct {
 	hwnd HWND
 	hdc  HDC
+
+	done   chan struct{} // closed by Destroy
+	exited chan struct{} // closed once the window is gone
 }
 
-// NewHiddenWindow creates a hidden 1×1 window on the calling thread.
-// The DC returned via HiddenWindow.DC() is valid until Destroy() is called.
+// NewHiddenWindow creates a hidden 1×1 window with the default pixel format
+// on a new thread. The DC returned via HiddenWindow.DC() is valid until
+// Destroy() is called.
 func NewHiddenWindow() (*HiddenWindow, error) {
 	if err := registerHiddenWindowClass(); err != nil {
 		return nil, fmt.Errorf("wgl: register hidden window class: %w", err)
 	}
 
+	hw := &HiddenWindow{done: make(chan struct{}), exited: make(chan struct{})}
+	setup := make(chan error, 1)
+	go func() {
+		// Never unlocked: the thread exits with the goroutine, after the
+		// window is destroyed on it.
+		runtime.LockOSThread()
+		defer close(hw.exited)
+		hwnd, hdc, err := makeHiddenWindow()
+		setup <- err
+		if err != nil {
+			return
+		}
+		hw.hwnd, hw.hdc = hwnd, hdc
+		<-hw.done
+		ReleaseDC(hwnd, hdc)
+		destroyWindow(hwnd)
+	}()
+	if err := <-setup; err != nil {
+		return nil, err
+	}
+	return hw, nil
+}
+
+// makeHiddenWindow makes the window, its DC and the DC's pixel format on
+// the calling thread.
+func makeHiddenWindow() (HWND, HDC, error) {
 	hwnd, err := createWindowEx(
 		0,                   // dwExStyle
 		&hiddenClassName[0], // lpClassName
@@ -135,19 +163,24 @@ func NewHiddenWindow() (*HiddenWindow, error) {
 		0, 0, 0, 0, // parent, menu, instance, param
 	)
 	if err != nil {
-		return nil, fmt.Errorf("wgl: CreateWindowExW: %w", err)
+		return 0, 0, fmt.Errorf("wgl: CreateWindowExW: %w", err)
 	}
-
 	hdc := GetDC(hwnd)
 	if hdc == 0 {
 		destroyWindow(hwnd)
-		return nil, fmt.Errorf("wgl: GetDC failed for hidden window")
+		return 0, 0, fmt.Errorf("wgl: GetDC failed for hidden window")
 	}
-
-	return &HiddenWindow{
-		hwnd: hwnd,
-		hdc:  hdc,
-	}, nil
+	pfd := DefaultPixelFormat()
+	format, err := ChoosePixelFormat(hdc, &pfd)
+	if err == nil {
+		err = SetPixelFormat(hdc, format, &pfd)
+	}
+	if err != nil {
+		ReleaseDC(hwnd, hdc)
+		destroyWindow(hwnd)
+		return 0, 0, fmt.Errorf("wgl: hidden window pixel format: %w", err)
+	}
+	return hwnd, hdc, nil
 }
 
 // DC returns the device context of the hidden window.
@@ -160,16 +193,16 @@ func (hw *HiddenWindow) HWND() HWND {
 	return hw.hwnd
 }
 
-// Destroy releases the DC and destroys the hidden window.
+// Destroy releases the DC and destroys the hidden window, on the window's
+// thread, and waits for that.
 func (hw *HiddenWindow) Destroy() {
-	if hw.hdc != 0 {
-		ReleaseDC(hw.hwnd, hw.hdc)
-		hw.hdc = 0
+	if hw.done == nil {
+		return
 	}
-	if hw.hwnd != 0 {
-		destroyWindow(hw.hwnd)
-		hw.hwnd = 0
-	}
+	close(hw.done)
+	<-hw.exited
+	hw.done = nil
+	hw.hwnd, hw.hdc = 0, 0
 }
 
 // createWindowEx wraps CreateWindowExW.

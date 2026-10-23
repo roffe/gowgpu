@@ -35,25 +35,13 @@ func (Backend) CreateInstance(_ *hal.InstanceDescriptor) (hal.Instance, error) {
 		return nil, fmt.Errorf("gles: failed to initialize WGL: %w", err)
 	}
 
-	// Create hidden 1×1 window to host the GL context (Rust: create_instance_device).
-	// GL context is NOT created here — it will be lazily created on the render
-	// thread's first Lock() call, avoiding cross-thread WGL issues.
+	// Create hidden 1×1 window to host the GL context (Rust: create_instance_device),
+	// with its pixel format set. GL context is NOT created here — it will be
+	// lazily created on the render thread's first Lock() call, avoiding
+	// cross-thread WGL issues.
 	hiddenWindow, err := wgl.NewHiddenWindow()
 	if err != nil {
 		return nil, fmt.Errorf("gles: failed to create hidden window: %w", err)
-	}
-
-	// Set pixel format on hidden window DC. This is thread-safe and must be
-	// done before wglCreateContext (which happens lazily in AdapterContext).
-	pfd := wgl.DefaultPixelFormat()
-	format, err := wgl.ChoosePixelFormat(hiddenWindow.DC(), &pfd)
-	if err != nil {
-		hiddenWindow.Destroy()
-		return nil, fmt.Errorf("gles: hidden window ChoosePixelFormat: %w", err)
-	}
-	if err := wgl.SetPixelFormat(hiddenWindow.DC(), format, &pfd); err != nil {
-		hiddenWindow.Destroy()
-		return nil, fmt.Errorf("gles: hidden window SetPixelFormat: %w", err)
 	}
 
 	ctx := NewAdapterContext(hiddenWindow.DC())
