@@ -761,7 +761,7 @@ func (e *CommandEncoder) CopyTextureToBuffer(src *Texture, dst *Buffer, regions 
 	e.trackBuffer(dst)
 	halRegions := make([]hal.BufferTextureCopy, len(regions))
 	for i, r := range regions {
-		halRegions[i] = r.toHAL()
+		halRegions[i] = r.toHAL(halSrc)
 	}
 	raw.CopyTextureToBuffer(halSrc, halDst, halRegions)
 }
@@ -819,7 +819,7 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst *Texture, regions []Textu
 	e.trackTexture(dst)
 	halRegions := make([]hal.TextureCopy, len(regions))
 	for i, r := range regions {
-		halRegions[i] = r.toHAL()
+		halRegions[i] = r.toHAL(halSrc, halDst)
 	}
 	raw.CopyTextureToTexture(halSrc, halDst, halRegions)
 }
@@ -990,19 +990,7 @@ func (e *CommandEncoder) CopyBufferToTexture(src *Buffer, dst *Texture, regions 
 	e.trackBuffer(src)
 	halRegions := make([]hal.BufferTextureCopy, len(regions))
 	for i, r := range regions {
-		halRegions[i] = hal.BufferTextureCopy{
-			BufferLayout: hal.ImageDataLayout{
-				Offset:       r.BufferLayout.Offset,
-				BytesPerRow:  r.BufferLayout.BytesPerRow,
-				RowsPerImage: r.BufferLayout.RowsPerImage,
-			},
-			TextureBase: hal.ImageCopyTexture{
-				Texture:  halDst,
-				MipLevel: r.TextureBase.MipLevel,
-				Origin:   hal.Origin3D(r.TextureBase.Origin),
-			},
-			Size: hal.Extent3D(r.Size),
-		}
+		halRegions[i] = r.toHAL(halDst)
 	}
 	raw.CopyBufferToTexture(halSrc, halDst, halRegions)
 }

@@ -614,8 +614,13 @@ func (i *ImageCopyTexture) toHAL() *hal.ImageCopyTexture {
 
 // halValue is toHAL by value, for a caller with somewhere to keep it.
 func (i *ImageCopyTexture) halValue() hal.ImageCopyTexture {
+	return i.halBase(i.Texture.resolveHAL())
+}
+
+// halBase is i on t, the texture a copy is on, whatever i.Texture holds.
+func (i *ImageCopyTexture) halBase(t hal.Texture) hal.ImageCopyTexture {
 	return hal.ImageCopyTexture{
-		Texture:  i.Texture.resolveHAL(),
+		Texture:  t,
 		MipLevel: i.MipLevel,
 		Origin:   i.Origin.toHAL(),
 		Aspect:   i.Aspect,
@@ -630,10 +635,10 @@ type TextureCopy struct {
 	Size        Extent3D
 }
 
-func (t *TextureCopy) toHAL() hal.TextureCopy {
+func (t *TextureCopy) toHAL(src, dst hal.Texture) hal.TextureCopy {
 	return hal.TextureCopy{
-		SrcBase: *t.Source.toHAL(),
-		DstBase: *t.Destination.toHAL(),
+		SrcBase: t.Source.halBase(src),
+		DstBase: t.Destination.halBase(dst),
 		Size:    t.Size.toHAL(),
 	}
 }
@@ -690,14 +695,10 @@ type BufferTextureCopy struct {
 	Size         Extent3D
 }
 
-func (c BufferTextureCopy) toHAL() hal.BufferTextureCopy {
-	btc := hal.BufferTextureCopy{
+func (c BufferTextureCopy) toHAL(t hal.Texture) hal.BufferTextureCopy {
+	return hal.BufferTextureCopy{
 		BufferLayout: c.BufferLayout.toHAL(),
+		TextureBase:  c.TextureBase.halBase(t),
 		Size:         c.Size.toHAL(),
 	}
-	halTex := c.TextureBase.toHAL()
-	if halTex != nil {
-		btc.TextureBase = *halTex
-	}
-	return btc
 }
