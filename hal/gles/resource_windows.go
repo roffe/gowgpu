@@ -42,44 +42,11 @@ func (s *Surface) GetAdapterInfo() hal.ExposedAdapter {
 	defer s.ctx.Unlock()
 
 	caps := queryAdapterCapabilities(glCtx)
-
-	driverInfo := "OpenGL 3.3+"
-	if caps.IsES {
-		driverInfo = fmt.Sprintf("OpenGL ES %d.%d", caps.GLMajor, caps.GLMinor)
-	} else if caps.GLMajor > 0 {
-		driverInfo = fmt.Sprintf("OpenGL %d.%d", caps.GLMajor, caps.GLMinor)
-	}
-
-	return hal.ExposedAdapter{
-		Adapter: &Adapter{
-			ctx:     s.ctx,
-			version: fmt.Sprintf("%d.%d", caps.GLMajor, caps.GLMinor),
-			caps:    caps,
-		},
-		Info: gputypes.AdapterInfo{
-			Name:       caps.Renderer,
-			Vendor:     caps.Vendor,
-			VendorID:   caps.VendorID,
-			DeviceID:   0,
-			DeviceType: caps.DeviceType,
-			Driver:     caps.Version,
-			DriverInfo: driverInfo,
-			Backend:    gputypes.BackendGL,
-		},
-		Features: caps.Features,
-		Capabilities: hal.Capabilities{
-			Limits: caps.Limits,
-			AlignmentsMask: hal.Alignments{
-				BufferCopyOffset: 4,
-				BufferCopyPitch:  4,
-			},
-			DownlevelCapabilities: gputypes.DownlevelCapabilities{
-				ShaderModel: gputypes.ShaderModelSm5,
-				Limits:      gputypes.DownlevelLimits{},
-				Flags:       caps.DownlevelFlags,
-			},
-		},
-	}
+	return exposeAdapter(&Adapter{
+		ctx:     s.ctx,
+		version: fmt.Sprintf("%d.%d", caps.GLMajor, caps.GLMinor),
+		caps:    caps,
+	}, &caps)
 }
 
 // Configure configures the surface for presentation.

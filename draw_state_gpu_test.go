@@ -36,6 +36,9 @@ type dynamicRig struct {
 
 func newDynamicRig(t *testing.T, device *Device) *dynamicRig {
 	t.Helper()
+	if device.Limits().MaxStorageBuffersPerShaderStage == 0 {
+		t.Skip("no storage buffers on this adapter")
+	}
 	module, err := device.CreateShaderModule(&ShaderModuleDescriptor{Label: "dynamic-offsets", WGSL: dynamicShader})
 	if err != nil {
 		t.Fatalf("CreateShaderModule: %v", err)

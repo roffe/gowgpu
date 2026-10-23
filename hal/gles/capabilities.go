@@ -13,6 +13,7 @@ package gles
 // and shared between Windows (WGL) and Linux (EGL) adapters.
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/gogpu/naga/glsl"
@@ -60,6 +61,10 @@ type AdapterCapabilities struct {
 
 	// Inferred vendor ID.
 	VendorID uint32
+
+	// compute and storage are whether compute shaders and storage buffers
+	// work: the context has them and the shaders' GLSL version can use them.
+	compute, storage bool
 }
 
 // queryAdapterCapabilities queries all adapter capabilities from the GL context.
@@ -86,14 +91,22 @@ func queryAdapterCapabilities(glCtx *gl.Context) AdapterCapabilities {
 	glCtx.GetIntegerv(gl.MAX_SAMPLES, &maxSamples)
 	caps.MaxMSAASamples = maxSamples
 
+	// Compute and storage buffers need both the context and the GLSL the
+	// shaders are written in: naga declares storage buffers below GLSL 4.30
+	// (ES 3.10) as uniform blocks and writes no compute shader there.
+	glslVer := GLSLVersionToNaga(caps.GLSLVersion, caps.IsES)
+	modern := glVersionAtLeast(caps.GLMajor, caps.GLMinor, caps.IsES, [2]int{3, 1}, [2]int{4, 3})
+	caps.compute = glslVer.SupportsCompute() && (modern || hasExtension(caps.Extensions, "GL_ARB_compute_shader"))
+	caps.storage = glslVer.SupportsStorageBuffers() && (modern || hasExtension(caps.Extensions, "GL_ARB_shader_storage_buffer_object"))
+
 	// --- 4. Detect features ---
 	caps.Features = queryFeatures(caps.Extensions, caps.GLMajor, caps.GLMinor, caps.IsES, glCtx)
 
 	// --- 5. Query limits ---
-	caps.Limits = queryLimits(glCtx, caps.GLMajor, caps.GLMinor, caps.IsES, caps.Extensions)
+	caps.Limits = queryLimits(glCtx, &caps)
 
 	// --- 6. Downlevel flags ---
-	caps.DownlevelFlags = queryDownlevelFlags(glCtx, caps.Extensions, caps.GLMajor, caps.GLMinor, caps.IsES)
+	caps.DownlevelFlags = queryDownlevelFlags(glCtx, &caps)
 
 	// --- 7. Device type and vendor ID ---
 	caps.DeviceType = inferDeviceType(caps.Vendor, caps.Renderer)
@@ -112,6 +125,39 @@ func queryAdapterCapabilities(glCtx *gl.Context) AdapterCapabilities {
 	)
 
 	return caps
+}
+
+// exposeAdapter describes adapter to core with the capabilities probed from
+// its context.
+func exposeAdapter(adapter hal.Adapter, caps *AdapterCapabilities) hal.ExposedAdapter {
+	driverInfo := fmt.Sprintf("OpenGL %d.%d", caps.GLMajor, caps.GLMinor)
+	if caps.IsES {
+		driverInfo = fmt.Sprintf("OpenGL ES %d.%d", caps.GLMajor, caps.GLMinor)
+	}
+	return hal.ExposedAdapter{
+		Adapter: adapter,
+		Info: gputypes.AdapterInfo{
+			Name:       caps.Renderer,
+			Vendor:     caps.Vendor,
+			VendorID:   caps.VendorID,
+			DeviceType: caps.DeviceType,
+			Driver:     caps.Version,
+			DriverInfo: driverInfo,
+			Backend:    gputypes.BackendGL,
+		},
+		Features: caps.Features,
+		Capabilities: hal.Capabilities{
+			Limits: caps.Limits,
+			AlignmentsMask: hal.Alignments{
+				BufferCopyOffset: 4,
+				BufferCopyPitch:  4,
+			},
+			DownlevelCapabilities: gputypes.DownlevelCapabilities{
+				ShaderModel: gputypes.ShaderModelSm5,
+				Flags:       caps.DownlevelFlags,
+			},
+		},
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -358,11 +404,9 @@ func glVersionAtLeast(glMajor, glMinor int, isES bool, reqES, reqFull [2]int) bo
 
 // queryLimits queries GL limits and returns a populated Limits struct.
 // Follows Rust wgpu-hal adapter.rs limits construction.
-func queryLimits(glCtx *gl.Context, glMajor, glMinor int, isES bool, exts map[string]bool) gputypes.Limits {
-	supportsStorage := glVersionAtLeast(glMajor, glMinor, isES, [2]int{3, 1}, [2]int{4, 3}) ||
-		hasExtension(exts, "GL_ARB_shader_storage_buffer_object")
-	supportsCompute := glVersionAtLeast(glMajor, glMinor, isES, [2]int{3, 1}, [2]int{4, 3}) ||
-		hasExtension(exts, "GL_ARB_compute_shader")
+func queryLimits(glCtx *gl.Context, caps *AdapterCapabilities) gputypes.Limits {
+	glMajor, glMinor, isES, exts := caps.GLMajor, caps.GLMinor, caps.IsES, caps.Extensions
+	supportsStorage, supportsCompute := caps.storage, caps.compute
 
 	maxTextureSize := getGLInt(glCtx, gl.MAX_TEXTURE_SIZE, 2048)
 	maxTexture3DSize := getGLInt(glCtx, gl.MAX_3D_TEXTURE_SIZE, 256)
@@ -491,13 +535,11 @@ func queryLimits(glCtx *gl.Context, glMajor, glMinor int, isES bool, exts map[st
 
 // queryDownlevelFlags computes the downlevel capability flags from the GL context.
 // Follows Rust wgpu-hal adapter.rs downlevel_flags logic.
-func queryDownlevelFlags(glCtx *gl.Context, exts map[string]bool, glMajor, glMinor int, isES bool) gputypes.DownlevelFlags {
+func queryDownlevelFlags(glCtx *gl.Context, caps *AdapterCapabilities) gputypes.DownlevelFlags {
 	var flags gputypes.DownlevelFlags
 
-	supportsCompute := glVersionAtLeast(glMajor, glMinor, isES, [2]int{3, 1}, [2]int{4, 3}) ||
-		hasExtension(exts, "GL_ARB_compute_shader")
-	supportsStorage := glVersionAtLeast(glMajor, glMinor, isES, [2]int{3, 1}, [2]int{4, 3}) ||
-		hasExtension(exts, "GL_ARB_shader_storage_buffer_object")
+	glMajor, glMinor, isES, exts := caps.GLMajor, caps.GLMinor, caps.IsES, caps.Extensions
+	supportsCompute, supportsStorage := caps.compute, caps.storage
 
 	if supportsCompute {
 		flags |= gputypes.DownlevelFlagsComputeShaders

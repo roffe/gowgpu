@@ -251,20 +251,26 @@ func (i *Instance) adoptContext(ctx *AdapterContext) (prev *AdapterContext) {
 func (i *Instance) EnumerateAdapters(surfaceHint hal.Surface) []hal.ExposedAdapter {
 	// Priority 1: surface provides the best context (has window handle)
 	if surface, ok := surfaceHint.(*Surface); ok {
-		return []hal.ExposedAdapter{surface.GetAdapterInfo()}
+		return exposedOrNone(surface.GetAdapterInfo())
 	}
 
 	// Priority 2: instance-level AdapterContext (created in CreateInstance via
 	// pbuffer/surfaceless, or adopted from the first CreateSurface on Wayland)
 	if instCtx := i.context(); instCtx != nil && instCtx.GL() != nil {
-		return []hal.ExposedAdapter{
-			makeAdapterFromContext(instCtx),
-		}
+		return exposedOrNone(makeAdapterFromContext(instCtx, 0, 0))
 	}
 
 	// Priority 3: no context available (Wayland without surface hint)
 	// Return placeholder — Open() has nil guard from PR #210.
 	return []hal.ExposedAdapter{placeholderExposedAdapter("OpenGL 3.3+ / ES 3.0+ (no context — use RequestAdapterWithSurface)")}
+}
+
+// exposedOrNone lists exposed, or nothing when it has no adapter.
+func exposedOrNone(exposed hal.ExposedAdapter) []hal.ExposedAdapter {
+	if exposed.Adapter == nil {
+		return nil
+	}
+	return []hal.ExposedAdapter{exposed}
 }
 
 // placeholderExposedAdapter returns a non-openable adapter when no EGL context exists.
@@ -289,37 +295,27 @@ func placeholderExposedAdapter(driverInfo string) hal.ExposedAdapter {
 	}
 }
 
-// makeAdapterFromContext creates an ExposedAdapter using a live AdapterContext.
-func makeAdapterFromContext(ctx *AdapterContext) hal.ExposedAdapter {
+// makeAdapterFromContext describes the adapter of a live AdapterContext with
+// the capabilities probed from it, the window handles being the surface's
+// the context was made for, if any. The Adapter is nil when the context is
+// older than the backend supports.
+func makeAdapterFromContext(ctx *AdapterContext, displayHandle, windowHandle uintptr) hal.ExposedAdapter {
 	glCtx := ctx.Lock()
 	defer ctx.Unlock()
 
-	version := glCtx.GetString(gl.VERSION)
-	renderer := glCtx.GetString(gl.RENDERER)
-	vendor := glCtx.GetString(gl.VENDOR)
-
-	return hal.ExposedAdapter{
-		Adapter: &Adapter{
-			ctx:      ctx,
-			version:  version,
-			renderer: renderer,
-		},
-		Info: gputypes.AdapterInfo{
-			Name:       renderer,
-			Vendor:     vendor,
-			DeviceType: gputypes.DeviceTypeIntegratedGPU,
-			Driver:     driverOpenGL,
-			DriverInfo: version,
-			Backend:    gputypes.BackendGL,
-		},
-		Capabilities: hal.Capabilities{
-			Limits: gputypes.DefaultLimits(),
-			AlignmentsMask: hal.Alignments{
-				BufferCopyOffset: 4,
-				BufferCopyPitch:  256,
-			},
-		},
+	caps := queryAdapterCapabilities(glCtx)
+	if !caps.supported() {
+		hal.Logger().Warn("gles: no adapter, the GL context is older than 3.3 / ES 3.0", "version", caps.Version, "renderer", caps.Renderer)
+		return hal.ExposedAdapter{}
 	}
+	return exposeAdapter(&Adapter{
+		ctx:           ctx,
+		displayHandle: displayHandle,
+		windowHandle:  windowHandle,
+		version:       caps.Version,
+		renderer:      caps.Renderer,
+		caps:          caps,
+	}, &caps)
 }
 
 // Destroy releases the instance resources. The Instance owns its AdapterContext,

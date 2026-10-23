@@ -92,3 +92,34 @@ func TestETC2TextureOnES(t *testing.T) {
 		t.Errorf("internal format %#x, want COMPRESSED_RGB8_ETC2", got)
 	}
 }
+
+// An adapter made without a surface has the capabilities of its context:
+// it had none, and its device wrote GLSL 3.30 core for every context, ES
+// included, which no ES driver compiles.
+func TestHeadlessAdapterHasCapabilities(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		ctx  func(*testing.T) *AdapterContext
+		es   bool
+	}{{"desktop", newTestAdapterContext, false}, {"es", newTestESAdapterContext, true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := tc.ctx(t)
+			t.Cleanup(ctx.Destroy)
+			exposed := makeAdapterFromContext(ctx, 0, 0)
+			if exposed.Adapter == nil {
+				t.Fatal("no adapter")
+			}
+			if exposed.Features == 0 || exposed.Capabilities.DownlevelCapabilities.Flags == 0 {
+				t.Errorf("features %#x, downlevel %#x: the context's capabilities were not probed", uint64(exposed.Features), uint64(exposed.Capabilities.DownlevelCapabilities.Flags))
+			}
+			open, err := exposed.Adapter.Open(0, gputypes.Limits{})
+			if err != nil {
+				t.Fatalf("Open: %v", err)
+			}
+			defer open.Device.Destroy()
+			if v := open.Device.(*Device).glslVersion; v.ES != tc.es {
+				t.Errorf("the device writes GLSL %s", v)
+			}
+		})
+	}
+}

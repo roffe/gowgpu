@@ -140,46 +140,12 @@ func (i *Instance) EnumerateAdapters(_ hal.Surface) []hal.ExposedAdapter {
 		return nil
 	}
 
-	driverInfo := "OpenGL 3.3+"
-	if caps.IsES {
-		driverInfo = fmt.Sprintf("OpenGL ES %d.%d", caps.GLMajor, caps.GLMinor)
-	} else if caps.GLMajor > 0 {
-		driverInfo = fmt.Sprintf("OpenGL %d.%d", caps.GLMajor, caps.GLMinor)
-	}
-
-	return []hal.ExposedAdapter{
-		{
-			Adapter: &Adapter{
-				ctx:      i.ctx,
-				version:  version,
-				renderer: renderer,
-				caps:     caps,
-			},
-			Info: gputypes.AdapterInfo{
-				Name:       caps.Renderer,
-				Vendor:     caps.Vendor,
-				VendorID:   caps.VendorID,
-				DeviceID:   0,
-				DeviceType: caps.DeviceType,
-				Driver:     caps.Version,
-				DriverInfo: driverInfo,
-				Backend:    gputypes.BackendGL,
-			},
-			Features: caps.Features,
-			Capabilities: hal.Capabilities{
-				Limits: caps.Limits,
-				AlignmentsMask: hal.Alignments{
-					BufferCopyOffset: 4,
-					BufferCopyPitch:  4,
-				},
-				DownlevelCapabilities: gputypes.DownlevelCapabilities{
-					ShaderModel: gputypes.ShaderModelSm5,
-					Limits:      gputypes.DownlevelLimits{},
-					Flags:       caps.DownlevelFlags,
-				},
-			},
-		},
-	}
+	return []hal.ExposedAdapter{exposeAdapter(&Adapter{
+		ctx:      i.ctx,
+		version:  version,
+		renderer: renderer,
+		caps:     caps,
+	}, &caps)}
 }
 
 // Destroy releases the instance resources.

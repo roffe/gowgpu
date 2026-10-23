@@ -55,56 +55,12 @@ type Surface struct {
 // GetAdapterInfo returns adapter information from this surface's GL context.
 // Probes GL version, extensions, features, limits, and MSAA support to build
 // an accurate ExposedAdapter. Follows Rust wgpu-hal adapter.rs expose pattern.
+// Its Adapter is nil when the context is older than the backend supports.
 func (s *Surface) GetAdapterInfo() hal.ExposedAdapter {
 	if s.ctx == nil {
 		return placeholderExposedAdapter("OpenGL 3.3+ / ES 3.0+ (no AdapterContext)")
 	}
-
-	glCtx := s.ctx.Lock()
-	defer s.ctx.Unlock()
-
-	caps := queryAdapterCapabilities(glCtx)
-
-	driverInfo := "OpenGL 3.3+"
-	if caps.IsES {
-		driverInfo = fmt.Sprintf("OpenGL ES %d.%d", caps.GLMajor, caps.GLMinor)
-	} else if caps.GLMajor > 0 {
-		driverInfo = fmt.Sprintf("OpenGL %d.%d", caps.GLMajor, caps.GLMinor)
-	}
-
-	return hal.ExposedAdapter{
-		Adapter: &Adapter{
-			ctx:           s.ctx,
-			displayHandle: s.displayHandle,
-			windowHandle:  s.windowHandle,
-			version:       s.version,
-			renderer:      s.renderer,
-			caps:          caps,
-		},
-		Info: gputypes.AdapterInfo{
-			Name:       caps.Renderer,
-			Vendor:     caps.Vendor,
-			VendorID:   caps.VendorID,
-			DeviceID:   0,
-			DeviceType: caps.DeviceType,
-			Driver:     caps.Version,
-			DriverInfo: driverInfo,
-			Backend:    gputypes.BackendGL,
-		},
-		Features: caps.Features,
-		Capabilities: hal.Capabilities{
-			Limits: caps.Limits,
-			AlignmentsMask: hal.Alignments{
-				BufferCopyOffset: 4,
-				BufferCopyPitch:  4,
-			},
-			DownlevelCapabilities: gputypes.DownlevelCapabilities{
-				ShaderModel: gputypes.ShaderModelSm5,
-				Limits:      gputypes.DownlevelLimits{},
-				Flags:       caps.DownlevelFlags,
-			},
-		},
-	}
+	return makeAdapterFromContext(s.ctx, s.displayHandle, s.windowHandle)
 }
 
 // Configure configures the surface for presentation.
