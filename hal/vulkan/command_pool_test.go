@@ -32,6 +32,16 @@ func openTestDevice(t *testing.T, flags gputypes.InstanceFlags) *Device {
 	return open.Device.(*Device)
 }
 
+// TestDeviceCachesExistBeforeUse checks that a device comes with its render
+// pass cache and descriptor allocator: made on first use, two goroutines
+// beginning their first passes or bind groups at once each made one.
+func TestDeviceCachesExistBeforeUse(t *testing.T) {
+	d := openTestDevice(t, 0)
+	if d.renderPassCache == nil || d.descriptorAllocator == nil {
+		t.Fatalf("new device has render pass cache %p and descriptor allocator %p", d.renderPassCache, d.descriptorAllocator)
+	}
+}
+
 // TestRecycledPoolKeepsCommandBuffers ends a standalone encoder, then
 // discards one, then ends another: each encoder that takes the recycled
 // pool starts with the command buffers already allocated from it.

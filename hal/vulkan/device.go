@@ -1146,11 +1146,6 @@ func (d *Device) CreateBindGroup(desc *hal.BindGroupDescriptor) (hal.BindGroup, 
 		return nil, fmt.Errorf("vulkan: invalid bind group layout")
 	}
 
-	// Initialize descriptor allocator if needed
-	if d.descriptorAllocator == nil {
-		d.descriptorAllocator = NewDescriptorAllocator(d.handle, d.cmds, DefaultDescriptorAllocatorConfig())
-	}
-
 	// Allocate descriptor set
 	set, pool, err := d.descriptorAllocator.Allocate(vkLayout.handle, vkLayout.counts)
 	if err != nil {
@@ -1825,11 +1820,8 @@ func (d *Device) Destroy() {
 	}
 }
 
-// GetRenderPassCache returns the render pass cache, creating it if needed.
+// GetRenderPassCache returns the device's render pass cache.
 func (d *Device) GetRenderPassCache() *RenderPassCache {
-	if d.renderPassCache == nil {
-		d.renderPassCache = NewRenderPassCache(d.handle, d.cmds)
-	}
 	return d.renderPassCache
 }
 
