@@ -59,6 +59,11 @@ func (u BufferUses) IsCompatible(other BufferUses) bool {
 	return u == other
 }
 
+// ToHAL converts a tracked state to the HAL's, bit for bit.
+func (u BufferUses) ToHAL() hal.BufferUses {
+	return hal.BufferUses(u)
+}
+
 // ToBufferUsage converts internal uses to gputypes.BufferUsage for HAL.
 func (u BufferUses) ToBufferUsage() gputypes.BufferUsage {
 	var result gputypes.BufferUsage
@@ -362,6 +367,8 @@ func (p PendingTransition) IntoHAL(buffer hal.Buffer) hal.BufferBarrier {
 		Usage: hal.BufferUsageTransition{
 			OldUsage: p.Usage.From.ToBufferUsage(),
 			NewUsage: p.Usage.To.ToBufferUsage(),
+			Old:      p.Usage.From.ToHAL(),
+			New:      p.Usage.To.ToHAL(),
 		},
 	}
 }

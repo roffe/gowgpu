@@ -219,10 +219,40 @@ type TextureBarrier struct {
 }
 
 // BufferUsageTransition defines a buffer usage state transition.
+//
+// OldUsage and NewUsage are the coarse WebGPU usages. Old and New are the
+// fine-grained states behind them when the caller knows them (the core
+// tracker always does): gputypes folds read-only and read-write storage
+// into Storage, which DX12 reads through an SRV and writes through a UAV.
+// Zero means not known, and the backend goes by the coarse usage.
 type BufferUsageTransition struct {
 	OldUsage gputypes.BufferUsage
 	NewUsage gputypes.BufferUsage
+	Old      BufferUses
+	New      BufferUses
 }
+
+// BufferUses is the fine-grained usage state of a buffer, the states the
+// core tracker tells apart. core/track.BufferUses has the same bits, so a
+// tracked state converts by value.
+//
+// Reference: wgpu-types BufferUses (wgpu-types/src/buffer.rs).
+type BufferUses uint32
+
+// Buffer usage states.
+const (
+	BufferUsesCopySrc      BufferUses = 1 << 0  // Source of a copy
+	BufferUsesCopyDst      BufferUses = 1 << 1  // Destination of a copy
+	BufferUsesIndex        BufferUses = 1 << 2  // Index buffer
+	BufferUsesVertex       BufferUses = 1 << 3  // Vertex buffer
+	BufferUsesUniform      BufferUses = 1 << 4  // Uniform buffer
+	BufferUsesStorageRead  BufferUses = 1 << 5  // Read-only storage buffer
+	BufferUsesStorageWrite BufferUses = 1 << 6  // Read-write storage buffer
+	BufferUsesIndirect     BufferUses = 1 << 7  // Indirect arguments
+	BufferUsesMapRead      BufferUses = 1 << 8  // Mapped for reading
+	BufferUsesMapWrite     BufferUses = 1 << 9  // Mapped for writing
+	BufferUsesQueryResolve BufferUses = 1 << 10 // Destination of a query resolve
+)
 
 // TextureUsageTransition defines a texture usage state transition.
 //

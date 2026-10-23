@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/roffe/gowgpu/gputypes"
+	"github.com/roffe/gowgpu/hal"
 )
 
 func TestBufferUses_IsReadOnly(t *testing.T) {
@@ -463,5 +464,40 @@ func BenchmarkBufferTracker_Merge(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = tracker.Merge(scope)
+	}
+}
+
+// TestBufferUsesMatchHAL: the tracker's states convert to the HAL's by value
+// (ToHAL), so the bits have to be the same, and a barrier carries them next
+// to the coarse usages.
+func TestBufferUsesMatchHAL(t *testing.T) {
+	pairs := []struct {
+		name  string
+		track BufferUses
+		hal   hal.BufferUses
+	}{
+		{"CopySrc", BufferUsesCopySrc, hal.BufferUsesCopySrc},
+		{"CopyDst", BufferUsesCopyDst, hal.BufferUsesCopyDst},
+		{"Index", BufferUsesIndex, hal.BufferUsesIndex},
+		{"Vertex", BufferUsesVertex, hal.BufferUsesVertex},
+		{"Uniform", BufferUsesUniform, hal.BufferUsesUniform},
+		{"StorageRead", BufferUsesStorageRead, hal.BufferUsesStorageRead},
+		{"StorageWrite", BufferUsesStorageWrite, hal.BufferUsesStorageWrite},
+		{"Indirect", BufferUsesIndirect, hal.BufferUsesIndirect},
+		{"MapRead", BufferUsesMapRead, hal.BufferUsesMapRead},
+		{"MapWrite", BufferUsesMapWrite, hal.BufferUsesMapWrite},
+		{"QueryResolve", BufferUsesQueryResolve, hal.BufferUsesQueryResolve},
+	}
+	for _, p := range pairs {
+		if p.track.ToHAL() != p.hal {
+			t.Errorf("%s: track %#x, hal %#x", p.name, uint32(p.track), uint32(p.hal))
+		}
+	}
+	tr := PendingTransition{Usage: StateTransition{From: BufferUsesStorageWrite, To: BufferUsesStorageRead | BufferUsesVertex}}.IntoHAL(nil)
+	if tr.Usage.Old != hal.BufferUsesStorageWrite || tr.Usage.New != hal.BufferUsesStorageRead|hal.BufferUsesVertex {
+		t.Errorf("IntoHAL fine usage = %#x -> %#x", uint32(tr.Usage.Old), uint32(tr.Usage.New))
+	}
+	if tr.Usage.OldUsage != gputypes.BufferUsageStorage || tr.Usage.NewUsage != gputypes.BufferUsageStorage|gputypes.BufferUsageVertex {
+		t.Errorf("IntoHAL coarse usage = %v -> %v", tr.Usage.OldUsage, tr.Usage.NewUsage)
 	}
 }
