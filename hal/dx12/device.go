@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"math"
 	"os"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"sync"
@@ -333,6 +334,13 @@ func newDevice(instance *Instance, adapterPtr unsafe.Pointer, adapterDesc *dxgi.
 	// DXIL path uses naga dxil backend (SM 6.0, BYPASS hash) instead of HLSL->FXC.
 	dev.useDXIL = os.Getenv("GOGPU_DX12_DXIL") == "1"
 	dev.dxilValidate = os.Getenv("GOGPU_DX12_DXIL_VALIDATE") == "1"
+	if dev.useDXIL {
+		sm := d3d12.D3D12_FEATURE_DATA_SHADER_MODEL{HighestShaderModel: d3d12.D3D_SHADER_MODEL_6_0}
+		if rawDevice.CheckFeatureSupport(d3d12.D3D12_FEATURE_SHADER_MODEL, unsafe.Pointer(&sm), uint32(unsafe.Sizeof(sm))) != nil || sm.HighestShaderModel < d3d12.D3D_SHADER_MODEL_6_0 {
+			hal.Logger().Warn("dx12: GOGPU_DX12_DXIL needs shader model 6.0, compiling with FXC", "shaderModel", fmt.Sprintf("0x%x", sm.HighestShaderModel))
+			dev.useDXIL = false
+		}
+	}
 
 	// Create pre-built command signatures for indirect draw/dispatch.
 	// DX12 ExecuteIndirect requires an ID3D12CommandSignature that describes
@@ -2391,11 +2399,9 @@ func (d *Device) compileDXIL(module *ShaderModule, ep *ir.EntryPoint, nagaOpts *
 	// tmp/ for post-mortem dxilval --corpus replay.
 	if d.dxilValidate {
 		if verr := dxil.Validate(dxilBytes, dxil.ValidateFull); verr != nil {
-			_ = os.WriteFile(
-				fmt.Sprintf("D:/projects/gogpu/wgpu/tmp/dbg_stage%d_%s.dxil", int(ep.Stage), ep.Name),
-				dxilBytes, 0o644,
-			)
-			return nil, fmt.Errorf("dx12: DXIL validation rejected %q (stage %d): %w", ep.Name, ep.Stage, verr)
+			dump := filepath.Join(os.TempDir(), fmt.Sprintf("gowgpu_dxil_stage%d_%s.dxil", int(ep.Stage), ep.Name))
+			_ = os.WriteFile(dump, dxilBytes, 0o644)
+			return nil, fmt.Errorf("dx12: DXIL validation rejected %q (stage %d, dumped to %s): %w", ep.Name, ep.Stage, dump, verr)
 		}
 	}
 
