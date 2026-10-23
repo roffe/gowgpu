@@ -255,7 +255,7 @@ func TestBufferMapWaitsForItsOwnSubmission(t *testing.T) {
 	}
 	if submitTook > busy/2 {
 		if submitWaitsForWork(t, device) {
-			t.Skip("the driver holds a Submit until the work before it is done")
+			t.Skip("the driver's Submit returns only once its work or the work before it is done")
 		}
 		t.Errorf("a Submit made while Map waited took %v, a dispatch %v", submitTook, busy)
 	}
@@ -263,7 +263,8 @@ func TestBufferMapWaitsForItsOwnSubmission(t *testing.T) {
 
 // submitWaitsForWork reports whether a Submit made while the GPU runs a
 // dispatch submitted before it returns only once the dispatch is done, as
-// lavapipe's does.
+// lavapipe's does, or a Submit runs its dispatch before it returns, as
+// Mesa's llvmpipe GL does.
 func submitWaitsForWork(t *testing.T, device *Device) bool {
 	t.Helper()
 	busy, later := busyCommands(t, device, 50_000_000, nil), busyCommands(t, device, 1, nil)
@@ -271,6 +272,7 @@ func submitWaitsForWork(t *testing.T, device *Device) bool {
 	if _, err := device.Queue().Submit(busy); err != nil {
 		t.Fatalf("Submit: %v", err)
 	}
+	busyTook := time.Since(start)
 	time.Sleep(10 * time.Millisecond)
 	submitStart := time.Now()
 	if _, err := device.Queue().Submit(later); err != nil {
@@ -278,7 +280,8 @@ func submitWaitsForWork(t *testing.T, device *Device) bool {
 	}
 	submitTook := time.Since(submitStart)
 	device.Poll(PollWait)
-	return submitTook > time.Since(start)/2
+	all := time.Since(start)
+	return submitTook > all/2 || busyTook > all/2
 }
 
 // Release fails a map still pending, and afterwards Poll and Map report
