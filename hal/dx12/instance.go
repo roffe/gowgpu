@@ -475,12 +475,19 @@ func (s *Surface) AcquireTexture(_ hal.Fence) (*hal.AcquiredSurfaceTexture, erro
 
 	// Wait on the frame latency waitable object for proper frame pacing.
 	if s.frameLatencyWaitableObject != 0 {
-		_, err := windows.WaitForSingleObject(
+		result, err := windows.WaitForSingleObject(
 			windows.Handle(s.frameLatencyWaitableObject),
 			1000, // 1 second timeout (same as Rust wgpu)
 		)
 		if err != nil {
 			return nil, fmt.Errorf("dx12: WaitForSingleObject on frame latency waitable failed: %w", err)
+		}
+		// A removed device never releases a frame: every acquire would
+		// wait out the timeout.
+		if result == uint32(windows.WAIT_TIMEOUT) && s.device != nil {
+			if reason := s.device.raw.GetDeviceRemovedReason(); reason != nil {
+				return nil, fmt.Errorf("dx12: acquire: %w", deviceLost(reason))
+			}
 		}
 	}
 

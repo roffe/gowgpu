@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"os"
 	"runtime"
 	"slices"
@@ -554,7 +555,19 @@ func (d *Device) waitForGPU() error {
 			return fmt.Errorf("dx12: WaitForSingleObject failed: %w", err)
 		}
 	}
+	return d.fenceRemoved(d.fence)
+}
 
+// fenceRemoved returns a deviceLost error when fence reads UINT64_MAX, the
+// value D3D12 gives the fences of a removed device, which would read as
+// every value reached, and the device says it was removed, as Dawn checks.
+func (d *Device) fenceRemoved(fence *d3d12.ID3D12Fence) error {
+	if fence.GetCompletedValue() != math.MaxUint64 {
+		return nil
+	}
+	if reason := d.raw.GetDeviceRemovedReason(); reason != nil {
+		return deviceLost(reason)
+	}
 	return nil
 }
 
@@ -730,6 +743,22 @@ func (d *Device) zeroBuffer() (*Buffer, error) {
 	return d.zeroBuf, nil
 }
 
+// deviceLost is the error of a device D3D12 removed for reason:
+// hal.ErrDeviceLost, with the reason, as Rust's wgpu-hal maps a removed or
+// reset device to DeviceError::Lost.
+func deviceLost(reason error) error {
+	return fmt.Errorf("%w: %w", hal.ErrDeviceLost, reason)
+}
+
+// removedDeviceLost turns err into a deviceLost error when it is an HRESULT
+// that says the device was removed, hung or reset.
+func removedDeviceLost(err error) error {
+	if dxgi.IsDeviceRemovedError(err) {
+		return deviceLost(err)
+	}
+	return err
+}
+
 // checkHealth verifies the device is still alive and logs the current step.
 // Returns an error if the device has been removed.
 func (d *Device) checkHealth(operation string) error {
@@ -738,7 +767,7 @@ func (d *Device) checkHealth(operation string) error {
 	if reason := d.raw.GetDeviceRemovedReason(); reason != nil {
 		hal.Logger().Error("dx12: device removed", "step", step, "operation", operation, "reason", reason)
 		d.logDREDBreadcrumbs()
-		return fmt.Errorf("dx12: device removed at step %d (%s): %w", step, operation, reason)
+		return fmt.Errorf("dx12: device removed at step %d (%s): %w", step, operation, deviceLost(reason))
 	}
 	return nil
 }
@@ -1328,7 +1357,7 @@ func (d *Device) CreateTexture(desc *hal.TextureDescriptor) (hal.Texture, error)
 		d.DrainDebugMessages() // Print validation errors that killed the device
 		d.logDREDBreadcrumbs()
 		return nil, fmt.Errorf("dx12: device already removed before CreateTexture (format=%d, samples=%d): %w",
-			desc.Format, desc.SampleCount, reason)
+			desc.Format, desc.SampleCount, deviceLost(reason))
 	}
 
 	// Convert format
@@ -1436,7 +1465,7 @@ func (d *Device) CreateTexture(desc *hal.TextureDescriptor) (hal.Texture, error)
 	if err != nil {
 		if reason := d.raw.GetDeviceRemovedReason(); reason != nil {
 			return nil, fmt.Errorf("dx12: CreateCommittedResource for texture failed (device removed: %w, format=%d, samples=%d, %dx%d, flags=0x%x): %w",
-				reason, createFormat, sampleCount, desc.Size.Width, desc.Size.Height, resourceFlags, err)
+				deviceLost(reason), createFormat, sampleCount, desc.Size.Width, desc.Size.Height, resourceFlags, err)
 		}
 		return nil, fmt.Errorf("dx12: CreateCommittedResource for texture failed (format=%d, samples=%d, %dx%d, flags=0x%x): %w",
 			createFormat, sampleCount, desc.Size.Width, desc.Size.Height, resourceFlags, err)
@@ -2490,7 +2519,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		)
 		if reason := d.raw.GetDeviceRemovedReason(); reason != nil {
 			d.logDREDBreadcrumbs()
-			return nil, fmt.Errorf("dx12: CreateGraphicsPipelineState failed (device removed: %w): %w", reason, err)
+			return nil, fmt.Errorf("dx12: CreateGraphicsPipelineState failed (device removed: %w): %w", deviceLost(reason), err)
 		}
 		return nil, fmt.Errorf("dx12: CreateGraphicsPipelineState failed: %w", err)
 	}
@@ -2620,7 +2649,7 @@ func (d *Device) CreateComputePipeline(desc *hal.ComputePipelineDescriptor) (hal
 		)
 		if reason := d.raw.GetDeviceRemovedReason(); reason != nil {
 			d.logDREDBreadcrumbs()
-			return nil, fmt.Errorf("dx12: CreateComputePipelineState failed (device removed: %w): %w", reason, err)
+			return nil, fmt.Errorf("dx12: CreateComputePipelineState failed (device removed: %w): %w", deviceLost(reason), err)
 		}
 		return nil, fmt.Errorf("dx12: CreateComputePipelineState failed: %w", err)
 	}
@@ -2727,6 +2756,9 @@ func (d *Device) Wait(fence hal.Fence, value uint64, timeout time.Duration) (boo
 		return false, fmt.Errorf("dx12: invalid fence")
 	}
 
+	if err := d.fenceRemoved(f.raw); err != nil {
+		return false, err
+	}
 	// Check if already completed
 	if f.raw.GetCompletedValue() >= value {
 		return true, nil
@@ -2755,6 +2787,9 @@ func (d *Device) Wait(fence hal.Fence, value uint64, timeout time.Duration) (boo
 
 	switch result {
 	case windows.WAIT_OBJECT_0:
+		if err := d.fenceRemoved(f.raw); err != nil {
+			return false, err
+		}
 		return true, nil
 	case uint32(windows.WAIT_TIMEOUT):
 		return false, nil

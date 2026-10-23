@@ -219,7 +219,7 @@ func (q *Queue) submitLocked(commandBuffers []hal.CommandBuffer, external bool) 
 	if reason := q.device.raw.GetDeviceRemovedReason(); reason != nil {
 		q.device.logDREDBreadcrumbs()
 		q.retainPreamblesWithoutFence(nativePreambles)
-		return 0, fmt.Errorf("dx12: device removed after ExecuteCommandLists: %w", reason)
+		return 0, fmt.Errorf("dx12: device removed after ExecuteCommandLists: %w", deviceLost(reason))
 	}
 	q.commitScheduledStates(finalStates)
 
@@ -844,11 +844,11 @@ func (q *Queue) Present(surface hal.Surface, texture hal.SurfaceTexture, damageR
 			DirtyRects:      &rects[0],
 		}
 		if err := dx12Surface.swapchain.Present1(syncInterval, presentFlags, &params); err != nil {
-			return fmt.Errorf("dx12: Present1 failed: %w", err)
+			return fmt.Errorf("dx12: Present1 failed: %w", removedDeviceLost(err))
 		}
 	} else {
 		if err := dx12Surface.swapchain.Present(syncInterval, presentFlags); err != nil {
-			return fmt.Errorf("dx12: Present failed: %w", err)
+			return fmt.Errorf("dx12: Present failed: %w", removedDeviceLost(err))
 		}
 	}
 
