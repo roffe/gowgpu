@@ -12,15 +12,16 @@ type LateSizedBufferGroup struct {
 
 // RenderPipeline represents a configured render pipeline.
 type RenderPipeline struct {
-	browser  *browser.RenderPipeline
-	released bool
+	browser       *browser.RenderPipeline
+	maxBindGroups uint32
+	released      bool
 }
 
 // GetBindGroupLayout returns the bind group layout at the given index, or nil
-// when the browser throws for the index. This wraps
-// GPURenderPipeline.getBindGroupLayout(index) for "auto" layouts.
+// at or past the device's MaxBindGroups, where no pipeline has a group. This
+// wraps GPURenderPipeline.getBindGroupLayout(index) for "auto" layouts.
 func (p *RenderPipeline) GetBindGroupLayout(index uint32) *BindGroupLayout {
-	if p.browser == nil {
+	if p.browser == nil || index >= p.maxBindGroups {
 		return nil
 	}
 	bl, err := p.browser.GetBindGroupLayout(index)
@@ -42,15 +43,16 @@ func (p *RenderPipeline) Release() {
 
 // ComputePipeline represents a configured compute pipeline.
 type ComputePipeline struct {
-	browser  *browser.ComputePipeline
-	released bool
+	browser       *browser.ComputePipeline
+	maxBindGroups uint32
+	released      bool
 }
 
 // GetBindGroupLayout returns the bind group layout at the given index, or nil
-// when the browser throws for the index. This wraps
-// GPUComputePipeline.getBindGroupLayout(index) for "auto" layouts.
+// at or past the device's MaxBindGroups, where no pipeline has a group. This
+// wraps GPUComputePipeline.getBindGroupLayout(index) for "auto" layouts.
 func (p *ComputePipeline) GetBindGroupLayout(index uint32) *BindGroupLayout {
-	if p.browser == nil {
+	if p.browser == nil || index >= p.maxBindGroups {
 		return nil
 	}
 	bl, err := p.browser.GetBindGroupLayout(index)

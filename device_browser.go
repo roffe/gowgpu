@@ -312,8 +312,8 @@ func (d *Device) CreateRenderPipeline(desc *RenderPipelineDescriptor) (*RenderPi
 		return nil, fmt.Errorf("wgpu: CreateRenderPipeline: %w", err)
 	}
 	return &RenderPipeline{
-		browser:  bp,
-		released: false,
+		browser:       bp,
+		maxBindGroups: d.limits.MaxBindGroups,
 	}, nil
 }
 
@@ -345,8 +345,8 @@ func (d *Device) CreateComputePipeline(desc *ComputePipelineDescriptor) (*Comput
 		return nil, fmt.Errorf("wgpu: CreateComputePipeline: %w", err)
 	}
 	return &ComputePipeline{
-		browser:  bp,
-		released: false,
+		browser:       bp,
+		maxBindGroups: d.limits.MaxBindGroups,
 	}, nil
 }
 

@@ -191,3 +191,21 @@ func TestBrowserPopErrorScopeOnALostInstanceReturnsNil(t *testing.T) {
 		t.Fatalf("PopErrorScope = %v after the browser rejected the pop, want nil", gpuErr)
 	}
 }
+
+func TestBrowserGetBindGroupLayoutPastMaxBindGroupsIsNil(t *testing.T) {
+	dev := jsEval(`{
+		queue: {},
+		createComputePipeline() { return {getBindGroupLayout(i) { return {group: i} }} },
+	}`)
+	d := &Device{browser: browser.NewDevice(dev), limits: gputypes.Limits{MaxBindGroups: 4}}
+	pipe, err := d.CreateComputePipeline(&ComputePipelineDescriptor{})
+	if err != nil {
+		t.Fatalf("CreateComputePipeline: %v", err)
+	}
+	if pipe.GetBindGroupLayout(3) == nil {
+		t.Error("GetBindGroupLayout(3) = nil with 4 bind groups")
+	}
+	if bgl := pipe.GetBindGroupLayout(4); bgl != nil {
+		t.Errorf("GetBindGroupLayout(4) = %v with 4 bind groups, want nil", bgl)
+	}
+}
