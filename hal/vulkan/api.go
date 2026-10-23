@@ -111,33 +111,20 @@ func (Backend) CreateInstance(desc *hal.InstanceDescriptor) (hal.Instance, error
 		// Silently skip if validation layers not installed (Vulkan SDK not present)
 	}
 
-	// Convert to C strings
-	extensionPtrs := make([]*byte, len(extensions))
-	for i, ext := range extensions {
-		extensionPtrs[i] = unsafe.StringData(ext)
-	}
-
-	layerPtrs := make([]*byte, len(layers))
-	for i, layer := range layers {
-		layerPtrs[i] = unsafe.StringData(layer)
-	}
-
 	// Create instance
+	var pins runtime.Pinner
+	defer pins.Unpin()
 	createInfo := vk.InstanceCreateInfo{
-		SType:                 vk.StructureTypeInstanceCreateInfo,
-		PApplicationInfo:      &appInfo,
-		EnabledExtensionCount: uint32(len(extensions)),
-		EnabledLayerCount:     uint32(len(layers)),
+		SType:                   vk.StructureTypeInstanceCreateInfo,
+		PApplicationInfo:        &appInfo,
+		EnabledExtensionCount:   uint32(len(extensions)),
+		PpEnabledExtensionNames: cNames(&pins, extensions),
+		EnabledLayerCount:       uint32(len(layers)),
+		PpEnabledLayerNames:     cNames(&pins, layers),
 	}
 
 	if slices.Contains(extensions, portabilityEnumeration) {
 		createInfo.Flags = vk.InstanceCreateFlags(vk.InstanceCreateEnumeratePortabilityBitKhr)
-	}
-	if len(extensionPtrs) > 0 {
-		createInfo.PpEnabledExtensionNames = &extensionPtrs[0]
-	}
-	if len(layerPtrs) > 0 {
-		createInfo.PpEnabledLayerNames = &layerPtrs[0]
 	}
 
 	var instance vk.Instance
@@ -161,8 +148,6 @@ func (Backend) CreateInstance(desc *hal.InstanceDescriptor) (hal.Instance, error
 	runtime.KeepAlive(engineName)
 	runtime.KeepAlive(extensions)
 	runtime.KeepAlive(layers)
-	runtime.KeepAlive(extensionPtrs)
-	runtime.KeepAlive(layerPtrs)
 
 	inst := &Instance{
 		handle:       instance,
@@ -209,6 +194,19 @@ type Instance struct {
 	debugEnabled   bool
 	platform       platformInstanceState
 	extensions     []string // enabled
+}
+
+// cNames is names, each ending in a NUL, as the array of C strings a create
+// info takes, the array and the names pinned in pins, or nil for no names.
+func cNames(pins *runtime.Pinner, names []string) **byte {
+	if len(names) == 0 {
+		return nil
+	}
+	ptrs := make([]*byte, len(names))
+	for i, name := range names {
+		ptrs[i] = vk.Pin(pins, unsafe.StringData(name))
+	}
+	return vk.Pin(pins, &ptrs[0])
 }
 
 // trimNUL returns names without the NUL they are passed to Vulkan with.

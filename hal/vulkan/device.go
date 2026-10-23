@@ -8,6 +8,7 @@ package vulkan
 import (
 	"encoding/binary"
 	"fmt"
+	"runtime"
 	"slices"
 	"sync"
 	"time"
@@ -1110,8 +1111,10 @@ func (d *Device) CreateBindGroupLayout(desc *hal.BindGroupLayoutDescriptor) (hal
 		BindingCount: uint32(len(bindings)),
 	}
 
+	var pins runtime.Pinner
+	defer pins.Unpin()
 	if len(bindings) > 0 {
-		createInfo.PBindings = &bindings[0]
+		createInfo.PBindings = vk.Pin(&pins, &bindings[0])
 	}
 
 	var layout vk.DescriptorSetLayout
@@ -1189,11 +1192,17 @@ func (d *Device) updateDescriptorSet(set vk.DescriptorSet, entries []gputypes.Bi
 		return nil
 	}
 
-	// Build write descriptor sets
-	// Note: We need to keep the info structs alive until vkUpdateDescriptorSets returns
+	// Build write descriptor sets. The infos have room for all of their
+	// kind, so the writes point into one array of each, which the call pins.
+	buffers := 0
+	for _, entry := range entries {
+		if _, ok := entry.Resource.(gputypes.BufferBinding); ok {
+			buffers++
+		}
+	}
 	writes := make([]vk.WriteDescriptorSet, 0, len(entries))
-	bufferInfos := make([]vk.DescriptorBufferInfo, 0)
-	imageInfos := make([]vk.DescriptorImageInfo, 0)
+	bufferInfos := make([]vk.DescriptorBufferInfo, 0, buffers)
+	imageInfos := make([]vk.DescriptorImageInfo, 0, len(entries)-buffers)
 
 	for _, entry := range entries {
 		write := vk.WriteDescriptorSet{
@@ -1265,6 +1274,14 @@ func (d *Device) updateDescriptorSet(set vk.DescriptorSet, entries []gputypes.Bi
 	}
 
 	if len(writes) > 0 {
+		var pins runtime.Pinner
+		defer pins.Unpin()
+		if len(bufferInfos) > 0 {
+			vk.Pin(&pins, &bufferInfos[0])
+		}
+		if len(imageInfos) > 0 {
+			vk.Pin(&pins, &imageInfos[0])
+		}
 		vkUpdateDescriptorSets(d.cmds, d.handle, uint32(len(writes)), &writes[0], 0, nil)
 	}
 
@@ -1326,13 +1343,15 @@ func (d *Device) CreatePipelineLayout(desc *hal.PipelineLayoutDescriptor) (hal.P
 		SetLayoutCount: uint32(len(setLayouts)),
 	}
 
+	var pins runtime.Pinner
+	defer pins.Unpin()
 	if len(setLayouts) > 0 {
-		createInfo.PSetLayouts = &setLayouts[0]
+		createInfo.PSetLayouts = vk.Pin(&pins, &setLayouts[0])
 	}
 
 	if len(pushConstantRanges) > 0 {
 		createInfo.PushConstantRangeCount = uint32(len(pushConstantRanges))
-		createInfo.PPushConstantRanges = &pushConstantRanges[0]
+		createInfo.PPushConstantRanges = vk.Pin(&pins, &pushConstantRanges[0])
 	}
 
 	var layout vk.PipelineLayout
@@ -1543,10 +1562,12 @@ func writesFragDepth(module *ir.Module, stage ir.ShaderStage, entry string) bool
 }
 
 func (d *Device) createVkShaderModule(code []uint32) (vk.ShaderModule, error) {
+	var pins runtime.Pinner
+	defer pins.Unpin()
 	createInfo := vk.ShaderModuleCreateInfo{
 		SType:    vk.StructureTypeShaderModuleCreateInfo,
 		CodeSize: uintptr(len(code) * 4), // Size in bytes (uint32 = 4 bytes)
-		PCode:    &code[0],
+		PCode:    vk.Pin(&pins, &code[0]),
 	}
 	var module vk.ShaderModule
 	if result := vkCreateShaderModule(d.cmds, d.handle, &createInfo, nil, &module); result != vk.Success {

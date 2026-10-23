@@ -237,13 +237,15 @@ func (a *DescriptorAllocator) createPool(counts DescriptorCounts) (*DescriptorPo
 		{Type: vk.DescriptorTypeStorageBufferDynamic, DescriptorCount: max(counts.StorageBuffersDynamic*poolSize, poolSize/4)},
 	}
 
+	var pins runtime.Pinner
+	defer pins.Unpin()
 	createInfo := vk.DescriptorPoolCreateInfo{
 		SType: vk.StructureTypeDescriptorPoolCreateInfo,
 		// VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT allows individual set freeing
 		Flags:         vk.DescriptorPoolCreateFlags(vk.DescriptorPoolCreateFreeDescriptorSetBit),
 		MaxSets:       poolSize,
 		PoolSizeCount: uint32(len(poolSizes)),
-		PPoolSizes:    &poolSizes[0],
+		PPoolSizes:    vk.Pin(&pins, &poolSizes[0]),
 	}
 
 	var pool vk.DescriptorPool
@@ -268,15 +270,16 @@ func (a *DescriptorAllocator) setObjectName(objectType vk.ObjectType, handle uin
 	if !a.cmds.HasDebugUtils() || handle == 0 {
 		return
 	}
+	var pins runtime.Pinner
+	defer pins.Unpin()
 	nameBytes := append([]byte(name), 0)
 	nameInfo := vk.DebugUtilsObjectNameInfoEXT{
 		SType:        vk.StructureTypeDebugUtilsObjectNameInfoExt,
 		ObjectType:   objectType,
 		ObjectHandle: handle,
-		PObjectName:  &nameBytes[0],
+		PObjectName:  vk.Pin(&pins, &nameBytes[0]),
 	}
 	_ = a.cmds.SetDebugUtilsObjectNameEXT(a.device, &nameInfo)
-	runtime.KeepAlive(nameBytes)
 }
 
 // Destroy releases all descriptor pools.

@@ -234,13 +234,14 @@ func (d *Device) setObjectName(objectType vk.ObjectType, handle uint64, name str
 		return
 	}
 
+	var pins runtime.Pinner
+	defer pins.Unpin()
 	cname := append([]byte(name), 0)
 	nameInfo := vk.DebugUtilsObjectNameInfoEXT{
 		SType:        vk.StructureTypeDebugUtilsObjectNameInfoExt,
 		ObjectType:   objectType,
 		ObjectHandle: handle,
-		PObjectName:  &cname[0],
+		PObjectName:  vk.Pin(&pins, &cname[0]),
 	}
 	_ = d.cmds.SetDebugUtilsObjectNameEXT(d.handle, &nameInfo)
-	runtime.KeepAlive(cname)
 }

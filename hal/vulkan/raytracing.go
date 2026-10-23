@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"runtime"
 	"unsafe"
 
 	"github.com/roffe/gowgpu/gputypes"
@@ -329,6 +330,8 @@ func (d *Device) GetAccelerationStructureBuildSizes(desc *hal.GetAccelerationStr
 
 	geometries, primitiveCounts, asType := d.buildGeometryInfosForSizeQuery(desc)
 
+	var pins runtime.Pinner
+	defer pins.Unpin()
 	geometryInfo := vk.AccelerationStructureBuildGeometryInfoKHR{
 		SType:         vk.StructureTypeAccelerationStructureBuildGeometryInfoKhr,
 		Type:          asType,
@@ -336,7 +339,7 @@ func (d *Device) GetAccelerationStructureBuildSizes(desc *hal.GetAccelerationStr
 		GeometryCount: uint32(len(geometries)),
 	}
 	if len(geometries) > 0 {
-		geometryInfo.PGeometries = &geometries[0]
+		geometryInfo.PGeometries = vk.Pin(&pins, &geometries[0])
 	}
 
 	sizeInfo := vk.AccelerationStructureBuildSizesInfoKHR{
@@ -592,10 +595,12 @@ func (e *CommandEncoder) BuildAccelerationStructures(descriptors []hal.BuildAcce
 
 	// Patch geometry pointers into the geometry infos (must be done after all
 	// slices are fully built, because append may reallocate).
+	var pins runtime.Pinner
+	defer pins.Unpin()
 	for i := range geometryInfos {
 		geometryInfos[i].GeometryCount = uint32(len(geometriesStorage[i]))
 		if len(geometriesStorage[i]) > 0 {
-			geometryInfos[i].PGeometries = &geometriesStorage[i][0]
+			geometryInfos[i].PGeometries = vk.Pin(&pins, &geometriesStorage[i][0])
 		}
 	}
 
@@ -603,7 +608,7 @@ func (e *CommandEncoder) BuildAccelerationStructures(descriptors []hal.BuildAcce
 	rangePtrs := make([]*vk.AccelerationStructureBuildRangeInfoKHR, len(geometryInfos))
 	for i := range rangesStorage {
 		if len(rangesStorage[i]) > 0 {
-			rangePtrs[i] = &rangesStorage[i][0]
+			rangePtrs[i] = vk.Pin(&pins, &rangesStorage[i][0])
 		}
 	}
 

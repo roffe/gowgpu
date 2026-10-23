@@ -171,10 +171,11 @@ func (f *deviceFence) waitForValue(cmds *vk.Commands, device vk.Device, value ui
 		return nil
 	}
 
+	sem := f.timelineSemaphore
 	waitInfo := vk.SemaphoreWaitInfo{
 		SType:          vk.StructureTypeSemaphoreWaitInfo,
 		SemaphoreCount: 1,
-		PSemaphores:    &f.timelineSemaphore,
+		PSemaphores:    &sem,
 		PValues:        &value,
 	}
 

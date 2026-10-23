@@ -54,6 +54,10 @@ type Swapchain struct {
 	surfaceTextures   []*SwapchainTexture
 	acquireFence      vk.Fence // Post-acquire fence for frame pacing (Rust wgpu pattern)
 
+	// presentRects are the damage rects of the last present, kept so a
+	// present allocates nothing once they have grown.
+	presentRects []vk.RectLayerKHR
+
 	// imageLayouts is the layout each image is left in by the commands
 	// recorded since its acquire, in the order they were recorded: the
 	// present of an image no barrier took to PRESENT_SRC_KHR transitions it
@@ -1421,26 +1425,27 @@ func (sc *Swapchain) present(queue *Queue, damageRects []image.Rectangle) error 
 	}
 
 	// ADR-058: Present waits on ALL semaphores accumulated by Submit() calls.
+	var pins runtime.Pinner
+	defer pins.Unpin()
+	swapchain, imageIndex := sc.handle, sc.currentImage
 	presentInfo := vk.PresentInfoKHR{
 		SType:              vk.StructureTypePresentInfoKhr,
 		WaitSemaphoreCount: uint32(len(waitSems)),
-		PWaitSemaphores:    &waitSems[0],
+		PWaitSemaphores:    vk.Pin(&pins, &waitSems[0]),
 		SwapchainCount:     1,
-		PSwapchains:        &sc.handle,
-		PImageIndices:      &sc.currentImage,
+		PSwapchains:        &swapchain,
+		PImageIndices:      &imageIndex,
 	}
 
 	// VK_KHR_incremental_present: chain damage rects as a compositor hint.
-	// Stack-allocate up to 8 rects to avoid heap allocation in the common case.
 	var (
-		stackRects     [8]vk.RectLayerKHR
 		presentRegion  vk.PresentRegionKHR
 		presentRegions vk.PresentRegionsKHR
 	)
-	if vkRects := damageRegions(stackRects[:0], damageRects, sc.extent); len(vkRects) > 0 && sc.device.supportsIncrementalPresent {
+	if sc.presentRects = damageRegions(sc.presentRects[:0], damageRects, sc.extent); len(sc.presentRects) > 0 && sc.device.supportsIncrementalPresent {
 		presentRegion = vk.PresentRegionKHR{
-			RectangleCount: uint32(len(vkRects)),
-			PRectangles:    &vkRects[0],
+			RectangleCount: uint32(len(sc.presentRects)),
+			PRectangles:    vk.Pin(&pins, &sc.presentRects[0]),
 		}
 		presentRegions = vk.PresentRegionsKHR{
 			SType:          vk.StructureTypePresentRegionsKhr,
@@ -1622,9 +1627,10 @@ func (sc *Swapchain) ensurePresentLayout(queue *Queue) error {
 		SignalSemaphoreCount: 1,
 		PSignalSemaphores:    &signalSems[0],
 	}
+	acquireSem := sc.currentAcquireSem
 	if waitAcquire {
 		submitInfo.WaitSemaphoreCount = 1
-		submitInfo.PWaitSemaphores = &sc.currentAcquireSem
+		submitInfo.PWaitSemaphores = &acquireSem
 		submitInfo.PWaitDstStageMask = &waitStage
 	}
 	fence := vk.Fence(0)

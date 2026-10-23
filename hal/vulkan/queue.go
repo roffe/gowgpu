@@ -8,6 +8,7 @@ package vulkan
 import (
 	"fmt"
 	"image"
+	"runtime"
 	"slices"
 	"sync"
 	"time"
@@ -151,7 +152,6 @@ type Queue struct {
 		signalValues []uint64
 		consumed     []*Swapchain
 		one          [1]*Swapchain
-		timeline     vk.TimelineSemaphoreSubmitInfo
 	}
 
 	// Points of timeline semaphores of code sharing the device the next
@@ -351,23 +351,30 @@ func (q *Queue) submit(cmdBuffers []vk.CommandBuffer, swapchains []*Swapchain) (
 	tf := q.device.timelineFence
 	signalValue := tf.nextSignalValue()
 	fence := vk.Fence(0)
+	var pins runtime.Pinner
+	defer pins.Unpin()
+	var stack struct {
+		cmdBuffers               [8]vk.CommandBuffer
+		waits, signals           [16]vk.Semaphore // maxExternalSync points, the relay, the timeline, swapchains
+		waitStages               [16]vk.PipelineStageFlags
+		waitValues, signalValues [16]uint64
+	}
 	submitInfo := vk.SubmitInfo{
 		SType:              vk.StructureTypeSubmitInfo,
 		CommandBufferCount: uint32(len(cmdBuffers)),
-		PCommandBuffers:    &cmdBuffers[0],
+		PCommandBuffers:    onStackOrPinned(&pins, stack.cmdBuffers[:], cmdBuffers),
 	}
+	var timelineInfo vk.TimelineSemaphoreSubmitInfo
 	if tf.isTimeline {
 		signal(tf.timelineSemaphore, signalValue)
-		s.timeline = vk.TimelineSemaphoreSubmitInfo{
+		timelineInfo = vk.TimelineSemaphoreSubmitInfo{
 			SType:                     vk.StructureTypeTimelineSemaphoreSubmitInfo,
 			WaitSemaphoreValueCount:   uint32(len(s.waitValues)),
+			PWaitSemaphoreValues:      onStackOrPinned(&pins, stack.waitValues[:], s.waitValues),
 			SignalSemaphoreValueCount: uint32(len(s.signalValues)),
-			PSignalSemaphoreValues:    &s.signalValues[0],
+			PSignalSemaphoreValues:    onStackOrPinned(&pins, stack.signalValues[:], s.signalValues),
 		}
-		if len(s.waitValues) > 0 {
-			s.timeline.PWaitSemaphoreValues = &s.waitValues[0]
-		}
-		submitInfo.PNext = (*uintptr)(unsafe.Pointer(&s.timeline))
+		submitInfo.PNext = (*uintptr)(unsafe.Pointer(&timelineInfo))
 	} else {
 		// Binary path (VK-IMPL-003): a fence of the pool tracks the submission.
 		var err error
@@ -377,12 +384,12 @@ func (q *Queue) submit(cmdBuffers []vk.CommandBuffer, swapchains []*Swapchain) (
 	}
 	if len(s.waits) > 0 {
 		submitInfo.WaitSemaphoreCount = uint32(len(s.waits))
-		submitInfo.PWaitSemaphores = &s.waits[0]
-		submitInfo.PWaitDstStageMask = &s.waitStages[0]
+		submitInfo.PWaitSemaphores = onStackOrPinned(&pins, stack.waits[:], s.waits)
+		submitInfo.PWaitDstStageMask = onStackOrPinned(&pins, stack.waitStages[:], s.waitStages)
 	}
 	if len(s.signals) > 0 {
 		submitInfo.SignalSemaphoreCount = uint32(len(s.signals))
-		submitInfo.PSignalSemaphores = &s.signals[0]
+		submitInfo.PSignalSemaphores = onStackOrPinned(&pins, stack.signals[:], s.signals)
 	}
 
 	if result := vkQueueSubmit(q, 1, &submitInfo, fence); result != vk.Success {
@@ -397,6 +404,22 @@ func (q *Queue) submit(cmdBuffers []vk.CommandBuffer, swapchains []*Swapchain) (
 	return signalValue, nil
 }
 
+// onStackOrPinned points a Vulkan call at the elements of src: at their
+// copy in stack, an array on the caller's stack, when they fit, as they
+// almost always do, and else at src, pinned in pins. Memory on the stack
+// needs no pinning, and a Pinner allocates once it holds more than five
+// objects.
+func onStackOrPinned[T any](pins *runtime.Pinner, stack, src []T) *T {
+	if len(src) == 0 {
+		return nil
+	}
+	if len(src) <= len(stack) {
+		copy(stack, src)
+		return &stack[0]
+	}
+	return vk.Pin(pins, &src[0])
+}
+
 // consumeAcquire waits for sc's acquire semaphore in a submission of
 // nothing, for a frame discarded without a Submit: vkAcquireNextImageKHR
 // may only get the semaphore back unsignaled, and the fence value recorded
@@ -407,6 +430,7 @@ func (q *Queue) consumeAcquire(sc *Swapchain) error {
 	}
 	tf := q.device.timelineFence
 	signalValue := tf.nextSignalValue()
+	waitSem := sc.currentAcquireSem
 	waitStage := vk.PipelineStageFlags(vk.PipelineStageAllCommandsBit)
 	waitValues := [1]uint64{0}
 	signalSems := [1]vk.Semaphore{tf.timelineSemaphore}
@@ -414,7 +438,7 @@ func (q *Queue) consumeAcquire(sc *Swapchain) error {
 	submitInfo := vk.SubmitInfo{
 		SType:              vk.StructureTypeSubmitInfo,
 		WaitSemaphoreCount: 1,
-		PWaitSemaphores:    &sc.currentAcquireSem,
+		PWaitSemaphores:    &waitSem,
 		PWaitDstStageMask:  &waitStage,
 	}
 	fence := vk.Fence(0)

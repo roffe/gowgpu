@@ -17,6 +17,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"runtime"
 	"unsafe"
 
 	"github.com/roffe/gowgpu/hal/vulkan/vk"
@@ -42,6 +43,9 @@ func run() error {
 	fmt.Println("Testing: VkRenderPass (traditional) vs VK_KHR_dynamic_rendering")
 	fmt.Println()
 
+	var pins runtime.Pinner
+	defer pins.Unpin()
+
 	// Initialize Vulkan
 	fmt.Print("1. Initializing Vulkan... ")
 	if err := vk.Init(); err != nil {
@@ -61,23 +65,23 @@ func run() error {
 	fmt.Print("3. Creating instance... ")
 	appInfo := vk.ApplicationInfo{
 		SType:            vk.StructureTypeApplicationInfo,
-		PApplicationName: &[]byte("RenderPassTest\x00")[0],
+		PApplicationName: vk.Pin(&pins, &[]byte("RenderPassTest\x00")[0]),
 		ApiVersion:       makeVersion(1, 0, 0), // Vulkan 1.0 for compatibility
 	}
 
 	extensions := []string{"VK_KHR_surface\x00", "VK_KHR_win32_surface\x00"}
 	extensionPtrs := make([]*byte, len(extensions))
 	for i, ext := range extensions {
-		extensionPtrs[i] = unsafe.StringData(ext)
+		extensionPtrs[i] = vk.Pin(&pins, unsafe.StringData(ext))
 	}
 
 	createInfo := vk.InstanceCreateInfo{
 		SType:                 vk.StructureTypeInstanceCreateInfo,
-		PApplicationInfo:      &appInfo,
+		PApplicationInfo:      vk.Pin(&pins, &appInfo),
 		EnabledExtensionCount: uint32(len(extensions)),
 	}
 	if len(extensionPtrs) > 0 {
-		createInfo.PpEnabledExtensionNames = &extensionPtrs[0]
+		createInfo.PpEnabledExtensionNames = vk.Pin(&pins, &extensionPtrs[0])
 	}
 
 	var instance vk.Instance
@@ -137,18 +141,18 @@ func run() error {
 		SType:            vk.StructureTypeDeviceQueueCreateInfo,
 		QueueFamilyIndex: graphicsFamily,
 		QueueCount:       1,
-		PQueuePriorities: &queuePriority,
+		PQueuePriorities: vk.Pin(&pins, &queuePriority),
 	}
 
 	swapchainExt := "VK_KHR_swapchain\x00"
-	deviceExtensions := []*byte{unsafe.StringData(swapchainExt)}
+	deviceExtensions := []*byte{vk.Pin(&pins, unsafe.StringData(swapchainExt))}
 
 	deviceCreateInfo := vk.DeviceCreateInfo{
 		SType:                   vk.StructureTypeDeviceCreateInfo,
 		QueueCreateInfoCount:    1,
-		PQueueCreateInfos:       &queueCreateInfo,
+		PQueueCreateInfos:       vk.Pin(&pins, &queueCreateInfo),
 		EnabledExtensionCount:   uint32(len(deviceExtensions)),
-		PpEnabledExtensionNames: &deviceExtensions[0],
+		PpEnabledExtensionNames: vk.Pin(&pins, &deviceExtensions[0]),
 	}
 
 	var device vk.Device
@@ -195,15 +199,15 @@ func run() error {
 	subpass := vk.SubpassDescription{
 		PipelineBindPoint:    vk.PipelineBindPointGraphics,
 		ColorAttachmentCount: 1,
-		PColorAttachments:    &colorAttachmentRef,
+		PColorAttachments:    vk.Pin(&pins, &colorAttachmentRef),
 	}
 
 	renderPassCreateInfo := vk.RenderPassCreateInfo{
 		SType:           vk.StructureTypeRenderPassCreateInfo,
 		AttachmentCount: 1,
-		PAttachments:    &colorAttachment,
+		PAttachments:    vk.Pin(&pins, &colorAttachment),
 		SubpassCount:    1,
-		PSubpasses:      &subpass,
+		PSubpasses:      vk.Pin(&pins, &subpass),
 	}
 
 	var renderPass vk.RenderPass
@@ -272,13 +276,13 @@ func run() error {
 			SType:  vk.StructureTypePipelineShaderStageCreateInfo,
 			Stage:  vk.ShaderStageVertexBit,
 			Module: vertShader,
-			PName:  &mainEntry[0],
+			PName:  vk.Pin(&pins, &mainEntry[0]),
 		},
 		{
 			SType:  vk.StructureTypePipelineShaderStageCreateInfo,
 			Stage:  vk.ShaderStageFragmentBit,
 			Module: fragShader,
-			PName:  &mainEntry[0],
+			PName:  vk.Pin(&pins, &mainEntry[0]),
 		},
 	}
 
@@ -306,7 +310,7 @@ func run() error {
 	dynamicState := vk.PipelineDynamicStateCreateInfo{
 		SType:             vk.StructureTypePipelineDynamicStateCreateInfo,
 		DynamicStateCount: uint32(len(dynamicStates)),
-		PDynamicStates:    &dynamicStates[0],
+		PDynamicStates:    vk.Pin(&pins, &dynamicStates[0]),
 	}
 
 	rasterizationState := vk.PipelineRasterizationStateCreateInfo{
@@ -330,20 +334,20 @@ func run() error {
 	colorBlendState := vk.PipelineColorBlendStateCreateInfo{
 		SType:           vk.StructureTypePipelineColorBlendStateCreateInfo,
 		AttachmentCount: 1,
-		PAttachments:    &colorBlendAttachment,
+		PAttachments:    vk.Pin(&pins, &colorBlendAttachment),
 	}
 
 	pipelineCreateInfo := vk.GraphicsPipelineCreateInfo{
 		SType:               vk.StructureTypeGraphicsPipelineCreateInfo,
 		StageCount:          uint32(len(stages)),
-		PStages:             &stages[0],
-		PVertexInputState:   &vertexInputState,
-		PInputAssemblyState: &inputAssemblyState,
-		PViewportState:      &viewportState,
-		PRasterizationState: &rasterizationState,
-		PMultisampleState:   &multisampleState,
-		PColorBlendState:    &colorBlendState,
-		PDynamicState:       &dynamicState,
+		PStages:             vk.Pin(&pins, &stages[0]),
+		PVertexInputState:   vk.Pin(&pins, &vertexInputState),
+		PInputAssemblyState: vk.Pin(&pins, &inputAssemblyState),
+		PViewportState:      vk.Pin(&pins, &viewportState),
+		PRasterizationState: vk.Pin(&pins, &rasterizationState),
+		PMultisampleState:   vk.Pin(&pins, &multisampleState),
+		PColorBlendState:    vk.Pin(&pins, &colorBlendState),
+		PDynamicState:       vk.Pin(&pins, &dynamicState),
 		Layout:              pipelineLayout,
 		RenderPass:          renderPass, // <-- TRADITIONAL: Using VkRenderPass!
 		Subpass:             0,
@@ -387,10 +391,12 @@ func run() error {
 }
 
 func createShaderModule(cmds *vk.Commands, device vk.Device, code []uint32) (vk.ShaderModule, error) {
+	var pins runtime.Pinner
+	defer pins.Unpin()
 	createInfo := vk.ShaderModuleCreateInfo{
 		SType:    vk.StructureTypeShaderModuleCreateInfo,
 		CodeSize: uintptr(len(code) * 4),
-		PCode:    &code[0],
+		PCode:    vk.Pin(&pins, &code[0]),
 	}
 
 	var module vk.ShaderModule

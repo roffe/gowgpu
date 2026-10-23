@@ -7,6 +7,7 @@ package vulkan
 
 import (
 	"fmt"
+	"runtime"
 	"unsafe"
 
 	"github.com/roffe/gowgpu/gputypes"
@@ -84,10 +85,6 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 			storeOpNone = true
 		}
 	}
-	extensionPtrs := make([]*byte, len(extensions))
-	for i, ext := range extensions {
-		extensionPtrs[i] = unsafe.StringData(ext)
-	}
 
 	// Detect timeline semaphore support (VK-IMPL-001), and on Vulkan 1.3 what
 	// a video decoder sharing the device needs.
@@ -117,12 +114,14 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 
 	// The graphics queue, and with video a compute and a video decode queue
 	// gowgpu leaves to the decoder.
+	var pins runtime.Pinner
+	defer pins.Unpin()
 	queuePriority := float32(1.0)
 	queueCreateInfos := []vk.DeviceQueueCreateInfo{{
 		SType:            vk.StructureTypeDeviceQueueCreateInfo,
 		QueueFamilyIndex: graphicsFamily,
 		QueueCount:       1,
-		PQueuePriorities: &queuePriority,
+		PQueuePriorities: vk.Pin(&pins, &queuePriority),
 	}}
 	if video != nil {
 		for _, family := range []uint32{video.compute, video.decode} {
@@ -131,22 +130,17 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 			queueCreateInfos = append(queueCreateInfos, info)
 		}
 		extensions = append(extensions, video.extensions...)
-		extensionPtrs = extensionPtrs[:0]
-		for _, ext := range extensions {
-			extensionPtrs = append(extensionPtrs, unsafe.StringData(ext))
-		}
 	}
 
 	// Device create info
+	features := a.features
 	deviceCreateInfo := vk.DeviceCreateInfo{
-		SType:                 vk.StructureTypeDeviceCreateInfo,
-		QueueCreateInfoCount:  uint32(len(queueCreateInfos)),
-		PQueueCreateInfos:     &queueCreateInfos[0],
-		EnabledExtensionCount: uint32(len(extensions)),
-		PEnabledFeatures:      &a.features,
-	}
-	if len(extensionPtrs) > 0 {
-		deviceCreateInfo.PpEnabledExtensionNames = &extensionPtrs[0]
+		SType:                   vk.StructureTypeDeviceCreateInfo,
+		QueueCreateInfoCount:    uint32(len(queueCreateInfos)),
+		PQueueCreateInfos:       vk.Pin(&pins, &queueCreateInfos[0]),
+		EnabledExtensionCount:   uint32(len(extensions)),
+		PpEnabledExtensionNames: cNames(&pins, extensions),
+		PEnabledFeatures:        &features,
 	}
 
 	// Enable timeline semaphore feature if supported.
@@ -163,14 +157,14 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 		vulkan12Enable.DrawIndirectCount = vk.Bool32(vk.True)
 	}
 	if hasTimelineSemaphore || has12.DrawIndirectCount != 0 {
-		deviceCreateInfo.PNext = (*uintptr)(unsafe.Pointer(&vulkan12Enable))
+		deviceCreateInfo.PNext = (*uintptr)(unsafe.Pointer(vk.Pin(&pins, &vulkan12Enable)))
 	}
 	if video != nil {
 		vulkan11Enable.SamplerYcbcrConversion = vk.Bool32(vk.True)
 		vulkan13Enable.Synchronization2 = vk.Bool32(vk.True)
-		deviceCreateInfo.PNext = (*uintptr)(unsafe.Pointer(&vulkan11Enable))
-		vulkan11Enable.PNext = (*uintptr)(unsafe.Pointer(&vulkan12Enable))
-		vulkan12Enable.PNext = (*uintptr)(unsafe.Pointer(&vulkan13Enable))
+		deviceCreateInfo.PNext = (*uintptr)(unsafe.Pointer(vk.Pin(&pins, &vulkan11Enable)))
+		vulkan11Enable.PNext = (*uintptr)(unsafe.Pointer(vk.Pin(&pins, &vulkan12Enable)))
+		vulkan12Enable.PNext = (*uintptr)(unsafe.Pointer(vk.Pin(&pins, &vulkan13Enable)))
 	}
 
 	var device vk.Device

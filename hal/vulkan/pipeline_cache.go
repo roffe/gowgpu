@@ -45,17 +45,18 @@ func (d *Device) initPipelineCache(props *vk.PhysicalDeviceProperties) {
 		initialData = nil
 	}
 
+	var pins runtime.Pinner
+	defer pins.Unpin()
 	createInfo := vk.PipelineCacheCreateInfo{
 		SType: vk.StructureTypePipelineCacheCreateInfo,
 	}
 	if len(initialData) > 0 {
 		createInfo.InitialDataSize = uintptr(len(initialData))
-		createInfo.PInitialData = (*uintptr)(unsafe.Pointer(&initialData[0]))
+		createInfo.PInitialData = (*uintptr)(unsafe.Pointer(vk.Pin(&pins, &initialData[0])))
 	}
 
 	var cache vk.PipelineCache
 	result := d.cmds.CreatePipelineCache(d.handle, &createInfo, nil, &cache)
-	runtime.KeepAlive(initialData)
 	if result == vk.ErrorInitializationFailed && len(initialData) > 0 {
 		hal.Logger().Info("vulkan: stale pipeline cache rejected by driver, recreating empty",
 			"path", cachePath,

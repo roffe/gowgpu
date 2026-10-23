@@ -39,9 +39,11 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 	}
 	pipelineLayout := vkLayout.handle
 
+	var pins runtime.Pinner
+	defer pins.Unpin()
+
 	// Build shader stages
 	var stages []vk.PipelineShaderStageCreateInfo
-	var shaderModules []vk.ShaderModule // Keep references to prevent GC
 
 	// Vertex shader (required)
 	if desc.Vertex.Module == nil {
@@ -62,13 +64,12 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		return nil, err
 	}
 	defer d.destroyStageModule(vertexHandle, temporary)
-	shaderModules = append(shaderModules, vertexHandle)
 
 	stages = append(stages, vk.PipelineShaderStageCreateInfo{
 		SType:  vk.StructureTypePipelineShaderStageCreateInfo,
 		Stage:  vk.ShaderStageVertexBit,
 		Module: vertexHandle,
-		PName:  &vertexEntryBytes[0],
+		PName:  vk.Pin(&pins, &vertexEntryBytes[0]),
 	})
 
 	// Fragment shader (optional)
@@ -89,13 +90,12 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 			return nil, err
 		}
 		defer d.destroyStageModule(fragmentHandle, temporary)
-		shaderModules = append(shaderModules, fragmentHandle)
 
 		stages = append(stages, vk.PipelineShaderStageCreateInfo{
 			SType:  vk.StructureTypePipelineShaderStageCreateInfo,
 			Stage:  vk.ShaderStageFragmentBit,
 			Module: fragmentHandle,
-			PName:  &fragmentEntryBytes[0],
+			PName:  vk.Pin(&pins, &fragmentEntryBytes[0]),
 		})
 	}
 
@@ -130,10 +130,10 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		VertexAttributeDescriptionCount: uint32(len(vertexAttribs)),
 	}
 	if len(vertexBindings) > 0 {
-		vertexInputState.PVertexBindingDescriptions = &vertexBindings[0]
+		vertexInputState.PVertexBindingDescriptions = vk.Pin(&pins, &vertexBindings[0])
 	}
 	if len(vertexAttribs) > 0 {
-		vertexInputState.PVertexAttributeDescriptions = &vertexAttribs[0]
+		vertexInputState.PVertexAttributeDescriptions = vk.Pin(&pins, &vertexAttribs[0])
 	}
 
 	// Input assembly state
@@ -257,7 +257,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		AttachmentCount: uint32(len(colorBlendAttachments)),
 	}
 	if len(colorBlendAttachments) > 0 {
-		colorBlendState.PAttachments = &colorBlendAttachments[0]
+		colorBlendState.PAttachments = vk.Pin(&pins, &colorBlendAttachments[0])
 	}
 
 	// Dynamic state — all pipelines declare the same 4 dynamic states.
@@ -272,7 +272,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 	dynamicState := vk.PipelineDynamicStateCreateInfo{
 		SType:             vk.StructureTypePipelineDynamicStateCreateInfo,
 		DynamicStateCount: uint32(len(dynamicStates)),
-		PDynamicStates:    &dynamicStates[0],
+		PDynamicStates:    vk.Pin(&pins, &dynamicStates[0]),
 	}
 
 	// Create compatible render pass for pipeline (not dynamic rendering).
@@ -321,7 +321,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 	createInfo := vk.GraphicsPipelineCreateInfo{
 		SType:               vk.StructureTypeGraphicsPipelineCreateInfo,
 		StageCount:          uint32(len(stages)),
-		PStages:             &stages[0],
+		PStages:             vk.Pin(&pins, &stages[0]),
 		PVertexInputState:   &vertexInputState,
 		PInputAssemblyState: &inputAssemblyState,
 		PViewportState:      &viewportState,
@@ -337,18 +337,6 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 
 	var pipeline vk.Pipeline
 	result := vkCreateGraphicsPipelines(d.cmds, d.handle, d.pipelineCache, 1, &createInfo, nil, &pipeline)
-
-	// Keep all data structures alive until after the Vulkan call completes.
-	// This is critical because unsafe.Pointer→uintptr conversions break GC tracking.
-	runtime.KeepAlive(stages)
-	runtime.KeepAlive(shaderModules)
-	runtime.KeepAlive(vertexEntryBytes)
-	runtime.KeepAlive(fragmentEntryBytes)
-	runtime.KeepAlive(vertexBindings)
-	runtime.KeepAlive(vertexAttribs)
-	runtime.KeepAlive(colorBlendAttachments)
-	runtime.KeepAlive(dynamicStates)
-
 	if result != vk.Success {
 		return nil, fmt.Errorf("vulkan: vkCreateGraphicsPipelines failed: %d", result)
 	}
@@ -433,11 +421,13 @@ func (d *Device) CreateComputePipeline(desc *hal.ComputePipelineDescriptor) (hal
 	}
 	defer d.destroyStageModule(computeHandle, temporary)
 
+	var pins runtime.Pinner
+	defer pins.Unpin()
 	stage := vk.PipelineShaderStageCreateInfo{
 		SType:  vk.StructureTypePipelineShaderStageCreateInfo,
 		Stage:  vk.ShaderStageComputeBit,
 		Module: computeHandle,
-		PName:  &entryPointBytes[0],
+		PName:  vk.Pin(&pins, &entryPointBytes[0]),
 	}
 
 	createInfo := vk.ComputePipelineCreateInfo{

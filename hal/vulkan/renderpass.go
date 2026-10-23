@@ -374,15 +374,16 @@ func (c *RenderPassCache) setObjectName(objectType vk.ObjectType, handle uint64,
 	if !c.cmds.HasDebugUtils() || handle == 0 {
 		return
 	}
+	var pins runtime.Pinner
+	defer pins.Unpin()
 	nameBytes := append([]byte(name), 0)
 	nameInfo := vk.DebugUtilsObjectNameInfoEXT{
 		SType:        vk.StructureTypeDebugUtilsObjectNameInfoExt,
 		ObjectType:   objectType,
 		ObjectHandle: handle,
-		PObjectName:  &nameBytes[0],
+		PObjectName:  vk.Pin(&pins, &nameBytes[0]),
 	}
 	_ = c.cmds.SetDebugUtilsObjectNameEXT(c.device, &nameInfo)
-	runtime.KeepAlive(nameBytes)
 }
 
 // InvalidateFramebuffer removes framebuffers from cache that reference the given image view.
