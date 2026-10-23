@@ -3079,8 +3079,12 @@ func vertexStrideDesc(buffers ...gputypes.VertexBufferLayout) *hal.RenderPipelin
 }
 
 func TestValidateRenderPipelineDescriptor_VertexBuffers(t *testing.T) {
+	// Every attribute gets a shader location of its own: two at one are
+	// an error of their own.
+	var location uint32
 	float32x4 := func(offset uint64) gputypes.VertexAttribute {
-		return gputypes.VertexAttribute{Format: gputypes.VertexFormatFloat32x4, Offset: offset}
+		location++
+		return gputypes.VertexAttribute{Format: gputypes.VertexFormatFloat32x4, Offset: offset, ShaderLocation: location - 1}
 	}
 	layout := func(stride uint64, attrs ...gputypes.VertexAttribute) gputypes.VertexBufferLayout {
 		return gputypes.VertexBufferLayout{ArrayStride: stride, StepMode: gputypes.VertexStepModeVertex, Attributes: attrs}

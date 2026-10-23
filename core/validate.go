@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/bits"
+	"slices"
 
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
@@ -430,13 +431,27 @@ func ValidateRenderPipelineDescriptor(desc *hal.RenderPipelineDescriptor, limits
 		}
 	}
 
-	// RP8: Color target formats must be color formats (not depth/stencil).
-	// Rust: resource.rs:4083-4085 — FormatNotColor
+	// RP8: Color target formats must be color formats (not depth/stencil),
+	// renderable, and blendable when the target blends.
+	// Rust: resource.rs:4083-4085 — FormatNotColor, FormatNotRenderable, FormatNotBlendable
 	if desc.Fragment != nil {
 		for i, ct := range desc.Fragment.Targets {
-			if ct.Format != gputypes.TextureFormatUndefined && isDepthStencilFormat(ct.Format) {
+			if ct.Format == gputypes.TextureFormatUndefined {
+				continue
+			}
+			kind := CreateRenderPipelineErrorKind(-1)
+			ff := GuaranteedFormatFeatures(ct.Format, features)
+			switch {
+			case isDepthStencilFormat(ct.Format):
+				kind = CreateRenderPipelineErrorColorTargetDepthFormat
+			case ff.Usages&gputypes.TextureUsageRenderAttachment == 0:
+				kind = CreateRenderPipelineErrorColorTargetNotRenderable
+			case ct.Blend != nil && !ff.Blendable:
+				kind = CreateRenderPipelineErrorColorTargetNotBlendable
+			}
+			if kind >= 0 {
 				return &CreateRenderPipelineError{
-					Kind:        CreateRenderPipelineErrorColorTargetDepthFormat,
+					Kind:        kind,
 					Label:       label,
 					TargetIndex: uint32(i),
 					Format:      ct.Format.String(),
@@ -490,6 +505,51 @@ func ValidateRenderPipelineDescriptor(desc *hal.RenderPipelineDescriptor, limits
 	return validateRenderPipelineFormatFeatures(desc, features)
 }
 
+// validateVertexAttributes checks the vertex buffers and their attributes
+// against the vertex limits: no more buffers than MaxVertexBuffers, no more
+// attributes than MaxVertexAttributes, each attribute at its own shader
+// location below MaxVertexAttributes and at an offset aligned to
+// min(4, its format's size).
+//
+// Reference: wgpu-core device/resource.rs create_render_pipeline
+// (TooManyVertexBuffers, TooManyVertexAttributes,
+// VertexAttributeLocationTooLarge, ShaderLocationClash,
+// InvalidVertexAttributeOffset)
+func validateVertexAttributes(buffers []gputypes.VertexBufferLayout, label string, limits gputypes.Limits) error {
+	if limits.MaxVertexBuffers > 0 && uint32(len(buffers)) > limits.MaxVertexBuffers { //nolint:gosec // len bounded by memory
+		return &CreateRenderPipelineError{Kind: CreateRenderPipelineErrorTooManyVertexBuffers, Label: label,
+			Count: uint32(len(buffers)), Limit: limits.MaxVertexBuffers} //nolint:gosec // len bounded by memory
+	}
+	var total uint32
+	for i := range buffers {
+		total += uint32(len(buffers[i].Attributes)) //nolint:gosec // len bounded by memory
+	}
+	if limits.MaxVertexAttributes > 0 && total > limits.MaxVertexAttributes {
+		return &CreateRenderPipelineError{Kind: CreateRenderPipelineErrorTooManyVertexAttributes, Label: label,
+			Count: total, Limit: limits.MaxVertexAttributes}
+	}
+	var seen []uint32
+	for i := range buffers {
+		for j, attr := range buffers[i].Attributes {
+			fail := func(kind CreateRenderPipelineErrorKind) error {
+				return &CreateRenderPipelineError{Kind: kind, Label: label, BufferIndex: uint32(i), AttributeIndex: uint32(j), //nolint:gosec // indices bounded by the limits
+					Location: attr.ShaderLocation, Limit: limits.MaxVertexAttributes,
+					AttributeOffset: attr.Offset, AttributeFormat: attr.Format.String()}
+			}
+			switch {
+			case limits.MaxVertexAttributes > 0 && attr.ShaderLocation >= limits.MaxVertexAttributes:
+				return fail(CreateRenderPipelineErrorVertexLocationTooLarge)
+			case slices.Contains(seen, attr.ShaderLocation):
+				return fail(CreateRenderPipelineErrorVertexLocationClash)
+			case attr.Offset%min(4, max(attr.Format.Size(), 1)) != 0:
+				return fail(CreateRenderPipelineErrorVertexAttributeMisaligned)
+			}
+			seen = append(seen, attr.ShaderLocation)
+		}
+	}
+	return nil
+}
+
 // validateVertexBuffers checks RP10 vertex buffer layout constraints.
 //
 // WebGPU spec (GPUVertexBufferLayout validation):
@@ -505,6 +565,9 @@ func ValidateRenderPipelineDescriptor(desc *hal.RenderPipelineDescriptor, limits
 // backend emulates it. The attribute check above already handles stride 0 the
 // way the spec does, so lifting this rejection needs no other change.
 func validateVertexBuffers(buffers []gputypes.VertexBufferLayout, label string, limits gputypes.Limits) error {
+	if err := validateVertexAttributes(buffers, label, limits); err != nil {
+		return err
+	}
 	maxStride := uint64(limits.MaxVertexBufferArrayStride)
 	for i := range buffers {
 		vb := &buffers[i]

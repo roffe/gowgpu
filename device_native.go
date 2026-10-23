@@ -766,6 +766,10 @@ func (d *Device) CreateRenderPipeline(desc *RenderPipelineDescriptor) (*RenderPi
 		layout = autoLayout
 		halDesc.Layout = layout.hal
 	}
+	if err := checkRenderPipelineShaders(desc, layout); err != nil {
+		autoLayout.releaseAuto()
+		return nil, fmt.Errorf("wgpu: CreateRenderPipeline %q: %w", desc.Label, err)
+	}
 
 	halPipeline, err := halDevice.CreateRenderPipeline(halDesc)
 	if err != nil {
@@ -830,6 +834,26 @@ func (d *Device) CreateRenderPipeline(desc *RenderPipelineDescriptor) (*RenderPi
 		lateSizedBufferGroups: lateGroups,
 		ref:                   core.NewResourceRef("RenderPipeline:"+desc.Label, rpOnZero),
 	}, nil
+}
+
+// checkRenderPipelineShaders checks the shaders of a render pipeline
+// against its layout, vertex buffers and color targets.
+func checkRenderPipelineShaders(desc *RenderPipelineDescriptor, layout *PipelineLayout) error {
+	if err := checkStageBindings(desc.Vertex.Module, desc.Vertex.EntryPoint, ir.StageVertex, ShaderStageVertex, layout.bindGroupLayouts); err != nil {
+		return fmt.Errorf("vertex stage: %w", err)
+	}
+	if err := checkVertexInputs(desc.Vertex.Module, desc.Vertex.EntryPoint, desc.Vertex.Buffers); err != nil {
+		return err
+	}
+	if fs := desc.Fragment; fs != nil {
+		if err := checkStageBindings(fs.Module, fs.EntryPoint, ir.StageFragment, ShaderStageFragment, layout.bindGroupLayouts); err != nil {
+			return fmt.Errorf("fragment stage: %w", err)
+		}
+		if err := checkFragmentOutputs(fs.Module, fs.EntryPoint, fs.Targets); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // fragmentShaderModule extracts the ShaderModule from a FragmentState, or nil if absent.
@@ -913,6 +937,10 @@ func (d *Device) CreateComputePipeline(desc *ComputePipelineDescriptor) (*Comput
 		}
 		layout = autoLayout
 		halDesc.Layout = layout.hal
+	}
+	if err := checkStageBindings(desc.Module, desc.EntryPoint, ir.StageCompute, ShaderStageCompute, layout.bindGroupLayouts); err != nil {
+		autoLayout.releaseAuto()
+		return nil, fmt.Errorf("wgpu: CreateComputePipeline %q: %w", desc.Label, err)
 	}
 
 	halPipeline, err := halDevice.CreateComputePipeline(halDesc)

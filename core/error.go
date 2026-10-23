@@ -571,6 +571,27 @@ const (
 	// the native backends do not emulate it yet and disagree about what 0 means,
 	// so it is rejected until they do.
 	CreateRenderPipelineErrorVertexStrideZero
+	// CreateRenderPipelineErrorTooManyVertexBuffers indicates more vertex
+	// buffers than Limits.MaxVertexBuffers.
+	CreateRenderPipelineErrorTooManyVertexBuffers
+	// CreateRenderPipelineErrorTooManyVertexAttributes indicates more vertex
+	// attributes, over all buffers, than Limits.MaxVertexAttributes.
+	CreateRenderPipelineErrorTooManyVertexAttributes
+	// CreateRenderPipelineErrorVertexLocationTooLarge indicates a vertex
+	// attribute shader location of Limits.MaxVertexAttributes or more.
+	CreateRenderPipelineErrorVertexLocationTooLarge
+	// CreateRenderPipelineErrorVertexLocationClash indicates two vertex
+	// attributes with one shader location.
+	CreateRenderPipelineErrorVertexLocationClash
+	// CreateRenderPipelineErrorVertexAttributeMisaligned indicates a vertex
+	// attribute offset that is not a multiple of min(4, its format's size).
+	CreateRenderPipelineErrorVertexAttributeMisaligned
+	// CreateRenderPipelineErrorColorTargetNotRenderable indicates a color
+	// target format WebGPU does not render to.
+	CreateRenderPipelineErrorColorTargetNotRenderable
+	// CreateRenderPipelineErrorColorTargetNotBlendable indicates blending on
+	// a color target format that does not blend.
+	CreateRenderPipelineErrorColorTargetNotBlendable
 )
 
 // CreateRenderPipelineError represents an error during render pipeline creation.
@@ -599,7 +620,11 @@ type CreateRenderPipelineError struct {
 	// AttributeFormat is the attribute vertex format for
 	// CreateRenderPipelineErrorVertexAttributeOutOfStride.
 	AttributeFormat string
-	HALError        error
+	// Location is the shader location of a vertex attribute, Count and Limit
+	// a count over its limit, for the vertex limit errors.
+	Location     uint32
+	Count, Limit uint32
+	HALError     error
 }
 
 // Error implements the error interface.
@@ -656,6 +681,23 @@ func (e *CreateRenderPipelineError) Error() string {
 	case CreateRenderPipelineErrorVertexStrideZero:
 		return fmt.Sprintf("render pipeline %q: vertex buffer [%d] arrayStride 0 (broadcast) is not supported on native backends yet",
 			label, e.BufferIndex)
+	case CreateRenderPipelineErrorTooManyVertexBuffers:
+		return fmt.Sprintf("render pipeline %q: %d vertex buffers, maxVertexBuffers is %d", label, e.Count, e.Limit)
+	case CreateRenderPipelineErrorTooManyVertexAttributes:
+		return fmt.Sprintf("render pipeline %q: %d vertex attributes, maxVertexAttributes is %d", label, e.Count, e.Limit)
+	case CreateRenderPipelineErrorVertexLocationTooLarge:
+		return fmt.Sprintf("render pipeline %q: vertex buffer [%d] attribute [%d] shader location %d is not below maxVertexAttributes %d",
+			label, e.BufferIndex, e.AttributeIndex, e.Location, e.Limit)
+	case CreateRenderPipelineErrorVertexLocationClash:
+		return fmt.Sprintf("render pipeline %q: vertex buffer [%d] attribute [%d] shader location %d is another attribute's too",
+			label, e.BufferIndex, e.AttributeIndex, e.Location)
+	case CreateRenderPipelineErrorVertexAttributeMisaligned:
+		return fmt.Sprintf("render pipeline %q: vertex buffer [%d] attribute [%d] (%s at offset %d) is not aligned to its format",
+			label, e.BufferIndex, e.AttributeIndex, e.AttributeFormat, e.AttributeOffset)
+	case CreateRenderPipelineErrorColorTargetNotRenderable:
+		return fmt.Sprintf("render pipeline %q: color target [%d] format %s is not renderable", label, e.TargetIndex, e.Format)
+	case CreateRenderPipelineErrorColorTargetNotBlendable:
+		return fmt.Sprintf("render pipeline %q: color target [%d] format %s does not blend", label, e.TargetIndex, e.Format)
 	default:
 		return fmt.Sprintf("render pipeline %q: unknown error", label)
 	}
