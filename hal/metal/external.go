@@ -125,7 +125,7 @@ func (d *Device) encodeExternalCopy(blit ID, c externalCopy) {
 		t := c.dsts[0]
 		size := MTLSize{Width: NSUInteger(t.width), Height: NSUInteger(t.height), Depth: 1}
 		msgSendVoid(blit, Sel("copyFromBuffer:sourceOffset:sourceBytesPerRow:sourceBytesPerImage:sourceSize:toTexture:destinationSlice:destinationLevel:destinationOrigin:"),
-			argPointer(uintptr(c.src)), argUint64(0), argUint64(uint64(c.bytesPerRow)), argUint64(uint64(c.bytesPerRow)*uint64(t.height)),
+			argPointer(uintptr(c.src)), argUint64(0), argUint64(uint64(c.bytesPerRow)), argUint64(0),
 			argStruct(size, mtlSizeType), argPointer(uintptr(t.raw)), argUint64(0), argUint64(0), argStruct(MTLOrigin{}, mtlOriginType))
 		return
 	}
