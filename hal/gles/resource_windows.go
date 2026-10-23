@@ -84,6 +84,9 @@ func (s *Surface) Configure(_ hal.Device, config *hal.SurfaceConfiguration) erro
 	// Scope 2: Allocate swapchain FBO on hidden DC.
 	glCtx := s.ctx.Lock()
 	defer s.ctx.Unlock()
+	if err := s.ctx.Err(); err != nil {
+		return err
+	}
 
 	if err := s.reconfigureSwapchainFBOWith(glCtx, config.Format, config.Width, config.Height); err != nil {
 		return fmt.Errorf("gles: failed to configure swapchain framebuffer: %w", err)

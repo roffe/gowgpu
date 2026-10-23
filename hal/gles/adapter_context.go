@@ -36,6 +36,8 @@ type AdapterContext struct {
 
 	initOnce sync.Once
 	initErr  error
+
+	err error // why the lock held has no current context
 }
 
 // NewAdapterContext creates an AdapterContext with a hidden window DC.
@@ -95,11 +97,13 @@ func (c *AdapterContext) Lock() *gl.Context {
 	runtime.LockOSThread()
 
 	if err := c.ensureInit(); err != nil {
+		c.err = fmt.Errorf("gles: %w", err)
 		slog.Error("gles: AdapterContext.Lock init failed", "err", err)
 		return c.gl
 	}
 
 	if err := wgl.MakeCurrent(c.hiddenDC, c.hglrc); err != nil {
+		c.err = fmt.Errorf("gles: %w", err)
 		slog.Error("gles: AdapterContext.Lock MakeCurrent failed",
 			"err", err,
 			"hiddenDC", fmt.Sprintf("0x%x", c.hiddenDC),
@@ -117,11 +121,13 @@ func (c *AdapterContext) LockForDC(hdc wgl.HDC) *gl.Context {
 	runtime.LockOSThread()
 
 	if err := c.ensureInit(); err != nil {
+		c.err = fmt.Errorf("gles: %w", err)
 		slog.Error("gles: AdapterContext.LockForDC init failed", "err", err)
 		return c.gl
 	}
 
 	if err := wgl.MakeCurrent(hdc, c.hglrc); err != nil {
+		c.err = fmt.Errorf("gles: %w", err)
 		slog.Error("gles: AdapterContext.LockForDC MakeCurrent failed",
 			"err", err,
 			"hdc", fmt.Sprintf("0x%x", hdc),
@@ -143,9 +149,14 @@ func (c *AdapterContext) Unlock() {
 			slog.Error("gles: AdapterContext.Unlock UnmakeCurrent failed", "err", err)
 		}
 	}
+	c.err = nil
 	runtime.UnlockOSThread()
 	c.mu.Unlock()
 }
+
+// Err reports why the lock held has no current context, or nil when the
+// context is current: GL calls without one do nothing.
+func (c *AdapterContext) Err() error { return c.err }
 
 // GL returns the GL function table.
 // Safe to read without Lock; GL calls on the returned context require Lock.

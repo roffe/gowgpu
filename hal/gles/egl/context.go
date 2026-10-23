@@ -312,18 +312,20 @@ func createPbufferSurface(display EGLDisplay, config EGLConfig) EGLSurface {
 	return CreatePbufferSurface(display, config, &attribs[0])
 }
 
-// MakeCurrent makes this context current on the pbuffer (headless rendering).
+// MakeCurrent makes this context current on the pbuffer (headless
+// rendering). Its error is an *Error.
 func (c *Context) MakeCurrent() error {
 	if MakeCurrent(c.display, c.pbuffer, c.pbuffer, c.context) == False {
-		return fmt.Errorf("eglMakeCurrent failed: error 0x%x", GetError())
+		return LastError("eglMakeCurrent")
 	}
 	return nil
 }
 
-// MakeCurrentSurface makes this context current on a window surface (for Present).
+// MakeCurrentSurface makes this context current on a window surface (for
+// Present). Its error is an *Error.
 func (c *Context) MakeCurrentSurface(surface EGLSurface) error {
 	if MakeCurrent(c.display, surface, surface, c.context) == False {
-		return fmt.Errorf("eglMakeCurrent(surface) failed: error 0x%x", GetError())
+		return LastError("eglMakeCurrent(surface)")
 	}
 	return nil
 }

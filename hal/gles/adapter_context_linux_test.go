@@ -281,3 +281,43 @@ func TestHALInterface_AdapterContextWiring(t *testing.T) {
 		t.Errorf("Backend = %v, want BackendGL", adapters[0].Info.Backend)
 	}
 }
+
+// A failed EGL call loses the device when the context is gone and the
+// surface when the window surface is; other failures are errors only.
+func TestLostError(t *testing.T) {
+	for _, tc := range []struct {
+		code            egl.EGLInt
+		device, surface bool // lost
+	}{
+		{egl.ContextLost, true, false},
+		{egl.BadContext, true, false},
+		{egl.NotInitialized, true, false},
+		{egl.BadDisplay, true, false},
+		{egl.BadSurface, false, true},
+		{egl.BadNativeWindow, false, true},
+		{egl.BadAlloc, false, false},
+		{egl.BadMatch, false, false},
+	} {
+		err := lostError(&egl.Error{Op: "eglSwapBuffers", Code: tc.code})
+		if errors.Is(err, hal.ErrDeviceLost) != tc.device || errors.Is(err, hal.ErrSurfaceLost) != tc.surface {
+			t.Errorf("0x%x: %v, want device lost %v and surface lost %v", tc.code, err, tc.device, tc.surface)
+		}
+		var e *egl.Error
+		if !errors.As(err, &e) || e.Code != tc.code {
+			t.Errorf("0x%x: %v does not wrap the EGL error", tc.code, err)
+		}
+	}
+}
+
+func TestAdapterContext_LockOnDestroyedContextReportsIt(t *testing.T) {
+	ctx := NewAdapterContext(nil, &gl.Context{}, false)
+	ctx.Lock()
+	err := ctx.Err()
+	ctx.Unlock()
+	if err == nil {
+		t.Fatal("a lock without an EGL context reported no error")
+	}
+	if _, err := (&Queue{ctx: ctx}).Submit(nil); err == nil {
+		t.Fatal("Submit without an EGL context reported no error")
+	}
+}

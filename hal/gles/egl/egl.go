@@ -204,6 +204,17 @@ func GetError() EGLInt {
 	return result
 }
 
+// Error is a failed EGL call with the error eglGetError gave for it.
+type Error struct {
+	Op   string // the call, such as eglMakeCurrent
+	Code EGLInt
+}
+
+func (e *Error) Error() string { return fmt.Sprintf("%s failed: error 0x%x", e.Op, e.Code) }
+
+// LastError is the Error of op, the call that failed last on this thread.
+func LastError(op string) *Error { return &Error{Op: op, Code: GetError()} }
+
 // GetDisplay returns an EGL display connection.
 func GetDisplay(displayID EGLNativeDisplayType) EGLDisplay {
 	var result EGLDisplay

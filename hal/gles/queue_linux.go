@@ -45,6 +45,9 @@ type Queue struct {
 func (q *Queue) Submit(commandBuffers []hal.CommandBuffer) (uint64, error) {
 	glCtx := q.ctx.Lock()
 	defer q.ctx.Unlock()
+	if err := q.ctx.Err(); err != nil {
+		return 0, err
+	}
 	if q.ctx.OnHelper() {
 		return 0, errOtherThread
 	}
@@ -127,6 +130,9 @@ func (q *Queue) WriteBuffer(buffer hal.Buffer, offset uint64, data []byte) error
 
 	glCtx := q.ctx.Lock()
 	defer q.ctx.Unlock()
+	if err := q.ctx.Err(); err != nil {
+		return err
+	}
 
 	glCtx.BindBuffer(buf.target, buf.id)
 	glCtx.BufferSubData(buf.target, int(offset), len(data), unsafe.Pointer(&data[0]))
@@ -143,6 +149,9 @@ func (q *Queue) WriteTexture(dst *hal.ImageCopyTexture, data []byte, layout *hal
 
 	glCtx := q.ctx.Lock()
 	defer q.ctx.Unlock()
+	if err := q.ctx.Err(); err != nil {
+		return err
+	}
 	return writeTexture(glCtx, tex, dst, data, layout, size)
 }
 
@@ -159,14 +168,27 @@ func (q *Queue) WriteTexture(dst *hal.ImageCopyTexture, data []byte, layout *hal
 // eglSwapBuffersWithDamageKHR as compositor hints. EGL uses bottom-left
 // origin, so Y coordinates are flipped here. When the extension is unavailable
 // or no rects are provided, the standard eglSwapBuffers path is used.
+//
+// A window surface EGL reports gone gives hal.ErrSurfaceLost, and its EGL
+// surface is destroyed, for the next Configure to make a new one.
 func (q *Queue) Present(surface hal.Surface, _ hal.SurfaceTexture, damageRects []image.Rectangle) error {
 	surf, ok := surface.(*Surface)
 	if !ok {
 		return fmt.Errorf("gles: invalid surface type")
 	}
+	err := q.present(surf, damageRects)
+	if errors.Is(err, hal.ErrSurfaceLost) && surf.eglSurface != 0 {
+		surf.destroyEGLSurface()
+	}
+	return err
+}
 
+func (q *Queue) present(surf *Surface, damageRects []image.Rectangle) error {
 	glCtx := q.ctx.LockForSurface(surf.eglSurface)
 	defer q.ctx.Unlock()
+	if err := q.ctx.Err(); err != nil {
+		return err
+	}
 	if q.ctx.OnHelper() {
 		return errOtherThread
 	}
@@ -215,19 +237,16 @@ func (q *Queue) Present(surface hal.Surface, _ hal.SurfaceTexture, damageRects [
 				int32(r.Dy()),
 			)
 		}
-		result := egl.SwapBuffersWithDamage(surf.eglDisplay, surf.eglSurface, &ints[0], int32(len(damageRects)))
-		if result == egl.False {
-			return fmt.Errorf("gles: eglSwapBuffersWithDamageKHR failed: error 0x%x", egl.GetError())
+		if egl.SwapBuffersWithDamage(surf.eglDisplay, surf.eglSurface, &ints[0], int32(len(damageRects))) == egl.False {
+			return lostError(egl.LastError("eglSwapBuffersWithDamageKHR"))
 		}
 		return nil
 	}
 
 	// Standard full-surface swap.
-	result := egl.SwapBuffers(surf.eglDisplay, surf.eglSurface)
-	if result == egl.False {
-		return fmt.Errorf("gles: eglSwapBuffers failed: error 0x%x", egl.GetError())
+	if egl.SwapBuffers(surf.eglDisplay, surf.eglSurface) == egl.False {
+		return lostError(egl.LastError("eglSwapBuffers"))
 	}
-
 	return nil
 }
 

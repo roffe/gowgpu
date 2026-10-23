@@ -6,11 +6,13 @@
 package gles
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"runtime"
 	"sync"
 
+	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/gles/egl"
 	"github.com/roffe/gowgpu/hal/gles/gl"
 )
@@ -44,6 +46,28 @@ type AdapterContext struct {
 	keepCurrent bool
 	helper      *egl.Context
 	onHelper    bool // the lock held now runs on helper
+
+	err error // why the lock held has no current context
+}
+
+// errNoContext is the error of a lock on a destroyed AdapterContext.
+var errNoContext = errors.New("gles: the GL context is destroyed")
+
+// lostError is the error a call reports for err, the error of a failed EGL
+// call: hal.ErrDeviceLost when the context is gone, as after a power event
+// (EGL_CONTEXT_LOST) or with its display terminated, and hal.ErrSurfaceLost
+// when the window surface or its native window is.
+func lostError(err error) error {
+	var e *egl.Error
+	if errors.As(err, &e) {
+		switch e.Code {
+		case egl.ContextLost, egl.BadContext, egl.NotInitialized, egl.BadDisplay:
+			return fmt.Errorf("gles: %w: %w", hal.ErrDeviceLost, err)
+		case egl.BadSurface, egl.BadNativeWindow:
+			return fmt.Errorf("gles: %w: %w", hal.ErrSurfaceLost, err)
+		}
+	}
+	return fmt.Errorf("gles: %w", err)
 }
 
 // NewAdapterContext wraps an already-created EGL context and GL function table.
@@ -65,6 +89,7 @@ func (c *AdapterContext) Lock() *gl.Context {
 	runtime.LockOSThread()
 
 	if c.eglCtx == nil {
+		c.err = errNoContext
 		slog.Error("gles: AdapterContext.Lock: nil egl context")
 		return c.gl
 	}
@@ -73,6 +98,7 @@ func (c *AdapterContext) Lock() *gl.Context {
 		return c.gl
 	}
 	if err := c.eglCtx.MakeCurrent(); err != nil {
+		c.err = lostError(err)
 		slog.Error("gles: AdapterContext.Lock MakeCurrent failed", "err", err)
 	}
 	return c.gl
@@ -87,6 +113,7 @@ func (c *AdapterContext) LockForSurface(surf egl.EGLSurface) *gl.Context {
 	runtime.LockOSThread()
 
 	if c.eglCtx == nil {
+		c.err = errNoContext
 		slog.Error("gles: AdapterContext.LockForSurface: nil egl context")
 		return c.gl
 	}
@@ -95,6 +122,7 @@ func (c *AdapterContext) LockForSurface(surf egl.EGLSurface) *gl.Context {
 		return c.gl
 	}
 	if err := c.eglCtx.MakeCurrentSurface(surf); err != nil {
+		c.err = lostError(err)
 		slog.Error("gles: AdapterContext.LockForSurface MakeCurrent failed",
 			"err", err,
 			"surface", fmt.Sprintf("0x%x", surf))
@@ -125,19 +153,22 @@ func (c *AdapterContext) bindKept(surf egl.EGLSurface) {
 		}
 		return
 	}
-	if err := egl.GetError(); err != egl.BadAccess {
-		slog.Error("gles: AdapterContext MakeCurrent failed", "err", fmt.Sprintf("0x%x", err), "surface", fmt.Sprintf("0x%x", surf))
+	if err := egl.LastError("eglMakeCurrent"); err.Code != egl.BadAccess {
+		c.err = lostError(err)
+		slog.Error("gles: AdapterContext MakeCurrent failed", "err", err, "surface", fmt.Sprintf("0x%x", surf))
 		return
 	}
 	if c.helper == nil {
 		h, err := c.eglCtx.NewShared()
 		if err != nil {
+			c.err = fmt.Errorf("gles: the context is current on another thread and no helper context could be made: %w", err)
 			slog.Error("gles: AdapterContext: the context is current on another thread and no helper context could be made", "err", err)
 			return
 		}
 		c.helper = h
 	}
 	if err := c.helper.MakeCurrent(); err != nil {
+		c.err = lostError(err)
 		slog.Error("gles: AdapterContext helper MakeCurrent failed", "err", err)
 		return
 	}
@@ -163,6 +194,11 @@ func (c *AdapterContext) ReleaseSurface(surf egl.EGLSurface) {
 // only shared objects exist and glFinish finishes nothing of the queue's.
 func (c *AdapterContext) OnHelper() bool { return c.onHelper }
 
+// Err reports why the lock held has no current context, wrapping
+// hal.ErrDeviceLost or hal.ErrSurfaceLost when that is what happened, or
+// nil when the context is current: GL calls without one do nothing.
+func (c *AdapterContext) Err() error { return c.err }
+
 // Unlock unmakes the GL context current, unpins the goroutine from the OS
 // thread, and releases the mutex.
 //
@@ -177,7 +213,7 @@ func (c *AdapterContext) Unlock() {
 				"err", fmt.Sprintf("0x%x", egl.GetError()))
 		}
 	}
-	c.onHelper = false
+	c.onHelper, c.err = false, nil
 	runtime.UnlockOSThread()
 	c.mu.Unlock()
 }
