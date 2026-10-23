@@ -1,0 +1,154 @@
+//go:build !(js && wasm)
+
+package wgpu
+
+import (
+	"testing"
+
+	"github.com/roffe/gowgpu/gputypes"
+)
+
+// greenAtHalfDepthShader draws a full-screen triangle at depth 0.5 in green.
+const greenAtHalfDepthShader = `
+@vertex fn vs_main(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
+	let x = f32(i32(vi & 1u) * 4 - 1);
+	let y = f32(i32(vi >> 1u) * 4 - 1);
+	return vec4<f32>(x, y, 0.5, 1.0);
+}
+@fragment fn fs_main() -> @location(0) vec4<f32> {
+	return vec4<f32>(0.0, 1.0, 0.0, 1.0);
+}
+`
+
+// dsDraw is a depth/stencil attachment to clear and the pipeline state to
+// draw greenAtHalfDepthShader against it with.
+type dsDraw struct {
+	format     gputypes.TextureFormat
+	state      DepthStencilState
+	depthClear float32
+	stencil    uint32 // the stencil clear value
+	ref        uint32 // the stencil reference
+}
+
+// drawGreenAgainst clears a pixTexture colour target red, clears a new
+// pixSide square texture of d.format to d's values, draws the green
+// triangle with d.state and returns the colour target's pixels: green where
+// the depth and stencil tests passed.
+func drawGreenAgainst(t *testing.T, device *Device, d dsDraw) []byte {
+	t.Helper()
+	ds, err := device.CreateTexture(&TextureDescriptor{
+		Label: "depth-stencil", Size: Extent3D{Width: pixSide, Height: pixSide, DepthOrArrayLayers: 1},
+		MipLevelCount: 1, SampleCount: 1, Dimension: TextureDimension2D, Format: d.format, Usage: TextureUsageRenderAttachment,
+	})
+	if err != nil {
+		t.Fatalf("CreateTexture(%s): %v", d.format, err)
+	}
+	defer ds.Release()
+	dsView, err := device.CreateTextureView(ds, nil)
+	if err != nil {
+		t.Fatalf("CreateTextureView: %v", err)
+	}
+	defer dsView.Release()
+	color, colorView := pixTexture(t, device, "color", TextureUsageRenderAttachment|TextureUsageCopySrc)
+	defer releaseTextureView(color, colorView)
+
+	module, err := device.CreateShaderModule(&ShaderModuleDescriptor{Label: "green", WGSL: greenAtHalfDepthShader})
+	if err != nil {
+		t.Fatalf("CreateShaderModule: %v", err)
+	}
+	defer module.Release()
+	state := d.state
+	state.Format = d.format
+	pipe, err := device.CreateRenderPipeline(&RenderPipelineDescriptor{
+		Label:        "green",
+		Vertex:       VertexState{Module: module, EntryPoint: "vs_main"},
+		Primitive:    gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList},
+		DepthStencil: &state,
+		Fragment: &FragmentState{Module: module, EntryPoint: "fs_main",
+			Targets: []gputypes.ColorTargetState{{Format: gputypes.TextureFormatRGBA8Unorm, WriteMask: gputypes.ColorWriteMaskAll}}},
+	})
+	if err != nil {
+		t.Fatalf("CreateRenderPipeline: %v", err)
+	}
+	defer pipe.Release()
+
+	att := &RenderPassDepthStencilAttachment{View: dsView}
+	if d.format.HasDepth() {
+		att.DepthLoadOp, att.DepthStoreOp, att.DepthClearValue = gputypes.LoadOpClear, gputypes.StoreOpStore, d.depthClear
+	}
+	if d.format.HasStencil() {
+		att.StencilLoadOp, att.StencilStoreOp, att.StencilClearValue = gputypes.LoadOpClear, gputypes.StoreOpStore, d.stencil
+	}
+	enc, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	pass, err := enc.BeginRenderPass(&RenderPassDescriptor{
+		ColorAttachments:       []RenderPassColorAttachment{{View: colorView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore, ClearValue: red}},
+		DepthStencilAttachment: att,
+	})
+	if err != nil {
+		t.Fatalf("BeginRenderPass: %v", err)
+	}
+	pass.SetPipeline(pipe)
+	pass.SetStencilReference(d.ref)
+	pass.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1})
+	if err := pass.End(); err != nil {
+		t.Fatalf("End: %v", err)
+	}
+	staging := readbackBuffer(t, device, "staging")
+	enc.CopyTextureToBuffer(color, staging, []BufferTextureCopy{{
+		BufferLayout: ImageDataLayout{BytesPerRow: pixRow, RowsPerImage: pixSide},
+		TextureBase:  ImageCopyTexture{Texture: color},
+		Size:         Extent3D{Width: pixSide, Height: pixSide, DepthOrArrayLayers: 1},
+	}})
+	finishAndSubmit(t, device, enc)
+	return readback(t, staging)
+}
+
+// lessThanCleared tests the triangle's depth against the cleared one.
+var lessThanCleared = DepthStencilState{DepthCompare: gputypes.CompareFunctionLess,
+	StencilFront: StencilFaceState{Compare: gputypes.CompareFunctionAlways},
+	StencilBack:  StencilFaceState{Compare: gputypes.CompareFunctionAlways}}
+
+// expectDepthTested draws against format's attachment cleared behind and in
+// front of the triangle.
+func expectDepthTested(t *testing.T, device *Device, format gputypes.TextureFormat) {
+	t.Helper()
+	expectPixels(t, "cleared behind the triangle", drawGreenAgainst(t, device, dsDraw{format: format, state: lessThanCleared, depthClear: 0.75}), 0, 255, 0, 255)
+	expectPixels(t, "cleared in front of the triangle", drawGreenAgainst(t, device, dsDraw{format: format, state: lessThanCleared, depthClear: 0.25}), 255, 0, 0, 255)
+}
+
+// TestDepthFormatsTestDepth draws against every depth format's attachment.
+// GL made Depth32Float as the unorm GL_DEPTH_COMPONENT32, which ES has no
+// such format for.
+func TestDepthFormatsTestDepth(t *testing.T) {
+	device, _ := newValidatedDevice(t)
+	for _, format := range []gputypes.TextureFormat{
+		gputypes.TextureFormatDepth16Unorm, gputypes.TextureFormatDepth24Plus,
+		gputypes.TextureFormatDepth24PlusStencil8, gputypes.TextureFormatDepth32Float,
+	} {
+		t.Run(format.String(), func(t *testing.T) { expectDepthTested(t, device, format) })
+	}
+}
+
+// TestDepth32FloatStencil8TestsDepth: GL made Depth32FloatStencil8 with a
+// transfer type its internal format doesn't take, so the texture had no
+// storage on any GL.
+func TestDepth32FloatStencil8TestsDepth(t *testing.T) {
+	device, _ := newValidatedDeviceWith(t, gputypes.Features(gputypes.FeatureDepth32FloatStencil8))
+	expectDepthTested(t, device, gputypes.TextureFormatDepth32FloatStencil8)
+}
+
+// TestStencil8Attachment draws against a Stencil8 attachment, which GL made
+// as RGBA8 and attached to the stencil attachment point, an incomplete
+// framebuffer that drew nothing.
+func TestStencil8Attachment(t *testing.T) {
+	device, _ := newValidatedDevice(t)
+	equal := DepthStencilState{DepthCompare: gputypes.CompareFunctionAlways,
+		StencilFront:    StencilFaceState{Compare: gputypes.CompareFunctionEqual},
+		StencilBack:     StencilFaceState{Compare: gputypes.CompareFunctionEqual},
+		StencilReadMask: 0xff, StencilWriteMask: 0xff}
+	expectPixels(t, "stencil equal to the reference", drawGreenAgainst(t, device, dsDraw{format: gputypes.TextureFormatStencil8, state: equal}), 0, 255, 0, 255)
+	expectPixels(t, "stencil not equal to the reference", drawGreenAgainst(t, device, dsDraw{format: gputypes.TextureFormatStencil8, state: equal, ref: 1}), 255, 0, 0, 255)
+}

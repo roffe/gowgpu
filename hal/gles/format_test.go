@@ -28,6 +28,9 @@ func TestGLFormat(t *testing.T) {
 		{gputypes.TextureFormatRGBA32Float, glFormat{gl.RGBA32F, gl.RGBA, gl.FLOAT}},
 		{gputypes.TextureFormatDepth16Unorm, glFormat{gl.DEPTH_COMPONENT16, gl.DEPTH_COMPONENT, gl.UNSIGNED_SHORT}},
 		{gputypes.TextureFormatDepth24PlusStencil8, glFormat{gl.DEPTH24_STENCIL8, gl.DEPTH_STENCIL, gl.UNSIGNED_INT_24_8}},
+		{gputypes.TextureFormatDepth32Float, glFormat{gl.DEPTH_COMPONENT32F, gl.DEPTH_COMPONENT, gl.FLOAT}},
+		{gputypes.TextureFormatDepth32FloatStencil8, glFormat{gl.DEPTH32F_STENCIL8, gl.DEPTH_STENCIL, gl.FLOAT_32_UNSIGNED_INT_24_8_REV}},
+		{gputypes.TextureFormatStencil8, glFormat{gl.DEPTH24_STENCIL8, gl.DEPTH_STENCIL, gl.UNSIGNED_INT_24_8}},
 	}
 	for _, tt := range tests {
 		got, ok := formatCaps{}.glFormat(tt.format)
@@ -37,6 +40,10 @@ func TestGLFormat(t *testing.T) {
 	}
 	if _, ok := (formatCaps{}).glFormat(gputypes.TextureFormat(9999)); ok {
 		t.Error("an unknown format got a GL format")
+	}
+	want := glFormat{gl.STENCIL_INDEX8, gl.STENCIL_INDEX, gl.UNSIGNED_BYTE}
+	if got, _ := (formatCaps{stencil8: true}).glFormat(gputypes.TextureFormatStencil8); got != want {
+		t.Errorf("Stencil8 with stencil-only textures is %#x, want %#x", got, want)
 	}
 }
 

@@ -69,15 +69,16 @@ var glFormats = map[gputypes.TextureFormat]glFormat{
 	gputypes.TextureFormatDepth16Unorm:         {gl.DEPTH_COMPONENT16, gl.DEPTH_COMPONENT, gl.UNSIGNED_SHORT},
 	gputypes.TextureFormatDepth24Plus:          {gl.DEPTH_COMPONENT24, gl.DEPTH_COMPONENT, gl.UNSIGNED_INT},
 	gputypes.TextureFormatDepth24PlusStencil8:  {gl.DEPTH24_STENCIL8, gl.DEPTH_STENCIL, gl.UNSIGNED_INT_24_8},
-	gputypes.TextureFormatDepth32Float:         {gl.DEPTH_COMPONENT32, gl.DEPTH_COMPONENT, gl.FLOAT},
-	gputypes.TextureFormatDepth32FloatStencil8: {gl.DEPTH32F_STENCIL8, gl.DEPTH_STENCIL, gl.FLOAT},
+	gputypes.TextureFormatDepth32Float:         {gl.DEPTH_COMPONENT32F, gl.DEPTH_COMPONENT, gl.FLOAT},
+	gputypes.TextureFormatDepth32FloatStencil8: {gl.DEPTH32F_STENCIL8, gl.DEPTH_STENCIL, gl.FLOAT_32_UNSIGNED_INT_24_8_REV},
 }
 
 // formatCaps is what a context offers beyond the formats of glFormats.
 type formatCaps struct {
-	es     bool
-	bgra8  bool // ES: EXT_texture_format_BGRA8888 or APPLE_texture_format_BGRA8888
-	norm16 bool // ES: EXT_texture_norm16, for the 16-bit unorm and snorm formats
+	es       bool
+	bgra8    bool // ES: EXT_texture_format_BGRA8888 or APPLE_texture_format_BGRA8888
+	norm16   bool // ES: EXT_texture_norm16, for the 16-bit unorm and snorm formats
+	stencil8 bool // STENCIL_INDEX8 textures: GL 4.4, ES 3.2, ARB_texture_stencil8, OES_texture_stencil8
 }
 
 // newFormatCaps reads the formats a context offers from its capabilities.
@@ -86,11 +87,21 @@ func newFormatCaps(caps *AdapterCapabilities) formatCaps {
 		es:     caps.IsES,
 		bgra8:  hasExtension(caps.Extensions, "GL_EXT_texture_format_BGRA8888", "GL_APPLE_texture_format_BGRA8888"),
 		norm16: hasExtension(caps.Extensions, "GL_EXT_texture_norm16"),
+		stencil8: glVersionAtLeast(caps.GLMajor, caps.GLMinor, caps.IsES, [2]int{3, 2}, [2]int{4, 4}) ||
+			hasExtension(caps.Extensions, "GL_ARB_texture_stencil8", "GL_OES_texture_stencil8"),
 	}
 }
 
 // glFormat returns how GL stores format, false when the context can't.
 func (fc formatCaps) glFormat(format gputypes.TextureFormat) (glFormat, bool) {
+	if format == gputypes.TextureFormatStencil8 {
+		// Without stencil-only textures, the stencil of a combined format,
+		// as Dawn does.
+		if fc.stencil8 {
+			return glFormat{gl.STENCIL_INDEX8, gl.STENCIL_INDEX, gl.UNSIGNED_BYTE}, true
+		}
+		return glFormat{gl.DEPTH24_STENCIL8, gl.DEPTH_STENCIL, gl.UNSIGNED_INT_24_8}, true
+	}
 	f, ok := glFormats[format]
 	if !ok || !fc.es {
 		return f, ok
@@ -125,10 +136,12 @@ func pixelSize(format, typ uint32) uint32 {
 	switch typ {
 	case gl.UNSIGNED_INT_2_10_10_10_REV, gl.UNSIGNED_INT_10F_11F_11F_REV, gl.UNSIGNED_INT_5_9_9_9_REV, gl.UNSIGNED_INT_24_8:
 		return 4
+	case gl.FLOAT_32_UNSIGNED_INT_24_8_REV:
+		return 8
 	}
 	var n uint32
 	switch format {
-	case gl.RED, gl.RED_INTEGER, gl.DEPTH_COMPONENT:
+	case gl.RED, gl.RED_INTEGER, gl.DEPTH_COMPONENT, gl.STENCIL_INDEX:
 		n = 1
 	case gl.RG, gl.RG_INTEGER:
 		n = 2

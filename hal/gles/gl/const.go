@@ -17,18 +17,19 @@ const (
 	TRUE  = 1
 
 	// Data types
-	BYTE                         = 0x1400
-	UNSIGNED_BYTE                = 0x1401
-	SHORT                        = 0x1402
-	UNSIGNED_SHORT               = 0x1403
-	INT                          = 0x1404
-	UNSIGNED_INT                 = 0x1405
-	FLOAT                        = 0x1406
-	HALF_FLOAT                   = 0x140B
-	UNSIGNED_INT_24_8            = 0x84FA
-	UNSIGNED_INT_2_10_10_10_REV  = 0x8368
-	UNSIGNED_INT_10F_11F_11F_REV = 0x8C3B
-	UNSIGNED_INT_5_9_9_9_REV     = 0x8C3E
+	BYTE                           = 0x1400
+	UNSIGNED_BYTE                  = 0x1401
+	SHORT                          = 0x1402
+	UNSIGNED_SHORT                 = 0x1403
+	INT                            = 0x1404
+	UNSIGNED_INT                   = 0x1405
+	FLOAT                          = 0x1406
+	HALF_FLOAT                     = 0x140B
+	UNSIGNED_INT_24_8              = 0x84FA
+	UNSIGNED_INT_2_10_10_10_REV    = 0x8368
+	UNSIGNED_INT_10F_11F_11F_REV   = 0x8C3B
+	UNSIGNED_INT_5_9_9_9_REV       = 0x8C3E
+	FLOAT_32_UNSIGNED_INT_24_8_REV = 0x8DAD
 
 	// Errors
 	NO_ERROR                      = 0
@@ -122,21 +123,24 @@ const (
 	MIRRORED_REPEAT = 0x8370
 
 	// Pixel formats
-	DEPTH_COMPONENT   = 0x1902
-	RED               = 0x1903
-	RG                = 0x8227
-	RGB               = 0x1907
-	RGBA              = 0x1908
-	DEPTH_STENCIL     = 0x84F9
-	RED_INTEGER       = 0x8D94
-	RG_INTEGER        = 0x8228
-	RGB_INTEGER       = 0x8D98
-	RGBA_INTEGER      = 0x8D99
-	BGRA              = 0x80E1
-	DEPTH_COMPONENT16 = 0x81A5
-	DEPTH_COMPONENT24 = 0x81A6
-	DEPTH_COMPONENT32 = 0x81A7
-	DEPTH24_STENCIL8  = 0x88F0
+	DEPTH_COMPONENT    = 0x1902
+	RED                = 0x1903
+	RG                 = 0x8227
+	RGB                = 0x1907
+	RGBA               = 0x1908
+	DEPTH_STENCIL      = 0x84F9
+	RED_INTEGER        = 0x8D94
+	RG_INTEGER         = 0x8228
+	RGB_INTEGER        = 0x8D98
+	RGBA_INTEGER       = 0x8D99
+	BGRA               = 0x80E1
+	DEPTH_COMPONENT16  = 0x81A5
+	DEPTH_COMPONENT24  = 0x81A6
+	DEPTH_COMPONENT32  = 0x81A7
+	DEPTH24_STENCIL8   = 0x88F0
+	DEPTH_COMPONENT32F = 0x8CAC
+	STENCIL_INDEX      = 0x1901
+	STENCIL_INDEX8     = 0x8D48
 
 	// Internal formats
 	R8                = 0x8229

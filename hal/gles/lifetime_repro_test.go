@@ -17,14 +17,26 @@ import (
 // AdapterContext, or skips when there is no EGL display to make one on.
 func newTestAdapterContext(t *testing.T) *AdapterContext {
 	t.Helper()
+	return newTestAdapterContextWith(t, egl.DefaultContextConfig())
+}
+
+// newTestESAdapterContext is newTestAdapterContext on an OpenGL ES 3
+// context, the highest one EGL has.
+func newTestESAdapterContext(t *testing.T) *AdapterContext {
+	t.Helper()
+	config := egl.DefaultContextConfig()
+	config.GLES, config.GLVersionMajor, config.GLVersionMinor, config.CoreProfile = true, 3, 0, false
+	return newTestAdapterContextWith(t, config)
+}
+
+func newTestAdapterContextWith(t *testing.T, config egl.ContextConfig) *AdapterContext {
+	t.Helper()
 	runtime.LockOSThread()
 	t.Cleanup(runtime.UnlockOSThread)
 
 	if err := egl.Init(); err != nil {
 		t.Skipf("egl.Init() failed: %v", err)
 	}
-	config := egl.DefaultContextConfig()
-	config.GLES = false
 	eglCtx, err := egl.NewContext(config)
 	if err != nil {
 		t.Skipf("egl.NewContext() failed: %v", err)
