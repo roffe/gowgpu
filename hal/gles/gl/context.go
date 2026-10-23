@@ -6,6 +6,7 @@
 package gl
 
 import (
+	"math"
 	"syscall"
 	"unsafe"
 )
@@ -428,15 +429,25 @@ func (c *Context) ClearColor(r, g, b, a float32) {
 // Desktop GL uses glClearDepth (double); GLES uses glClearDepthf (float).
 // Both variants are loaded via getProcAddr in init.
 func (c *Context) ClearDepth(depth float64) {
-	syscall.SyscallN(c.glClearDepth, uintptr(*(*uint64)(unsafe.Pointer(&depth))))
+	syscall.SyscallN(c.glClearDepth, doubleArg(depth)...)
 }
 
 // DepthRange sets the mapping of NDC depth to window depth.
 // Desktop GL: glDepthRange(double, double). GLES: glDepthRangef(float, float).
 func (c *Context) DepthRange(near, far float64) {
-	syscall.SyscallN(c.glDepthRange,
-		uintptr(*(*uint64)(unsafe.Pointer(&near))),
-		uintptr(*(*uint64)(unsafe.Pointer(&far))))
+	args := append(doubleArg(near), doubleArg(far)...)
+	syscall.SyscallN(c.glDepthRange, args...)
+}
+
+// doubleArg is a double argument as SyscallN passes it: one uintptr on
+// 64-bit Windows, which puts it in a register, and both halves of it on 386,
+// which puts it on the stack.
+func doubleArg(v float64) []uintptr {
+	bits := math.Float64bits(v)
+	if unsafe.Sizeof(uintptr(0)) < 8 {
+		return []uintptr{uintptr(bits), uintptr(bits >> 32)}
+	}
+	return []uintptr{uintptr(bits)}
 }
 
 func (c *Context) Viewport(x, y, width, height int32) {
