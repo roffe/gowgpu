@@ -373,6 +373,7 @@ func (s *Surface) GetCurrentTexture() (*SurfaceTexture, bool, error) {
 				size,
 				1, 1, "surface",
 			)
+			s.swapchainTexture.MarkSurface()
 		}
 	}
 

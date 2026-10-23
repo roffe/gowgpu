@@ -150,6 +150,7 @@ type passScope struct {
 type scopeTexture struct {
 	index   track.TrackerIndex
 	texture hal.Texture
+	surface bool
 }
 
 type scopeBuffer struct {
@@ -181,15 +182,37 @@ func (p *passScope) clearScratch() {
 // usage of the same texture earlier in the scope is a conflict. A texture
 // the scope does not know yet is listed with its HAL handle; nil means no
 // barrier can be recorded for it.
-func (p *passScope) addTexture(index track.TrackerIndex, texture hal.Texture, usage track.TextureUses) error {
+func (p *passScope) addTexture(index track.TrackerIndex, texture hal.Texture, usage track.TextureUses, surface bool) error {
 	known := p.textures.IsUsed(index)
 	if err := p.textures.SetUsage(index, usage); err != nil {
 		return err
 	}
 	if !known {
-		p.texHAL = append(p.texHAL, scopeTexture{index: index, texture: texture})
+		p.texHAL = append(p.texHAL, scopeTexture{index: index, texture: texture, surface: surface})
 	}
 	return nil
+}
+
+// surfaceFirstUses appends to dst the transitions into the scope of the
+// surface textures it is the first in the command buffer to use, other than
+// as attachments, which the render pass moves itself: the submit-time
+// barriers leave surface textures out, and a texture a pass samples or a
+// dispatch writes needs its barrier from here. Called before the scope is
+// applied to tracker.
+func (p *passScope) surfaceFirstUses(tracker *track.EncoderTextureTracker, dst []track.TexturePendingTransition) []track.TexturePendingTransition {
+	const attachment = track.TextureUsesColorTarget | track.TextureUsesDepthStencilRead | track.TextureUsesDepthStencilWrite
+	for _, st := range p.texHAL {
+		if !st.surface || tracker.IsUsed(st.index) {
+			continue
+		}
+		if usage := p.textures.GetUsage(st.index); usage&attachment == 0 {
+			dst = append(dst, track.TexturePendingTransition{
+				Index: st.index,
+				Usage: track.TextureStateTransition{From: track.TextureUsesUninitialized, To: usage},
+			})
+		}
+	}
+	return dst
 }
 
 // addView is addTexture for an attachment view's parent texture. Views
@@ -209,7 +232,7 @@ func (p *passScope) addView(view *TextureView, usage track.TextureUses, guard Sn
 	if texture == nil {
 		texture = view.Parent.Raw(guard)
 	}
-	return p.addTexture(td.Index(), texture, usage)
+	return p.addTexture(td.Index(), texture, usage, view.Parent.surface)
 }
 
 // addBuffer is addTexture for a buffer.
@@ -762,7 +785,9 @@ func (e *CoreCommandEncoder) recordPassTransitions() error {
 		return nil
 	}
 	scope := &m.pass
+	surfaces := scope.surfaceFirstUses(m.textureTracker, nil)
 	scope.texTransitions = m.textureTracker.SetFromScopeInto(scope.textures, scope.texTransitions[:0])
+	scope.texTransitions = append(scope.texTransitions, surfaces...)
 	scope.bufTransitions = m.bufferTracker.SetFromScopeInto(scope.buffers, scope.bufTransitions[:0])
 	defer scope.clearScratch()
 	needed := len(scope.texTransitions) > 0 || len(scope.bufTransitions) > 0
@@ -774,15 +799,10 @@ func (e *CoreCommandEncoder) recordPassTransitions() error {
 		return ErrResourceDestroyed
 	}
 
-	if !scope.split {
-		// An encoder's first pass: every usage in it is a first usage, so
-		// there is nothing to transition. Unless commands were recorded
-		// while the pass was open, which the API forbids; then the barriers
-		// go after the pass, late, so the HAL state at least matches the
-		// tracker from here on.
-		if needed {
-			scope.recordBarriers(*halEncoder)
-		}
+	if !scope.split && !needed {
+		// An encoder's first pass: every usage in it is a first usage, which
+		// the submit-time barriers take care of, but for a surface texture
+		// it samples.
 		return nil
 	}
 
@@ -1440,7 +1460,7 @@ func (e *CoreCommandEncoder) RecordPassTextureUsage(texture *Texture, halTexture
 	if m.activePass == nil {
 		return nil
 	}
-	return m.pass.addTexture(td.Index(), halTexture, usage)
+	return m.pass.addTexture(td.Index(), halTexture, usage, texture.surface)
 }
 
 // RecordPassBufferUsage is RecordPassTextureUsage for a buffer a bind group
@@ -1976,7 +1996,9 @@ func (p *CoreComputePassEncoder) flushScope() {
 		return
 	}
 	defer scope.clear()
+	surfaces := scope.surfaceFirstUses(m.textureTracker, nil)
 	scope.texTransitions = m.textureTracker.SetFromScopeInto(scope.textures, scope.texTransitions[:0])
+	scope.texTransitions = append(scope.texTransitions, surfaces...)
 	scope.bufTransitions = m.bufferTracker.SetFromScopeInto(scope.buffers, scope.bufTransitions[:0])
 	if len(scope.texTransitions) == 0 && len(scope.bufTransitions) == 0 {
 		return
