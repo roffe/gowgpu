@@ -2333,7 +2333,11 @@ func (d *Device) compileHLSL(module *ShaderModule, ep *ir.EntryPoint, opts *hlsl
 	if err != nil {
 		return nil, fmt.Errorf("load d3dcompiler: %w", err)
 	}
-	bytecode, err := compiler.Compile(hlslSource, hlslName, target)
+	flags := uint32(d3dcompile.FlagIEEEStrictness)
+	if d.instance.flags&gputypes.InstanceFlagsDebug != 0 {
+		flags |= d3dcompile.FlagDebug | d3dcompile.FlagSkipOptimization
+	}
+	bytecode, err := compiler.CompileWithFlags(hlslSource, hlslName, target, flags, 0)
 	if err != nil {
 		return nil, fmt.Errorf("D3DCompile entry point %q (hlsl: %q, target: %s): %w", ep.Name, hlslName, target, err)
 	}

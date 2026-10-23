@@ -58,6 +58,13 @@ const (
 	TargetCS51 = "cs_5_1" // Compute shader, Shader Model 5.1
 )
 
+// D3DCompile Flags1 bits.
+const (
+	FlagDebug            = 1 << 0  // D3DCOMPILE_DEBUG
+	FlagSkipOptimization = 1 << 2  // D3DCOMPILE_SKIP_OPTIMIZATION
+	FlagIEEEStrictness   = 1 << 13 // D3DCOMPILE_IEEE_STRICTNESS
+)
+
 // id3dBlobVtbl is the COM vtable for ID3DBlob.
 type id3dBlobVtbl struct {
 	QueryInterface   uintptr
