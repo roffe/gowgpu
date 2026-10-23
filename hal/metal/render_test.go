@@ -118,3 +118,29 @@ func TestPointListDrawsOnePixel(t *testing.T) {
 		}
 	}
 }
+
+// TestCompileOptionsPreserveInvariance checks the option @invariant needs,
+// and that a shader using it builds and draws.
+func TestCompileOptionsPreserveInvariance(t *testing.T) {
+	device, queue := newMetalTextureCopyTestDevice(t)
+	options := newCompileOptions()
+	defer Release(options)
+	if !MsgSendBool(options, Sel("preserveInvariance")) {
+		t.Error("compile options do not preserve invariance")
+	}
+	pipeline := renderTestPipeline(t, device, `
+@vertex fn vs_main(@builtin(vertex_index) vi: u32) -> @invariant @builtin(position) vec4<f32> {
+	return vec4<f32>(f32(i32(vi & 1u) * 4 - 1), f32(i32(vi >> 1u) * 4 - 1), 0.0, 1.0);
+}
+@fragment fn fs_main() -> @location(0) vec4<f32> { return vec4<f32>(0.0, 1.0, 0.0, 1.0); }
+`, nil, gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList})
+	pixels := renderTestDraw(t, device, queue, func(pass *RenderPassEncoder) {
+		pass.SetPipeline(pipeline)
+		pass.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1})
+	})
+	for i := 0; i < len(pixels); i += 4 {
+		if got := pixels[i : i+4]; string(got) != string([]byte{0, 255, 0, 255}) {
+			t.Fatalf("pixel %d = %v, want green", i/4, got)
+		}
+	}
+}

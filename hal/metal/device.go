@@ -679,10 +679,12 @@ func (d *Device) compileLibrary(module *ShaderModule, layout *PipelineLayout, st
 
 	mslString := NSString(mslSource)
 	defer Release(mslString)
+	compileOptions := newCompileOptions()
+	defer Release(compileOptions)
 
 	var errorPtr ID
 	library := msgSendErr(d.raw, Sel("newLibraryWithSource:options:error:"), &errorPtr,
-		uintptr(mslString), 0)
+		uintptr(mslString), uintptr(compileOptions))
 	if library == 0 {
 		errMsg := unknownError
 		if errorPtr != 0 {
@@ -706,6 +708,15 @@ func (d *Device) compileLibrary(module *ShaderModule, layout *PipelineLayout, st
 	}
 
 	return &compiledLibrary{library: library, function: function, sizesBindings: sizesBindings, sizesSlot: sizesSlot}, nil
+}
+
+// newCompileOptions returns +1 MTLCompileOptions with Metal's defaults, but
+// for preserveInvariance: naga writes WGSL's @invariant as [[invariant]],
+// which needs it.
+func newCompileOptions() ID {
+	options := MsgSend(ID(GetClass("MTLCompileOptions")), Sel("new"))
+	msgSendVoid(options, Sel("setPreserveInvariance:"), argBool(true))
+	return options
 }
 
 func formatNSError(errObj ID) string {
