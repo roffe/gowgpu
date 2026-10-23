@@ -288,6 +288,13 @@ func (a *Adapter) limits() gputypes.Limits {
 	limits.MaxSamplersPerShaderStage = 16
 	limits.MaxStorageBuffersPerShaderStage = 64
 	limits.MaxStorageTexturesPerShaderStage = 64
+	if a.capabilities.ResourceBindingTier < 3 {
+		// Tier 2 has 64 UAVs across all stages, which the storage
+		// buffers and storage textures of a vertex and a fragment stage
+		// share, as Rust's wgpu-hal and Dawn split them.
+		limits.MaxStorageBuffersPerShaderStage = 16
+		limits.MaxStorageTexturesPerShaderStage = 16
+	}
 	limits.MaxUniformBuffersPerShaderStage = 14 // D3D12_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT
 
 	// Buffer limits

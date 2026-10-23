@@ -33,3 +33,15 @@ func TestAdaptersThisBackendCanNotUse(t *testing.T) {
 		t.Error("a resource binding tier 2 or 3 adapter is left out")
 	}
 }
+
+func TestStorageLimitsFitTheUAVsOfTheBindingTier(t *testing.T) {
+	for _, tc := range []struct {
+		tier, want uint32
+	}{{2, 16}, {3, 64}} {
+		limits := (&Adapter{capabilities: AdapterCapabilities{ResourceBindingTier: tc.tier}}).limits()
+		if limits.MaxStorageBuffersPerShaderStage != tc.want || limits.MaxStorageTexturesPerShaderStage != tc.want {
+			t.Errorf("tier %d: storage buffers %d, storage textures %d per stage, want %d each",
+				tc.tier, limits.MaxStorageBuffersPerShaderStage, limits.MaxStorageTexturesPerShaderStage, tc.want)
+		}
+	}
+}
