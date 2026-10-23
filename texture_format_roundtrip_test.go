@@ -84,3 +84,33 @@ func formatPattern(format gputypes.TextureFormat, n int) []byte {
 	}
 	return data
 }
+
+// TestWriteTextureOddPitchAndEmpty writes rows of RGBA8 18 bytes apart,
+// which WebGPU allows, and reads every row back: GL stepped the rows by
+// whole texels, 16 bytes, so the second row started two bytes early. A
+// write of nothing then writes nothing; GL indexed the empty data and
+// panicked.
+func TestWriteTextureOddPitchAndEmpty(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	tex, err := device.CreateTexture(&TextureDescriptor{
+		Size: Extent3D{Width: 4, Height: 2, DepthOrArrayLayers: 1}, Format: gputypes.TextureFormatRGBA8Unorm,
+		Usage: TextureUsageCopyDst | TextureUsageCopySrc, MipLevelCount: 1, SampleCount: 1, Dimension: TextureDimension2D,
+	})
+	if err != nil {
+		t.Fatalf("CreateTexture: %v", err)
+	}
+	defer tex.Release()
+	data := bytes.Repeat([]byte{0x11}, 18+16)
+	copy(data, bytes.Repeat([]byte{0x22}, 16))
+	copy(data[18:], bytes.Repeat([]byte{0x22}, 16))
+	if err := device.Queue().WriteTexture(&ImageCopyTexture{Texture: tex}, data, &ImageDataLayout{BytesPerRow: 18, RowsPerImage: 2},
+		&Extent3D{Width: 4, Height: 2, DepthOrArrayLayers: 1}); err != nil {
+		t.Fatalf("WriteTexture: %v", err)
+	}
+	if err := device.Queue().WriteTexture(&ImageCopyTexture{Texture: tex}, nil, &ImageDataLayout{}, &Extent3D{DepthOrArrayLayers: 1}); err != nil {
+		t.Fatalf("WriteTexture of nothing: %v", err)
+	}
+	got := readSubresources(t, device, tex, gputypes.TextureAspectAll, []subresource{{width: 4, height: 2, rowBytes: 16, rows: 2}})[0]
+	expectBytes(t, "the rows written", got, 0x22)
+	assertNoValidation(t, h)
+}

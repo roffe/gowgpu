@@ -225,20 +225,30 @@ func createRenderbuffer(glCtx *gl.Context, glf glFormat, samples uint32, desc *T
 // writeTexture uploads data into tex at dst: the layers or slices from
 // dst.Origin.Z on of an array, cube or 3D texture. The context must be
 // current.
-func writeTexture(glCtx *gl.Context, tex *Texture, dst *hal.ImageCopyTexture, data []byte, layout *hal.ImageDataLayout, size *hal.Extent3D) {
+func writeTexture(glCtx *gl.Context, tex *Texture, dst *hal.ImageCopyTexture, data []byte, layout *hal.ImageDataLayout, size *hal.Extent3D) error {
+	if size.Width == 0 || size.Height == 0 {
+		return nil
+	}
 	var l hal.ImageDataLayout
 	if layout != nil {
 		l = *layout
 	}
+	if l.Offset > uint64(len(data)) {
+		return fmt.Errorf("gles: WriteTexture data starts at %d of %d bytes", l.Offset, len(data))
+	}
 	data = data[l.Offset:]
 	depth := max(1, size.DepthOrArrayLayers)
 	glCtx.BindTexture(tex.target, tex.id)
+	var err error
 	if tex.glf.compressed() {
-		writeBlocks(glCtx, tex, dst, data, l, size.Width, size.Height, depth)
+		err = writeBlocks(glCtx, tex, dst, data, l, size.Width, size.Height, depth)
 	} else {
-		writePixels(glCtx, tex, dst, data, l, size.Width, size.Height, depth)
+		err = writePixels(glCtx, tex, dst, data, l, size.Width, size.Height, depth)
 	}
 	glCtx.BindTexture(tex.target, 0)
+	if err != nil {
+		return err
+	}
 
 	if hal.DebugEnabled() {
 		hal.Logger().Debug("gles: texture written",
@@ -247,12 +257,35 @@ func writeTexture(glCtx *gl.Context, tex *Texture, dst *hal.ImageCopyTexture, da
 			"height", size.Height,
 		)
 	}
+	return nil
+}
+
+// checkData reports whether data holds images of rows rows of rowBytes, at
+// pitch bytes a row and imageRows rows an image.
+func checkData(data []byte, rowBytes, rows, images, pitch, imageRows uint32) error {
+	need := (uint64(images-1)*uint64(imageRows)+uint64(rows-1))*uint64(pitch) + uint64(rowBytes)
+	if uint64(len(data)) < need {
+		return fmt.Errorf("gles: WriteTexture needs %d bytes of data, has %d", need, len(data))
+	}
+	return nil
+}
+
+// packRows copies those rows out of data into one packed run.
+func packRows(data []byte, rowBytes, rows, images, pitch, imageRows uint32) []byte {
+	packed := make([]byte, int(rowBytes)*int(rows)*int(images))
+	for img := range int(images) {
+		for r := range int(rows) {
+			from := (img*int(imageRows) + r) * int(pitch)
+			copy(packed[(img*int(rows)+r)*int(rowBytes):], data[from:from+int(rowBytes)])
+		}
+	}
+	return packed
 }
 
 // writePixels uploads texels with the texture's transfer pair, the rows and
 // images at the layout's pitches: an atlas fills in one small rectangle of a
 // bigger image at a time.
-func writePixels(glCtx *gl.Context, tex *Texture, dst *hal.ImageCopyTexture, data []byte, l hal.ImageDataLayout, width, height, depth uint32) {
+func writePixels(glCtx *gl.Context, tex *Texture, dst *hal.ImageCopyTexture, data []byte, l hal.ImageDataLayout, width, height, depth uint32) error {
 	f := tex.glf
 	bpp := pixelSize(f.format, f.typ)
 	rows := height
@@ -262,6 +295,14 @@ func writePixels(glCtx *gl.Context, tex *Texture, dst *hal.ImageCopyTexture, dat
 	pitch := width * bpp
 	if l.BytesPerRow > pitch {
 		pitch = l.BytesPerRow
+	}
+	if err := checkData(data, width*bpp, height, depth, pitch, rows); err != nil {
+		return err
+	}
+	if pitch%bpp != 0 {
+		// UNPACK_ROW_LENGTH counts texels, so rows a part texel apart
+		// go in packed.
+		data, pitch, rows = packRows(data, width*bpp, height, depth, pitch, rows), width*bpp, height
 	}
 	if pitch != width*bpp {
 		glCtx.PixelStorei(gl.UNPACK_ROW_LENGTH, int32(pitch/bpp))
@@ -291,11 +332,12 @@ func writePixels(glCtx *gl.Context, tex *Texture, dst *hal.ImageCopyTexture, dat
 		// TexImage2D reallocates storage on every call; TexSubImage2D updates in-place.
 		glCtx.TexSubImage2D(tex.target, mip, x, y, int32(width), int32(height), f.format, f.typ, unsafe.Pointer(&data[0]))
 	}
+	return nil
 }
 
 // writeBlocks uploads a compressed region. GL ES has no row length for
 // compressed uploads, so rows given at a wider pitch go in packed.
-func writeBlocks(glCtx *gl.Context, tex *Texture, dst *hal.ImageCopyTexture, data []byte, l hal.ImageDataLayout, width, height, depth uint32) {
+func writeBlocks(glCtx *gl.Context, tex *Texture, dst *hal.ImageCopyTexture, data []byte, l hal.ImageDataLayout, width, height, depth uint32) error {
 	blocks, rowBytes := compressedRows(tex.format, width, height)
 	pitch, imageRows := rowBytes, blocks
 	if l.BytesPerRow != 0 {
@@ -304,16 +346,12 @@ func writeBlocks(glCtx *gl.Context, tex *Texture, dst *hal.ImageCopyTexture, dat
 	if _, bh := tex.format.BlockDimensions(); l.RowsPerImage != 0 {
 		imageRows = l.RowsPerImage / bh
 	}
+	if err := checkData(data, rowBytes, blocks, depth, pitch, imageRows); err != nil {
+		return err
+	}
 	imageSize := rowBytes * blocks
 	if pitch != rowBytes || imageRows != blocks {
-		packed := make([]byte, imageSize*depth)
-		for img := range depth {
-			for r := range blocks {
-				from := (img*imageRows + r) * pitch
-				copy(packed[img*imageSize+r*rowBytes:], data[from:from+rowBytes])
-			}
-		}
-		data = packed
+		data = packRows(data, rowBytes, blocks, depth, pitch, imageRows)
 	}
 	x, y, z, mip := int32(dst.Origin.X), int32(dst.Origin.Y), dst.Origin.Z, int32(dst.MipLevel)
 	switch {
@@ -328,6 +366,7 @@ func writeBlocks(glCtx *gl.Context, tex *Texture, dst *hal.ImageCopyTexture, dat
 	default:
 		glCtx.CompressedTexSubImage2D(tex.target, mip, x, y, int32(width), int32(height), tex.glf.internal, int32(imageSize), unsafe.Pointer(&data[0]))
 	}
+	return nil
 }
 
 // compressedRows returns how many rows of blocks a width by height region

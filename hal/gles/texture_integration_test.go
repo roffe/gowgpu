@@ -424,3 +424,28 @@ func TestLimitsInWebGPUUnits(t *testing.T) {
 		})
 	}
 }
+
+// A WriteTexture given fewer bytes than its rows take is refused: GL read
+// on past the data into whatever memory followed it.
+func TestWriteTextureRefusesShortData(t *testing.T) {
+	ctx := newTestAdapterContext(t)
+	t.Cleanup(ctx.Destroy)
+	dev := openTestDevice(t, ctx)
+	t.Cleanup(dev.Destroy)
+	tex, err := dev.CreateTexture(&hal.TextureDescriptor{
+		Size: hal.Extent3D{Width: 64, Height: 64, DepthOrArrayLayers: 1}, MipLevelCount: 1, SampleCount: 1,
+		Dimension: gputypes.TextureDimension2D, Format: gputypes.TextureFormatRGBA8Unorm, Usage: gputypes.TextureUsageCopyDst,
+	})
+	if err != nil {
+		t.Fatalf("CreateTexture: %v", err)
+	}
+	defer dev.DestroyTexture(tex)
+	q := &Queue{ctx: ctx}
+	size := hal.Extent3D{Width: 64, Height: 64, DepthOrArrayLayers: 1}
+	if err := q.WriteTexture(&hal.ImageCopyTexture{Texture: tex}, make([]byte, 4096), &hal.ImageDataLayout{BytesPerRow: 256}, &size); err == nil {
+		t.Error("a write of 16384 bytes from 4096 went through")
+	}
+	if err := q.WriteTexture(&hal.ImageCopyTexture{Texture: tex}, make([]byte, 64), &hal.ImageDataLayout{Offset: 100, BytesPerRow: 256}, &size); err == nil {
+		t.Error("a write from past the end of its data went through")
+	}
+}

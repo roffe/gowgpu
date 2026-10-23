@@ -121,8 +121,7 @@ func (q *Queue) WriteTexture(dst *hal.ImageCopyTexture, data []byte, layout *hal
 
 	glCtx := q.ctx.Lock()
 	defer q.ctx.Unlock()
-	writeTexture(glCtx, tex, dst, data, layout, size)
-	return nil
+	return writeTexture(glCtx, tex, dst, data, layout, size)
 }
 
 // Present presents a surface texture to the screen.
