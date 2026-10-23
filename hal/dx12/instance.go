@@ -3,22 +3,6 @@
 
 //go:build windows && !(js && wasm)
 
-// Package dx12 provides the DirectX 12 HAL backend for Windows.
-//
-// This backend requires Windows 10 (1809+) or Windows 11 and a DirectX 12
-// capable GPU. It uses pure Go with syscall for all COM interactions,
-// requiring no CGO.
-//
-// # Instance Creation
-//
-// The Instance manages DXGI factory creation, debug layer initialization,
-// and adapter enumeration. It prefers discrete GPUs when enumerating adapters.
-//
-// # Debug Layer
-//
-// When InstanceFlagsDebug is set, the D3D12 debug layer is enabled via
-// D3D12GetDebugInterface. This provides detailed validation messages but
-// significantly impacts performance. Only use in development.
 package dx12
 
 import (
