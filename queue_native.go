@@ -97,8 +97,8 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (_ uint64, err error) {
 	if q.hal == nil {
 		return 0, fmt.Errorf("wgpu: queue not available")
 	}
-	if q.released() {
-		return 0, ErrReleased
+	if err := q.usable(); err != nil {
+		return 0, err
 	}
 	if err := q.validateSubmit(commandBuffers); err != nil {
 		return 0, err
@@ -117,8 +117,7 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (_ uint64, err error) {
 	//
 	// Reference: wgpu-core device/queue.rs pre_submit_for_command_buffers
 	if err := q.injectBarriers(commandBuffers, zeros); err != nil {
-		q.cancelSubmit(flushed)
-		return 0, fmt.Errorf("wgpu: submit barrier injection: %w", err)
+		return 0, fmt.Errorf("wgpu: submit barrier injection: %w", q.fail(flushed, err))
 	}
 	defer clear(q.cbBarriers)
 
@@ -151,8 +150,7 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (_ uint64, err error) {
 	err = q.presentSurfaces(commandBuffers, q.writtenSurfaces)
 	clear(q.writtenSurfaces)
 	if err != nil {
-		q.cancelSubmit(flushed)
-		return 0, fmt.Errorf("wgpu: submit barrier injection: %w", err)
+		return 0, fmt.Errorf("wgpu: submit barrier injection: %w", q.fail(flushed, err))
 	}
 	allBuffers := q.submitBufs
 	defer clear(allBuffers)
@@ -167,11 +165,10 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (_ uint64, err error) {
 		var err error
 		subIdx, err = q.hal.Submit(allBuffers)
 		if err != nil && subIdx == 0 {
-			q.cancelSubmit(flushed)
-			return 0, fmt.Errorf("wgpu: submit failed: %w", err)
+			return 0, fmt.Errorf("wgpu: submit failed: %w", q.fail(flushed, err))
 		}
 		if err != nil {
-			submitErr = fmt.Errorf("wgpu: submit: %w", err)
+			submitErr = fmt.Errorf("wgpu: submit: %w", q.device.lose(err))
 		}
 		// Track the latest submission index for deferred resource destruction.
 		q.lastSubmissionIndex.Store(subIdx)
@@ -196,6 +193,18 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (_ uint64, err error) {
 	}
 
 	return subIdx, submitErr
+}
+
+// usable returns the error the queue refuses work with: ErrReleased once
+// its device is released, the error that lost it once it is lost.
+func (q *Queue) usable() error {
+	if q.released() {
+		return ErrReleased
+	}
+	if q.device != nil {
+		return q.device.lostErr()
+	}
+	return nil
 }
 
 // validateSubmit checks the command buffers of a Submit before the pending
@@ -279,6 +288,15 @@ func (q *Queue) trackFlushed(f flushedWrites, subIdx, completed uint64) {
 		pw.belt.setLastSubmissionIndex(subIdx)
 	}
 	pw.maintain(completed)
+}
+
+// fail gives back what Submit set up before err, a failure of the backend,
+// and loses the device, as wgpu-core does on any error of the backend's
+// submit: the device tracker holds the states of command buffers that
+// did not run. It returns the error the queue refuses work with now.
+func (q *Queue) fail(f flushedWrites, err error) error {
+	q.cancelSubmit(f)
+	return q.device.lose(err)
 }
 
 // cancelSubmit gives back what Submit set up before it failed: the flushed
@@ -421,8 +439,8 @@ func (q *Queue) WriteBuffer(buffer *Buffer, offset uint64, data []byte) (err err
 	if q.hal == nil || buffer == nil {
 		return fmt.Errorf("wgpu: WriteBuffer: queue or buffer is nil")
 	}
-	if q.released() {
-		return ErrReleased
+	if err := q.usable(); err != nil {
+		return err
 	}
 	if q.device.foreign(buffer.device) {
 		return errForeign("Queue.WriteBuffer", "the buffer")
@@ -495,8 +513,8 @@ func (q *Queue) WriteTexture(dst *ImageCopyTexture, data []byte, layout *ImageDa
 	if q.hal == nil || dst == nil {
 		return fmt.Errorf("wgpu: WriteTexture: queue or destination is nil")
 	}
-	if q.released() {
-		return ErrReleased
+	if err := q.usable(); err != nil {
+		return err
 	}
 	if dst.Texture != nil && dst.Texture.resolveHAL() == nil {
 		return ErrReleased
@@ -572,8 +590,8 @@ func (q *Queue) CopyExternalPlanes(src ExternalImage, dsts ...*Texture) (uint32,
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	if q.released() {
-		return src.Layout, ErrReleased
+	if err := q.usable(); err != nil {
+		return src.Layout, err
 	}
 	syncer, ok := q.hal.(externalSyncer)
 	if !ok || q.pending == nil || len(dsts) == 0 || len(dsts) > 3 {
@@ -626,8 +644,8 @@ func (q *Queue) CopyExternalBuffer(src ExternalBuffer, dst *Texture) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	if q.released() {
-		return ErrReleased
+	if err := q.usable(); err != nil {
+		return err
 	}
 	syncer, ok := q.hal.(externalSyncer)
 	if !ok || q.pending == nil || dst == nil {

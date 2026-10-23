@@ -270,6 +270,17 @@ func (d *Device) IsValid() bool {
 	return d.valid.Load()
 }
 
+// Lose marks the device lost: it is no longer valid, and every pending
+// buffer map fails.
+//
+// Reference: wgpu-core device/resource.rs Device::lose
+func (d *Device) Lose() {
+	if d.valid != nil {
+		d.valid.Store(false)
+	}
+	d.failAllMaps(&BufferMapError{Kind: BufferMapErrKindDeviceLost})
+}
+
 // SnatchLock returns the device's snatch lock for resource coordination.
 //
 // The snatch lock must be held when accessing the raw HAL device or

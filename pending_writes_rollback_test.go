@@ -144,8 +144,8 @@ func (q *refusingQueue) Submit(cbs []hal.CommandBuffer) (uint64, error) {
 }
 
 // A Submit the backend refuses leaves the list of textures to zero as it
-// was: a texture its command buffer clears first is zeroed by the next
-// batch still, and one it discards is not put on it.
+// was: a texture its command buffer clears first stays on it, and one it
+// discards is not put on it.
 func TestRefusedSubmitKeepsTheZeroList(t *testing.T) {
 	q := &refusingQueue{}
 	device, err := NewDeviceFromHAL(&noop.Device{}, q, 0, gputypes.DefaultLimits(), "refused-submit")
@@ -215,5 +215,61 @@ func TestRefusedSubmitKeepsTheZeroList(t *testing.T) {
 	}
 	if zeroing(discarded) {
 		t.Error("the texture the refused submit would have discarded is on the list to zero")
+	}
+}
+
+// stalledQueue is a refusingQueue whose submissions never complete.
+type stalledQueue struct{ refusingQueue }
+
+func (*stalledQueue) PollCompleted() uint64 { return 0 }
+
+// A Submit the backend refuses loses the device, as in wgpu-core: the
+// device tracker holds the states the refused command buffers would have
+// left, so the queue takes no more work, and a pending map fails.
+func TestRefusedSubmitLosesTheDevice(t *testing.T) {
+	q := &stalledQueue{}
+	device, err := NewDeviceFromHAL(&noop.Device{}, q, 0, gputypes.DefaultLimits(), "refused-submit-lost")
+	if err != nil {
+		t.Fatalf("NewDeviceFromHAL: %v", err)
+	}
+	defer device.Release()
+	buffer := func() *Buffer {
+		buf, err := device.CreateBuffer(&BufferDescriptor{Size: 16, Usage: BufferUsageMapRead | BufferUsageCopyDst})
+		if err != nil {
+			t.Fatalf("CreateBuffer: %v", err)
+		}
+		t.Cleanup(buf.Release)
+		return buf
+	}
+	mapped, written := buffer(), buffer()
+	if err := device.Queue().WriteBuffer(mapped, 0, make([]byte, 16)); err != nil {
+		t.Fatalf("WriteBuffer: %v", err)
+	}
+	pending, err := mapped.MapAsync(MapModeRead, 0, 16)
+	if err != nil {
+		t.Fatalf("MapAsync: %v", err)
+	}
+	defer pending.Release()
+	if ready, _ := pending.Status(); ready {
+		t.Fatal("the map resolved before the write it waits for completed")
+	}
+
+	q.refuse = true
+	if err := device.Queue().WriteBuffer(written, 0, make([]byte, 16)); err != nil {
+		t.Fatalf("WriteBuffer: %v", err)
+	}
+	if _, err := device.Queue().Submit(); !errors.Is(err, ErrDeviceLost) {
+		t.Fatalf("refused Submit = %v, want ErrDeviceLost", err)
+	}
+	if ready, err := pending.Status(); !ready || !errors.Is(err, ErrMapDeviceLost) {
+		t.Errorf("pending map after the device was lost = %v, %v, want ErrMapDeviceLost", ready, err)
+	}
+
+	q.refuse = false
+	if _, err := device.Queue().Submit(); !errors.Is(err, ErrDeviceLost) {
+		t.Errorf("Submit on the lost device = %v, want ErrDeviceLost", err)
+	}
+	if err := device.Queue().WriteBuffer(written, 0, make([]byte, 16)); !errors.Is(err, ErrDeviceLost) {
+		t.Errorf("WriteBuffer on the lost device = %v, want ErrDeviceLost", err)
 	}
 }

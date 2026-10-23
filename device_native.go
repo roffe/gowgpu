@@ -52,6 +52,37 @@ type Device struct {
 	usedLists usedListPool
 
 	uncapturedErrorHandler atomic.Pointer[func(*GPUError)]
+
+	// lost is the error of the backend failure that lost the device.
+	lost atomic.Pointer[error]
+}
+
+// lose marks d lost after cause, a failure of the backend to run work: the
+// device tracker holds states of work that did not run, so the queue takes
+// no more, and pending buffer maps fail. It returns the error the queue
+// refuses work with from now on.
+//
+// Reference: wgpu-core device/resource.rs handle_hal_error
+func (d *Device) lose(cause error) error {
+	err := cause
+	if !errors.Is(err, ErrDeviceLost) {
+		err = fmt.Errorf("%w: %w", ErrDeviceLost, cause)
+	}
+	if !d.lost.CompareAndSwap(nil, &err) {
+		return *d.lost.Load()
+	}
+	if d.core != nil {
+		d.core.Lose()
+	}
+	return err
+}
+
+// lostErr returns the error that lost d, nil while it is not lost.
+func (d *Device) lostErr() error {
+	if err := d.lost.Load(); err != nil {
+		return *err
+	}
+	return nil
 }
 
 // Queue returns the device's command queue.
