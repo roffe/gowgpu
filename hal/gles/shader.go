@@ -17,14 +17,19 @@ import (
 	"github.com/roffe/naga/glsl"
 )
 
-// boundsChecks has image loads read zero out of bounds, where texelFetch is
-// undefined, from GLSL 4.30, which has the textureQueryLevels the check
-// needs. wgpu-hal checks them from GL 4.3 the same way.
+// boundsChecks clamps an index that may be out of bounds, which GL leaves
+// undefined, to the last element, as Dawn does on GL: WGSL keeps such an
+// access inside the array. Image loads read zero out of bounds, where
+// texelFetch is undefined, from GLSL 4.30, which has the
+// textureQueryLevels the check needs. wgpu-hal checks them from GL 4.3 the
+// same way.
 func boundsChecks(v glsl.Version) glsl.BoundsCheckPolicies {
+	p := glsl.BoundsCheckPolicies{Index: glsl.BoundsCheckRestrict, Buffer: glsl.BoundsCheckRestrict}
 	if v.ES || v.Major < 4 || v.Major == 4 && v.Minor < 30 {
-		return glsl.BoundsCheckPolicies{}
+		return p
 	}
-	return glsl.BoundsCheckPolicies{ImageLoad: glsl.BoundsCheckReadZeroSkipWrite}
+	p.ImageLoad = glsl.BoundsCheckReadZeroSkipWrite
+	return p
 }
 
 // compileWGSLToGLSL compiles a WGSL shader source to GLSL for the given entry point.

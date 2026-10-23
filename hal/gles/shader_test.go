@@ -40,3 +40,27 @@ func TestImageLoadsAreBoundsChecked(t *testing.T) {
 		}
 	}
 }
+
+// Indices that may be out of bounds are clamped to the last element at
+// every GLSL version: GL leaves such an access undefined, and WGSL keeps it
+// inside the array.
+func TestIndicesAreClamped(t *testing.T) {
+	src := hal.ShaderSource{WGSL: `
+struct U { a: array<vec4<f32>, 4>, i: i32 }
+@group(0) @binding(0) var<uniform> u: U;
+var<private> p: array<f32, 5>;
+@fragment fn fs_main() -> @location(0) vec4<f32> {
+	return u.a[u.i] * p[u.i];
+}`}
+	for _, v := range []glsl.Version{{Major: 4, Minor: 50}, {Major: 3, Minor: 30}, glsl.VersionES300} {
+		code, _, err := compileWGSLToGLSL(v, src, "fs_main", nil)
+		if err != nil {
+			t.Fatalf("GLSL %s: %v", v, err)
+		}
+		for _, clamp := range []string{", 3u)]", ", 4u)]"} {
+			if !strings.Contains(code, clamp) {
+				t.Errorf("GLSL %s: no index clamped with %q:\n%s", v, clamp, code)
+			}
+		}
+	}
+}
