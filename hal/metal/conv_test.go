@@ -270,7 +270,8 @@ func TestMipmapFilterModeToMTL(t *testing.T) {
 	}{
 		{"Nearest", gputypes.FilterModeNearest, MTLSamplerMipFilterNearest},
 		{"Linear", gputypes.FilterModeLinear, MTLSamplerMipFilterLinear},
-		{"Unknown defaults to NotMipmapped", gputypes.FilterMode(99), MTLSamplerMipFilterNotMipmapped},
+		{"Undefined is WebGPU's default, nearest", gputypes.FilterModeUndefined, MTLSamplerMipFilterNearest},
+		{"Unknown defaults to Nearest", gputypes.FilterMode(99), MTLSamplerMipFilterNearest},
 	}
 
 	for _, tt := range tests {
