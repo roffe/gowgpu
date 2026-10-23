@@ -221,3 +221,50 @@ func TestVertexBufferSlotsKeepOffBindGroups(t *testing.T) {
 		t.Fatalf("a pipeline with %d vertex buffers and %d bind group buffers was made", len(vertexBuffers), buffers)
 	}
 }
+
+// TestEmptyWorkIsNotEncoded draws and copies nothing, which WebGPU allows
+// and Metal's validation refuses: none of it may reach Metal or fail the
+// command buffer, and a real draw after it still lands.
+func TestEmptyWorkIsNotEncoded(t *testing.T) {
+	device, queue := newMetalTextureCopyTestDevice(t)
+	pipeline := renderTestPipeline(t, device, `
+@vertex fn vs_main(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
+	return vec4<f32>(f32(i32(vi & 1u) * 4 - 1), f32(i32(vi >> 1u) * 4 - 1), 0.0, 1.0);
+}
+@fragment fn fs_main() -> @location(0) vec4<f32> { return vec4<f32>(0.0, 1.0, 0.0, 1.0); }
+`, nil, gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList})
+	pixels := renderTestDraw(t, device, queue, func(pass *RenderPassEncoder) {
+		pass.SetPipeline(pipeline)
+		pass.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 0})
+		pass.Draw(gputypes.DrawArgs{VertexCount: 0, InstanceCount: 1})
+		if pass.raw != 0 {
+			t.Error("a draw of nothing made the render command encoder")
+		}
+		pass.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1})
+	})
+	for i := 0; i < len(pixels); i += 4 {
+		if got := pixels[i : i+4]; string(got) != string([]byte{0, 255, 0, 255}) {
+			t.Fatalf("pixel %d = %v, want green", i/4, got)
+		}
+	}
+
+	texture := createMetalTextureCopyTestTexture(t, device, gputypes.TextureDimension2D, 4, 4, 1)
+	defer texture.Destroy()
+	buffer := createMetalTextureCopyTestReadback(t, device, 1024)
+	defer buffer.Destroy()
+	encoder := &CommandEncoder{device: device}
+	if err := encoder.BeginEncoding("empty copies"); err != nil {
+		t.Fatalf("BeginEncoding failed: %v", err)
+	}
+	encoder.CopyBufferToBuffer(buffer, buffer, []hal.BufferCopy{{SrcOffset: 0, DstOffset: 256, Size: 0}})
+	for _, size := range []hal.Extent3D{{Width: 0, Height: 4, DepthOrArrayLayers: 1}, {Width: 4, Height: 0, DepthOrArrayLayers: 1}, {Width: 4, Height: 4}} {
+		region := []hal.BufferTextureCopy{{BufferLayout: hal.ImageDataLayout{BytesPerRow: 256}, TextureBase: hal.ImageCopyTexture{Texture: texture}, Size: size}}
+		encoder.CopyBufferToTexture(buffer, texture, region)
+		encoder.CopyTextureToBuffer(texture, buffer, region)
+		encoder.CopyTextureToTexture(texture, texture, []hal.TextureCopy{{SrcBase: hal.ImageCopyTexture{Texture: texture}, DstBase: hal.ImageCopyTexture{Texture: texture}, Size: size}})
+		if err := queue.WriteTexture(&region[0].TextureBase, nil, &region[0].BufferLayout, &size); err != nil {
+			t.Errorf("WriteTexture of %+v: %v", size, err)
+		}
+	}
+	submitMetalTextureCopyTestEncoder(t, device, queue, encoder)
+}

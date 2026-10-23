@@ -248,6 +248,9 @@ func TestCommandEncoderRejectsWrappedCopyBeforeMetalCall(t *testing.T) {
 		DstBase: hal.ImageCopyTexture{Texture: array},
 		Size:    size,
 	}})
+	if encoder.recordErr == nil {
+		t.Error("the wrapped copies did not fail the command buffer")
+	}
 }
 
 func TestMetalBufferTextureCopyPlan3D(t *testing.T) {

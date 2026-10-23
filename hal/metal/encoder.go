@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"runtime"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -194,8 +195,24 @@ func (e *CommandEncoder) ClearBuffer(buffer hal.Buffer, offset, size uint64) {
 	_ = MsgSend(blitEncoder, Sel("endEncoding"))
 }
 
+// dropEmpty drops the regions that copy nothing, which WebGPU allows and
+// Metal's validation doesn't, as Dawn skips them.
+func dropEmpty[T any](regions []T, empty func(T) bool) []T {
+	if !slices.ContainsFunc(regions, empty) {
+		return regions
+	}
+	return slices.DeleteFunc(slices.Clone(regions), empty)
+}
+
+func emptyExtent(size hal.Extent3D) bool {
+	return size.Width == 0 || size.Height == 0 || size.DepthOrArrayLayers == 0
+}
+
+func emptyBufferTextureCopy(r hal.BufferTextureCopy) bool { return emptyExtent(r.Size) }
+
 // CopyBufferToBuffer copies data between buffers.
 func (e *CommandEncoder) CopyBufferToBuffer(src, dst hal.Buffer, regions []hal.BufferCopy) {
+	regions = dropEmpty(regions, func(r hal.BufferCopy) bool { return r.Size == 0 })
 	if e.cmdBuffer == 0 || len(regions) == 0 {
 		return
 	}
@@ -222,6 +239,7 @@ func (e *CommandEncoder) CopyBufferToBuffer(src, dst hal.Buffer, regions []hal.B
 
 // CopyBufferToTexture copies data from a buffer to a texture.
 func (e *CommandEncoder) CopyBufferToTexture(src hal.Buffer, dst hal.Texture, regions []hal.BufferTextureCopy) {
+	regions = dropEmpty(regions, emptyBufferTextureCopy)
 	if e.cmdBuffer == 0 || len(regions) == 0 {
 		return
 	}
@@ -233,6 +251,7 @@ func (e *CommandEncoder) CopyBufferToTexture(src hal.Buffer, dst hal.Texture, re
 	}
 	for _, region := range regions {
 		if _, _, ok := validateMetalBufferTextureCopyPlan(dstTex.format, region.TextureBase.Aspect, dstTex.dimension, region.BufferLayout, region.TextureBase.Origin, region.Size); !ok {
+			e.failRecording(fmt.Errorf("metal: CopyBufferToTexture: invalid copy into %s texture", dstTex.format))
 			return
 		}
 	}
@@ -268,6 +287,7 @@ func (e *CommandEncoder) CopyBufferToTexture(src hal.Buffer, dst hal.Texture, re
 
 // CopyTextureToBuffer copies data from a texture to a buffer.
 func (e *CommandEncoder) CopyTextureToBuffer(src hal.Texture, dst hal.Buffer, regions []hal.BufferTextureCopy) {
+	regions = dropEmpty(regions, emptyBufferTextureCopy)
 	if e.cmdBuffer == 0 || len(regions) == 0 {
 		return
 	}
@@ -279,6 +299,7 @@ func (e *CommandEncoder) CopyTextureToBuffer(src hal.Texture, dst hal.Buffer, re
 	}
 	for _, region := range regions {
 		if _, _, ok := validateMetalBufferTextureCopyPlan(srcTex.format, region.TextureBase.Aspect, srcTex.dimension, region.BufferLayout, region.TextureBase.Origin, region.Size); !ok {
+			e.failRecording(fmt.Errorf("metal: CopyTextureToBuffer: invalid copy out of %s texture", srcTex.format))
 			return
 		}
 	}
@@ -314,6 +335,7 @@ func (e *CommandEncoder) CopyTextureToBuffer(src hal.Texture, dst hal.Buffer, re
 
 // CopyTextureToTexture copies data between textures.
 func (e *CommandEncoder) CopyTextureToTexture(src, dst hal.Texture, regions []hal.TextureCopy) {
+	regions = dropEmpty(regions, func(r hal.TextureCopy) bool { return emptyExtent(r.Size) })
 	if e.cmdBuffer == 0 || len(regions) == 0 {
 		return
 	}
@@ -324,6 +346,7 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst hal.Texture, regions []ha
 	}
 	for _, region := range regions {
 		if _, ok := validateMetalTextureCopyPlan(srcTex.dimension, dstTex.dimension, region.SrcBase.Origin, region.DstBase.Origin, region.Size); !ok {
+			e.failRecording(fmt.Errorf("metal: CopyTextureToTexture: invalid copy"))
 			return
 		}
 	}
@@ -1010,18 +1033,20 @@ func (e *RenderPassEncoder) primitive() MTLPrimitiveType {
 	return e.pipeline.primitive
 }
 
-// Draw draws primitives.
+// Draw draws primitives. A draw of nothing is not encoded: Metal's
+// validation refuses a vertex or instance count of 0, as Dawn notes.
 func (e *RenderPassEncoder) Draw(args gputypes.DrawArgs) {
-	if !e.beginDraw() {
+	if args.VertexCount == 0 || args.InstanceCount == 0 || !e.beginDraw() {
 		return
 	}
 	_ = MsgSend(e.raw, Sel("drawPrimitives:vertexStart:vertexCount:instanceCount:baseInstance:"),
 		uintptr(e.primitive()), uintptr(args.FirstVertex), uintptr(args.VertexCount), uintptr(args.InstanceCount), uintptr(args.FirstInstance))
 }
 
-// DrawIndexed draws indexed primitives.
+// DrawIndexed draws indexed primitives. A draw of nothing is not encoded,
+// as in Draw.
 func (e *RenderPassEncoder) DrawIndexed(args gputypes.DrawIndexedArgs) {
-	if e.indexBuffer == nil || !e.beginDraw() {
+	if args.IndexCount == 0 || args.InstanceCount == 0 || e.indexBuffer == nil || !e.beginDraw() {
 		return
 	}
 	indexType := indexFormatToMTL(e.indexFormat)
@@ -1279,10 +1304,11 @@ func sizeField(size uint64) uint32 {
 	return uint32(min(size, math.MaxUint32))
 }
 
-// Dispatch dispatches compute workgroups.
+// Dispatch dispatches compute workgroups. A dispatch of no workgroups is
+// not encoded, as wgpu-hal and Dawn skip it.
 func (e *ComputePassEncoder) Dispatch(x, y, z uint32) {
-	if e.pipeline == nil {
-		return // No pipeline set
+	if e.pipeline == nil || x == 0 || y == 0 || z == 0 {
+		return
 	}
 	e.bindBufferSizes()
 

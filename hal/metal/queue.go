@@ -288,6 +288,9 @@ func (q *Queue) WriteTexture(dst *hal.ImageCopyTexture, data []byte, layout *hal
 	if dst == nil || layout == nil {
 		return fmt.Errorf("metal: WriteTexture: invalid arguments")
 	}
+	if size != nil && emptyExtent(*size) {
+		return nil
+	}
 	tex := metalTexture(dst.Texture)
 	if tex == nil || len(data) == 0 || size == nil {
 		return fmt.Errorf("metal: WriteTexture: invalid arguments")
