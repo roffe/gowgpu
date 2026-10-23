@@ -247,6 +247,9 @@ func TestDepthAndStencilCopyToBuffer(t *testing.T) {
 		{gputypes.TextureFormatDepth24PlusStencil8, gputypes.TextureAspectStencilOnly, func(b []byte) bool { return b[0] == 7 }},
 	} {
 		t.Run(tc.format.String(), func(t *testing.T) {
+			if tc.aspect == gputypes.TextureAspectStencilOnly {
+				skipStencilCopiesOnWine(t, h)
+			}
 			tex, err := device.CreateTexture(&TextureDescriptor{
 				Size: Extent3D{Width: pixSide, Height: pixSide, DepthOrArrayLayers: 1}, Format: tc.format,
 				Usage: TextureUsageRenderAttachment | TextureUsageCopySrc, MipLevelCount: 1, SampleCount: 1, Dimension: TextureDimension2D,
