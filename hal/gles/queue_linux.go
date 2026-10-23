@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"unsafe"
 
+	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/gles/egl"
 	"github.com/roffe/gowgpu/hal/gles/gl"
@@ -23,6 +24,12 @@ import (
 // holding the context under InstanceFlagsGLPinnedThread: the helper context
 // they would run on shares no VAO or framebuffer, so nothing would be drawn.
 var errOtherThread = errors.New("gles: InstanceFlagsGLPinnedThread keeps the GL context on the goroutine that used it first; this call comes from another goroutine")
+
+// opaqueAlpha reports whether a surface configured with mode shows opaque:
+// Opaque, and Auto, which is Opaque on GL.
+func opaqueAlpha(mode gputypes.CompositeAlphaMode) bool {
+	return mode == hal.CompositeAlphaModeOpaque || mode == hal.CompositeAlphaModeAuto
+}
 
 // Queue implements hal.Queue for OpenGL on Linux.
 // Holds a shared *AdapterContext (owned by Instance or Surface).
@@ -179,6 +186,16 @@ func (q *Queue) Present(surface hal.Surface, _ hal.SurfaceTexture, damageRects [
 	}
 
 	surf.blitSwapchainToDefaultWith(glCtx)
+	// A Wayland compositor blends a window by its alpha, which the frames
+	// of an opaque surface need not have set to 1. EGL_PRESENT_OPAQUE_EXT
+	// would have it skip the alpha, but Mesa's software path drops the
+	// attribute, so the window's alpha is set to 1 here.
+	if surf.isWayland && surf.swapchainFBO != 0 && surf.config != nil && opaqueAlpha(surf.config.AlphaMode) {
+		glCtx.ColorMask(false, false, false, true)
+		glCtx.ClearColor(0, 0, 0, 1)
+		glCtx.Clear(gl.COLOR_BUFFER_BIT)
+		glCtx.ColorMask(true, true, true, true)
+	}
 
 	// Use damage-aware swap when the extension is available and rects provided.
 	if len(damageRects) > 0 && egl.HasSwapBuffersWithDamage() {

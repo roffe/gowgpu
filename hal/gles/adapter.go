@@ -102,7 +102,9 @@ func (a *Adapter) TextureFormatCapabilities(format gputypes.TextureFormat) hal.T
 	return queryTextureFormatCapabilities(format, a.caps.Features, a.caps.MaxMSAASamples, a.caps.Extensions)
 }
 
-// SurfaceCapabilities returns surface capabilities.
+// SurfaceCapabilities returns surface capabilities. Opaque is the only
+// alpha mode: DWM shows the GL frames of a window opaque, whatever their
+// alpha.
 func (a *Adapter) SurfaceCapabilities(_ hal.Surface) *hal.SurfaceCapabilities {
 	return &hal.SurfaceCapabilities{
 		Formats: []gputypes.TextureFormat{
@@ -115,10 +117,7 @@ func (a *Adapter) SurfaceCapabilities(_ hal.Surface) *hal.SurfaceCapabilities {
 			hal.PresentModeFifo,      // VSync on
 			hal.PresentModeImmediate, // VSync off (if supported)
 		},
-		AlphaModes: []gputypes.CompositeAlphaMode{
-			hal.CompositeAlphaModeOpaque,
-			hal.CompositeAlphaModePremultiplied,
-		},
+		AlphaModes: []gputypes.CompositeAlphaMode{hal.CompositeAlphaModeOpaque},
 	}
 }
 

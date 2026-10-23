@@ -10,6 +10,7 @@ import (
 
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
+	"github.com/roffe/gowgpu/hal/gles/egl"
 	"github.com/roffe/gowgpu/hal/gles/gl"
 )
 
@@ -112,13 +113,24 @@ func (a *Adapter) TextureFormatCapabilities(format gputypes.TextureFormat) hal.T
 // SurfaceCapabilities returns surface capabilities. The sRGB formats need
 // sRGB window surfaces on ES (EGL 1.5 or EGL_KHR_gl_colorspace), where the
 // present blit decodes an sRGB swapchain, as wgpu-hal and Dawn offer them.
+// Premultiplied alpha is offered on Wayland alone, whose compositor blends
+// a window by the alpha of its config: an X11 window gets a config without
+// alpha, and an Android window's own format decides.
 func (a *Adapter) SurfaceCapabilities(_ hal.Surface) *hal.SurfaceCapabilities {
 	formats := []gputypes.TextureFormat{
 		gputypes.TextureFormatBGRA8Unorm,
 		gputypes.TextureFormatRGBA8Unorm,
 	}
-	if !a.caps.IsES || a.ctx != nil && a.ctx.EGL() != nil && a.ctx.EGL().SupportsGLColorspace() {
+	var eglCtx *egl.Context
+	if a.ctx != nil {
+		eglCtx = a.ctx.EGL()
+	}
+	if !a.caps.IsES || eglCtx != nil && eglCtx.SupportsGLColorspace() {
 		formats = append(formats, gputypes.TextureFormatBGRA8UnormSrgb, gputypes.TextureFormatRGBA8UnormSrgb)
+	}
+	alphaModes := []gputypes.CompositeAlphaMode{hal.CompositeAlphaModeOpaque}
+	if eglCtx != nil && eglCtx.WindowKind() == egl.WindowKindWayland {
+		alphaModes = append(alphaModes, hal.CompositeAlphaModePremultiplied)
 	}
 	return &hal.SurfaceCapabilities{
 		Formats: formats,
@@ -126,10 +138,7 @@ func (a *Adapter) SurfaceCapabilities(_ hal.Surface) *hal.SurfaceCapabilities {
 			hal.PresentModeFifo,      // VSync on
 			hal.PresentModeImmediate, // VSync off (if supported)
 		},
-		AlphaModes: []gputypes.CompositeAlphaMode{
-			hal.CompositeAlphaModeOpaque,
-			hal.CompositeAlphaModePremultiplied,
-		},
+		AlphaModes: alphaModes,
 	}
 }
 
