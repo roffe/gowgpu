@@ -621,7 +621,7 @@ func (m *MultisampleStateJS) ToJS() js.Value {
 		obj.Set("count", m.Count)
 	}
 	if m.Mask > 0 {
-		obj.Set("mask", float64(m.Mask))
+		obj.Set("mask", uint32(m.Mask))
 	}
 	if m.AlphaToCoverageEnabled {
 		obj.Set("alphaToCoverageEnabled", true)

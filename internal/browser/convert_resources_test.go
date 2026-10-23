@@ -116,3 +116,10 @@ func TestUnusedColorSlotsAreNull(t *testing.T) {
 		t.Fatalf("targets = %v, want [null, {format: rgba8unorm}]", js.Global().Get("JSON").Call("stringify", targets))
 	}
 }
+
+func TestMultisampleMaskIsSentAs32Bits(t *testing.T) {
+	obj := (&MultisampleStateJS{Count: 4, Mask: ^uint64(0)}).ToJS()
+	if got := obj.Get("mask").Float(); got != 0xFFFFFFFF {
+		t.Fatalf("mask = %v, want 0xFFFFFFFF", got)
+	}
+}
