@@ -127,6 +127,10 @@ type pendingWrites struct {
 	// done with it.
 	views, flushedViews []hal.TextureView
 
+	// flushedSurfaces are the surface textures the batch flush closed last
+	// writes, which the submit takes to their present state after it.
+	flushedSurfaces []*Texture
+
 	// destroys are the HAL destroys of textures released while the batch
 	// copies into them (holdDestroy), and refs keep the buffers the batch
 	// copies into alive, as a command buffer keeps what it binds. Both run
@@ -1542,6 +1546,13 @@ func (pw *pendingWrites) flush() (hal.CommandBuffer, hal.CommandEncoder, []hal.T
 	// buckets, so subsequent inserts in the next batch don't trigger growth allocations.
 	clear(pw.dstBuffers)
 	clear(pw.dstTextures)
+	clear(pw.flushedSurfaces)
+	pw.flushedSurfaces = pw.flushedSurfaces[:0]
+	for _, o := range pw.dstOwners {
+		if o.owner.surface != nil {
+			pw.flushedSurfaces = append(pw.flushedSurfaces, o.owner)
+		}
+	}
 	pw.clearOwners()
 	pw.flushedViews, pw.views = pw.views, nil
 	pw.flushedDestroys, pw.destroys = pw.destroys, nil

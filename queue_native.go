@@ -59,6 +59,14 @@ type Queue struct {
 	bufResolver     map[track.TrackerIndex]hal.Buffer
 	barrierScratch  core.BarrierScratch
 
+	// Scratch for presentSurfaces, under mu: the surface textures the
+	// pending writes flushed wrote, the tracker indices of the ones taken to
+	// their present state, and the transitions and barriers there.
+	writtenSurfaces    []*Texture
+	presentIndices     []track.TrackerIndex
+	presentTransitions []track.TexturePendingTransition
+	presentBarriers    []hal.TextureBarrier
+
 	// Scratch for WriteTexture, under mu: the HAL forms of its arguments,
 	// which travel by pointer and would otherwise be heap copies every call.
 	wtDst    hal.ImageCopyTexture
@@ -126,6 +134,7 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (_ uint64, err error) {
 		pendingCmdBuf, flushedEncoder, flushedDstTextures, flushedDstBuffers, err = q.pending.flush()
 		if err == nil {
 			zeros = q.pending.queueDiscardedLocked(commandBuffers)
+			q.writtenSurfaces = append(q.writtenSurfaces[:0], q.pending.flushedSurfaces...)
 		}
 		q.pending.mu.Unlock()
 		if err != nil {
@@ -171,6 +180,12 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (_ uint64, err error) {
 			q.submitBufs = append(q.submitBufs, q.cbBarriers[i])
 		}
 		q.submitBufs = append(q.submitBufs, cb.halBufferList()...)
+	}
+	err = q.presentSurfaces(commandBuffers, q.writtenSurfaces)
+	clear(q.writtenSurfaces)
+	if err != nil {
+		q.cancelSubmit(pendingCmdBuf, flushedEncoder, flushedDstTextures)
+		return 0, fmt.Errorf("wgpu: submit barrier injection: %w", err)
 	}
 	allBuffers := q.submitBufs
 	defer clear(allBuffers)
@@ -876,15 +891,8 @@ func collectBoundTextureIndices(resolver map[track.TrackerIndex]hal.Texture, bou
 
 // addTrackedTexture adds a single texture to the resolver if it has a
 // valid coreTexture and TrackerIndex.
-//
-// A surface texture is left out, so it gets no submit-time barrier: that
-// barrier would be recorded here, after the command buffer it runs ahead of,
-// while the backend tracks the swapchain image's layout in recording order
-// (hal/vulkan), and the device state it would start from is another image's
-// anyway, every image of the swapchain sharing one tracker index. The copies
-// and render passes of the command buffer transition the image themselves.
 func addTrackedTexture(resolver map[track.TrackerIndex]hal.Texture, tex *Texture) {
-	if tex == nil || tex.coreTexture == nil || tex.surface != nil {
+	if tex == nil || tex.coreTexture == nil {
 		return
 	}
 	td := tex.coreTexture.TrackingData()
@@ -981,6 +989,83 @@ func (q *Queue) recordAndTrackBarriers(
 	// lastSubmissionIndex that was set before hal.Submit).
 	q.barrierCBs = append(q.barrierCBs, barrierCB)
 	return barrierCB, nil
+}
+
+// presentSurfaces records the barriers that take the surface textures the
+// submit uses, those its command buffers use and those its queue writes
+// wrote, to their present state after the last of them, in a barrier command
+// buffer of their own at the end of q.submitBufs, as wgpu-core does at the
+// end of every submit: the present finds them there.
+//
+// Reference: wgpu-core device/queue.rs submit (used_surface_textures go
+// to PRESENT in a final command buffer)
+func (q *Queue) presentSurfaces(commandBuffers []*CommandBuffer, written []*Texture) error {
+	if q.device == nil || q.device.core == nil || q.device.core.Tracker() == nil || q.device.cmdEncoderPool == nil {
+		return nil
+	}
+	defer func() {
+		clear(q.presentBarriers)
+		q.presentIndices, q.presentTransitions, q.presentBarriers = q.presentIndices[:0], q.presentTransitions[:0], q.presentBarriers[:0]
+	}()
+	tracker := q.device.core.Tracker()
+	for _, t := range written {
+		q.presentSurface(tracker, t)
+	}
+	for _, cb := range commandBuffers {
+		for _, t := range cb.usedTextures {
+			q.presentSurface(tracker, t)
+		}
+		for _, g := range cb.usedBindGroups {
+			for _, t := range g.boundTextures {
+				q.presentSurface(tracker, t)
+			}
+		}
+	}
+	if len(q.presentBarriers) == 0 {
+		return nil
+	}
+	if q.barrierEncoder == nil {
+		enc, err := q.device.cmdEncoderPool.acquire()
+		if err != nil {
+			return fmt.Errorf("acquire barrier encoder: %w", err)
+		}
+		q.barrierEncoder = enc
+	}
+	if err := q.barrierEncoder.BeginEncoding("present-barrier"); err != nil {
+		return fmt.Errorf("record present barriers: %w", err)
+	}
+	q.barrierEncoder.TransitionTextures(q.presentBarriers)
+	cb, err := q.barrierEncoder.EndEncoding()
+	if err != nil {
+		q.barrierEncoder.DiscardEncoding()
+		return fmt.Errorf("record present barriers: %w", err)
+	}
+	q.barrierCBs = append(q.barrierCBs, cb)
+	q.submitBufs = append(q.submitBufs, cb)
+	return nil
+}
+
+// presentSurface moves t, when it is a surface texture not moved yet, to its
+// present state in tracker, and keeps the barriers there.
+func (q *Queue) presentSurface(tracker *core.DeviceTracker, t *Texture) {
+	if t == nil || t.surface == nil || t.coreTexture == nil {
+		return
+	}
+	td := t.coreTexture.TrackingData()
+	if td == nil || !td.Index().IsValid() || slices.Contains(q.presentIndices, td.Index()) {
+		return
+	}
+	raw := t.resolveHAL()
+	if raw == nil {
+		return
+	}
+	q.presentIndices = append(q.presentIndices, td.Index())
+	n := len(q.presentTransitions)
+	q.presentTransitions = tracker.SetTextureUsage(td.Index(), t.coreTexture.Subresources(), track.TextureSelector{},
+		track.TextureUsesPresent, q.presentTransitions)
+	for _, tr := range q.presentTransitions[n:] {
+		q.presentBarriers = append(q.presentBarriers, tr.IntoHAL(raw))
+	}
 }
 
 // release cleans up queue resources.

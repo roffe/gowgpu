@@ -54,14 +54,17 @@ type Swapchain struct {
 	surfaceTextures   []*SwapchainTexture
 	acquireFence      vk.Fence // Post-acquire fence for frame pacing (Rust wgpu pattern)
 
-	// BUG-WGPU-VK-006: Swapchain image layout tracking.
-	// Tracks the current Vulkan image layout for each swapchain image. Used to
-	// determine whether an explicit barrier to PRESENT_SRC_KHR is needed before
-	// vkQueuePresentKHR. Set to UNDEFINED on acquire (per Vulkan spec), updated
-	// to PRESENT_SRC_KHR when a render pass with that finalLayout targets the
-	// swapchain image, and checked in present() to insert a defensive barrier
-	// when the layout is not PRESENT_SRC_KHR (e.g., blit-only or offscreen paths).
+	// imageLayouts is the layout each image is left in by the commands
+	// recorded since its acquire, in the order they were recorded: a pass
+	// that loads an image nothing used clears it instead, and the present
+	// of an image no barrier took to PRESENT_SRC_KHR transitions it from
+	// there. The barriers of the core, which tracks the image in the order
+	// the work runs in, go from its own states. UNDEFINED on acquire.
 	imageLayouts []vk.ImageLayout
+	// presentReady reports whether the last barrier recorded on the current
+	// image took it to PRESENT_SRC_KHR: the core does at the end of every
+	// submit that uses the image, and present adds none then.
+	presentReady bool
 
 	// barrierPool is a dedicated VkCommandPool for recording layout transition
 	// barriers before present. Separate from user command pools to avoid
@@ -1215,6 +1218,8 @@ func (sc *Swapchain) acquireNextImage() (*SwapchainTexture, bool, error) {
 	if sc.discarded && sc.currentImage < uint32(len(sc.surfaceTextures)) {
 		sc.discarded = false
 		sc.imageAcquired = true
+		sc.imageLayouts[sc.currentImage] = vk.ImageLayoutUndefined
+		sc.presentReady = false
 		return sc.surfaceTextures[sc.currentImage], false, nil
 	}
 
@@ -1341,10 +1346,10 @@ func (sc *Swapchain) acquireNextImage() (*SwapchainTexture, bool, error) {
 	sc.currentImage = imageIndex
 	sc.imageAcquired = true
 
-	// BUG-WGPU-VK-006: Per Vulkan spec, acquired swapchain images are in
-	// UNDEFINED layout regardless of previous usage. Track this so present()
-	// can insert a barrier if no render pass transitions to PRESENT_SRC_KHR.
+	// An acquired image's contents are undefined: the core starts it in no
+	// state, and the barriers out of that go from UNDEFINED.
 	sc.imageLayouts[imageIndex] = vk.ImageLayoutUndefined
+	sc.presentReady = false
 
 	return sc.surfaceTextures[imageIndex], policy.reportSuboptimal(result == vk.SuboptimalKhr), nil
 }
@@ -1478,13 +1483,8 @@ func (sc *Swapchain) present(queue *Queue, damageRects []image.Rectangle) error 
 	}
 }
 
-// SetImageLayout updates the tracked layout for a swapchain image.
-// Called from BeginRenderPass when the render pass finalLayout is known for a
-// swapchain color attachment. This allows present() to skip the barrier when
-// the render pass already transitions to PRESENT_SRC_KHR.
-//
-// BUG-WGPU-VK-006: Without this tracking, present() would either always insert
-// a barrier (unnecessary overhead) or never insert one (the bug).
+// SetImageLayout notes the layout the commands recorded last leave a
+// swapchain image in, see imageLayouts.
 func (sc *Swapchain) SetImageLayout(imageIndex uint32, layout vk.ImageLayout) {
 	if int(imageIndex) < len(sc.imageLayouts) {
 		sc.imageLayouts[imageIndex] = layout
@@ -1499,12 +1499,11 @@ func (sc *Swapchain) currentImageUndefined() bool {
 
 // ensurePresentLayout transitions the swapchain image to PRESENT_SRC_KHR if needed.
 //
-// ADR-060: In the common case (render pass targeting swapchain), the inline barrier
-// in CommandEncoder.EndEncoding() already transitions to PRESENT_SRC_KHR. This
-// function serves as a FALLBACK for edge cases where no render pass targeted the
-// swapchain (blit-only, offscreen-only paths), when the inline barrier was not
-// injected, or when a copy or queue write in a later command buffer took the
-// image out of PRESENT_SRC_KHR again.
+// The core takes a surface texture a submit used to its present state at the
+// end of the submit, which presentReady notes. This is the fallback for an
+// image no submit used since its acquire, and for work recorded on the HAL
+// directly, which it transitions from the layout the commands recorded last
+// left it in.
 //
 // ADR-059: The barrier CB is submitted without a fence -- the command pool reset is
 // deferred to acquireNextImage, where the acquire fence wait guarantees the
@@ -1531,8 +1530,7 @@ func (sc *Swapchain) ensurePresentLayout(queue *Queue) error {
 	waitAcquire := !sc.acquireUsed
 	if waitAcquire {
 		currentLayout = vk.ImageLayoutUndefined
-	} else if currentLayout == vk.ImageLayoutPresentSrcKhr {
-		// Common case: render pass already transitioned. Nothing to do.
+	} else if sc.presentReady || currentLayout == vk.ImageLayoutPresentSrcKhr {
 		return nil
 	}
 
@@ -1665,8 +1663,8 @@ func (sc *Swapchain) ensurePresentLayout(queue *Queue) error {
 		sc.acquireFenceValues[sc.currentAcquireIdx] = signalValue
 	}
 
-	// Update tracked layout — the barrier transitions to PRESENT_SRC_KHR.
 	sc.imageLayouts[idx] = vk.ImageLayoutPresentSrcKhr
+	sc.presentReady = true
 
 	hal.Logger().Debug("vulkan: inserted PRESENT_SRC_KHR barrier",
 		"imageIndex", idx, "oldLayout", currentLayout)

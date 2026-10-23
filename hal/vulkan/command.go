@@ -96,35 +96,11 @@ type CommandEncoder struct {
 	label       string
 	poolManaged bool // true when managed by wgpu-level encoder pool
 
-	// ADR-060: Inline present barrier optimization.
-	// Tracks the swapchain image targeted by BeginRenderPass so that
-	// EndEncoding can inject a pipeline barrier (COLOR_ATTACHMENT_OPTIMAL
-	// -> PRESENT_SRC_KHR) into the SAME command buffer, eliminating the
-	// separate vkQueueSubmit that ensurePresentLayout would otherwise need.
-	// Set by BeginRenderPass when a swapchain view is used; cleared by
-	// EndEncoding after the barrier is injected (or if no swapchain was used).
-	//
-	// For multi-submit frames (e.g. g3d + gg), each Submit's EndEncoding
-	// injects the barrier, and the next Submit's BeginRenderPass inserts a
-	// reverse barrier (PRESENT_SRC -> COLOR_ATTACHMENT) when LoadOp::Load
-	// needs the image back in COLOR_ATTACHMENT_OPTIMAL.
-	//
-	// Reference: Rust wgpu-core queue.rs:1284 — "Transition surface textures
-	// into Present state" is appended to the last baked encoder inline.
-	swapchainImage  vk.Image       // VkImage of the swapchain target (0 = none)
-	swapchainLayout vk.ImageLayout // layout the render pass leaves the image in
-	swapchain       *Swapchain     // back-pointer for layout tracking updates
-
-	// presented is the swapchain whose image presentedImage an inline
-	// present barrier of this encoder marked PRESENT_SRC_KHR, kept until
-	// ResetAll: the fields above are per command buffer (BeginEncoding
-	// clears them), and a swapchain pass split off into a command buffer
-	// of its own (core recordPassTransitions) is closed, barrier and all,
-	// while the encoder goes on recording. A DiscardEncoding after that
-	// drops the closed command buffer too, so the image never reaches
-	// PRESENT_SRC_KHR and its tracking goes back to UNDEFINED.
-	presented      *Swapchain
-	presentedImage uint32
+	// swapchain is the swapchain whose acquired image a command this
+	// encoder recorded since its last ResetAll uses, a render pass on it or
+	// a barrier of it, which a discard takes back (DiscardEncoding): the
+	// command buffers the encoder closed meanwhile go with it.
+	swapchain *Swapchain
 }
 
 // BeginEncoding begins command recording.
@@ -183,12 +159,6 @@ func (e *CommandEncoder) BeginEncoding(label string) error {
 	}
 
 	e.active = raw
-
-	// ADR-060: Reset inline present barrier tracking for this new recording.
-	e.swapchainImage = 0
-	e.swapchainLayout = 0
-	e.swapchain = nil
-
 	return nil
 }
 
@@ -200,32 +170,10 @@ func (e *CommandEncoder) BeginEncoding(label string) error {
 // In pool-managed mode: the encoder retains ownership of its VkCommandPool.
 // After GPU completion, call ResetAll to prepare for the next BeginEncoding cycle.
 //
-// ADR-060: Before closing the command buffer, injects an inline pipeline
-// barrier to transition the swapchain image from COLOR_ATTACHMENT_OPTIMAL
-// to PRESENT_SRC_KHR. This eliminates the separate vkQueueSubmit that
-// ensurePresentLayout would otherwise need, recovering ~30 FPS on Intel
-// Iris Xe. The barrier is recorded into the SAME command buffer as the
-// user's work — zero extra CB, zero extra submit.
-//
 // Reference: Rust wgpu-hal end_encoding (vulkan/command.rs:153-163).
-// Reference: Rust wgpu-core queue.rs:1284 — present barrier appended inline.
 func (e *CommandEncoder) EndEncoding() (hal.CommandBuffer, error) {
 	if e.active == 0 {
 		return nil, fmt.Errorf("vulkan: command encoder is not recording")
-	}
-
-	// ADR-060: Inject inline present barrier before closing the command buffer.
-	// If a render pass targeted a swapchain image and left it in
-	// COLOR_ATTACHMENT_OPTIMAL, append a pipeline barrier to transition it to
-	// PRESENT_SRC_KHR. This is the same barrier ensurePresentLayout would
-	// record in a separate submit — but here it is inside the user's CB.
-	//
-	// For multi-submit frames, the next BeginRenderPass inserts a reverse
-	// barrier (PRESENT_SRC -> COLOR_ATTACHMENT) when LoadOp::Load is used,
-	// so the inline barrier in the previous submit does not cause a layout
-	// mismatch.
-	if e.swapchainImage != 0 && e.swapchainLayout != vk.ImageLayoutPresentSrcKhr {
-		e.injectInlinePresentBarrier()
 	}
 
 	// The host reads what a copy or a shader wrote into a mapped buffer
@@ -266,10 +214,7 @@ func (e *CommandEncoder) EndEncoding() (hal.CommandBuffer, error) {
 		e.free = nil
 		e.discarded = e.discarded[:0]
 		e.label = ""
-		e.swapchainImage = 0
-		e.swapchainLayout = 0
 		e.swapchain = nil
-		e.presented = nil
 		encoderPool.Put(e)
 	}
 
@@ -292,113 +237,6 @@ func (e *CommandEncoder) result() *CommandBuffer {
 	cb := e.results[e.usedResults]
 	e.usedResults++
 	return cb
-}
-
-// injectInlinePresentBarrier records a pipeline barrier inside the active
-// command buffer, transitioning the swapchain image from its current tracked
-// layout to PRESENT_SRC_KHR. Called from EndEncoding to avoid a separate
-// vkQueueSubmit in ensurePresentLayout.
-//
-// The source access mask and pipeline stage come from the layout the command
-// buffer leaves the image in: what the render pass left, or a copy after it
-// (layoutAccess), the same as ensurePresentLayout uses.
-func (e *CommandEncoder) injectInlinePresentBarrier() {
-	srcAccess, srcStage := layoutAccess(e.swapchainLayout)
-	// The present engine does not need explicit access.
-	barrier := swapchainImageBarrier(e.swapchainImage, e.swapchainLayout, vk.ImageLayoutPresentSrcKhr, srcAccess, 0)
-
-	e.device.cmds.CmdPipelineBarrier(
-		e.active,
-		srcStage,
-		vk.PipelineStageFlags(vk.PipelineStageBottomOfPipeBit),
-		0,      // dependencyFlags
-		0, nil, // memory barriers
-		0, nil, // buffer barriers
-		1, &barrier,
-	)
-
-	// Update the swapchain's layout tracking so ensurePresentLayout in
-	// present() sees PRESENT_SRC_KHR and returns early (zero-cost path).
-	if e.swapchain != nil {
-		e.swapchain.SetImageLayout(e.swapchain.currentImage, vk.ImageLayoutPresentSrcKhr)
-		e.presented, e.presentedImage = e.swapchain, e.swapchain.currentImage
-	}
-
-	// Prevent double-injection if EndEncoding is called again (should not
-	// happen, but defensive).
-	e.swapchainImage = 0
-}
-
-// setupInlinePresentBarrier prepares the encoder for inline present barrier
-// injection in EndEncoding. Called from BeginRenderPass when a swapchain
-// image is targeted.
-//
-// Two responsibilities:
-//  1. Record the swapchain image/layout so EndEncoding knows what to barrier.
-//  2. If the image is currently in PRESENT_SRC_KHR (from a previous submit's
-//     inline barrier) and LoadOp::Load requires COLOR_ATTACHMENT_OPTIMAL,
-//     insert a reverse barrier before vkCmdBeginRenderPass to prevent a
-//     Vulkan layout mismatch VUID violation.
-func (e *CommandEncoder) setupInlinePresentBarrier(
-	view, resolveView *TextureView,
-	hasMSAAResolve bool,
-	colorFinalLayout vk.ImageLayout,
-	loadOp gputypes.LoadOp,
-) {
-	swapView := swapchainTargetView(view, resolveView, hasMSAAResolve)
-	if swapView == nil || swapView.swapchain == nil {
-		return
-	}
-	sc := swapView.swapchain
-	idx := sc.currentImage
-
-	// A barrier ahead of the pass takes the image to COLOR_ATTACHMENT_OPTIMAL
-	// from the layout the swapchain tracks it in when the pass cannot do it
-	// itself: from PRESENT_SRC_KHR, left by an earlier submit of the frame
-	// (its inline present barrier), when the pass loads the image, which
-	// needs it in COLOR_ATTACHMENT_OPTIMAL already; and from a transfer or
-	// shader layout, left by a copy, a queue write or an explicit barrier,
-	// loading or clearing, since the pass's implicit dependency waits for
-	// nothing and the transfer has to be done before the pass writes. From
-	// UNDEFINED and COLOR_ATTACHMENT_OPTIMAL the pass's own layouts do.
-	if int(idx) < len(sc.imageLayouts) {
-		switch cur := sc.imageLayouts[idx]; cur {
-		case vk.ImageLayoutPresentSrcKhr:
-			if loadOpToVk(loadOp) == vk.AttachmentLoadOpLoad {
-				e.injectReverseBarrier(sc, idx, cur)
-			}
-		case vk.ImageLayoutTransferSrcOptimal, vk.ImageLayoutTransferDstOptimal,
-			vk.ImageLayoutShaderReadOnlyOptimal, vk.ImageLayoutGeneral:
-			e.injectReverseBarrier(sc, idx, cur)
-		}
-	}
-
-	// Record the swapchain image for EndEncoding's forward barrier.
-	e.swapchainImage = sc.images[idx]
-	e.swapchainLayout = colorFinalLayout
-	e.swapchain = sc
-}
-
-// injectReverseBarrier transitions a swapchain image from oldLayout, the
-// layout the swapchain tracks it in, to COLOR_ATTACHMENT_OPTIMAL inside the
-// active command buffer, ahead of a render pass on it: back from
-// PRESENT_SRC_KHR in a multi-submit frame whose earlier submit injected the
-// inline present barrier and whose later pass loads the image, or from the
-// transfer layout a copy or queue write left it in.
-func (e *CommandEncoder) injectReverseBarrier(sc *Swapchain, idx uint32, oldLayout vk.ImageLayout) {
-	srcAccess, srcStage := layoutAccess(oldLayout)
-	dstAccess, dstStage := layoutAccess(vk.ImageLayoutColorAttachmentOptimal)
-	barrier := swapchainImageBarrier(sc.images[idx], oldLayout, vk.ImageLayoutColorAttachmentOptimal, srcAccess, dstAccess)
-	e.device.cmds.CmdPipelineBarrier(
-		e.active,
-		srcStage,
-		dstStage,
-		0,      // dependencyFlags
-		0, nil, // memory barriers
-		0, nil, // buffer barriers
-		1, &barrier,
-	)
-	sc.SetImageLayout(idx, vk.ImageLayoutColorAttachmentOptimal)
 }
 
 // copyImage is the image a copy works on: a texture of this device, or a
@@ -448,53 +286,23 @@ func (img copyImage) clampExtent(base hal.ImageCopyTexture, size hal.Extent3D) h
 	return size
 }
 
-// transitionSwapchainUsage is a barrier on a swapchain image into usage, from
-// the layout the swapchain tracks the image in. The barrier's old usage does
-// not name that layout: one tracker index stands for every image of the
-// swapchain in the core, so the usage it last saw was another image's, and
-// it never sees the present. A barrier into RenderAttachment is left to the
-// render pass, which transitions the image itself (BeginRenderPass and the
-// render pass's layouts), and so is one into no usage.
-func (e *CommandEncoder) transitionSwapchainUsage(st *SwapchainTexture, usage gputypes.TextureUsage) {
-	if usage == 0 || usage&gputypes.TextureUsageRenderAttachment != 0 {
-		return
-	}
-	_, _, layout := textureBarrierState(nil, textureUses(nil, 0, usage))
-	e.transitionSwapchainImage(st, layout)
-}
-
-// ensureSwapchainLayout puts the swapchain image a copy is about to use in
-// layout when nothing has: the core skips a barrier into the usage it last
-// saw the surface texture in, which was another image of the swapchain, and
-// the first use of an image in a command buffer has no barrier in it at all.
-// A texture of this device is left alone, its barriers are the core's.
-func (e *CommandEncoder) ensureSwapchainLayout(t hal.Texture, layout vk.ImageLayout) {
-	st, ok := t.(*SwapchainTexture)
-	if !ok || st.swapchain == nil || int(st.index) >= len(st.swapchain.imageLayouts) {
-		return
-	}
-	if st.swapchain.imageLayouts[st.index] != layout {
-		e.transitionSwapchainImage(st, layout)
-	}
-}
-
-// transitionSwapchainImage records the barrier that takes a swapchain image
-// from the layout the swapchain tracks it in to layout, and tracks the new
-// one: in the swapchain, so present and the next render pass start from it,
-// and in the encoder when a render pass of this command buffer targets the
-// image, so the inline present barrier at EndEncoding does too. The tracking
-// follows recording order, which has to be the order of execution, as it
-// does for the render pass and present barriers: the core records no
-// submit-time barrier on a surface texture for that reason.
-func (e *CommandEncoder) transitionSwapchainImage(st *SwapchainTexture, layout vk.ImageLayout) {
+// transitionSwapchain records a barrier of the core's on a swapchain image,
+// from the layout of the state it names as old to the layout of the new one:
+// the core tracks a surface texture in the order its work runs in. A
+// barrier out of no state, an image as acquired, waits for the stages the
+// acquire semaphore holds, and one into the present state for the work
+// before it, as layoutAccess has them. The swapchain notes the new layout,
+// and whether it is the present one, which present goes by.
+func (e *CommandEncoder) transitionSwapchain(st *SwapchainTexture, usage hal.TextureUsageTransition) {
 	sc := st.swapchain
-	if sc == nil || int(st.index) >= len(sc.imageLayouts) {
+	if sc == nil || st.handle == 0 {
 		return
 	}
-	oldLayout := sc.imageLayouts[st.index]
+	oldLayout := deriveImageLayout(nil, textureUses(nil, usage.Old, usage.OldUsage))
+	newLayout := deriveImageLayout(nil, textureUses(nil, usage.New, usage.NewUsage))
 	srcAccess, srcStage := layoutAccess(oldLayout)
-	dstAccess, dstStage := layoutAccess(layout)
-	barrier := swapchainImageBarrier(st.handle, oldLayout, layout, srcAccess, dstAccess)
+	dstAccess, dstStage := layoutAccess(newLayout)
+	barrier := swapchainImageBarrier(st.handle, oldLayout, newLayout, srcAccess, dstAccess)
 	vkCmdPipelineBarrier(
 		e.device.cmds,
 		e.active,
@@ -505,10 +313,11 @@ func (e *CommandEncoder) transitionSwapchainImage(st *SwapchainTexture, layout v
 		0, nil,
 		1, &barrier,
 	)
-	sc.SetImageLayout(st.index, layout)
-	if e.swapchainImage == st.handle {
-		e.swapchainLayout = layout
+	sc.SetImageLayout(st.index, newLayout)
+	if st.index == sc.currentImage {
+		sc.presentReady = newLayout == vk.ImageLayoutPresentSrcKhr
 	}
+	e.swapchain = sc
 }
 
 // swapchainImageBarrier is the image barrier that takes a swapchain image,
@@ -574,23 +383,12 @@ func (e *CommandEncoder) DiscardEncoding() {
 		e.active = 0
 	}
 
-	// ADR-060: Clear inline present barrier tracking — discarded work
-	// should not trigger a layout transition. Reset the swapchain image
-	// layout to UNDEFINED so ensurePresentLayout sees the real GPU state
-	// (the discarded render pass never executed).
+	// What the discarded commands did to a swapchain image never runs.
 	if e.swapchain != nil {
 		e.swapchain.SetImageLayout(e.swapchain.currentImage, vk.ImageLayoutUndefined)
+		e.swapchain.presentReady = false
 	}
-	e.swapchainImage = 0
-	e.swapchainLayout = 0
 	e.swapchain = nil
-	// The same for a command buffer this encoder closed with a present
-	// barrier inside: it goes with the discard, so its image is not
-	// presentable either.
-	if e.presented != nil {
-		e.presented.SetImageLayout(e.presentedImage, vk.ImageLayoutUndefined)
-		e.presented = nil
-	}
 
 	if !e.poolManaged {
 		// Standalone mode: recycle pool and encoder struct (VK-POOL-001).
@@ -625,9 +423,7 @@ func (e *CommandEncoder) ResetAll(commandBuffers []hal.CommandBuffer) {
 	e.free = append(e.free, e.discarded...)
 	e.discarded = e.discarded[:0]
 	e.usedResults = 0
-	// The command buffers are spent, so is the present barrier one of them
-	// carried.
-	e.presented = nil
+	e.swapchain = nil
 
 	// Batch reset entire pool — one call resets all command buffers to
 	// initial state. Much cheaper than N individual resets (NVIDIA, ARM docs).
@@ -758,7 +554,7 @@ func (e *CommandEncoder) TransitionTextures(barriers []hal.TextureBarrier) {
 	var srcStages, dstStages vk.PipelineStageFlags
 	for _, b := range barriers {
 		if st, ok := b.Texture.(*SwapchainTexture); ok {
-			e.transitionSwapchainUsage(st, b.Usage.NewUsage)
+			e.transitionSwapchain(st, b.Usage)
 			continue
 		}
 		tex, ok := b.Texture.(*Texture)
@@ -949,8 +745,6 @@ func (e *CommandEncoder) CopyBufferToTexture(src hal.Buffer, dst hal.Texture, re
 	if !srcOk || !dstOk || len(regions) == 0 {
 		return
 	}
-	e.ensureSwapchainLayout(dst, vk.ImageLayoutTransferDstOptimal)
-
 	// The regions stay on the stack for the usual one-region copy: the
 	// command does not keep them.
 	var stack [4]vk.BufferImageCopy
@@ -977,8 +771,6 @@ func (e *CommandEncoder) CopyTextureToBuffer(src hal.Texture, dst hal.Buffer, re
 	if !srcOk || !dstOk || len(regions) == 0 {
 		return
 	}
-	e.ensureSwapchainLayout(src, vk.ImageLayoutTransferSrcOptimal)
-
 	var stack [4]vk.BufferImageCopy
 	vkRegions := convertBufferImageCopyRegions(stack[:0], regions, srcImage)
 	vkCmdCopyImageToBuffer(
@@ -1020,8 +812,6 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst hal.Texture, regions []ha
 	if !srcOk || !dstOk || len(regions) == 0 {
 		return
 	}
-	e.ensureSwapchainLayout(src, vk.ImageLayoutTransferSrcOptimal)
-	e.ensureSwapchainLayout(dst, vk.ImageLayoutTransferDstOptimal)
 
 	var stack [4]vk.ImageCopy
 	vkRegions := stack[:0]
@@ -1397,15 +1187,10 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 			loadOp, clearValue = gputypes.LoadOpClear, gputypes.Color{}
 		}
 
-		// ADR-060: Inline present barrier for swapchain targets.
-		// Only the FIRST swapchain attachment drives the barrier; additional
-		// swapchain attachments are unusual and would need separate tracking.
-		if e.swapchainImage == 0 {
-			e.setupInlinePresentBarrier(view, resolveView, hasMSAAResolve, targetLayout, loadOp)
+		if swapView := swapchainTargetView(view, resolveView, hasMSAAResolve); swapView != nil {
+			swapView.swapchain.SetImageLayout(swapView.swapchain.currentImage, targetLayout)
+			e.swapchain = swapView.swapchain
 		}
-
-		// BUG-WGPU-VK-006: Update swapchain image layout tracking.
-		updateSwapchainLayout(view, resolveView, hasMSAAResolve, targetLayout)
 
 		rpKey.Colors[i] = ColorAttachmentKeyEntry{
 			Format:        view.vkFormat,
@@ -2113,21 +1898,6 @@ func offscreenFinalLayout(view *TextureView) vk.ImageLayout {
 		return vk.ImageLayoutGeneral
 	}
 	return vk.ImageLayoutColorAttachmentOptimal
-}
-
-// updateSwapchainLayout updates swapchain image layout tracking for
-// BUG-WGPU-VK-006. When a render pass targets a swapchain image (directly
-// or via MSAA resolve), the Vulkan render pass finalLayout transitions the
-// image automatically. Recording the expected layout lets present() skip
-// the defensive barrier when it's not needed (zero overhead common case).
-func updateSwapchainLayout(view *TextureView, resolveView *TextureView, hasMSAAResolve bool, finalLayout vk.ImageLayout) {
-	if !hasMSAAResolve && view.isSwapchain && view.swapchain != nil {
-		// Non-MSAA: the color attachment IS the swapchain image.
-		view.swapchain.SetImageLayout(view.swapchain.currentImage, finalLayout)
-	} else if hasMSAAResolve && resolveView != nil && resolveView.isSwapchain && resolveView.swapchain != nil {
-		// MSAA: the resolve target IS the swapchain image.
-		resolveView.swapchain.SetImageLayout(resolveView.swapchain.currentImage, finalLayout)
-	}
 }
 
 // swapchainTargetView returns the TextureView that represents the swapchain

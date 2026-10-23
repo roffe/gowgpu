@@ -11,6 +11,7 @@ import (
 	"slices"
 
 	"github.com/roffe/gowgpu/core"
+	"github.com/roffe/gowgpu/core/track"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 )
@@ -381,7 +382,12 @@ func (s *Surface) GetCurrentTexture() (*SurfaceTexture, bool, error) {
 				size,
 				1, 1, "surface",
 			)
-			s.swapchainTexture.MarkSurface()
+		}
+		// The image just acquired is in no state the GPU knows: the device
+		// tracker starts it from there, and the barriers of the submits that
+		// use it go from that.
+		if td := s.swapchainTexture.TrackingData(); td != nil && td.Index().IsValid() && s.device.core.Tracker() != nil {
+			s.device.core.Tracker().InsertTexture(td.Index(), track.TextureUsesUninitialized)
 		}
 	}
 

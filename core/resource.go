@@ -994,16 +994,7 @@ type Texture struct {
 
 	// Ref is the GPU-aware reference counter for this texture (Phase 2).
 	Ref *ResourceRef
-
-	// surface is set for the texture a surface's images share.
-	surface bool
 }
-
-// MarkSurface marks t as the texture of a surface's images, whose layouts
-// the backend tracks in recording order: no barrier at submit takes them
-// anywhere, so a pass that first uses one other than as an attachment
-// moves it itself.
-func (t *Texture) MarkSurface() { t.surface = true }
 
 // NewTexture creates a core Texture wrapping a HAL texture.
 //
