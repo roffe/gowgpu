@@ -393,3 +393,34 @@ func TestVertexOnlyPipelineOnES(t *testing.T) {
 	}
 	dev.DestroyRenderPipeline(p)
 }
+
+// The limits are in WebGPU's units: inter-stage variables of four
+// components, where GL counts components, and the workgroup sizes the
+// context has, where ES 3.1 guarantees fewer than desktop GL.
+func TestLimitsInWebGPUUnits(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		ctx  func(*testing.T) *AdapterContext
+	}{{"desktop", newTestAdapterContext}, {"es", newTestESAdapterContext}} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := tc.ctx(t)
+			t.Cleanup(ctx.Destroy)
+			glCtx := ctx.Lock()
+			defer ctx.Unlock()
+			caps := queryAdapterCapabilities(glCtx)
+			var components int32
+			glCtx.GetIntegerv(gl.MAX_VARYING_COMPONENTS, &components)
+			if got := caps.Limits.MaxInterStageShaderVariables; components > 0 && got != uint32(components/4) {
+				t.Errorf("MaxInterStageShaderVariables %d for %d components", got, components)
+			}
+			if !caps.compute {
+				return
+			}
+			for i, got := range []uint32{caps.Limits.MaxComputeWorkgroupSizeX, caps.Limits.MaxComputeWorkgroupSizeY, caps.Limits.MaxComputeWorkgroupSizeZ} {
+				if want := glCtx.GetIntegeri(gl.MAX_COMPUTE_WORK_GROUP_SIZE, uint32(i)); got != uint32(want) {
+					t.Errorf("workgroup size %d is %d, the context has %d", i, got, want)
+				}
+			}
+		})
+	}
+}

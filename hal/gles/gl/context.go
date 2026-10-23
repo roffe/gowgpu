@@ -19,6 +19,7 @@ type Context struct {
 	glGetError     uintptr
 	glGetString    uintptr
 	glGetIntegerv  uintptr
+	glGetIntegeriv uintptr
 	glEnable       uintptr
 	glDisable      uintptr
 	glClear        uintptr
@@ -230,6 +231,7 @@ func (c *Context) Load(getProcAddr ProcAddressFunc) error {
 	c.glGetError = getProcAddr("glGetError")
 	c.glGetString = getProcAddr("glGetString")
 	c.glGetIntegerv = getProcAddr("glGetIntegerv")
+	c.glGetIntegeriv = getProcAddr("glGetIntegeri_v")
 	c.glEnable = getProcAddr("glEnable")
 	c.glDisable = getProcAddr("glDisable")
 	c.glClear = getProcAddr("glClear")
@@ -442,6 +444,16 @@ func (c *Context) GetString(name uint32) string {
 
 func (c *Context) GetIntegerv(pname uint32, data *int32) {
 	syscall.SyscallN(c.glGetIntegerv, uintptr(pname), uintptr(unsafe.Pointer(data)))
+}
+
+// GetIntegeri returns element index of an indexed integer state, 0 where
+// the context has no glGetIntegeri_v (GL 3.0, ES 3.0).
+func (c *Context) GetIntegeri(target, index uint32) int32 {
+	var v int32
+	if c.glGetIntegeriv != 0 {
+		syscall.SyscallN(c.glGetIntegeriv, uintptr(target), uintptr(index), uintptr(unsafe.Pointer(&v)))
+	}
+	return v
 }
 
 // GetStringi returns an indexed string from an OpenGL string array (GL 3.0+).

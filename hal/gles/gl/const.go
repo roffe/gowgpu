@@ -357,6 +357,7 @@ const (
 	MAX_SAMPLES                      = 0x8D57
 	MAX_ELEMENT_INDEX                = 0x8D6B
 	MAX_VARYING_COMPONENTS           = 0x8B4B
+	MAX_VERTEX_TEXTURE_IMAGE_UNITS   = 0x8B4C
 
 	// Shader storage buffer (GL 4.3+ / ES 3.1+)
 	MAX_VERTEX_SHADER_STORAGE_BLOCKS       = 0x90D6

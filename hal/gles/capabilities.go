@@ -382,6 +382,15 @@ func queryFeatures(exts map[string]bool, glMajor, glMinor int, isES bool, glCtx 
 // Limits querying
 // ---------------------------------------------------------------------------
 
+// indexedGLInt is element index of an indexed GL integer, fallback where
+// the context reports none.
+func indexedGLInt(glCtx *gl.Context, pname, index uint32, fallback int32) int32 {
+	if v := glCtx.GetIntegeri(pname, index); v > 0 {
+		return v
+	}
+	return fallback
+}
+
 // getGLInt queries a single GL integer parameter. Returns the fallback value
 // if the result is <= 0.
 func getGLInt(glCtx *gl.Context, pname uint32, fallback int32) int32 {
@@ -446,8 +455,9 @@ func queryLimits(glCtx *gl.Context, caps *AdapterCapabilities) gputypes.Limits {
 		maxColorAttachments = 8 // WebGPU max
 	}
 
-	// Texture units / samplers
-	maxTextureUnits := getGLInt(glCtx, gl.MAX_TEXTURE_IMAGE_UNITS, 16)
+	// Texture units / samplers, the fewer of the fragment and vertex
+	// stages', as Dawn takes.
+	maxTextureUnits := minI32(getGLInt(glCtx, gl.MAX_TEXTURE_IMAGE_UNITS, 16), getGLInt(glCtx, gl.MAX_VERTEX_TEXTURE_IMAGE_UNITS, 16))
 
 	// Vertex buffers
 	var maxVertexBuffers int32
@@ -466,32 +476,30 @@ func queryLimits(glCtx *gl.Context, caps *AdapterCapabilities) gputypes.Limits {
 		maxVertexBuffers = 16
 	}
 
-	// Varying components (inter-stage shader variables)
-	maxVaryingComponents := getGLInt(glCtx, gl.MAX_VARYING_COMPONENTS, 60)
-	if maxVaryingComponents == 0 {
-		// MAX_VARYING_COMPONENTS is deprecated in OpenGL 3.2+ core profile;
-		// some drivers return 0. Use the WebGPU default.
-		maxVaryingComponents = 60
+	// WebGPU counts inter-stage variables of four components, so GL's
+	// component count is divided, as wgpu-hal does. The query is
+	// deprecated in core profiles, where some drivers return 0; ES 3.0
+	// guarantees 15 vectors.
+	maxInterStage := getGLInt(glCtx, gl.MAX_VARYING_COMPONENTS, 60) / 4
+	if maxInterStage == 0 {
+		maxInterStage = 15
 	}
 
 	// Compute limits (ES 3.1+ / GL 4.3+)
 	var computeSharedMem int32
 	var computeInvocations int32
 	var computeWorkgroupsPerDim int32
-	// NOTE: compute workgroup size per-axis requires glGetIntegeri_v which we
-	// don't expose yet. Use conservative defaults matching the GL spec minimums.
 	var computeWGSizeX, computeWGSizeY, computeWGSizeZ int32
 	if supportsCompute {
 		computeSharedMem = getGLInt(glCtx, gl.MAX_COMPUTE_SHARED_MEMORY_SIZE, 16384)
 		computeInvocations = getGLInt(glCtx, gl.MAX_COMPUTE_WORK_GROUP_INVOCATIONS, 256)
-		// Without glGetIntegeri_v, use the guaranteed minimums from the GL spec.
-		// ES 3.1 / GL 4.3 guarantee at least 1024 for X/Y and 64 for Z.
-		computeWGSizeX = 1024
-		computeWGSizeY = 1024
-		computeWGSizeZ = 64
-		// Workgroups per dimension -- also indexed but we can approximate.
-		// GL spec guarantees at least 65535 per dimension.
-		computeWorkgroupsPerDim = 65535
+		// Per axis, as the context has them: ES 3.1 guarantees only
+		// 128x128x64, GL 4.3 1024x1024x64, and both 65535 workgroups.
+		computeWGSizeX = indexedGLInt(glCtx, gl.MAX_COMPUTE_WORK_GROUP_SIZE, 0, 128)
+		computeWGSizeY = indexedGLInt(glCtx, gl.MAX_COMPUTE_WORK_GROUP_SIZE, 1, 128)
+		computeWGSizeZ = indexedGLInt(glCtx, gl.MAX_COMPUTE_WORK_GROUP_SIZE, 2, 64)
+		computeWorkgroupsPerDim = minI32(indexedGLInt(glCtx, gl.MAX_COMPUTE_WORK_GROUP_COUNT, 0, 65535),
+			minI32(indexedGLInt(glCtx, gl.MAX_COMPUTE_WORK_GROUP_COUNT, 1, 65535), indexedGLInt(glCtx, gl.MAX_COMPUTE_WORK_GROUP_COUNT, 2, 65535)))
 	}
 
 	return gputypes.Limits{
@@ -517,7 +525,7 @@ func queryLimits(glCtx *gl.Context, caps *AdapterCapabilities) gputypes.Limits {
 		MaxBufferSize:                             1<<31 - 1, // i32::MAX
 		MaxVertexAttributes:                       uint32(maxVertexAttribs),
 		MaxVertexBufferArrayStride:                uint32(maxVertexStride),
-		MaxInterStageShaderVariables:              uint32(maxVaryingComponents),
+		MaxInterStageShaderVariables:              uint32(maxInterStage),
 		MaxColorAttachments:                       uint32(maxColorAttachments),
 		MaxColorAttachmentBytesPerSample:          uint32(maxColorAttachments) * 16, // 16 bytes max per attachment
 		MaxComputeWorkgroupStorageSize:            uint32(computeSharedMem),
