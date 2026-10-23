@@ -807,26 +807,49 @@ func TestHasStencilAspect(t *testing.T) {
 	}
 }
 
-// TestTextureDimensionToViewType tests texture dimension to view type conversions.
-func TestTextureDimensionToViewType(t *testing.T) {
+// TestDefaultViewDimension: a view without a dimension is the texture's,
+// and an array of a 2D texture with more than one layer.
+func TestDefaultViewDimension(t *testing.T) {
 	tests := []struct {
 		name   string
 		dim    gputypes.TextureDimension
-		expect vk.ImageViewType
+		layers uint32
+		expect gputypes.TextureViewDimension
 	}{
-		{"1D", gputypes.TextureDimension1D, vk.ImageViewType1d},
-		{"2D", gputypes.TextureDimension2D, vk.ImageViewType2d},
-		{"3D", gputypes.TextureDimension3D, vk.ImageViewType3d},
-		{"Unknown defaults to 2D", gputypes.TextureDimension(99), vk.ImageViewType2d},
+		{"1D", gputypes.TextureDimension1D, 1, gputypes.TextureViewDimension1D},
+		{"2D", gputypes.TextureDimension2D, 1, gputypes.TextureViewDimension2D},
+		{"2D of 6 layers", gputypes.TextureDimension2D, 6, gputypes.TextureViewDimension2DArray},
+		{"3D", gputypes.TextureDimension3D, 1, gputypes.TextureViewDimension3D},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := textureDimensionToViewType(tt.dim)
-			if got != tt.expect {
-				t.Errorf("textureDimensionToViewType() = %v, want %v", got, tt.expect)
+			if got := defaultViewDimension(tt.dim, tt.layers); got != tt.expect {
+				t.Errorf("defaultViewDimension() = %v, want %v", got, tt.expect)
 			}
 		})
+	}
+}
+
+// TestDefaultViewLayers: a view without a layer count has one layer, six
+// for a cube, and the rest of the texture's for an array.
+func TestDefaultViewLayers(t *testing.T) {
+	tests := []struct {
+		dim          gputypes.TextureViewDimension
+		base, layers uint32
+		expect       uint32
+	}{
+		{gputypes.TextureViewDimension2D, 0, 4, 1},
+		{gputypes.TextureViewDimension2D, 2, 4, 1},
+		{gputypes.TextureViewDimension2DArray, 1, 4, 3},
+		{gputypes.TextureViewDimensionCube, 0, 12, 6},
+		{gputypes.TextureViewDimensionCubeArray, 0, 12, 12},
+		{gputypes.TextureViewDimension3D, 0, 1, 1},
+	}
+	for _, tt := range tests {
+		if got := defaultViewLayers(tt.dim, tt.base, tt.layers); got != tt.expect {
+			t.Errorf("defaultViewLayers(%v, %d, %d) = %d, want %d", tt.dim, tt.base, tt.layers, got, tt.expect)
+		}
 	}
 }
 

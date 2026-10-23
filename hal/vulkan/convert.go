@@ -628,18 +628,36 @@ func hasStencilAspect(format gputypes.TextureFormat) bool {
 	}
 }
 
-// textureDimensionToViewType converts WebGPU texture dimension to default Vulkan image view type.
-func textureDimensionToViewType(dim gputypes.TextureDimension) vk.ImageViewType {
-	switch dim {
-	case gputypes.TextureDimension1D:
-		return vk.ImageViewType1d
-	case gputypes.TextureDimension2D:
-		return vk.ImageViewType2d
-	case gputypes.TextureDimension3D:
-		return vk.ImageViewType3d
+// defaultViewDimension is the dimension of a view that names none, of a
+// texture of dim with layers array layers: a 2D texture of more than one
+// layer is viewed as an array (WebGPU's view descriptor defaults).
+func defaultViewDimension(dim gputypes.TextureDimension, layers uint32) gputypes.TextureViewDimension {
+	switch {
+	case dim == gputypes.TextureDimension1D:
+		return gputypes.TextureViewDimension1D
+	case dim == gputypes.TextureDimension3D:
+		return gputypes.TextureViewDimension3D
+	case layers > 1:
+		return gputypes.TextureViewDimension2DArray
 	default:
-		return vk.ImageViewType2d
+		return gputypes.TextureViewDimension2D
 	}
+}
+
+// defaultViewLayers is the layer count of a view of dim that names none,
+// starting at base of a texture with layers array layers: one, six for a
+// cube, and the rest of the texture's for an array (WebGPU's view
+// descriptor defaults).
+func defaultViewLayers(dim gputypes.TextureViewDimension, base, layers uint32) uint32 {
+	switch dim {
+	case gputypes.TextureViewDimensionCube:
+		return 6
+	case gputypes.TextureViewDimension2DArray, gputypes.TextureViewDimensionCubeArray:
+		if layers > base {
+			return layers - base
+		}
+	}
+	return 1
 }
 
 // vkFormatFeaturesToHAL converts Vulkan format feature flags to HAL texture format capability flags.

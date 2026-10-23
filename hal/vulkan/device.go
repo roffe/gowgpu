@@ -793,12 +793,9 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 		format = textureFormat
 	}
 
-	// Determine view type - derive from texture dimension if not specified
-	var viewType vk.ImageViewType
-	if desc.Dimension == gputypes.TextureViewDimensionUndefined {
-		viewType = textureDimensionToViewType(dimension)
-	} else {
-		viewType = textureViewDimensionToVk(desc.Dimension)
+	viewDimension := desc.Dimension
+	if viewDimension == gputypes.TextureViewDimensionUndefined {
+		viewDimension = defaultViewDimension(dimension, arrayLayers)
 	}
 
 	// Determine mip level count
@@ -807,25 +804,15 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 		mipLevelCount = mipLevels - desc.BaseMipLevel
 	}
 
-	// Determine array layer count
 	arrayLayerCount := desc.ArrayLayerCount
 	if arrayLayerCount == 0 {
-		// Use all remaining layers from base layer
-		if arrayLayers > desc.BaseArrayLayer {
-			arrayLayerCount = arrayLayers - desc.BaseArrayLayer
-		} else {
-			arrayLayerCount = 1
-		}
-		// For cube views, ensure we use exactly 6 layers
-		if viewType == vk.ImageViewTypeCube && arrayLayerCount > 6 {
-			arrayLayerCount = 6
-		}
+		arrayLayerCount = defaultViewLayers(viewDimension, desc.BaseArrayLayer, arrayLayers)
 	}
 
 	createInfo := vk.ImageViewCreateInfo{
 		SType:    vk.StructureTypeImageViewCreateInfo,
 		Image:    imageHandle,
-		ViewType: viewType,
+		ViewType: textureViewDimensionToVk(viewDimension),
 		Format:   d.vkFormat(format),
 		Components: vk.ComponentMapping{
 			R: vk.ComponentSwizzleIdentity,
