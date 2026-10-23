@@ -29,6 +29,7 @@ var (
 
 	// GDI32.dll functions
 	procChoosePixelFormat *syscall.Proc
+	procGetPixelFormat    *syscall.Proc
 	procSetPixelFormat    *syscall.Proc
 	procSwapBuffers       *syscall.Proc
 
@@ -152,6 +153,11 @@ func Init() error {
 		return fmt.Errorf("ChoosePixelFormat: %w", err)
 	}
 
+	procGetPixelFormat, err = gdi32.FindProc("GetPixelFormat")
+	if err != nil {
+		return fmt.Errorf("GetPixelFormat: %w", err)
+	}
+
 	procSetPixelFormat, err = gdi32.FindProc("SetPixelFormat")
 	if err != nil {
 		return fmt.Errorf("SetPixelFormat: %w", err)
@@ -247,6 +253,29 @@ func SetPixelFormat(hdc HDC, format int, pfd *PIXELFORMATDESCRIPTOR) error {
 		return fmt.Errorf("SetPixelFormat failed: %w", err)
 	}
 	return nil
+}
+
+// GetPixelFormat returns the pixel format of the device context's window,
+// 0 when it has none yet.
+func GetPixelFormat(hdc HDC) int {
+	r, _, _ := procGetPixelFormat.Call(uintptr(hdc))
+	return int(r)
+}
+
+// SetWindowPixelFormat gives the window of hdc the pixel format, unless it
+// has it already. A window's pixel format is set only once, so a window
+// that has another one is an error: a context draws only to windows of its
+// own pixel format.
+func SetWindowPixelFormat(hdc HDC, format int) error {
+	switch current := GetPixelFormat(hdc); current {
+	case format:
+		return nil
+	case 0:
+		pfd := DefaultPixelFormat()
+		return SetPixelFormat(hdc, format, &pfd)
+	default:
+		return fmt.Errorf("the window has pixel format %d, not the %d of the GL context, and a window's pixel format can be set only once", current, format)
+	}
 }
 
 // SwapBuffers swaps the front and back buffers.
@@ -381,16 +410,17 @@ func NewContext(hwnd HWND) (*Context, error) {
 		return nil, fmt.Errorf("GetDC failed")
 	}
 
-	pfd := DefaultPixelFormat()
-	format, err := ChoosePixelFormat(hdc, &pfd)
-	if err != nil {
-		ReleaseDC(hwnd, hdc)
-		return nil, err
-	}
-
-	if err := SetPixelFormat(hdc, format, &pfd); err != nil {
-		ReleaseDC(hwnd, hdc)
-		return nil, err
+	// A window that has a pixel format keeps it, and the context takes it.
+	if GetPixelFormat(hdc) == 0 {
+		pfd := DefaultPixelFormat()
+		format, err := ChoosePixelFormat(hdc, &pfd)
+		if err == nil {
+			err = SetPixelFormat(hdc, format, &pfd)
+		}
+		if err != nil {
+			ReleaseDC(hwnd, hdc)
+			return nil, err
+		}
 	}
 
 	hglrc, err := CreateContext(hdc)

@@ -113,8 +113,9 @@ func registerHiddenWindowClass() error {
 // goroutine's thread may do. The window has no message pump — it exists
 // solely to own a DC for the GL context.
 type HiddenWindow struct {
-	hwnd HWND
-	hdc  HDC
+	hwnd   HWND
+	hdc    HDC
+	format int // the DC's pixel format
 
 	done   chan struct{} // closed by Destroy
 	exited chan struct{} // closed once the window is gone
@@ -135,8 +136,8 @@ func NewHiddenWindow() (*HiddenWindow, error) {
 		// window is destroyed on it.
 		runtime.LockOSThread()
 		defer close(hw.exited)
-		hwnd, hdc, err := makeHiddenWindow()
-		hw.hwnd, hw.hdc = hwnd, hdc
+		hwnd, hdc, format, err := makeHiddenWindow()
+		hw.hwnd, hw.hdc, hw.format = hwnd, hdc, format
 		setup <- err
 		if err != nil {
 			return
@@ -153,7 +154,7 @@ func NewHiddenWindow() (*HiddenWindow, error) {
 
 // makeHiddenWindow makes the window, its DC and the DC's pixel format on
 // the calling thread.
-func makeHiddenWindow() (HWND, HDC, error) {
+func makeHiddenWindow() (HWND, HDC, int, error) {
 	hwnd, err := createWindowEx(
 		0,                   // dwExStyle
 		&hiddenClassName[0], // lpClassName
@@ -163,12 +164,12 @@ func makeHiddenWindow() (HWND, HDC, error) {
 		0, 0, 0, 0, // parent, menu, instance, param
 	)
 	if err != nil {
-		return 0, 0, fmt.Errorf("wgl: CreateWindowExW: %w", err)
+		return 0, 0, 0, fmt.Errorf("wgl: CreateWindowExW: %w", err)
 	}
 	hdc := GetDC(hwnd)
 	if hdc == 0 {
 		destroyWindow(hwnd)
-		return 0, 0, fmt.Errorf("wgl: GetDC failed for hidden window")
+		return 0, 0, 0, fmt.Errorf("wgl: GetDC failed for hidden window")
 	}
 	pfd := DefaultPixelFormat()
 	format, err := ChoosePixelFormat(hdc, &pfd)
@@ -178,9 +179,9 @@ func makeHiddenWindow() (HWND, HDC, error) {
 	if err != nil {
 		ReleaseDC(hwnd, hdc)
 		destroyWindow(hwnd)
-		return 0, 0, fmt.Errorf("wgl: hidden window pixel format: %w", err)
+		return 0, 0, 0, fmt.Errorf("wgl: hidden window pixel format: %w", err)
 	}
-	return hwnd, hdc, nil
+	return hwnd, hdc, format, nil
 }
 
 // DC returns the device context of the hidden window.
@@ -191,6 +192,12 @@ func (hw *HiddenWindow) DC() HDC {
 // HWND returns the hidden window handle.
 func (hw *HiddenWindow) HWND() HWND {
 	return hw.hwnd
+}
+
+// PixelFormat returns the pixel format of the hidden window's DC, which a
+// GL context made on it draws with.
+func (hw *HiddenWindow) PixelFormat() int {
+	return hw.format
 }
 
 // Destroy releases the DC and destroys the hidden window, on the window's

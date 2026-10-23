@@ -70,9 +70,9 @@ type Instance struct {
 //
 // The Surface is lightweight — it does NOT own the GL context. The context
 // lives on the hidden window owned by Instance. Surface only stores the user
-// HWND and a reference to the shared AdapterContext. SetPixelFormat is called
-// on the user window DC so that wglMakeCurrent can switch between hidden and
-// user DCs during Present.
+// HWND and a reference to the shared AdapterContext. The user window gets
+// the hidden window's pixel format, unless it has it already, so that
+// wglMakeCurrent can switch between hidden and user DCs during Present.
 //
 // Follows Rust wgpu-hal/src/gles/wgl.rs Instance::create_surface (lines 624-670).
 func (i *Instance) CreateSurface(target hal.SurfaceTarget) (hal.Surface, error) {
@@ -82,23 +82,15 @@ func (i *Instance) CreateSurface(target hal.SurfaceTarget) (hal.Surface, error) 
 	windowHandle := target.WindowHandle
 	hwnd := wgl.HWND(windowHandle)
 
-	// Set pixel format on user window DC. Required for wglMakeCurrent to
-	// accept this DC with the hidden window's HGLRC — pixel formats must match.
 	hdc := wgl.GetDC(hwnd)
 	if hdc == 0 {
 		return nil, fmt.Errorf("gles: GetDC failed for window 0x%x", windowHandle)
 	}
-	pfd := wgl.DefaultPixelFormat()
-	format, err := wgl.ChoosePixelFormat(hdc, &pfd)
-	if err != nil {
-		wgl.ReleaseDC(hwnd, hdc)
-		return nil, fmt.Errorf("gles: surface ChoosePixelFormat: %w", err)
-	}
-	if err := wgl.SetPixelFormat(hdc, format, &pfd); err != nil {
-		wgl.ReleaseDC(hwnd, hdc)
-		return nil, fmt.Errorf("gles: surface SetPixelFormat: %w", err)
-	}
+	err := wgl.SetWindowPixelFormat(hdc, i.hiddenWindow.PixelFormat())
 	wgl.ReleaseDC(hwnd, hdc)
+	if err != nil {
+		return nil, fmt.Errorf("gles: surface for window 0x%x: %w", windowHandle, err)
+	}
 
 	hal.Logger().Info("gles: surface created", "hwnd", fmt.Sprintf("0x%x", windowHandle))
 
