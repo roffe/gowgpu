@@ -24,7 +24,7 @@ func TestMapPendingWaitFastPath(t *testing.T) {
 	buf, err := device.CreateBuffer(&wgpu.BufferDescriptor{
 		Label:            "wait-fast-buf",
 		Size:             64,
-		Usage:            wgpu.BufferUsageMapRead | wgpu.BufferUsageCopySrc,
+		Usage:            wgpu.BufferUsageMapRead | wgpu.BufferUsageCopyDst,
 		MappedAtCreation: true,
 	})
 	if err != nil {
@@ -65,7 +65,7 @@ func TestMapPendingWaitGoroutinePath(t *testing.T) {
 	buf, err := device.CreateBuffer(&wgpu.BufferDescriptor{
 		Label: "wait-goroutine-buf",
 		Size:  64,
-		Usage: wgpu.BufferUsageMapRead | wgpu.BufferUsageCopySrc,
+		Usage: wgpu.BufferUsageMapRead | wgpu.BufferUsageCopyDst,
 	})
 	if err != nil {
 		t.Fatalf("CreateBuffer: %v", err)
@@ -152,7 +152,7 @@ func TestMapPendingReleaseBeforeResolution(t *testing.T) {
 	buf, err := device.CreateBuffer(&wgpu.BufferDescriptor{
 		Label: "release-before-resolve",
 		Size:  64,
-		Usage: wgpu.BufferUsageMapRead | wgpu.BufferUsageCopySrc,
+		Usage: wgpu.BufferUsageMapRead | wgpu.BufferUsageCopyDst,
 	})
 	if err != nil {
 		t.Fatalf("CreateBuffer: %v", err)
@@ -309,7 +309,7 @@ func TestBufferMapSynchronous(t *testing.T) {
 	buf, err := device.CreateBuffer(&wgpu.BufferDescriptor{
 		Label:            "sync-map",
 		Size:             64,
-		Usage:            wgpu.BufferUsageMapRead | wgpu.BufferUsageCopySrc,
+		Usage:            wgpu.BufferUsageMapRead | wgpu.BufferUsageCopyDst,
 		MappedAtCreation: true,
 	})
 	if err != nil {
@@ -367,7 +367,7 @@ func TestBufferMapRangeOverflow(t *testing.T) {
 	buf, err := device.CreateBuffer(&wgpu.BufferDescriptor{
 		Label: "overflow-map",
 		Size:  64,
-		Usage: wgpu.BufferUsageMapRead | wgpu.BufferUsageCopySrc,
+		Usage: wgpu.BufferUsageMapRead | wgpu.BufferUsageCopyDst,
 	})
 	if err != nil {
 		t.Fatalf("CreateBuffer: %v", err)
@@ -394,7 +394,7 @@ func TestBufferMapAlignmentErrors(t *testing.T) {
 	buf, err := device.CreateBuffer(&wgpu.BufferDescriptor{
 		Label: "align-map",
 		Size:  128,
-		Usage: wgpu.BufferUsageMapRead | wgpu.BufferUsageCopySrc,
+		Usage: wgpu.BufferUsageMapRead | wgpu.BufferUsageCopyDst,
 	})
 	if err != nil {
 		t.Fatalf("CreateBuffer: %v", err)

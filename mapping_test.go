@@ -50,7 +50,7 @@ func TestMapPendingStatusResolvesImmediately(t *testing.T) {
 	buf, err := device.CreateBuffer(&wgpu.BufferDescriptor{
 		Label:            "pending-status-buf",
 		Size:             64,
-		Usage:            wgpu.BufferUsageMapRead | wgpu.BufferUsageCopySrc,
+		Usage:            wgpu.BufferUsageMapRead | wgpu.BufferUsageCopyDst,
 		MappedAtCreation: true,
 	})
 	if err != nil {
@@ -89,7 +89,7 @@ func TestMapPendingStatusCachedAfterResolve(t *testing.T) {
 	buf, err := device.CreateBuffer(&wgpu.BufferDescriptor{
 		Label:            "pending-cached-buf",
 		Size:             64,
-		Usage:            wgpu.BufferUsageMapRead | wgpu.BufferUsageCopySrc,
+		Usage:            wgpu.BufferUsageMapRead | wgpu.BufferUsageCopyDst,
 		MappedAtCreation: true,
 	})
 	if err != nil {
@@ -127,7 +127,7 @@ func TestMapPendingWaitResolvesImmediately(t *testing.T) {
 	buf, err := device.CreateBuffer(&wgpu.BufferDescriptor{
 		Label:            "pending-wait-buf",
 		Size:             64,
-		Usage:            wgpu.BufferUsageMapRead | wgpu.BufferUsageCopySrc,
+		Usage:            wgpu.BufferUsageMapRead | wgpu.BufferUsageCopyDst,
 		MappedAtCreation: true,
 	})
 	if err != nil {
@@ -163,7 +163,7 @@ func TestMapPendingWaitContextCancel(t *testing.T) {
 	buf, err := device.CreateBuffer(&wgpu.BufferDescriptor{
 		Label: "pending-cancel-buf",
 		Size:  64,
-		Usage: wgpu.BufferUsageMapRead | wgpu.BufferUsageCopySrc,
+		Usage: wgpu.BufferUsageMapRead | wgpu.BufferUsageCopyDst,
 	})
 	if err != nil {
 		t.Fatalf("CreateBuffer: %v", err)
@@ -561,7 +561,7 @@ func TestBufferMapContextAlreadyCanceled(t *testing.T) {
 	buf, err := device.CreateBuffer(&wgpu.BufferDescriptor{
 		Label: "map-ctx-cancel",
 		Size:  64,
-		Usage: wgpu.BufferUsageMapRead | wgpu.BufferUsageCopySrc,
+		Usage: wgpu.BufferUsageMapRead | wgpu.BufferUsageCopyDst,
 	})
 	if err != nil {
 		t.Fatalf("CreateBuffer: %v", err)
@@ -589,7 +589,7 @@ func TestBufferMapNilContext(t *testing.T) {
 	buf, err := device.CreateBuffer(&wgpu.BufferDescriptor{
 		Label:            "map-nil-ctx",
 		Size:             64,
-		Usage:            wgpu.BufferUsageMapRead | wgpu.BufferUsageCopySrc,
+		Usage:            wgpu.BufferUsageMapRead | wgpu.BufferUsageCopyDst,
 		MappedAtCreation: true,
 	})
 	if err != nil {

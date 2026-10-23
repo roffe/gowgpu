@@ -190,6 +190,12 @@ const (
 	CreateBufferErrorMapReadWriteExclusive
 	// CreateBufferErrorHAL indicates the HAL backend failed to create the buffer.
 	CreateBufferErrorHAL
+	// CreateBufferErrorMapUsageMismatch indicates MAP_READ with another usage
+	// than COPY_DST, or MAP_WRITE with another usage than COPY_SRC.
+	CreateBufferErrorMapUsageMismatch
+	// CreateBufferErrorUnalignedMappedSize indicates MappedAtCreation with a
+	// size that is not a multiple of 4.
+	CreateBufferErrorUnalignedMappedSize
 )
 
 // CreateBufferError represents an error during buffer creation.
@@ -222,6 +228,10 @@ func (e *CreateBufferError) Error() string {
 		return fmt.Sprintf("buffer %q: MAP_READ and MAP_WRITE are mutually exclusive", label)
 	case CreateBufferErrorHAL:
 		return fmt.Sprintf("buffer %q: HAL error: %v", label, e.HALError)
+	case CreateBufferErrorMapUsageMismatch:
+		return fmt.Sprintf("buffer %q: MAP_READ may only go with COPY_DST and MAP_WRITE with COPY_SRC", label)
+	case CreateBufferErrorUnalignedMappedSize:
+		return fmt.Sprintf("buffer %q: mapped at creation with size %d, not a multiple of 4", label, e.RequestedSize)
 	default:
 		return fmt.Sprintf("buffer %q: unknown error", label)
 	}

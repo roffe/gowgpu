@@ -469,6 +469,17 @@ func (d *Device) CreateBuffer(desc *gputypes.BufferDescriptor) (*Buffer, error) 
 			Label: desc.Label,
 		}
 	}
+	// MAP_READ goes only with COPY_DST and MAP_WRITE only with COPY_SRC,
+	// and a buffer mapped at creation has a size in whole 4-byte words.
+	// Reference: wgpu-core device/resource.rs create_buffer (UsageMismatch,
+	// UnalignedSize)
+	if hasMapRead && desc.Usage&^(gputypes.BufferUsageMapRead|gputypes.BufferUsageCopyDst) != 0 ||
+		hasMapWrite && desc.Usage&^(gputypes.BufferUsageMapWrite|gputypes.BufferUsageCopySrc) != 0 {
+		return nil, &CreateBufferError{Kind: CreateBufferErrorMapUsageMismatch, Label: desc.Label}
+	}
+	if desc.MappedAtCreation && desc.Size%4 != 0 {
+		return nil, &CreateBufferError{Kind: CreateBufferErrorUnalignedMappedSize, Label: desc.Label, RequestedSize: desc.Size}
+	}
 
 	// 6. Calculate aligned size (align to COPY_BUFFER_ALIGNMENT = 4)
 	const copyBufferAlignment uint64 = 4
