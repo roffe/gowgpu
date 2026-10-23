@@ -40,11 +40,22 @@ func semanticsStorage(t *testing.T, device *Device, label string, words []uint32
 // 1, ... as read-write storage buffers, and returns their words afterwards.
 func semanticsDispatch(t *testing.T, device *Device, label, wgsl string, bufs ...*Buffer) [][]uint32 {
 	t.Helper()
+	types := make([]gputypes.BufferBindingType, len(bufs))
+	for i := range types {
+		types[i] = gputypes.BufferBindingTypeStorage
+	}
+	return semanticsDispatchTypes(t, device, label, wgsl, types, bufs...)
+}
+
+// semanticsDispatchTypes is semanticsDispatch with buffer i bound as a
+// buffer of types[i].
+func semanticsDispatchTypes(t *testing.T, device *Device, label, wgsl string, types []gputypes.BufferBindingType, bufs ...*Buffer) [][]uint32 {
+	t.Helper()
 	entries := make([]gputypes.BindGroupLayoutEntry, len(bufs))
 	group := make([]BindGroupEntry, len(bufs))
 	for i, b := range bufs {
 		entries[i] = gputypes.BindGroupLayoutEntry{Binding: uint32(i), Visibility: ShaderStageCompute,
-			Buffer: &gputypes.BufferBindingLayout{Type: gputypes.BufferBindingTypeStorage}}
+			Buffer: &gputypes.BufferBindingLayout{Type: types[i]}}
 		group[i] = BindGroupEntry{Binding: uint32(i), Buffer: b, Size: b.Size()}
 	}
 	pipe, layout := computePipeline(t, device, label, wgsl, entries)
@@ -524,5 +535,98 @@ fn sampled(t: texture_depth_2d, uv: vec2<f32>) -> f32 {
 		t.Fatalf("CreateRenderPipeline: %v", err)
 	}
 	expectPixels(t, "sampled and loaded 0.25, compared 1", pix, 64, 64, 255, 255)
+	assertNoValidation(t, h)
+}
+
+// TestUniformLayoutReads reads a uniform struct whose members WGSL packs
+// with two-row matrices 8 bytes a column, padding after them and a u32 and
+// an i32 array among the floats, by constant and run-time indices into
+// vectors and matrix columns, as a whole, and by run-time indices into a
+// matrix and vectors loaded from it. Each 4-byte slot k of the buffer
+// holds k+1, as a float or an integer as its member has it, so each value
+// read is the slot it was read from, plus 1.
+func TestUniformLayoutReads(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	const wgsl = `
+struct U {
+    a: vec2<f32>,
+    m2: mat2x2<f32>,
+    b: f32,
+    m3: mat3x2<f32>,
+    m4: mat4x2<f32>,
+    m33: mat3x3<f32>,
+    c: vec3<f32>,
+    d: u32,
+    arr: array<vec4<i32>, 3>,
+}
+@group(0) @binding(0) var<uniform> u: U;
+@group(0) @binding(1) var<storage, read_write> out: array<f32>;
+@group(0) @binding(2) var<storage, read_write> idx: array<u32>;
+@compute @workgroup_size(1) fn cs_main() {
+    let i1 = idx[1];
+    let i2 = idx[2];
+    let i3 = idx[3];
+    out[0] = u.m2[1].x;
+    out[1] = u.m2[i1].y;
+    out[2] = u.m2[idx[0]][i1];
+    out[3] = u.m3[2].y;
+    out[4] = u.m3[i2].x;
+    out[5] = u.m4[i3][i1];
+    out[6] = u.m33[i2].z;
+    out[7] = u.m33[1][i2];
+    out[8] = u.c[i2];
+    out[9] = f32(u.d);
+    out[10] = f32(u.arr[i2][i3]);
+    out[11] = u.b;
+    out[12] = u.a[i1];
+    let whole = u;
+    out[13] = whole.m2[1].y;
+    out[14] = whole.c.z;
+    out[15] = f32(whole.d);
+    out[16] = f32(whole.arr[2].z);
+    let m = u.m4;
+    out[17] = m[i2].x;
+    let c = u.c;
+    out[18] = c[i2];
+    let v = vec3<f32>(u.b, u.a.x, u.a.y);
+    out[19] = v[i2];
+}
+`
+	// The byte offset of each value cs_main writes, in the order it writes
+	// them: m2 at 8, b at 24, m3 at 32, m4 at 56, m33 at 96, c at 144, d at
+	// 156 and arr at 160.
+	offsets := []uint32{16, 20, 12, 52, 48, 84, 136, 120, 152, 156, 204, 24, 4, 20, 152, 156, 200, 72, 152, 4}
+	words := make([]uint32, 208/4)
+	for k := range words {
+		switch {
+		case k == 156/4:
+			words[k] = uint32(k + 1)
+		case k >= 160/4:
+			words[k] = uint32(k + 1)
+		default:
+			words[k] = math.Float32bits(float32(k + 1))
+		}
+	}
+	data := make([]byte, len(words)*4)
+	for k, w := range words {
+		binary.LittleEndian.PutUint32(data[k*4:], w)
+	}
+	u, err := device.CreateBuffer(&BufferDescriptor{Label: "uniform-layout", Size: uint64(len(data)),
+		Usage: BufferUsageUniform | BufferUsageCopySrc | BufferUsageCopyDst})
+	if err != nil {
+		t.Fatalf("CreateBuffer: %v", err)
+	}
+	t.Cleanup(u.Release)
+	if err := device.Queue().WriteBuffer(u, 0, data); err != nil {
+		t.Fatalf("WriteBuffer: %v", err)
+	}
+	got := semanticsDispatchTypes(t, device, "uniform-layout", wgsl,
+		[]gputypes.BufferBindingType{gputypes.BufferBindingTypeUniform, gputypes.BufferBindingTypeStorage, gputypes.BufferBindingTypeStorage},
+		u, semanticsStorage(t, device, "uniform-layout-out", make([]uint32, len(offsets))), semanticsStorage(t, device, "uniform-layout-idx", []uint32{0, 1, 2, 3}))
+	for i, off := range offsets {
+		if v, want := math.Float32frombits(got[1][i]), float32(off/4+1); v != want {
+			t.Errorf("out[%d] = %v, want %v, the value at byte %d", i, v, want, off)
+		}
+	}
 	assertNoValidation(t, h)
 }
