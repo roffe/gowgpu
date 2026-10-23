@@ -50,7 +50,7 @@ func TestCopyOnlyTextureIsNoBinding(t *testing.T) {
 // state is still recorded, so the layer has a word about that until the
 // core checks for RenderAttachment usage.
 func TestCopyOnlyTextureIsNoAttachment(t *testing.T) {
-	device, _, view := copyOnlyView(t)
+	device, h, view := copyOnlyView(t)
 	enc, err := device.CreateCommandEncoder(nil)
 	if err != nil {
 		t.Fatalf("CreateCommandEncoder: %v", err)
@@ -66,4 +66,7 @@ func TestCopyOnlyTextureIsNoAttachment(t *testing.T) {
 		}
 	}
 	device.Poll(PollWait)
+	for _, m := range h.validation() {
+		t.Logf("until the core checks the usage: %s", m)
+	}
 }
