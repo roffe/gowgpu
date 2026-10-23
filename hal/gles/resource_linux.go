@@ -115,6 +115,9 @@ func (s *Surface) Configure(_ hal.Device, config *hal.SurfaceConfiguration) erro
 	// invalidation when Submit (Lock) and Present (LockForSurface) alternate.
 	glCtx := s.ctx.Lock()
 	defer s.ctx.Unlock()
+	if err := s.ctx.Err(); err != nil {
+		return err
+	}
 	if s.ctx.OnHelper() {
 		return errOtherThread
 	}
