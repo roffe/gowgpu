@@ -933,11 +933,11 @@ func buildRenderTargetBlendDesc(target *gputypes.ColorTargetState) d3d12.D3D12_R
 
 	if target.Blend != nil {
 		desc.BlendEnable = 1
-		desc.SrcBlend = blendFactorToD3D12(target.Blend.Color.SrcFactor)
-		desc.DestBlend = blendFactorToD3D12(target.Blend.Color.DstFactor)
+		desc.SrcBlend = blendFactorToD3D12(target.Blend.Color.SrcFactor, false)
+		desc.DestBlend = blendFactorToD3D12(target.Blend.Color.DstFactor, false)
 		desc.BlendOp = blendOperationToD3D12(target.Blend.Color.Operation)
-		desc.SrcBlendAlpha = blendFactorToD3D12(target.Blend.Alpha.SrcFactor)
-		desc.DestBlendAlpha = blendFactorToD3D12(target.Blend.Alpha.DstFactor)
+		desc.SrcBlendAlpha = blendFactorToD3D12(target.Blend.Alpha.SrcFactor, true)
+		desc.DestBlendAlpha = blendFactorToD3D12(target.Blend.Alpha.DstFactor, true)
 		desc.BlendOpAlpha = blendOperationToD3D12(target.Blend.Alpha.Operation)
 	}
 

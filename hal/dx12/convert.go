@@ -488,24 +488,38 @@ func alignTo256(size uint64) uint64 {
 // Pipeline Conversion Helpers
 // -----------------------------------------------------------------------------
 
-// blendFactorToD3D12 converts a WebGPU blend factor to D3D12.
-func blendFactorToD3D12(factor gputypes.BlendFactor) d3d12.D3D12_BLEND {
+// blendFactorToD3D12 converts a WebGPU blend factor to D3D12. The factors
+// of the alpha component take the _ALPHA form of a colour factor, since
+// D3D12 forbids the _COLOR ones there, as Rust's wgpu-hal maps them.
+func blendFactorToD3D12(factor gputypes.BlendFactor, alpha bool) d3d12.D3D12_BLEND {
 	switch factor {
 	case gputypes.BlendFactorZero:
 		return d3d12.D3D12_BLEND_ZERO
 	case gputypes.BlendFactorOne:
 		return d3d12.D3D12_BLEND_ONE
 	case gputypes.BlendFactorSrc:
+		if alpha {
+			return d3d12.D3D12_BLEND_SRC_ALPHA
+		}
 		return d3d12.D3D12_BLEND_SRC_COLOR
 	case gputypes.BlendFactorOneMinusSrc:
+		if alpha {
+			return d3d12.D3D12_BLEND_INV_SRC_ALPHA
+		}
 		return d3d12.D3D12_BLEND_INV_SRC_COLOR
 	case gputypes.BlendFactorSrcAlpha:
 		return d3d12.D3D12_BLEND_SRC_ALPHA
 	case gputypes.BlendFactorOneMinusSrcAlpha:
 		return d3d12.D3D12_BLEND_INV_SRC_ALPHA
 	case gputypes.BlendFactorDst:
+		if alpha {
+			return d3d12.D3D12_BLEND_DEST_ALPHA
+		}
 		return d3d12.D3D12_BLEND_DEST_COLOR
 	case gputypes.BlendFactorOneMinusDst:
+		if alpha {
+			return d3d12.D3D12_BLEND_INV_DEST_ALPHA
+		}
 		return d3d12.D3D12_BLEND_INV_DEST_COLOR
 	case gputypes.BlendFactorDstAlpha:
 		return d3d12.D3D12_BLEND_DEST_ALPHA

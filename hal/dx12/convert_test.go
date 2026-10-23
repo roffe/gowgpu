@@ -428,11 +428,28 @@ func TestBlendFactorToD3D12(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := blendFactorToD3D12(tt.factor)
+			got := blendFactorToD3D12(tt.factor, false)
 			if got != tt.expect {
 				t.Errorf("blendFactorToD3D12(%v) = %v, want %v", tt.factor, got, tt.expect)
 			}
 		})
+	}
+}
+
+// TestBlendFactorToD3D12Alpha checks the alpha component never gets a
+// _COLOR factor, which D3D12 refuses for SrcBlendAlpha and DestBlendAlpha.
+func TestBlendFactorToD3D12Alpha(t *testing.T) {
+	for factor, want := range map[gputypes.BlendFactor]d3d12.D3D12_BLEND{
+		gputypes.BlendFactorSrc:         d3d12.D3D12_BLEND_SRC_ALPHA,
+		gputypes.BlendFactorOneMinusSrc: d3d12.D3D12_BLEND_INV_SRC_ALPHA,
+		gputypes.BlendFactorDst:         d3d12.D3D12_BLEND_DEST_ALPHA,
+		gputypes.BlendFactorOneMinusDst: d3d12.D3D12_BLEND_INV_DEST_ALPHA,
+		gputypes.BlendFactorSrcAlpha:    d3d12.D3D12_BLEND_SRC_ALPHA,
+		gputypes.BlendFactorConstant:    d3d12.D3D12_BLEND_BLEND_FACTOR,
+	} {
+		if got := blendFactorToD3D12(factor, true); got != want {
+			t.Errorf("alpha factor %v = %v, want %v", factor, got, want)
+		}
 	}
 }
 
