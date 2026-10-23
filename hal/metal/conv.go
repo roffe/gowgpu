@@ -18,6 +18,10 @@ func textureFormatToMTL(format gputypes.TextureFormat) MTLPixelFormat {
 		return MTLPixelFormatR8Uint
 	case gputypes.TextureFormatR8Sint:
 		return MTLPixelFormatR8Sint
+	case gputypes.TextureFormatR16Unorm:
+		return MTLPixelFormatR16Unorm
+	case gputypes.TextureFormatR16Snorm:
+		return MTLPixelFormatR16Snorm
 	case gputypes.TextureFormatR16Uint:
 		return MTLPixelFormatR16Uint
 	case gputypes.TextureFormatR16Sint:
@@ -38,6 +42,10 @@ func textureFormatToMTL(format gputypes.TextureFormat) MTLPixelFormat {
 		return MTLPixelFormatR32Sint
 	case gputypes.TextureFormatR32Float:
 		return MTLPixelFormatR32Float
+	case gputypes.TextureFormatRG16Unorm:
+		return MTLPixelFormatRG16Unorm
+	case gputypes.TextureFormatRG16Snorm:
+		return MTLPixelFormatRG16Snorm
 	case gputypes.TextureFormatRG16Uint:
 		return MTLPixelFormatRG16Uint
 	case gputypes.TextureFormatRG16Sint:
@@ -60,6 +68,8 @@ func textureFormatToMTL(format gputypes.TextureFormat) MTLPixelFormat {
 		return MTLPixelFormatBGRA8UnormSRGB
 	case gputypes.TextureFormatRGB10A2Unorm:
 		return MTLPixelFormatRGB10A2Unorm
+	case gputypes.TextureFormatRGB10A2Uint:
+		return MTLPixelFormatRGB10A2Uint
 	case gputypes.TextureFormatRG11B10Ufloat:
 		return MTLPixelFormatRG11B10Float
 	case gputypes.TextureFormatRGB9E5Ufloat:
@@ -70,6 +80,10 @@ func textureFormatToMTL(format gputypes.TextureFormat) MTLPixelFormat {
 		return MTLPixelFormatRG32Sint
 	case gputypes.TextureFormatRG32Float:
 		return MTLPixelFormatRG32Float
+	case gputypes.TextureFormatRGBA16Unorm:
+		return MTLPixelFormatRGBA16Unorm
+	case gputypes.TextureFormatRGBA16Snorm:
+		return MTLPixelFormatRGBA16Snorm
 	case gputypes.TextureFormatRGBA16Uint:
 		return MTLPixelFormatRGBA16Uint
 	case gputypes.TextureFormatRGBA16Sint:

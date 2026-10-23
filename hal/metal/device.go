@@ -192,6 +192,11 @@ func (d *Device) CreateTexture(desc *hal.TextureDescriptor) (hal.Texture, error)
 		return nil, fmt.Errorf("BUG: texture descriptor is nil in Metal.CreateTexture — core validation gap")
 	}
 
+	pixelFormat := d.adapter.mapTextureFormat(desc.Format)
+	if pixelFormat == MTLPixelFormatInvalid {
+		return nil, fmt.Errorf("metal: texture format %s has no Metal pixel format", desc.Format)
+	}
+
 	pool := NewAutoreleasePool()
 	defer pool.Drain()
 
@@ -204,7 +209,6 @@ func (d *Device) CreateTexture(desc *hal.TextureDescriptor) (hal.Texture, error)
 	texType := textureTypeFromDimension(desc.Dimension, desc.SampleCount, desc.Size.DepthOrArrayLayers)
 	_ = MsgSend(texDesc, Sel("setTextureType:"), uintptr(texType))
 
-	pixelFormat := d.adapter.mapTextureFormat(desc.Format)
 	_ = MsgSend(texDesc, Sel("setPixelFormat:"), uintptr(pixelFormat))
 
 	_ = MsgSend(texDesc, Sel("setWidth:"), uintptr(desc.Size.Width))
@@ -309,6 +313,9 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 		format = mtlTexture.format
 	}
 	pixelFormat := d.adapter.mapTextureFormat(format)
+	if pixelFormat == MTLPixelFormatInvalid {
+		return nil, fmt.Errorf("metal: texture view format %s has no Metal pixel format", format)
+	}
 	if desc.Aspect == gputypes.TextureAspectStencilOnly {
 		switch pixelFormat {
 		case MTLPixelFormatDepth24UnormStencil8:
@@ -789,8 +796,10 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 				continue
 			}
 
-			// Set pixel format
 			pixelFormat := d.adapter.mapTextureFormat(target.Format)
+			if pixelFormat == MTLPixelFormatInvalid {
+				return nil, fmt.Errorf("metal: color target format %s has no Metal pixel format", target.Format)
+			}
 			_ = MsgSend(attachment, Sel("setPixelFormat:"), uintptr(pixelFormat))
 
 			// Set write mask. Metal numbers the channels the other way round
@@ -815,6 +824,9 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 	var depthBias, depthSlopeScale, depthClamp float32
 	if desc.DepthStencil != nil {
 		rawFormat := uintptr(d.adapter.mapTextureFormat(desc.DepthStencil.Format))
+		if rawFormat == uintptr(MTLPixelFormatInvalid) {
+			return nil, fmt.Errorf("metal: depth-stencil format %s has no Metal pixel format", desc.DepthStencil.Format)
+		}
 		if desc.DepthStencil.Format.HasDepth() {
 			_ = MsgSend(pipelineDesc, Sel("setDepthAttachmentPixelFormat:"), rawFormat)
 		}

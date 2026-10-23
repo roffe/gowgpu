@@ -25,6 +25,8 @@ func TestTextureFormatToMTL(t *testing.T) {
 		{"R8Sint", gputypes.TextureFormatR8Sint, MTLPixelFormatR8Sint},
 
 		// 16-bit formats
+		{"R16Unorm", gputypes.TextureFormatR16Unorm, MTLPixelFormatR16Unorm},
+		{"R16Snorm", gputypes.TextureFormatR16Snorm, MTLPixelFormatR16Snorm},
 		{"R16Uint", gputypes.TextureFormatR16Uint, MTLPixelFormatR16Uint},
 		{"R16Sint", gputypes.TextureFormatR16Sint, MTLPixelFormatR16Sint},
 		{"R16Float", gputypes.TextureFormatR16Float, MTLPixelFormatR16Float},
@@ -37,6 +39,8 @@ func TestTextureFormatToMTL(t *testing.T) {
 		{"R32Uint", gputypes.TextureFormatR32Uint, MTLPixelFormatR32Uint},
 		{"R32Sint", gputypes.TextureFormatR32Sint, MTLPixelFormatR32Sint},
 		{"R32Float", gputypes.TextureFormatR32Float, MTLPixelFormatR32Float},
+		{"RG16Unorm", gputypes.TextureFormatRG16Unorm, MTLPixelFormatRG16Unorm},
+		{"RG16Snorm", gputypes.TextureFormatRG16Snorm, MTLPixelFormatRG16Snorm},
 		{"RG16Uint", gputypes.TextureFormatRG16Uint, MTLPixelFormatRG16Uint},
 		{"RG16Sint", gputypes.TextureFormatRG16Sint, MTLPixelFormatRG16Sint},
 		{"RG16Float", gputypes.TextureFormatRG16Float, MTLPixelFormatRG16Float},
@@ -50,6 +54,7 @@ func TestTextureFormatToMTL(t *testing.T) {
 
 		// Packed formats
 		{"RGB10A2Unorm", gputypes.TextureFormatRGB10A2Unorm, MTLPixelFormatRGB10A2Unorm},
+		{"RGB10A2Uint", gputypes.TextureFormatRGB10A2Uint, MTLPixelFormatRGB10A2Uint},
 		{"RG11B10Ufloat", gputypes.TextureFormatRG11B10Ufloat, MTLPixelFormatRG11B10Float},
 		{"RGB9E5Ufloat", gputypes.TextureFormatRGB9E5Ufloat, MTLPixelFormatRGB9E5Float},
 
@@ -57,6 +62,8 @@ func TestTextureFormatToMTL(t *testing.T) {
 		{"RG32Uint", gputypes.TextureFormatRG32Uint, MTLPixelFormatRG32Uint},
 		{"RG32Sint", gputypes.TextureFormatRG32Sint, MTLPixelFormatRG32Sint},
 		{"RG32Float", gputypes.TextureFormatRG32Float, MTLPixelFormatRG32Float},
+		{"RGBA16Unorm", gputypes.TextureFormatRGBA16Unorm, MTLPixelFormatRGBA16Unorm},
+		{"RGBA16Snorm", gputypes.TextureFormatRGBA16Snorm, MTLPixelFormatRGBA16Snorm},
 		{"RGBA16Uint", gputypes.TextureFormatRGBA16Uint, MTLPixelFormatRGBA16Uint},
 		{"RGBA16Sint", gputypes.TextureFormatRGBA16Sint, MTLPixelFormatRGBA16Sint},
 		{"RGBA16Float", gputypes.TextureFormatRGBA16Float, MTLPixelFormatRGBA16Float},
@@ -85,6 +92,16 @@ func TestTextureFormatToMTL(t *testing.T) {
 				t.Errorf("textureFormatToMTL(%v) = %v, want %v", tt.format, got, tt.expect)
 			}
 		})
+	}
+}
+
+// TestEveryUncompressedFormatMaps checks that no uncompressed format reaches
+// Metal as MTLPixelFormatInvalid, which its descriptor validation aborts on.
+func TestEveryUncompressedFormatMaps(t *testing.T) {
+	for f := gputypes.TextureFormatR8Unorm; f <= gputypes.TextureFormatDepth32FloatStencil8; f++ {
+		if textureFormatToMTL(f) == MTLPixelFormatInvalid {
+			t.Errorf("%s maps to MTLPixelFormatInvalid", f)
+		}
 	}
 }
 

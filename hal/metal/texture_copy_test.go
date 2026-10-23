@@ -6,6 +6,7 @@
 package metal
 
 import (
+	"bytes"
 	"math"
 	"testing"
 	"unsafe"
@@ -640,5 +641,84 @@ func assertMetalTextureArrayTestData(t *testing.T, got, want []byte, width, heig
 				}
 			}
 		}
+	}
+}
+
+// TestNewlyMappedFormatsRoundTrip creates textures in the formats that used
+// to reach Metal as pixel format 0, and copies texels in and out of them.
+func TestNewlyMappedFormatsRoundTrip(t *testing.T) {
+	device, queue := newMetalTextureCopyTestDevice(t)
+	for _, format := range []gputypes.TextureFormat{
+		gputypes.TextureFormatR16Unorm, gputypes.TextureFormatR16Snorm,
+		gputypes.TextureFormatRG16Unorm, gputypes.TextureFormatRG16Snorm,
+		gputypes.TextureFormatRGBA16Unorm, gputypes.TextureFormatRGBA16Snorm,
+		gputypes.TextureFormatRGB10A2Uint,
+	} {
+		t.Run(format.String(), func(t *testing.T) {
+			const side, pitch = 4, 256
+			raw, err := device.CreateTexture(&hal.TextureDescriptor{
+				Size:          hal.Extent3D{Width: side, Height: side, DepthOrArrayLayers: 1},
+				MipLevelCount: 1,
+				SampleCount:   1,
+				Dimension:     gputypes.TextureDimension2D,
+				Format:        format,
+				Usage:         gputypes.TextureUsageCopySrc | gputypes.TextureUsageCopyDst | gputypes.TextureUsageTextureBinding,
+			})
+			if err != nil {
+				t.Fatalf("CreateTexture failed: %v", err)
+			}
+			texture := raw.(*Texture)
+			defer texture.Destroy()
+
+			rowBytes := int(format.BlockCopySize()) * side
+			data := make([]byte, pitch*side)
+			for y := range side {
+				for x := range rowBytes {
+					data[y*pitch+x] = byte(y*rowBytes + x + 1)
+				}
+			}
+			upload := createMetalTextureCopyTestUpload(t, device, 0, data)
+			defer upload.Destroy()
+			readback := createMetalTextureCopyTestReadback(t, device, uint64(len(data)))
+			defer readback.Destroy()
+
+			region := []hal.BufferTextureCopy{{
+				BufferLayout: hal.ImageDataLayout{BytesPerRow: pitch, RowsPerImage: side},
+				TextureBase:  hal.ImageCopyTexture{Texture: texture},
+				Size:         hal.Extent3D{Width: side, Height: side, DepthOrArrayLayers: 1},
+			}}
+			encoder := &CommandEncoder{device: device}
+			if err := encoder.BeginEncoding(format.String()); err != nil {
+				t.Fatalf("BeginEncoding failed: %v", err)
+			}
+			encoder.CopyBufferToTexture(upload, texture, region)
+			encoder.CopyTextureToBuffer(texture, readback, region)
+			submitMetalTextureCopyTestEncoder(t, device, queue, encoder)
+
+			got := unsafe.Slice((*byte)(readback.Contents()), len(data))
+			for y := range side {
+				row := y * pitch
+				if !bytes.Equal(got[row:row+rowBytes], data[row:row+rowBytes]) {
+					t.Fatalf("row %d = %v, want %v", y, got[row:row+rowBytes], data[row:row+rowBytes])
+				}
+			}
+		})
+	}
+}
+
+// TestCreateTextureRejectsUnmappedFormat checks that a format without a
+// Metal pixel format is an error, not a texture of pixel format 0.
+func TestCreateTextureRejectsUnmappedFormat(t *testing.T) {
+	device, _ := newMetalTextureCopyTestDevice(t)
+	_, err := device.CreateTexture(&hal.TextureDescriptor{
+		Size:          hal.Extent3D{Width: 4, Height: 4, DepthOrArrayLayers: 1},
+		MipLevelCount: 1,
+		SampleCount:   1,
+		Dimension:     gputypes.TextureDimension2D,
+		Format:        gputypes.TextureFormatBC1RGBAUnorm,
+		Usage:         gputypes.TextureUsageTextureBinding,
+	})
+	if err == nil {
+		t.Fatal("CreateTexture of a BC1 texture succeeded; Metal maps no BC format")
 	}
 }
