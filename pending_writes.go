@@ -616,7 +616,7 @@ func (pw *pendingWrites) copyToTextureLocked(
 	if err != nil {
 		return fmt.Errorf("wgpu: pending writes: activate encoder: %w", err)
 	}
-	w := pw.beginTextureWrite(enc, owner, dst, size)
+	w := pw.beginTextureWrite(enc, owner, dst)
 
 	// Record copy command.
 	pw.texCopy[0] = hal.BufferTextureCopy{
@@ -638,13 +638,12 @@ func (pw *pendingWrites) copyToTextureLocked(
 // textureWrite is what beginTextureWrite found out about a texture that
 // endTextureWrite needs.
 type textureWrite struct {
-	copyRange hal.TextureRange
-	idx       track.TrackerIndex
-	tracked   bool
+	idx     track.TrackerIndex
+	tracked bool
 }
 
 // beginTextureWrite records the barrier that makes dst a copy destination.
-func (pw *pendingWrites) beginTextureWrite(enc hal.CommandEncoder, owner *Texture, dst *hal.ImageCopyTexture, size *hal.Extent3D) textureWrite {
+func (pw *pendingWrites) beginTextureWrite(enc hal.CommandEncoder, owner *Texture, dst *hal.ImageCopyTexture) textureWrite {
 	// Transition texture to COPY_DST from the state the GPU has it in: what
 	// the last submit left (the device tracker), else what the backend tracks
 	// itself (DX12), else undefined, which is right for a new texture and
@@ -662,13 +661,16 @@ func (pw *pendingWrites) beginTextureWrite(enc hal.CommandEncoder, owner *Textur
 			currentUsage = uses
 		}
 	}
-	copyRange := textureCopyRange(owner, dst, size)
 	// One the tracker knows as a copy destination already was written by an
-	// earlier copy, which this one has to wait for.
+	// earlier copy, which this one has to wait for. The barrier takes the
+	// whole texture, every aspect included, as the tracker knows only the
+	// whole texture's state and Vulkan wants both aspects of a depth/stencil
+	// image in one barrier (VUID-VkImageMemoryBarrier-image-03320); the copy
+	// itself stays on its region. wgpu-core makes every texture barrier
+	// with TextureAspect::All the same way.
 	if currentUsage != gputypes.TextureUsageCopyDst || currentUses&hal.TextureUsesCopyDst != 0 {
 		pw.texBarrier[0] = hal.TextureBarrier{
 			Texture: dst.Texture,
-			Range:   copyRange,
 			Usage: hal.TextureUsageTransition{
 				OldUsage: currentUsage,
 				NewUsage: gputypes.TextureUsageCopyDst,
@@ -679,7 +681,7 @@ func (pw *pendingWrites) beginTextureWrite(enc hal.CommandEncoder, owner *Textur
 		enc.TransitionTextures(pw.texBarrier[:])
 		pw.texBarrier[0] = hal.TextureBarrier{}
 	}
-	return textureWrite{copyRange: copyRange, idx: idx, tracked: tracked}
+	return textureWrite{idx: idx, tracked: tracked}
 }
 
 // endTextureWrite records what follows a copy into dst: the barrier taking it
@@ -702,7 +704,6 @@ func (pw *pendingWrites) endTextureWrite(enc hal.CommandEncoder, owner *Texture,
 		// also covers queue write operations (pending_writes integration, future work).
 		pw.texBarrier[0] = hal.TextureBarrier{
 			Texture: dst.Texture,
-			Range:   w.copyRange,
 			Usage: hal.TextureUsageTransition{
 				OldUsage: gputypes.TextureUsageCopyDst,
 				NewUsage: gputypes.TextureUsageTextureBinding,
@@ -753,8 +754,7 @@ func (pw *pendingWrites) copyExternalLocked(src uintptr, layout, slice uint32, o
 	for i, owner := range owners {
 		delete(pw.zero, owner) // the copy fills it, where zeroing at flush would clear it after
 		dsts[i] = hal.ImageCopyTexture{Texture: raws[i]}
-		s := owner.coreTexture.Size()
-		writes[i] = pw.beginTextureWrite(enc, owner, &dsts[i], &hal.Extent3D{Width: s.Width, Height: s.Height, DepthOrArrayLayers: 1})
+		writes[i] = pw.beginTextureWrite(enc, owner, &dsts[i])
 	}
 	after := copier.CopyExternalPlanes(src, layout, slice, raws[:len(owners)])
 	for i, owner := range owners {
@@ -783,8 +783,7 @@ func (pw *pendingWrites) copyExternalBufferLocked(src uintptr, bytesPerRow uint3
 	}
 	delete(pw.zero, owner) // the copy fills it, where zeroing at flush would clear it after
 	dst := hal.ImageCopyTexture{Texture: raw}
-	s := owner.coreTexture.Size()
-	write := pw.beginTextureWrite(enc, owner, &dst, &hal.Extent3D{Width: s.Width, Height: s.Height, DepthOrArrayLayers: 1})
+	write := pw.beginTextureWrite(enc, owner, &dst)
 	copier.CopyExternalBuffer(src, bytesPerRow, raw)
 	pw.endTextureWrite(enc, owner, &dst, write)
 	return nil
@@ -847,25 +846,6 @@ func (pw *pendingWrites) trackedIndex(owner *Texture) (track.TrackerIndex, bool)
 		return 0, false
 	}
 	return td.Index(), true
-}
-
-func textureCopyRange(owner *Texture, dst *hal.ImageCopyTexture, size *hal.Extent3D) hal.TextureRange {
-	baseLayer := uint32(0)
-	layerCount := uint32(1)
-	if owner != nil && owner.coreTexture != nil && owner.coreTexture.Dimension() != gputypes.TextureDimension3D {
-		baseLayer = dst.Origin.Z
-		layerCount = size.DepthOrArrayLayers
-		if layerCount == 0 {
-			layerCount = 1
-		}
-	}
-	return hal.TextureRange{
-		Aspect:          dst.Aspect,
-		BaseMipLevel:    dst.MipLevel,
-		MipLevelCount:   1,
-		BaseArrayLayer:  baseLayer,
-		ArrayLayerCount: layerCount,
-	}
 }
 
 // zeroableTexture reports whether a texture made from desc gets zeroed through

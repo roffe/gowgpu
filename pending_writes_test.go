@@ -427,8 +427,8 @@ func TestPendingWrites_WriteTextureTransitionsArrayLayers(t *testing.T) {
 		t.Fatalf("texture barriers = %d, want 2", len(barriers))
 	}
 	for i, barrier := range barriers {
-		if barrier.Range.BaseArrayLayer != 1 || barrier.Range.ArrayLayerCount != 1 {
-			t.Errorf("barrier %d array range = %d+%d, want 1+1", i, barrier.Range.BaseArrayLayer, barrier.Range.ArrayLayerCount)
+		if barrier.Range != (hal.TextureRange{}) {
+			t.Errorf("barrier %d range = %+v, want the whole texture", i, barrier.Range)
 		}
 	}
 }
@@ -469,8 +469,8 @@ func TestPendingWrites_WriteTextureTransitions3DDepth(t *testing.T) {
 		t.Fatalf("texture barriers = %d, want 2", len(barriers))
 	}
 	for i, barrier := range barriers {
-		if barrier.Range.BaseArrayLayer != 0 || barrier.Range.ArrayLayerCount != 1 {
-			t.Errorf("barrier %d array range = %d+%d, want 0+1", i, barrier.Range.BaseArrayLayer, barrier.Range.ArrayLayerCount)
+		if barrier.Range != (hal.TextureRange{}) {
+			t.Errorf("barrier %d range = %+v, want the whole texture", i, barrier.Range)
 		}
 	}
 }
