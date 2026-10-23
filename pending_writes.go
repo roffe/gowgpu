@@ -964,9 +964,9 @@ func (pw *pendingWrites) trackedIndex(owner *Texture) (track.TrackerIndex, bool)
 // copies, which take a color format with a copy size and one sample.
 // ponytail: GL writes to textures straight away instead of recording the
 // writes, so it zeroes uncompressed color textures from the CPU and leaves
-// depth, multisampled and compressed ones with old memory: the GL HAL has no
-// depth-only passes and no compressed uploads, and a clear pass would need
-// an encoder of its own, submitted ahead of the rest.
+// depth, multisampled and compressed ones to the GL HAL, which zeroes them
+// when it makes them but not after a pass discards them: a clear pass would
+// need an encoder of its own, submitted ahead of the rest.
 func zeroableTexture(desc *hal.TextureDescriptor, batching bool) (zero, pass bool) {
 	f := desc.Format
 	color := !f.IsDepthStencil() && desc.SampleCount <= 1 && f.BlockCopySize() != 0
