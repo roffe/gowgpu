@@ -264,22 +264,25 @@ func (e *CommandEncoder) CopyBufferToTexture(src hal.Buffer, dst hal.Texture, re
 	for _, region := range regions {
 		aspect := region.TextureBase.Aspect
 		plan, bytesPerImage, _ := validateMetalBufferTextureCopyPlan(dstTex.format, aspect, dstTex.dimension, region.BufferLayout, region.TextureBase.Origin, region.Size)
-		strides := metalBlitStrides(dstTex.dimension, uint64(region.BufferLayout.BytesPerRow), bytesPerImage)
+		blockWidth, blockHeight, blockSize, _ := metalCopyBlockInfo(dstTex.format, aspect)
 		for operation := uint32(0); operation < plan.operationCount; operation++ {
 			destination, _ := plan.textureRegion(dstTex.dimension, region.TextureBase.Origin, region.Size, operation)
 			sourceOffset, _ := plan.bufferOffset(region.BufferLayout.Offset, bytesPerImage, operation)
-			msgSendVoid(blitEncoder, Sel("copyFromBuffer:sourceOffset:sourceBytesPerRow:sourceBytesPerImage:sourceSize:toTexture:destinationSlice:destinationLevel:destinationOrigin:options:"),
-				argPointer(uintptr(srcBuf.raw)),
-				argUint64(sourceOffset),
-				argUint64(strides.bytesPerRow),
-				argUint64(strides.bytesPerImage),
-				argStruct(destination.size, mtlSizeType),
-				argPointer(uintptr(dstTex.raw)),
-				argUint64(uint64(destination.slice)),
-				argUint64(uint64(region.TextureBase.MipLevel)),
-				argStruct(destination.origin, mtlOriginType),
-				argUint64(uint64(metalBlitOption(dstTex.format, aspect))),
-			)
+			for _, blit := range splitMetalBufferBlit(destination, dstTex.dimension, sourceOffset, srcBuf.size,
+				uint64(region.BufferLayout.BytesPerRow), bytesPerImage, blockWidth, blockHeight, blockSize) {
+				msgSendVoid(blitEncoder, Sel("copyFromBuffer:sourceOffset:sourceBytesPerRow:sourceBytesPerImage:sourceSize:toTexture:destinationSlice:destinationLevel:destinationOrigin:options:"),
+					argPointer(uintptr(srcBuf.raw)),
+					argUint64(blit.offset),
+					argUint64(blit.bytesPerRow),
+					argUint64(blit.bytesPerImage),
+					argStruct(blit.region.size, mtlSizeType),
+					argPointer(uintptr(dstTex.raw)),
+					argUint64(uint64(blit.region.slice)),
+					argUint64(uint64(region.TextureBase.MipLevel)),
+					argStruct(blit.region.origin, mtlOriginType),
+					argUint64(uint64(metalBlitOption(dstTex.format, aspect))),
+				)
+			}
 		}
 	}
 	_ = MsgSend(blitEncoder, Sel("endEncoding"))
@@ -312,22 +315,25 @@ func (e *CommandEncoder) CopyTextureToBuffer(src hal.Texture, dst hal.Buffer, re
 	for _, region := range regions {
 		aspect := region.TextureBase.Aspect
 		plan, bytesPerImage, _ := validateMetalBufferTextureCopyPlan(srcTex.format, aspect, srcTex.dimension, region.BufferLayout, region.TextureBase.Origin, region.Size)
-		strides := metalBlitStrides(srcTex.dimension, uint64(region.BufferLayout.BytesPerRow), bytesPerImage)
+		blockWidth, blockHeight, blockSize, _ := metalCopyBlockInfo(srcTex.format, aspect)
 		for operation := uint32(0); operation < plan.operationCount; operation++ {
 			source, _ := plan.textureRegion(srcTex.dimension, region.TextureBase.Origin, region.Size, operation)
 			destinationOffset, _ := plan.bufferOffset(region.BufferLayout.Offset, bytesPerImage, operation)
-			msgSendVoid(blitEncoder, Sel("copyFromTexture:sourceSlice:sourceLevel:sourceOrigin:sourceSize:toBuffer:destinationOffset:destinationBytesPerRow:destinationBytesPerImage:options:"),
-				argPointer(uintptr(srcTex.raw)),
-				argUint64(uint64(source.slice)),
-				argUint64(uint64(region.TextureBase.MipLevel)),
-				argStruct(source.origin, mtlOriginType),
-				argStruct(source.size, mtlSizeType),
-				argPointer(uintptr(dstBuf.raw)),
-				argUint64(destinationOffset),
-				argUint64(strides.bytesPerRow),
-				argUint64(strides.bytesPerImage),
-				argUint64(uint64(metalBlitOption(srcTex.format, aspect))),
-			)
+			for _, blit := range splitMetalBufferBlit(source, srcTex.dimension, destinationOffset, dstBuf.size,
+				uint64(region.BufferLayout.BytesPerRow), bytesPerImage, blockWidth, blockHeight, blockSize) {
+				msgSendVoid(blitEncoder, Sel("copyFromTexture:sourceSlice:sourceLevel:sourceOrigin:sourceSize:toBuffer:destinationOffset:destinationBytesPerRow:destinationBytesPerImage:options:"),
+					argPointer(uintptr(srcTex.raw)),
+					argUint64(uint64(blit.region.slice)),
+					argUint64(uint64(region.TextureBase.MipLevel)),
+					argStruct(blit.region.origin, mtlOriginType),
+					argStruct(blit.region.size, mtlSizeType),
+					argPointer(uintptr(dstBuf.raw)),
+					argUint64(blit.offset),
+					argUint64(blit.bytesPerRow),
+					argUint64(blit.bytesPerImage),
+					argUint64(uint64(metalBlitOption(srcTex.format, aspect))),
+				)
+			}
 		}
 	}
 	_ = MsgSend(blitEncoder, Sel("endEncoding"))

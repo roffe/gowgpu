@@ -342,22 +342,25 @@ func (q *Queue) WriteTexture(dst *hal.ImageCopyTexture, data []byte, layout *hal
 		return fmt.Errorf("metal: WriteTexture: blit encoder creation failed")
 	}
 
-	strides := metalBlitStrides(tex.dimension, uint64(copyLayout.bytesPerRow), copyLayout.bytesPerImage)
+	blockWidth, blockHeight, blockSize, _ := metalCopyBlockInfo(tex.format, dst.Aspect)
 	for operation := uint32(0); operation < plan.operationCount; operation++ {
 		destination, _ := plan.textureRegion(tex.dimension, dst.Origin, *size, operation)
 		sourceOffset, _ := plan.bufferOffset(layout.Offset, copyLayout.bytesPerImage, operation)
-		msgSendVoid(blitEncoder, Sel("copyFromBuffer:sourceOffset:sourceBytesPerRow:sourceBytesPerImage:sourceSize:toTexture:destinationSlice:destinationLevel:destinationOrigin:options:"),
-			argPointer(uintptr(stagingBuffer)),
-			argUint64(sourceOffset),
-			argUint64(strides.bytesPerRow),
-			argUint64(strides.bytesPerImage),
-			argStruct(destination.size, mtlSizeType),
-			argPointer(uintptr(tex.raw)),
-			argUint64(uint64(destination.slice)),
-			argUint64(uint64(dst.MipLevel)),
-			argStruct(destination.origin, mtlOriginType),
-			argUint64(uint64(metalBlitOption(tex.format, dst.Aspect))),
-		)
+		for _, blit := range splitMetalBufferBlit(destination, tex.dimension, sourceOffset, uint64(len(data)),
+			uint64(copyLayout.bytesPerRow), copyLayout.bytesPerImage, blockWidth, blockHeight, blockSize) {
+			msgSendVoid(blitEncoder, Sel("copyFromBuffer:sourceOffset:sourceBytesPerRow:sourceBytesPerImage:sourceSize:toTexture:destinationSlice:destinationLevel:destinationOrigin:options:"),
+				argPointer(uintptr(stagingBuffer)),
+				argUint64(blit.offset),
+				argUint64(blit.bytesPerRow),
+				argUint64(blit.bytesPerImage),
+				argStruct(blit.region.size, mtlSizeType),
+				argPointer(uintptr(tex.raw)),
+				argUint64(uint64(blit.region.slice)),
+				argUint64(uint64(dst.MipLevel)),
+				argStruct(blit.region.origin, mtlOriginType),
+				argUint64(uint64(metalBlitOption(tex.format, dst.Aspect))),
+			)
+		}
 	}
 
 	_ = MsgSend(blitEncoder, Sel("endEncoding"))

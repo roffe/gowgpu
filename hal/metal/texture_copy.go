@@ -142,14 +142,76 @@ func metalReplaceRegionStrides(dimension gputypes.TextureDimension, bytesPerRow,
 	}
 }
 
-// metalBlitStrides applies MTLBlitCommandEncoder's buffer/texture copy rules.
-// Its row stride remains explicit; its image stride is only valid for true 3D.
-func metalBlitStrides(dimension gputypes.TextureDimension, bytesPerRow, bytesPerImage uint64) metalCopyStrides {
-	strides := metalCopyStrides{bytesPerRow: bytesPerRow}
-	if dimension == gputypes.TextureDimension3D {
-		strides.bytesPerImage = bytesPerImage
+// metalBufferBlit is one blit between a buffer and a texture.
+type metalBufferBlit struct {
+	region metalTextureCopyRegion
+	offset uint64
+	metalCopyStrides
+}
+
+// splitMetalBufferBlit returns the blits of region between a texture and a
+// buffer of length bytes, at offset with the strides bytesPerRow and
+// bytesPerImage, that Metal's validation takes, as Dawn's
+// ComputeTextureBufferCopySplit makes them. Metal takes no row stride past
+// the widest texture's row, so such a copy goes a row at a time. Its
+// validation sizes a copy as whole images of whole rows from the offset,
+// so one that ends inside the padding of its last row copies its last
+// image and then its last row apart, the last row with a tight stride. An
+// image stride only goes with more than one image of a 3D texture.
+func splitMetalBufferBlit(region metalTextureCopyRegion, dimension gputypes.TextureDimension, offset, length, bytesPerRow, bytesPerImage uint64, blockWidth, blockHeight, blockSize uint32) []metalBufferBlit {
+	blockRows := (uint64(region.size.Height) + uint64(blockHeight) - 1) / uint64(blockHeight)
+	rowBytes := (uint64(region.size.Width) + uint64(blockWidth) - 1) / uint64(blockWidth) * uint64(blockSize)
+	if bytesPerRow == 0 {
+		bytesPerRow = rowBytes
 	}
-	return strides
+	images := uint64(region.size.Depth)
+	imageStride := func(images uint64) uint64 {
+		if dimension == gputypes.TextureDimension3D && images > 1 {
+			return bytesPerImage
+		}
+		return 0
+	}
+
+	maxRowBytes := uint64(16384) * uint64(blockSize)
+	if dimension == gputypes.TextureDimension3D {
+		maxRowBytes = 2048 * uint64(blockSize)
+	}
+	if bytesPerRow > maxRowBytes {
+		blits := make([]metalBufferBlit, 0, images*blockRows)
+		for image := range images {
+			for row := range blockRows {
+				r := region
+				r.origin.Y += NSUInteger(row * uint64(blockHeight))
+				r.origin.Z += NSUInteger(image)
+				r.size.Height = NSUInteger(min(uint64(blockHeight), uint64(region.size.Height)-row*uint64(blockHeight)))
+				r.size.Depth = 1
+				blits = append(blits, metalBufferBlit{r, offset + image*bytesPerImage + row*bytesPerRow, metalCopyStrides{bytesPerRow: rowBytes}})
+			}
+		}
+		return blits
+	}
+
+	if offset <= length && length-offset >= images*bytesPerImage && length-offset >= blockRows*bytesPerRow {
+		return []metalBufferBlit{{region, offset, metalCopyStrides{bytesPerRow, imageStride(images)}}}
+	}
+	var blits []metalBufferBlit
+	if images > 1 {
+		r := region
+		r.size.Depth = NSUInteger(images - 1)
+		blits = append(blits, metalBufferBlit{r, offset, metalCopyStrides{bytesPerRow, imageStride(images - 1)}})
+		offset += (images - 1) * bytesPerImage
+		region.origin.Z += r.size.Depth
+		region.size.Depth = 1
+	}
+	if blockRows > 1 {
+		r := region
+		r.size.Height = NSUInteger((blockRows - 1) * uint64(blockHeight))
+		blits = append(blits, metalBufferBlit{r, offset, metalCopyStrides{bytesPerRow: bytesPerRow}})
+		offset += (blockRows - 1) * bytesPerRow
+		region.origin.Y += r.size.Height
+		region.size.Height -= r.size.Height
+	}
+	return append(blits, metalBufferBlit{region, offset, metalCopyStrides{bytesPerRow: rowBytes}})
 }
 
 func validateMetalBufferTextureCopyPlan(

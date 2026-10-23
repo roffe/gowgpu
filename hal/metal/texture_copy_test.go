@@ -155,16 +155,46 @@ func TestMetalReplaceRegionStridesMatchTextureDimension(t *testing.T) {
 	}
 }
 
-func TestMetalBlitStridesMatchTextureDimension(t *testing.T) {
-	for _, dimension := range []gputypes.TextureDimension{gputypes.TextureDimension1D, gputypes.TextureDimension2D} {
-		got := metalBlitStrides(dimension, 256, 1024)
-		if got.bytesPerRow != 256 || got.bytesPerImage != 0 {
-			t.Errorf("%s blit strides = %+v; want row 256 image 0", dimension, got)
-		}
+func TestSplitMetalBufferBlit(t *testing.T) {
+	region := func(x, y, z, w, h, d NSUInteger) metalTextureCopyRegion {
+		return metalTextureCopyRegion{origin: MTLOrigin{X: x, Y: y, Z: z}, size: MTLSize{Width: w, Height: h, Depth: d}}
 	}
-	got := metalBlitStrides(gputypes.TextureDimension3D, 256, 1024)
-	if got.bytesPerRow != 256 || got.bytesPerImage != 1024 {
-		t.Errorf("3D blit strides = %+v; want row 256 image 1024", got)
+	blit := func(r metalTextureCopyRegion, offset, bytesPerRow, bytesPerImage uint64) metalBufferBlit {
+		return metalBufferBlit{r, offset, metalCopyStrides{bytesPerRow, bytesPerImage}}
+	}
+	for _, test := range []struct {
+		name                               string
+		region                             metalTextureCopyRegion
+		dimension                          gputypes.TextureDimension
+		offset, length, rowBytes, imageLen uint64
+		want                               []metalBufferBlit
+	}{
+		{"2D, whole rows in the buffer", region(1, 2, 0, 100, 100, 1), gputypes.TextureDimension2D, 64, 64 + 512*100, 512, 512 * 100,
+			[]metalBufferBlit{blit(region(1, 2, 0, 100, 100, 1), 64, 512, 0)}},
+		{"3D, image stride", region(0, 0, 1, 4, 4, 3), gputypes.TextureDimension3D, 0, 3 * 1024, 256, 1024,
+			[]metalBufferBlit{blit(region(0, 0, 1, 4, 4, 3), 0, 256, 1024)}},
+		{"3D, one image", region(0, 0, 1, 4, 4, 1), gputypes.TextureDimension3D, 0, 1024, 256, 1024,
+			[]metalBufferBlit{blit(region(0, 0, 1, 4, 4, 1), 0, 256, 0)}},
+		{"2D, buffer ends at the last texel", region(0, 0, 0, 100, 100, 1), gputypes.TextureDimension2D, 0, 512*99 + 400, 512, 512 * 100,
+			[]metalBufferBlit{blit(region(0, 0, 0, 100, 99, 1), 0, 512, 0), blit(region(0, 99, 0, 100, 1, 1), 512*99, 400, 0)}},
+		{"3D, buffer ends at the last texel", region(2, 0, 0, 4, 4, 2), gputypes.TextureDimension3D, 0, 1024 + 256*3 + 16, 256, 1024,
+			[]metalBufferBlit{blit(region(2, 0, 0, 4, 4, 1), 0, 256, 0), blit(region(2, 0, 1, 4, 3, 1), 1024, 256, 0), blit(region(2, 3, 1, 4, 1, 1), 1024+768, 16, 0)}},
+		{"row stride past the widest texture", region(0, 4, 0, 2, 3, 1), gputypes.TextureDimension2D, 8, 1 << 20, 16384*4 + 256, 3 * (16384*4 + 256),
+			[]metalBufferBlit{blit(region(0, 4, 0, 2, 1, 1), 8, 8, 0), blit(region(0, 5, 0, 2, 1, 1), 8+16384*4+256, 8, 0), blit(region(0, 6, 0, 2, 1, 1), 8+2*(16384*4+256), 8, 0)}},
+		{"no row stride for one row", region(0, 0, 0, 3, 1, 1), gputypes.TextureDimension1D, 0, 12, 0, 0,
+			[]metalBufferBlit{blit(region(0, 0, 0, 3, 1, 1), 0, 12, 0)}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got := splitMetalBufferBlit(test.region, test.dimension, test.offset, test.length, test.rowBytes, test.imageLen, 1, 1, 4)
+			if len(got) != len(test.want) {
+				t.Fatalf("blits = %+v; want %+v", got, test.want)
+			}
+			for i := range got {
+				if got[i] != test.want[i] {
+					t.Errorf("blit %d = %+v; want %+v", i, got[i], test.want[i])
+				}
+			}
+		})
 	}
 }
 
@@ -900,6 +930,81 @@ func TestCopyBetweenSRGBAndLinearTextures(t *testing.T) {
 		row := y * pitch
 		if !bytes.Equal(got[row:row+side*4], data[row:row+side*4]) {
 			t.Fatalf("row %d = %v, want %v", y, got[row:row+side*4], data[row:row+side*4])
+		}
+	}
+}
+
+// TestTightBufferCopies copies between textures and buffers that end at the
+// last texel, short of the last row's padding, which Metal's validation
+// counts in: with MTL_DEBUG_LAYER=1 these blits must split.
+func TestTightBufferCopies(t *testing.T) {
+	device, queue := newMetalTextureCopyTestDevice(t)
+	const side, pitch = 8, 256
+	tight := pitch*(side-1) + side*4
+	data := make([]byte, tight)
+	for i := range data {
+		data[i] = byte(i*13 + 7)
+	}
+	texture := createMetalTextureCopyTestTexture(t, device, gputypes.TextureDimension2D, side, side, 1)
+	defer texture.Destroy()
+	upload := createMetalTextureCopyTestUpload(t, device, 0, data)
+	defer upload.Destroy()
+	readback := createMetalTextureCopyTestReadback(t, device, uint64(tight))
+	defer readback.Destroy()
+	region := []hal.BufferTextureCopy{{
+		BufferLayout: hal.ImageDataLayout{BytesPerRow: pitch, RowsPerImage: side},
+		TextureBase:  hal.ImageCopyTexture{Texture: texture},
+		Size:         hal.Extent3D{Width: side, Height: side, DepthOrArrayLayers: 1},
+	}}
+	encoder := &CommandEncoder{device: device}
+	if err := encoder.BeginEncoding("tight copies"); err != nil {
+		t.Fatalf("BeginEncoding failed: %v", err)
+	}
+	encoder.CopyBufferToTexture(upload, texture, region)
+	encoder.CopyTextureToBuffer(texture, readback, region)
+	submitMetalTextureCopyTestEncoder(t, device, queue, encoder)
+	got := unsafe.Slice((*byte)(readback.Contents()), tight)
+	for y := range side {
+		row := y * pitch
+		if !bytes.Equal(got[row:row+side*4], data[row:row+side*4]) {
+			t.Fatalf("row %d = %v, want %v", y, got[row:row+side*4], data[row:row+side*4])
+		}
+	}
+
+	depth, err := device.CreateTexture(&hal.TextureDescriptor{
+		Size:          hal.Extent3D{Width: side, Height: side, DepthOrArrayLayers: 1},
+		MipLevelCount: 1,
+		SampleCount:   1,
+		Dimension:     gputypes.TextureDimension2D,
+		Format:        gputypes.TextureFormatDepth16Unorm,
+		Usage:         gputypes.TextureUsageCopySrc | gputypes.TextureUsageCopyDst | gputypes.TextureUsageRenderAttachment,
+	})
+	if err != nil {
+		t.Fatalf("CreateTexture(depth16) failed: %v", err)
+	}
+	defer depth.Destroy()
+	depthTight := pitch*(side-1) + side*2
+	depthRegion := []hal.BufferTextureCopy{{
+		BufferLayout: hal.ImageDataLayout{BytesPerRow: pitch, RowsPerImage: side},
+		TextureBase:  hal.ImageCopyTexture{Texture: depth},
+		Size:         hal.Extent3D{Width: side, Height: side, DepthOrArrayLayers: 1},
+	}}
+	if err := queue.WriteTexture(&depthRegion[0].TextureBase, data[:depthTight], &depthRegion[0].BufferLayout, &depthRegion[0].Size); err != nil {
+		t.Fatalf("WriteTexture(depth16) failed: %v", err)
+	}
+	depthReadback := createMetalTextureCopyTestReadback(t, device, uint64(depthTight))
+	defer depthReadback.Destroy()
+	encoder = &CommandEncoder{device: device}
+	if err := encoder.BeginEncoding("tight depth readback"); err != nil {
+		t.Fatalf("BeginEncoding failed: %v", err)
+	}
+	encoder.CopyTextureToBuffer(depth, depthReadback, depthRegion)
+	submitMetalTextureCopyTestEncoder(t, device, queue, encoder)
+	got = unsafe.Slice((*byte)(depthReadback.Contents()), depthTight)
+	for y := range side {
+		row := y * pitch
+		if !bytes.Equal(got[row:row+side*2], data[row:row+side*2]) {
+			t.Fatalf("depth row %d = %v, want %v", y, got[row:row+side*2], data[row:row+side*2])
 		}
 	}
 }
