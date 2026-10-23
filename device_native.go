@@ -418,6 +418,13 @@ func (d *Device) CreatePipelineLayout(desc *PipelineLayoutDescriptor) (*Pipeline
 	if err := core.ValidatePipelineLayoutDescriptor(halDesc, d.core.Limits, d.core.Features); err != nil {
 		return nil, err
 	}
+	groups := make([][]gputypes.BindGroupLayoutEntry, len(desc.BindGroupLayouts))
+	for i, layout := range desc.BindGroupLayouts {
+		groups[i] = layout.entries
+	}
+	if err := core.ValidatePipelineLayoutBindings(desc.Label, groups, d.core.Limits); err != nil {
+		return nil, err
+	}
 
 	halLayout, err := halDevice.CreatePipelineLayout(halDesc)
 	if err != nil {
