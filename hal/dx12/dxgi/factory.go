@@ -249,6 +249,48 @@ func (f *IDXGIFactory4) CreateSwapChainForHwnd(
 	return swapChain, nil
 }
 
+// CreateSwapChainForComposition creates a swap chain for DirectComposition.
+func (f *IDXGIFactory4) CreateSwapChainForComposition(
+	device unsafe.Pointer, // ID3D12CommandQueue
+	desc *DXGI_SWAP_CHAIN_DESC1,
+	restrictToOutput *IDXGIOutput,
+) (*IDXGISwapChain1, error) {
+	var swapChain *IDXGISwapChain1
+
+	ret, _, _ := syscall.Syscall6(
+		f.vtbl.CreateSwapChainForComposition,
+		5,
+		uintptr(unsafe.Pointer(f)),
+		uintptr(device),
+		uintptr(unsafe.Pointer(desc)),
+		uintptr(unsafe.Pointer(restrictToOutput)),
+		uintptr(unsafe.Pointer(&swapChain)),
+		0,
+	)
+
+	if int32(ret) < 0 {
+		return nil, d3d12.HRESULTError(ret)
+	}
+	return swapChain, nil
+}
+
+// Factory6 returns the factory's IDXGIFactory6 interface, or nil when DXGI
+// has none, before Windows 10 1803.
+func (f *IDXGIFactory4) Factory6() *IDXGIFactory6 {
+	var factory6 *IDXGIFactory6
+	ret, _, _ := syscall.Syscall(
+		f.vtbl.QueryInterface,
+		3,
+		uintptr(unsafe.Pointer(f)),
+		uintptr(unsafe.Pointer(&IID_IDXGIFactory6)),
+		uintptr(unsafe.Pointer(&factory6)),
+	)
+	if int32(ret) < 0 {
+		return nil
+	}
+	return factory6
+}
+
 // -----------------------------------------------------------------------------
 // IDXGIFactory6 methods
 // -----------------------------------------------------------------------------

@@ -69,24 +69,25 @@ func (Backend) CreateInstance(desc *hal.InstanceDescriptor) (hal.Instance, error
 	}
 
 	// Create DXGI factory (with graceful debug fallback)
-	factory, err := dxgiLib.CreateFactory2(factoryFlags)
+	factory, err := dxgiLib.CreateFactory4(factoryFlags)
 	if err != nil && debugRequested {
 		// Debug layer not installed (requires Windows "Graphics Tools" optional feature).
 		// Fall back to non-debug factory.
 		hal.Logger().Warn("dx12: debug layer not available, falling back to non-debug mode", "err", err)
 		factoryFlags = 0
 		instance.flags = 0
-		factory, err = dxgiLib.CreateFactory2(factoryFlags)
+		factory, err = dxgiLib.CreateFactory4(factoryFlags)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("dx12: failed to create DXGI factory: %w", err)
 	}
 	instance.factory = factory
+	instance.factory6 = factory.Factory6()
 
 	// Load D3D12 library
 	d3d12Lib, err := d3d12.LoadD3D12()
 	if err != nil {
-		factory.Release()
+		instance.Destroy()
 		return nil, fmt.Errorf("dx12: failed to load d3d12.dll: %w", err)
 	}
 	instance.d3d12Lib = d3d12Lib
@@ -113,7 +114,8 @@ func (Backend) CreateInstance(desc *hal.InstanceDescriptor) (hal.Instance, error
 
 // Instance implements hal.Instance for DirectX 12.
 type Instance struct {
-	factory      *dxgi.IDXGIFactory6
+	factory      *dxgi.IDXGIFactory4
+	factory6     *dxgi.IDXGIFactory6 // nil before Windows 10 1803
 	d3d12Lib     *d3d12.D3D12Lib
 	dxgiLib      *dxgi.DXGILib
 	debugLayer   *d3d12.ID3D12Debug
@@ -163,9 +165,11 @@ func (i *Instance) enableDebugLayer() error {
 
 // checkTearingSupport checks if variable refresh rate is supported.
 func (i *Instance) checkTearingSupport() {
-	// Query DXGI 1.5 feature for tearing support
+	if i.factory6 == nil {
+		return
+	}
 	var allowTearing int32
-	err := i.factory.CheckFeatureSupport(
+	err := i.factory6.CheckFeatureSupport(
 		dxgi.DXGI_FEATURE_PRESENT_ALLOW_TEARING,
 		unsafe.Pointer(&allowTearing),
 		4, // sizeof(BOOL)
@@ -198,12 +202,15 @@ func (i *Instance) CreateSurface(target hal.SurfaceTarget) (hal.Surface, error) 
 // works, as a CPU adapter: a VM or remote session without a GPU still renders,
 // and nobody else pays for creating a WARP device to probe it.
 func (i *Instance) EnumerateAdapters(surfaceHint hal.Surface) []hal.ExposedAdapter {
+	if i.factory6 == nil {
+		return i.enumerateAdaptersLegacy(surfaceHint)
+	}
 	var adapters []hal.ExposedAdapter
 	var software []*Adapter
 
 	// Enumerate adapters by GPU preference (high performance first)
 	for idx := uint32(0); ; idx++ {
-		raw, err := i.factory.EnumAdapterByGpuPreference(
+		raw, err := i.factory6.EnumAdapterByGpuPreference(
 			idx, dxgi.DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE)
 		if err != nil {
 			// No more adapters or factory doesn't support EnumAdapterByGpuPreference
@@ -388,6 +395,10 @@ func (i *Instance) Destroy() {
 		i.debugLayer = nil
 	}
 
+	if i.factory6 != nil {
+		i.factory6.Release()
+		i.factory6 = nil
+	}
 	if i.factory != nil {
 		i.factory.Release()
 		i.factory = nil

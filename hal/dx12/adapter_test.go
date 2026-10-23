@@ -4,9 +4,11 @@ package dx12
 
 import (
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/roffe/gowgpu/gputypes"
+	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/dx12/d3d12"
 	"github.com/roffe/gowgpu/hal/dx12/dxgi"
 )
@@ -50,5 +52,37 @@ func TestStorageLimitsFitTheUAVsOfTheBindingTier(t *testing.T) {
 func TestMaxBufferSizeFitsAVertexBufferView(t *testing.T) {
 	if got := (&Adapter{}).limits().MaxBufferSize; got > math.MaxUint32 {
 		t.Fatalf("MaxBufferSize = %d, more than the 32-bit size of a vertex or index buffer view", got)
+	}
+}
+
+// TestAdaptersWithoutFactory6 enumerates adapters as on DXGI before
+// Windows 10 1803, which has no IDXGIFactory6, and checks the same adapters
+// come out.
+func TestAdaptersWithoutFactory6(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping GPU test in short mode")
+	}
+	raw, err := Backend{}.CreateInstance(&hal.InstanceDescriptor{Backends: gputypes.BackendsDX12})
+	if err != nil {
+		t.Skipf("DX12 unavailable: %v", err)
+	}
+	defer raw.Destroy()
+	inst := raw.(*Instance)
+	names := func() []string {
+		var names []string
+		for _, a := range inst.EnumerateAdapters(nil) {
+			names = append(names, a.Info.Name)
+		}
+		slices.Sort(names)
+		return names
+	}
+	want := names()
+	if len(want) == 0 {
+		t.Skip("no DX12 adapters")
+	}
+	inst.factory6.Release()
+	inst.factory6 = nil
+	if got := names(); !slices.Equal(got, want) {
+		t.Fatalf("adapters without IDXGIFactory6 = %q, want %q", got, want)
 	}
 }
