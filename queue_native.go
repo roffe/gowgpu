@@ -740,8 +740,10 @@ func (q *Queue) injectBarriers(commandBuffers []*CommandBuffer) error {
 	//
 	// Reference: wgpu-core device/queue.rs pre_submit_for_command_buffers
 	// (one transit command buffer per baked command buffer, close_and_push_front)
-	defer clear(q.texResolver)
-	defer clear(q.bufResolver)
+	defer func() {
+		clear(q.texResolver)
+		clear(q.bufResolver)
+	}()
 	resolved := false
 	for i, cb := range commandBuffers {
 		q.cbBarriers = append(q.cbBarriers, nil)

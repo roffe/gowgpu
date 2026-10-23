@@ -149,6 +149,46 @@ func TestInjectTextureBarriers_WithTransition(t *testing.T) {
 	}
 }
 
+// TestInjectBarriers_ResolversEmptyAfterFirstSubmit checks that the first
+// submit that needs barriers leaves nothing in the resolver maps: an entry
+// left behind would resolve a later texture that gets the same tracker index
+// to this one's HAL texture.
+func TestInjectBarriers_ResolversEmptyAfterFirstSubmit(t *testing.T) {
+	t.Parallel()
+
+	_, _, device := newTestDeviceWithTracker(t)
+	defer device.Release()
+	q := device.Queue()
+
+	tex := createTrackedTexture(t, device, "resolver")
+	defer tex.Release()
+	td := tex.coreTexture.TrackingData()
+	device.core.Tracker().InsertTexture(td.Index(), track.TextureUsesResource)
+
+	coreEncoder, err := device.core.CreateCommandEncoder("test")
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	coreCB, err := coreEncoder.Finish()
+	if err != nil {
+		t.Fatalf("Finish: %v", err)
+	}
+	coreCB.TextureScope().SetSingle(td.Index(), track.TextureUsesColorTarget)
+	cb := &CommandBuffer{core: coreCB, device: device, usedTextures: []*Texture{tex}}
+
+	barrierCB, err := injectBarriersFirst(q, []*CommandBuffer{cb})
+	if err != nil {
+		t.Fatalf("injectBarriers: %v", err)
+	}
+	defer q.cancelSubmit(nil, nil, nil)
+	if barrierCB == nil {
+		t.Fatal("expected a barrier command buffer for Resource->ColorTarget")
+	}
+	if len(q.texResolver) != 0 || len(q.bufResolver) != 0 {
+		t.Errorf("resolvers keep %d textures and %d buffers after the submit", len(q.texResolver), len(q.bufResolver))
+	}
+}
+
 // TestInjectTextureBarriers_NoTransitionSameState verifies that no barriers
 // are generated when the texture remains in the same ordered state.
 func TestInjectTextureBarriers_NoTransitionSameState(t *testing.T) {
