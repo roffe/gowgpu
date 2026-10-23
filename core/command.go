@@ -1238,9 +1238,12 @@ func (e *CoreCommandEncoder) SetError(err error) {
 	e.setError(err)
 }
 
-// setError transitions to error state. Caller must hold e.mu.
+// setError transitions to error state, keeping the first error: the one
+// that made the encoder invalid, which Finish reports. Caller must hold e.mu.
 func (e *CoreCommandEncoder) setError(err error) {
-	e.error = err
+	if e.error == nil {
+		e.error = err
+	}
 	e.status.Store(int32(CommandEncoderStatusError))
 }
 
