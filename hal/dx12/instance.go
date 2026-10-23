@@ -24,6 +24,7 @@ package dx12
 import (
 	"fmt"
 	"runtime"
+	"slices"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -220,6 +221,10 @@ func (i *Instance) EnumerateAdapters(surfaceHint hal.Surface) []hal.ExposedAdapt
 			continue
 		}
 
+		if withdrawnAdapter(&desc) {
+			raw.Release()
+			continue
+		}
 		adapter := &Adapter{
 			raw:      raw,
 			desc:     desc,
@@ -231,7 +236,7 @@ func (i *Instance) EnumerateAdapters(surfaceHint hal.Surface) []hal.ExposedAdapt
 		}
 
 		// Probe adapter capabilities by creating a temporary device
-		if err := adapter.probeCapabilities(); err != nil {
+		if err := adapter.probeCapabilities(); err != nil || !bindingTierSupported(&desc, adapter.capabilities.ResourceBindingTier) {
 			raw.Release()
 			continue
 		}
@@ -248,7 +253,7 @@ func (i *Instance) EnumerateAdapters(surfaceHint hal.Surface) []hal.ExposedAdapt
 	}
 
 	for _, adapter := range software {
-		if len(adapters) > 0 || adapter.probeCapabilities() != nil {
+		if len(adapters) > 0 || adapter.probeCapabilities() != nil || !bindingTierSupported(&adapter.desc, adapter.capabilities.ResourceBindingTier) {
 			adapter.raw.Release()
 			continue
 		}
@@ -283,6 +288,10 @@ func (i *Instance) enumerateAdaptersLegacy(surfaceHint hal.Surface) []hal.Expose
 			continue
 		}
 
+		if withdrawnAdapter(&desc) {
+			raw.Release()
+			continue
+		}
 		adapter := &AdapterLegacy{
 			raw:      raw,
 			desc:     desc,
@@ -293,7 +302,7 @@ func (i *Instance) enumerateAdaptersLegacy(surfaceHint hal.Surface) []hal.Expose
 			continue
 		}
 
-		if err := adapter.probeCapabilities(); err != nil {
+		if err := adapter.probeCapabilities(); err != nil || !bindingTierSupported(&desc, adapter.capabilities.ResourceBindingTier) {
 			raw.Release()
 			continue
 		}
@@ -323,7 +332,7 @@ func (i *Instance) enumerateAdaptersLegacy(surfaceHint hal.Surface) []hal.Expose
 	adapters = append(adapters, otherAdapters...)
 
 	for _, adapter := range software {
-		if len(adapters) > 0 || adapter.probeCapabilities() != nil {
+		if len(adapters) > 0 || adapter.probeCapabilities() != nil || !bindingTierSupported(&adapter.desc, adapter.capabilities.ResourceBindingTier) {
 			adapter.raw.Release()
 			continue
 		}
@@ -333,6 +342,36 @@ func (i *Instance) enumerateAdaptersLegacy(surfaceHint hal.Surface) []hal.Expose
 	}
 
 	return adapters
+}
+
+// haswellDeviceIDs are the Intel Haswell GPUs, which Intel withdrew D3D12
+// from for a security flaw. Rust's wgpu-hal leaves them out, as their
+// devices are lost some time after they are made. The list is
+// https://dgpu-docs.intel.com/devices/hardware-table.html.
+var haswellDeviceIDs = []uint32{
+	0x0422, 0x0426, 0x042A, 0x042B, 0x042E, 0x0C22, 0x0C26, 0x0C2A, 0x0C2B, 0x0C2E, 0x0A22,
+	0x0A2A, 0x0A2B, 0x0D2A, 0x0D2B, 0x0D2E, 0x0A26, 0x0A2E, 0x0D22, 0x0D26, 0x0412, 0x0416,
+	0x0D12, 0x041A, 0x041B, 0x0C12, 0x0C16, 0x0C1A, 0x0C1B, 0x0C1E, 0x0A12, 0x0A1A, 0x0A1B,
+	0x0D16, 0x0D1A, 0x0D1B, 0x0D1E, 0x041E, 0x0A16, 0x0A1E, 0x0402, 0x0406, 0x040A, 0x040B,
+	0x040E, 0x0C02, 0x0C06, 0x0C0A, 0x0C0B, 0x0C0E, 0x0A02, 0x0A06, 0x0A0A, 0x0A0B, 0x0A0E,
+	0x0D02, 0x0D06, 0x0D0A, 0x0D0B, 0x0D0E,
+}
+
+// withdrawnAdapter reports an adapter D3D12 is not to be used on.
+func withdrawnAdapter(desc *dxgi.DXGI_ADAPTER_DESC1) bool {
+	return desc.VendorID == 0x8086 && slices.Contains(haswellDeviceIDs, desc.DeviceID)
+}
+
+// bindingTierSupported reports whether an adapter has resource binding
+// tier 2: every root signature with a sampler binds a table of 2048
+// samplers, more than tier 1's 16, as Rust's wgpu-hal requires it too.
+func bindingTierSupported(desc *dxgi.DXGI_ADAPTER_DESC1, tier uint32) bool {
+	if tier >= 2 {
+		return true
+	}
+	hal.Logger().Info("dx12: adapter has resource binding tier 1, which this backend can't use",
+		"name", utf16ToString(desc.Description[:]))
+	return false
 }
 
 // Destroy releases the DirectX 12 instance and all associated resources.

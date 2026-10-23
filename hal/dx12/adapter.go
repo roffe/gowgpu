@@ -546,6 +546,11 @@ func (a *AdapterLegacy) probeCapabilities() error {
 		"tileBasedRenderer", arch.TileBasedRenderer != 0,
 	)
 
+	var options d3d12.D3D12_FEATURE_DATA_D3D12_OPTIONS
+	if err := tempDevice.CheckFeatureSupport(d3d12.D3D12_FEATURE_D3D12_OPTIONS, unsafe.Pointer(&options), uint32(unsafe.Sizeof(options))); err == nil {
+		a.capabilities.ResourceBindingTier = options.ResourceBindingTier
+	}
+
 	// Set default texture limits based on feature level
 	a.setTextureLimits()
 
