@@ -697,6 +697,9 @@ func (e *CoreCommandEncoder) BeginRenderPass(desc *RenderPassDescriptor) (*CoreR
 
 	pass.raw = halPass
 	pass.passContext = &pass.passCtx
+	if ds := desc.DepthStencilAttachment; ds != nil && ds.View != nil {
+		pass.depthReadOnly, pass.stencilReadOnly = ds.DepthReadOnly, ds.StencilReadOnly
+	}
 	if e.mutable != nil {
 		pass.scope = &e.mutable.pass
 	}
@@ -1601,6 +1604,10 @@ type CoreRenderPassEncoder struct {
 	// Matches Rust wgpu-core command/render.rs RenderPassInfo.context.
 	passContext *RenderPassContext
 
+	// depthReadOnly and stencilReadOnly are the depth/stencil attachment's
+	// read-only aspects, which no pipeline of the pass may write.
+	depthReadOnly, stencilReadOnly bool
+
 	// passCtx holds passContext, and halDesc the HAL descriptor the backend
 	// reads until End, so a pass allocates neither.
 	passCtx RenderPassContext
@@ -1664,6 +1671,28 @@ func (p *CoreRenderPassEncoder) SetPipeline(pipeline *RenderPipeline) {
 	// if p.raw != nil && pipeline.Raw() != nil {
 	//     p.raw.SetPipeline(pipeline.Raw())
 	// }
+}
+
+// CheckPipeline checks a render pipeline, made for the attachments ctx
+// describes, writing depth or stencil when it says so, against the pass:
+// the same color formats, depth/stencil format and sample count, and no
+// write to a read-only aspect.
+//
+// Reference: wgpu-core command/render.rs set_pipeline (check_compatible,
+// IncompatibleDepthAccess, IncompatibleStencilAccess)
+func (p *CoreRenderPassEncoder) CheckPipeline(ctx *RenderPassContext, writesDepth, writesStencil bool, label string) error {
+	if p.passContext != nil {
+		if err := p.passContext.CheckCompatible(ctx, label); err != nil {
+			return err
+		}
+	}
+	switch {
+	case writesDepth && p.depthReadOnly:
+		return fmt.Errorf("pipeline %q writes depth, which the pass has read-only", label)
+	case writesStencil && p.stencilReadOnly:
+		return fmt.Errorf("pipeline %q writes stencil, which the pass has read-only", label)
+	}
+	return nil
 }
 
 // SetVertexBuffer sets a vertex buffer.

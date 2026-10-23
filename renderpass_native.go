@@ -74,6 +74,14 @@ func (p *RenderPassEncoder) SetPipeline(pipeline *RenderPipeline) {
 		p.encoder.setError(fmt.Errorf("wgpu: RenderPass.SetPipeline: pipeline is released: %w", ErrReleased))
 		return
 	}
+	// A pipeline CreateRenderPipeline did not make has no attachments to
+	// check: it draws with no HAL pipeline either.
+	if pipeline.passContext.SampleCount != 0 {
+		if err := p.core.CheckPipeline(&pipeline.passContext, pipeline.writesDepth, pipeline.writesStencil, pipeline.label); err != nil {
+			p.encoder.setError(fmt.Errorf("wgpu: RenderPass.SetPipeline: %w", err))
+			return
+		}
+	}
 	p.currentPipelineBindGroupCount = pipeline.bindGroupCount
 	p.pipelineSet = true
 	p.requiredVertexBuffers = pipeline.requiredVertexBuffers

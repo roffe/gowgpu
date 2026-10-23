@@ -91,6 +91,12 @@ type RenderPipeline struct {
 	ref *core.ResourceRef
 	// mark is the last command encoder that tracked this pipeline.
 	mark encoderMark
+	// passContext is the attachments the pipeline draws into, which
+	// SetPipeline checks against the pass's, and writesDepth and
+	// writesStencil whether it writes those aspects.
+	passContext                core.RenderPassContext
+	writesDepth, writesStencil bool
+	label                      string
 }
 
 // GetBindGroupLayout returns the bind group layout at index of the pipeline's

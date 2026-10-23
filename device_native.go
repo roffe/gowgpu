@@ -848,7 +848,7 @@ func (d *Device) CreateRenderPipeline(desc *RenderPipelineDescriptor) (*RenderPi
 		autoLayout.releaseAuto()
 	}
 
-	return &RenderPipeline{
+	pipeline := &RenderPipeline{
 		hal:                   halPipeline,
 		device:                d,
 		bindGroupCount:        bgCount,
@@ -858,7 +858,38 @@ func (d *Device) CreateRenderPipeline(desc *RenderPipelineDescriptor) (*RenderPi
 		stripIndexFormat:      desc.Primitive.StripIndexFormat,
 		lateSizedBufferGroups: lateGroups,
 		ref:                   core.NewResourceRef("RenderPipeline:"+desc.Label, rpOnZero),
-	}, nil
+		label:                 desc.Label,
+	}
+	pipeline.setAttachments(desc)
+	return pipeline, nil
+}
+
+// setAttachments records what a render pipeline draws into and whether it
+// writes depth or stencil, which the passes that use it have to agree with.
+//
+// Reference: wgpu-core pipeline.rs RenderPipeline.pass_context and
+// PipelineFlags::WRITES_DEPTH / WRITES_STENCIL
+func (p *RenderPipeline) setAttachments(desc *RenderPipelineDescriptor) {
+	if fs := desc.Fragment; fs != nil {
+		p.passContext.ColorFormats = make([]gputypes.TextureFormat, len(fs.Targets))
+		for i := range fs.Targets {
+			p.passContext.ColorFormats[i] = fs.Targets[i].Format
+		}
+	}
+	p.passContext.SampleCount = max(desc.Multisample.Count, 1)
+	if ds := desc.DepthStencil; ds != nil {
+		p.passContext.DepthStencilFormat = ds.Format
+		p.writesDepth = ds.DepthWriteEnabled
+		writes := func(face StencilFaceState) bool {
+			keep := func(op gputypes.StencilOperation) bool {
+				return op == gputypes.StencilOperationKeep || op == gputypes.StencilOperationUndefined
+			}
+			return !keep(face.FailOp) || !keep(face.DepthFailOp) || !keep(face.PassOp)
+		}
+		cull := desc.Primitive.CullMode
+		p.writesStencil = ds.StencilWriteMask != 0 &&
+			(cull != gputypes.CullModeFront && writes(ds.StencilFront) || cull != gputypes.CullModeBack && writes(ds.StencilBack))
+	}
 }
 
 // checkRenderPipelineShaders checks the shaders of a render pipeline

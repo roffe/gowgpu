@@ -1061,18 +1061,20 @@ type RenderPassContext struct {
 // Called at draw-time (SetPipeline) to ensure the pipeline was created with
 // formats/sample counts matching the current render pass.
 func (ctx *RenderPassContext) CheckCompatible(pipeline *RenderPassContext, pipelineLabel string) error {
-	// Check color target count.
-	if len(pipeline.ColorFormats) != len(ctx.ColorFormats) {
+	// Check color target count, the empty slots at the end left out as
+	// WebGPU's render targets layouts leave them out.
+	passFormats, pipelineFormats := trimEmptyFormats(ctx.ColorFormats), trimEmptyFormats(pipeline.ColorFormats)
+	if len(pipelineFormats) != len(passFormats) {
 		return &RenderPassCompatibilityError{
 			Kind:            RenderPassCompatibilityErrorColorTargetCount,
 			PipelineLabel:   pipelineLabel,
-			PipelineTargets: uint32(len(pipeline.ColorFormats)), //nolint:gosec // len bounded by MaxColorAttachments
-			PassAttachments: uint32(len(ctx.ColorFormats)),      //nolint:gosec // len bounded by MaxColorAttachments
+			PipelineTargets: uint32(len(pipelineFormats)), //nolint:gosec // len bounded by MaxColorAttachments
+			PassAttachments: uint32(len(passFormats)),     //nolint:gosec // len bounded by MaxColorAttachments
 		}
 	}
 
 	// Check color target formats match.
-	for i := range ctx.ColorFormats {
+	for i := range passFormats {
 		if pipeline.ColorFormats[i] != ctx.ColorFormats[i] {
 			return &RenderPassCompatibilityError{
 				Kind:           RenderPassCompatibilityErrorColorTargetFormat,
@@ -1106,6 +1108,14 @@ func (ctx *RenderPassContext) CheckCompatible(pipeline *RenderPassContext, pipel
 	}
 
 	return nil
+}
+
+// trimEmptyFormats returns formats without the undefined ones at its end.
+func trimEmptyFormats(formats []gputypes.TextureFormat) []gputypes.TextureFormat {
+	for len(formats) > 0 && formats[len(formats)-1] == gputypes.TextureFormatUndefined {
+		formats = formats[:len(formats)-1]
+	}
+	return formats
 }
 
 // ValidateRenderPassDescriptor validates a render pass descriptor against
