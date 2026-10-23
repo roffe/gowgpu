@@ -97,6 +97,10 @@ type SurfaceCapabilities struct {
 	Formats      []gputypes.TextureFormat
 	PresentModes []gputypes.PresentMode
 	AlphaModes   []gputypes.CompositeAlphaMode
+
+	// Usages are the usages the surface's textures can have, among them
+	// RenderAttachment: what a SurfaceConfiguration's Usage may hold.
+	Usages gputypes.TextureUsage
 }
 
 // GetSurfaceCapabilities returns the capabilities of a surface for this adapter.
@@ -106,6 +110,8 @@ type SurfaceCapabilities struct {
 //     rgba16float only where a device has shown the browser takes it
 //   - PresentModes: Fifo only (browser controls VSync)
 //   - AlphaModes: Opaque and Premultiplied
+//   - Usages: RenderAttachment, CopySrc, CopyDst and TextureBinding, which
+//     a canvas of every one of those formats takes
 //
 // The preferred format is obtained from navigator.gpu.getPreferredCanvasFormat()
 // and placed first in the formats list.
@@ -138,6 +144,8 @@ func (a *Adapter) GetSurfaceCapabilities(surface *Surface) *SurfaceCapabilities 
 		Formats:      formats,
 		PresentModes: []gputypes.PresentMode{gputypes.PresentModeFifo},
 		AlphaModes:   []gputypes.CompositeAlphaMode{gputypes.CompositeAlphaModeOpaque, gputypes.CompositeAlphaModePremultiplied},
+		Usages: gputypes.TextureUsageRenderAttachment | gputypes.TextureUsageCopySrc |
+			gputypes.TextureUsageCopyDst | gputypes.TextureUsageTextureBinding,
 	}
 }
 

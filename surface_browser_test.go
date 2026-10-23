@@ -55,6 +55,16 @@ func TestBrowserSurfaceCapabilitiesOfferPremultipliedAlpha(t *testing.T) {
 	}
 }
 
+// A canvas takes copies and sampling in each of its formats, and storage in
+// some of them only, so storage is not among the usages offered.
+func TestBrowserSurfaceCapabilitiesUsages(t *testing.T) {
+	caps := (&Adapter{}).GetSurfaceCapabilities(nil)
+	want := gputypes.TextureUsageRenderAttachment | gputypes.TextureUsageCopySrc | gputypes.TextureUsageCopyDst | gputypes.TextureUsageTextureBinding
+	if caps.Usages != want {
+		t.Fatalf("Usages = %#x, want %#x", caps.Usages, want)
+	}
+}
+
 func TestBrowserConfigurePassesViewFormats(t *testing.T) {
 	canvas := jsEval(`{
 		configured: [],

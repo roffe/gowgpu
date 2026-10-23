@@ -158,6 +158,10 @@ type SurfaceCapabilities struct {
 
 	// AlphaModes lists the supported composite alpha modes.
 	AlphaModes []gputypes.CompositeAlphaMode
+
+	// Usages are the usages the surface's textures can have, among them
+	// RenderAttachment: what a SurfaceConfiguration's Usage may hold.
+	Usages gputypes.TextureUsage
 }
 
 // GetSurfaceCapabilities returns the capabilities of a surface for this adapter.
@@ -172,6 +176,7 @@ func (a *Adapter) GetSurfaceCapabilities(surface *Surface) *SurfaceCapabilities 
 		// Core-only path: return safe defaults (Fifo is guaranteed by Vulkan spec).
 		return &SurfaceCapabilities{
 			PresentModes: []gputypes.PresentMode{gputypes.PresentModeFifo},
+			Usages:       gputypes.TextureUsageRenderAttachment,
 		}
 	}
 
@@ -188,6 +193,7 @@ func (a *Adapter) GetSurfaceCapabilities(surface *Surface) *SurfaceCapabilities 
 		Formats:      halCaps.Formats,
 		PresentModes: halCaps.PresentModes,
 		AlphaModes:   halCaps.AlphaModes,
+		Usages:       halCaps.Usage,
 	}
 }
 
