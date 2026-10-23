@@ -137,7 +137,7 @@ Every exported symbol of the typed surface path, with its Rust wgpu v29.0.3 coun
 | `hal/vulkan`, Android | Android native window | display ignored. gowgpu never acquires or releases the window, see [ANDROID.md](ANDROID.md) |
 | `hal/metal` | Metal layer | refuses a zero layer, retains it, and releases it when the surface is destroyed |
 | `hal/dx12` | Windows HWND | keeps the HWND, the swapchain gets made in `Configure` |
-| `hal/gles`, Windows | Windows HWND | sets the pixel format on the window's DC so the hidden window's context can present to it |
+| `hal/gles`, Windows | Windows HWND | gives the window's DC the hidden window's pixel format when it has none, so the context can present to it, and refuses a window that has another one |
 | `hal/gles`, Linux and Android | Xlib, Wayland, Android native window | picks the EGL display for that kind explicitly, no guessing from the environment |
 | `hal/noop` | anything | no native access, for tests |
 
@@ -155,7 +155,7 @@ Every exported symbol of the typed surface path, with its Rust wgpu v29.0.3 coun
 | Go symbol | Contract |
 |---|---|
 | `egl.ContextConfig.WindowKind` | a `*WindowKind`. nil detects the window system from the environment, set forces X11, Wayland, Android or surfaceless |
-| `egl.DefaultContextConfig` | desktop GL 3.3 core, `WindowKind` nil |
+| `egl.DefaultContextConfig` | desktop GL 3.3 core, `WindowKind` nil. Where EGL takes a version (EGL 1.5 or `EGL_KHR_create_context`), `NewContext` asks for 4.6 down to 4.3 before it, robust where it can, and it refuses a desktop context where EGL takes none |
 | `egl.NewContext` | uses an explicit `WindowKind` without looking at the environment, otherwise detects. Owns any display connection it opened itself |
 | `egl.GetEGLDisplay` | the old auto-detecting entry point |
 | `egl.DetectWindowKind` | Android on Android. Otherwise surfaceless when neither `DISPLAY` nor `WAYLAND_DISPLAY` is set and EGL can do it, then Wayland, then X11, and surfaceless when neither works |

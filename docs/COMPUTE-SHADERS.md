@@ -95,7 +95,7 @@ naga turns the WGSL into whatever the backend wants:
 | GL | WGSL -> GLSL |
 | Browser | no naga, the WGSL string goes to the browser as is |
 
-DX12 and GL compile when you create the pipeline, so on those a broken shader shows up as an error from `CreateComputePipeline`, not from `CreateShaderModule`.
+DX12, Metal and GL compile when you create the pipeline, so on those a shader the backend's compiler refuses shows up as an error from `CreateComputePipeline`, not from `CreateShaderModule`. So does a module with `override` declarations on Vulkan.
 
 The descriptor also has a `SPIRV []uint32` field. Only Vulkan takes SPIR-V as is, so stick to WGSL.
 
@@ -143,9 +143,9 @@ if err != nil {
 defer pipeline.Release()
 ```
 
-The `Layout` can also be left out. The pipeline then gets the one its shader implies, WebGPU's `"auto"`: an entry for every binding the entry point uses, in the group it's declared in, and `pipeline.GetBindGroupLayout(0)` hands out group 0 to make the bind group with. Those layouts belong to the pipeline and are released with it. On DX12 and Metal a pipeline whose module declares bindings it doesn't use needs an explicit layout with all of them (see the README's known issues), which a module with several entry points often does.
+The `Layout` can also be left out. The pipeline then gets the one its shader implies, WebGPU's `"auto"`: an entry for every binding the entry point uses, in the group it's declared in, and `pipeline.GetBindGroupLayout(0)` hands out group 0 to make the bind group with. Those layouts belong to the pipeline and are released with it.
 
-`ComputePipelineDescriptor` also has `Constants` (values for WGSL `override` declarations) and `ZeroInitializeWorkgroupMemory`. No backend passes either of them on yet (there's a TODO for it in each hal backend), so don't build on override constants.
+`ComputePipelineDescriptor` also has `Constants`, values for WGSL `override` declarations by name or `@id`. Every backend applies them: the native ones run the stage through naga's `ProcessOverrides` with them before writing the shader, and the browser passes them to `createComputePipeline`. `ZeroInitializeWorkgroupMemory` isn't passed on by any backend yet.
 
 ## Buffers
 
@@ -253,7 +253,7 @@ The pass methods don't return errors. A missing pipeline, a missing or wrong bin
 
 You don't need barriers between dispatches or before the copy. The native backends put one after every dispatch, and in the browser that's the browser's job.
 
-gowgpu doesn't check `CopyBufferToBuffer` yet, so stick to the WebGPU rules yourself: offsets and size multiples of 4, `CopySrc` on the source and `CopyDst` on the destination.
+`CopyBufferToBuffer` is checked like WebGPU's: offsets and size multiples of 4, `CopySrc` on the source and `CopyDst` on the destination, both ranges inside their buffers. A bad copy fails `Finish()`.
 
 `Submit` doesn't block. It returns a submission index, and `device.Queue().Poll()` returns the last one the GPU has finished.
 
@@ -292,21 +292,13 @@ if err := staging.Unmap(); err != nil {
 }
 ```
 
-`Map` blocks until the GPU is done with the buffer or `ctx` runs out, and it polls the device itself. The offset has to be a multiple of 8 and the size a multiple of 4.
+`Map` blocks until the submission the map waits for is done, or until `ctx` runs out, which cancels the map and leaves the buffer unmapped. It waits for that one submission on your goroutine, not for work submitted after it. The offset has to be a multiple of 8 and the size a multiple of 4.
 
-On the native backends `rng.Bytes()` is the mapped memory itself, no copy, and it's only valid until `Unmap` (after that it returns nil). Copy out what you need first.
+On the native backends `rng.Bytes()` is the mapped memory itself, no copy, and it's only valid until `Unmap` or `Release` (after `Unmap` it returns nil). Copy out what you need first.
 
-### WriteBuffer, then Map: submit in between
+### WriteBuffer, then Map
 
-`Map` doesn't flush pending writes. On Vulkan, DX12 and Metal a `WriteBuffer` waits in the staging encoder for the next `Submit`, so a `WriteBuffer` straight into a `MapRead | CopyDst` buffer followed by `Map` gives you the old contents (zeros for a new buffer). That's what `TestIntegrationQueueReadBuffer` and `TestBufferMapRoundTrip` trip over on Vulkan.
-
-Submit first. An empty submit is enough:
-
-```go
-if _, err := device.Queue().Submit(); err != nil {
-	return err
-}
-```
+On Vulkan, DX12 and Metal a `WriteBuffer` waits in the staging encoder for the next `Submit`. `MapAsync`, and so `Map`, submits first when one of those writes goes to the buffer it maps, so a `WriteBuffer` straight into a `MapRead | CopyDst` buffer followed by `Map` reads what you wrote.
 
 ### Without blocking
 
@@ -342,13 +334,15 @@ Call `MapAsync` after the `Submit` that fills the buffer: it waits for the submi
 
 Can't be done through the wgpu package yet. `ComputePassDescriptor` only has `Label`, and core drops compute-pass timestamp writes anyway. The HAL has them (`hal.ComputePassTimestampWrites`), but a `wgpu.Device` doesn't give you its HAL queue, so you'd have to drive the HAL yourself.
 
-What the wgpu package does have is `Device.CreateQuerySet` with `wgpu.QueryTypeTimestamp`, `RenderPassDescriptor.TimestampWrites` and `CommandEncoder.ResolveQuerySet`. A timestamp query set needs `gputypes.FeatureTimestampQuery` on the device, and the Vulkan and DX12 adapters don't report it right now. There's also no way to get the timestamp period from a `wgpu.Queue`. Details are in [COMPUTE-BACKENDS.md](COMPUTE-BACKENDS.md#timestamp-queries).
+What the wgpu package does have is `Device.CreateQuerySet` with `wgpu.QueryTypeTimestamp`, `RenderPassDescriptor.TimestampWrites` and `CommandEncoder.ResolveQuerySet`. A timestamp query set needs `gputypes.FeatureTimestampQuery` on the device, and only desktop GL adapters report it right now. There's also no way to get the timestamp period from a `wgpu.Queue`. Details are in [COMPUTE-BACKENDS.md](COMPUTE-BACKENDS.md#timestamp-queries).
 
 ## Errors
 
 Every create call returns an error, check it. Validation errors from core are typed, so `errors.As` works: `*core.CreateComputePipelineError` (workgroup size over the limit, empty entry point), `*core.CreateBindGroupError`, `*core.CreateBufferError` and `*core.FeatureError` (import `github.com/roffe/gowgpu/core`).
 
 Pass and encoder errors come back from `Finish()` as described above. Map errors are sentinels: `wgpu.ErrMapAlignment`, `wgpu.ErrMapInvalidMode`, `wgpu.ErrMapCanceled` and friends.
+
+The errors calls return also go to the device's error scopes, so `device.PushErrorScope(wgpu.ErrorFilterValidation)` around some calls and `device.PopErrorScope()` after them gives you the first validation error among them, as in the browser. An error no scope captures goes to the function `device.SetUncapturedErrorHandler` sets.
 
 `wgpu.ErrOutOfMemory` exists, but only the Vulkan swapchain code returns it today, so `errors.Is(err, wgpu.ErrOutOfMemory)` won't catch a failed buffer or pipeline.
 

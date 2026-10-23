@@ -130,7 +130,7 @@ Gates that are only tested here, not in `featureGateCases`:
 
 - `FeatureMultiDrawIndirect`: `MultiDrawIndirect` with `drawCount > 1`.
 - `FeatureMultiDrawIndirectCount`: the count-buffer indirect calls (`MultiDrawIndirectCount`, `MultiDrawIndexedIndirectCount`).
-- `FeatureIndirectFirstInstance`: the tests check that direct `Draw` and `DrawIndexed` with `firstInstance != 0` work without it, since WebGPU only gates indirect draws. Nothing checks the indirect case yet.
+- `FeatureIndirectFirstInstance`: the tests check that direct `Draw` and `DrawIndexed` with `firstInstance != 0` work without it, since WebGPU only gates indirect draws. On the GPU, `TestIndirectDrawWithAFirstInstanceIsANoOp` checks that without it an indirect record with a first instance draws nothing, and `TestIndirectDrawsFromAFirstInstance` that with it the draw starts there.
 
 ## Multi-draw indirect count (VAL-C2)
 
@@ -221,7 +221,7 @@ The root package (`go test .`, and `go test ./...` which includes it) runs on wh
 
 State on Vulkan right now (NVIDIA, Linux):
 
-- `TestFeatureGate_CreateQuerySet_WithFeature` skips, because the Vulkan adapter doesn't report `FeatureTimestampQuery`.
+- `TestFeatureGate_CreateQuerySet_WithFeature` skips, because the Vulkan adapter doesn't report `FeatureTimestampQuery`. Desktop GL does, but this test takes the default instance, which leaves GL out; `TestTimestampWritesResolve` runs timestamps on GL with `GOWGPU_TEST_BACKEND=gl`.
 
 ### Vulkan validation layer and lavapipe, without root
 
@@ -243,7 +243,7 @@ VK_ICD_FILENAMES=<dir>/usr/share/vulkan/icd.d/lvp_icd.json go test .
 VK_ICD_FILENAMES=/path/to/bogus_icd.json go test .
 ```
 
-The validation layer currently reports image layout errors from the Vulkan layout tracking.
+The root, core and Vulkan suites run clean under the layer with synchronization validation on: no "Validation Error", VUID or SYNC-HAZARD. With best practices on as well, a few validated tests fail on the best-practices warnings their device counts, see [CONTRIBUTING.md](../CONTRIBUTING.md#the-validation-layer).
 
 An app can also turn the layer on itself with `wgpu.InstanceDescriptor{Flags: gputypes.InstanceFlagsDebug}`. That enables `VK_LAYER_KHRONOS_validation` when the loader can find it, and silently skips it when it can't.
 
@@ -251,7 +251,7 @@ An app can also turn the layer on itself with `wgpu.InstanceDescriptor{Flags: gp
 
 - `core/testutil` and most of the validation tests: `!(js && wasm)`, so none of it builds for the browser.
 - The root package files also carry `!rust`, a leftover from gogpu's wgpu-native backend, which is gone.
-- A few tests sit behind `-tags integration`: `core/hal_integration_test.go`, `depth_only_pass_repro_test.go`, `hal/gles/integration_test.go` (Linux), and on macOS `arraylength_repro_test.go`, `indirect_count_integration_test.go` and `metal_icb_benchmark_test.go`.
+- A few tests sit behind `-tags integration`: `core/hal_integration_test.go`, `depth_only_pass_repro_test.go`, the `*_integration_test.go` files of `hal/gles` (Linux, on a real EGL context), and on macOS `arraylength_repro_test.go`, `indirect_count_integration_test.go` and `metal_icb_benchmark_test.go`.
 
 ## Key source files
 

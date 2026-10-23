@@ -4,7 +4,7 @@ gowgpu runs on Android arm64 and amd64. You get Vulkan by default, and GLES 3.0 
 
 ## Backends
 
-`hal/allbackends` registers both on android/arm64 and android/amd64, see `register_android.go`. On 32-bit Android (arm, 386) it registers nothing.
+`hal/allbackends` registers both on android/arm64 and android/amd64, see `register_android.go`. On 32-bit Android (arm, 386) it registers nothing. `hal/vulkan` and `hal/gles` build there, but neither has run.
 
 Vulkan is what `wgpu.CreateInstance(nil)` gives you. `libvulkan.so` gets opened with dlopen when the instance is created, nothing links against it. On a device without Vulkan the app still starts, the backend just isn't there.
 
@@ -60,7 +60,7 @@ Take the format from `adapter.GetSurfaceCapabilities(surface).Formats`. Mali's V
 
 Android 12 on a Lenovo Tab M10 3rd gen (Unisoc T610, Mali-G52), with fyne: Vulkan and GLES both draw, come back fine after the app was in the background, and handle rotation.
 
-That's the only device so far. Nothing older than Android 12, no emulator, no amd64.
+That's the only device so far. Nothing older than Android 12, no emulator, no amd64, and the fixes from the vet on 2026-10-23 haven't run on Android yet.
 
 ## Known issues
 
