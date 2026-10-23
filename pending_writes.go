@@ -208,14 +208,16 @@ type inflightSubmission struct {
 	views []hal.TextureView
 }
 
-// batchUndo is what a batch of writes changed outside itself: the device
-// tracker's state of each texture and buffer it moved, from before the
-// batch, and the textures and buffers it took off the lists to zero.
+// batchUndo is what a batch of writes and the Submit that flushes it
+// changed outside the batch: the device tracker's state of each texture and
+// buffer it moved, from before the batch, the textures and buffers taken
+// off the lists to zero, and the textures put on it.
 type batchUndo struct {
 	textures map[track.TrackerIndex]trackedTexture
 	buffers  map[track.TrackerIndex]trackedBuffer
 	zero     []*Texture
 	zeroBufs []*Buffer
+	queued   []*Texture
 }
 
 type trackedTexture struct {
@@ -253,10 +255,13 @@ func (pw *pendingWrites) saveBuffer(owner *Buffer, idx track.TrackerIndex) {
 	pw.undo.buffers[idx] = trackedBuffer{owner: owner, uses: uses, tracked: tracked}
 }
 
-// rollback puts back what a batch that does not run changed outside itself:
-// the tracker states of the textures and buffers that still have their
-// index, and the zeroing of the ones not released since. pw.mu is held.
+// rollback puts back what a batch that does not run, and its Submit,
+// changed outside the batch: the tracker states of the textures and buffers
+// that still have their index, and the zero lists. pw.mu is held.
 func (pw *pendingWrites) rollback() {
+	for _, t := range pw.undo.queued {
+		delete(pw.zero, t)
+	}
 	for idx, t := range pw.undo.textures {
 		if cur, ok := pw.trackedIndex(t.owner); ok && cur == idx {
 			pw.tracker.RestoreTexture(idx, t.state)
@@ -295,6 +300,8 @@ func (pw *pendingWrites) forgetUndo() {
 	pw.undo.zero = pw.undo.zero[:0]
 	clear(pw.undo.zeroBufs)
 	pw.undo.zeroBufs = pw.undo.zeroBufs[:0]
+	clear(pw.undo.queued)
+	pw.undo.queued = pw.undo.queued[:0]
 }
 
 // heldDestroy is a texture's HAL destroy held back while the batch being
@@ -1032,11 +1039,12 @@ func (pw *pendingWrites) queueDiscardedLocked(cbs []*CommandBuffer) [][]*Texture
 		}
 	}
 	for t, d := range scan.discarded {
-		if d {
+		if _, queued := pw.zero[t]; d && !queued {
 			if pw.zero == nil {
 				pw.zero = make(map[*Texture]struct{})
 			}
 			pw.zero[t] = struct{}{}
+			pw.undo.queued = append(pw.undo.queued, t)
 		}
 	}
 	return scan.zeros
@@ -1086,8 +1094,9 @@ func (pw *pendingWrites) forgetClearsLocked(cbs []*CommandBuffer) {
 	var used map[*Texture]bool
 	for _, cb := range cbs {
 		for _, t := range cb.clearsFirst {
-			if !used[t] {
+			if _, ok := pw.zero[t]; ok && !used[t] {
 				delete(pw.zero, t)
+				pw.undo.zero = append(pw.undo.zero, t)
 			}
 		}
 		if len(pw.zero) == 0 {

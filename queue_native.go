@@ -124,7 +124,9 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (_ uint64, err error) {
 		q.pending.forgetClearsLocked(commandBuffers)
 		var err error
 		pendingCmdBuf, flushedEncoder, flushedDstTextures, flushedDstBuffers, err = q.pending.flush()
-		zeros = q.pending.queueDiscardedLocked(commandBuffers)
+		if err == nil {
+			zeros = q.pending.queueDiscardedLocked(commandBuffers)
+		}
 		q.pending.mu.Unlock()
 		if err != nil {
 			return 0, fmt.Errorf("wgpu: flush pending writes: %w", err)
@@ -244,12 +246,17 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (_ uint64, err error) {
 }
 
 // cancelSubmit gives back what Submit set up before it failed: the flushed
-// pending writes, and the barrier encoder, which the next Submit would
-// otherwise overwrite without returning it to the pool.
+// pending writes, what they and the command buffers changed of the zero
+// lists, and the barrier encoder, which the next Submit would otherwise
+// overwrite without returning it to the pool.
 func (q *Queue) cancelSubmit(pendingCmdBuf hal.CommandBuffer, flushedEncoder hal.CommandEncoder, flushedDstTextures []hal.Texture) {
-	if q.pending != nil && pendingCmdBuf != nil {
+	if q.pending != nil {
 		q.pending.mu.Lock()
-		q.pending.cancelFlush(pendingCmdBuf, flushedEncoder, flushedDstTextures)
+		if pendingCmdBuf != nil {
+			q.pending.cancelFlush(pendingCmdBuf, flushedEncoder, flushedDstTextures)
+		} else {
+			q.pending.rollback()
+		}
 		q.pending.mu.Unlock()
 	}
 	if q.barrierEncoder != nil {

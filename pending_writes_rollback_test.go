@@ -128,3 +128,92 @@ func TestRefusedWriteBatchRollsBack(t *testing.T) {
 		t.Errorf("tracker state after the refused batch = %v (tracked %v), want %v (tracked %v)", uses, tracked, usesBefore, trackedBefore)
 	}
 }
+
+// refusingQueue is a batchingQueue whose backend refuses submits while
+// refuse is set.
+type refusingQueue struct {
+	batchingQueue
+	refuse bool
+}
+
+func (q *refusingQueue) Submit(cbs []hal.CommandBuffer) (uint64, error) {
+	if q.refuse {
+		return 0, errors.New("submit refused")
+	}
+	return q.batchingQueue.Submit(cbs)
+}
+
+// A Submit the backend refuses leaves the list of textures to zero as it
+// was: a texture its command buffer clears first is zeroed by the next
+// batch still, and one it discards is not put on it.
+func TestRefusedSubmitKeepsTheZeroList(t *testing.T) {
+	q := &refusingQueue{}
+	device, err := NewDeviceFromHAL(&noop.Device{}, q, 0, gputypes.DefaultLimits(), "refused-submit")
+	if err != nil {
+		t.Fatalf("NewDeviceFromHAL: %v", err)
+	}
+	defer device.Release()
+	target := func() (*Texture, *TextureView) {
+		tex, err := device.CreateTexture(&TextureDescriptor{
+			Size:          Extent3D{Width: 4, Height: 4, DepthOrArrayLayers: 1},
+			MipLevelCount: 1,
+			SampleCount:   1,
+			Dimension:     TextureDimension2D,
+			Format:        TextureFormatRGBA8Unorm,
+			Usage:         TextureUsageRenderAttachment,
+		})
+		if err != nil {
+			t.Fatalf("CreateTexture: %v", err)
+		}
+		view, err := device.CreateTextureView(tex, nil)
+		if err != nil {
+			t.Fatalf("CreateTextureView: %v", err)
+		}
+		t.Cleanup(func() { releaseTextureView(tex, view) })
+		return tex, view
+	}
+	pass := func(view *TextureView, store gputypes.StoreOp) *CommandBuffer {
+		enc, err := device.CreateCommandEncoder(nil)
+		if err != nil {
+			t.Fatalf("CreateCommandEncoder: %v", err)
+		}
+		p, err := enc.BeginRenderPass(&RenderPassDescriptor{ColorAttachments: []RenderPassColorAttachment{
+			{View: view, LoadOp: gputypes.LoadOpClear, StoreOp: store},
+		}})
+		if err != nil {
+			t.Fatalf("BeginRenderPass: %v", err)
+		}
+		if err := p.End(); err != nil {
+			t.Fatalf("End: %v", err)
+		}
+		cb, err := enc.Finish()
+		if err != nil {
+			t.Fatalf("Finish: %v", err)
+		}
+		return cb
+	}
+	zeroing := func(tex *Texture) bool {
+		_, ok := device.queue.pending.zero[tex]
+		return ok
+	}
+
+	discarded, discardedView := target()
+	if _, err := device.Queue().Submit(); err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	cleared, clearedView := target()
+	if !zeroing(cleared) || zeroing(discarded) {
+		t.Fatal("the textures are not where the test needs them: a new one to zero and a zeroed one")
+	}
+
+	q.refuse = true
+	if _, err := device.Queue().Submit(pass(clearedView, gputypes.StoreOpStore), pass(discardedView, gputypes.StoreOpDiscard)); err == nil {
+		t.Fatal("Submit succeeded on a queue that refuses submits")
+	}
+	if !zeroing(cleared) {
+		t.Error("the texture the refused submit would have cleared first is not on the list to zero")
+	}
+	if zeroing(discarded) {
+		t.Error("the texture the refused submit would have discarded is on the list to zero")
+	}
+}
