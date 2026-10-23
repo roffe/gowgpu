@@ -159,11 +159,44 @@ func (p *ComputePassEncoder) recordDispatch(op string) bool {
 	if enc.core == nil {
 		return true
 	}
+	p.zeroDiscarded()
 	wasErr := enc.core.Status() == core.CommandEncoderStatusError
 	for i := uint32(0); i < p.binder.maxSlots && i < MaxBindGroups; i++ {
 		enc.recordDispatchBindGroup(p.binder.groups[i], op)
 	}
 	return wasErr || enc.core.Status() != core.CommandEncoderStatusError
+}
+
+// zeroDiscarded zeroes the textures the bind groups of the next dispatch
+// bind whose contents a pass of the encoder discarded, which read as zeros.
+// The zeroing is a render pass, which goes between two HAL compute passes.
+func (p *ComputePassEncoder) zeroDiscarded() {
+	enc := p.encoder
+	if len(enc.discards) == 0 {
+		return
+	}
+	raw, parent := p.core.RawPass(), enc.core.RawEncoder()
+	if raw == nil || parent == nil {
+		return
+	}
+	ended := false
+	zero := func(t *core.Texture, tex hal.Texture, view hal.TextureView) {
+		if !ended {
+			raw.End()
+			ended = true
+		}
+		enc.core.ZeroTexture(t, tex, view)
+	}
+	for i := uint32(0); i < p.binder.maxSlots && i < MaxBindGroups; i++ {
+		if g := p.binder.groups[i]; g != nil {
+			enc.zeroDiscardedBound(g, zero)
+		}
+	}
+	if ended {
+		next := parent.BeginComputePass(&hal.ComputePassDescriptor{Label: "(wgpu internal) compute pass after zeroing"})
+		p.restoreComputeState(next)
+		p.core.ReplaceRawPass(next)
+	}
 }
 
 // DispatchIndirect dispatches compute work with GPU-generated parameters.

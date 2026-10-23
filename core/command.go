@@ -148,6 +148,12 @@ type passScope struct {
 	// drawValidations are the validated indirect draws of a render pass,
 	// whose validation goes ahead of it with the barriers.
 	drawValidations []drawValidation
+	// zeros are the textures a render pass reads whose contents an earlier
+	// pass discarded, zeroed ahead of it with the barriers, and the
+	// transitions and barriers into the passes that zero them.
+	zeros           []passZero
+	zeroTransitions []track.TexturePendingTransition
+	zeroBarriers    []hal.TextureBarrier
 }
 
 type scopeTexture struct {
@@ -170,6 +176,8 @@ func (p *passScope) clear() {
 	p.texHAL, p.bufHAL = p.texHAL[:0], p.bufHAL[:0]
 	clear(p.drawValidations)
 	p.drawValidations = p.drawValidations[:0]
+	clear(p.zeros)
+	p.zeros = p.zeros[:0]
 	p.clearScratch()
 	p.split = false
 }
@@ -181,6 +189,7 @@ func (p *passScope) clearScratch() {
 	clear(p.bufBarriers)
 	p.texTransitions, p.bufTransitions = p.texTransitions[:0], p.bufTransitions[:0]
 	p.texBarriers, p.bufBarriers = p.texBarriers[:0], p.bufBarriers[:0]
+	p.clearZeroScratch()
 }
 
 // addTexture merges a usage of the subresources sel selects of a texture,
@@ -858,12 +867,13 @@ func (e *CoreCommandEncoder) recordPassTransitions() error {
 		return nil
 	}
 	scope := &m.pass
+	scope.zeroTransitionsOf(m.textureTracker, scope.zeros)
 	surfaces := scope.surfaceFirstUses(m.textureTracker, nil)
 	scope.texTransitions = m.textureTracker.SetFromScopeInto(scope.textures, scope.texTransitions[:0])
 	scope.texTransitions = append(scope.texTransitions, surfaces...)
 	scope.bufTransitions = m.bufferTracker.SetFromScopeInto(scope.buffers, scope.bufTransitions[:0])
 	defer scope.clearScratch()
-	needed := len(scope.texTransitions) > 0 || len(scope.bufTransitions) > 0 || len(scope.drawValidations) > 0
+	needed := len(scope.texTransitions) > 0 || len(scope.bufTransitions) > 0 || len(scope.drawValidations) > 0 || len(scope.zeros) > 0
 
 	guard := e.device.snatchLock.Read()
 	defer guard.Release()
@@ -890,6 +900,7 @@ func (e *CoreCommandEncoder) recordPassTransitions() error {
 	if err := e.openLocked(*halEncoder, "(wgpu internal) pass transit"); err != nil {
 		return err
 	}
+	scope.recordZeros(*halEncoder, scope.zeros)
 	scope.recordBarriers(*halEncoder)
 	scope.recordDrawValidations(*halEncoder)
 	return e.closeAndSwapLocked(*halEncoder)

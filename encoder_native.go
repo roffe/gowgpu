@@ -339,7 +339,31 @@ func (e *CommandEncoder) recordPassBindGroup(bg *BindGroup) {
 	if bg == nil || e.passSerial == 0 || !bg.passMark.claim(e.passSerial) {
 		return
 	}
+	e.zeroDiscardedBound(bg, e.core.ZeroBeforePass)
 	e.recordBindGroupUsages(bg, "SetBindGroup")
+}
+
+// zeroDiscardedBound zeroes with zero the textures bg binds whose contents
+// a pass of the encoder discarded: a discarded texture reads as zeros.
+func (e *CommandEncoder) zeroDiscardedBound(bg *BindGroup, zero func(*core.Texture, hal.Texture, hal.TextureView)) {
+	if len(e.discards) == 0 {
+		return
+	}
+	for _, t := range bg.boundTextures {
+		if _, ok := e.discards[t]; !ok {
+			continue
+		}
+		delete(e.discards, t)
+		raw := t.resolveHAL()
+		if raw == nil {
+			continue
+		}
+		if dev := t.device.halDevice(); dev != nil {
+			if view, _ := t.sharedDefaultView(dev, raw); view != nil {
+				zero(t.coreTexture, raw, view)
+			}
+		}
+	}
 }
 
 // recordDispatchBindGroup is recordPassBindGroup for a compute dispatch:
