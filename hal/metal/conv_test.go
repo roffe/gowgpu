@@ -148,24 +148,30 @@ func TestTextureUsageToMTL(t *testing.T) {
 // these GPUs triggers a Metal validation error / SIGABRT. The fix uses
 // isAppleGPU (MTLGPUFamilyApple1 membership) instead of hasUnifiedMemory.
 func TestTextureStorageMode(t *testing.T) {
+	rgba := gputypes.TextureFormatRGBA8Unorm
 	tests := []struct {
 		name         string
 		isAppleGPU   bool
+		format       gputypes.TextureFormat
 		sampleCount  uint32
 		wantMode     MTLStorageMode
 		wantIsShared bool
 	}{
-		{"Apple GPU single-sample", true, 1, MTLStorageModeShared, true},
-		{"Apple GPU multisample 4x", true, 4, MTLStorageModePrivate, false},
-		{"Apple GPU multisample 8x", true, 8, MTLStorageModePrivate, false},
-		{"non-Apple GPU single-sample", false, 1, MTLStorageModePrivate, false},
-		{"non-Apple GPU multisample 4x", false, 4, MTLStorageModePrivate, false},
-		{"Apple GPU zero-sample (treated as single)", true, 0, MTLStorageModeShared, true},
+		{"Apple GPU single-sample", true, rgba, 1, MTLStorageModeShared, true},
+		{"Apple GPU multisample 4x", true, rgba, 4, MTLStorageModePrivate, false},
+		{"Apple GPU multisample 8x", true, rgba, 8, MTLStorageModePrivate, false},
+		{"non-Apple GPU single-sample", false, rgba, 1, MTLStorageModePrivate, false},
+		{"non-Apple GPU multisample 4x", false, rgba, 4, MTLStorageModePrivate, false},
+		{"Apple GPU zero-sample (treated as single)", true, rgba, 0, MTLStorageModeShared, true},
+		{"Apple GPU depth", true, gputypes.TextureFormatDepth32Float, 1, MTLStorageModePrivate, false},
+		{"Apple GPU depth16", true, gputypes.TextureFormatDepth16Unorm, 1, MTLStorageModePrivate, false},
+		{"Apple GPU stencil", true, gputypes.TextureFormatStencil8, 1, MTLStorageModePrivate, false},
+		{"Apple GPU depth-stencil", true, gputypes.TextureFormatDepth24PlusStencil8, 1, MTLStorageModePrivate, false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotMode, gotShared := textureStorageMode(tt.isAppleGPU, tt.sampleCount)
+			gotMode, gotShared := textureStorageMode(tt.isAppleGPU, tt.format, tt.sampleCount)
 			if gotMode != tt.wantMode {
 				t.Errorf("textureStorageMode(%v, %d) mode = %v, want %v",
 					tt.isAppleGPU, tt.sampleCount, gotMode, tt.wantMode)

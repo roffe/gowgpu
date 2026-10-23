@@ -240,11 +240,11 @@ func (d *Device) CreateTexture(desc *hal.TextureDescriptor) (hal.Texture, error)
 	}
 	_ = MsgSend(texDesc, Sel("setUsage:"), uintptr(usage))
 
-	// Select storage mode based on GPU family and sample count.
-	// Apple GPU + single-sample → Shared (zero-copy CPU writes, setPurgeableState).
-	// Apple GPU + multisample → Private (MSAA has no Shared benefit).
+	// Select storage mode based on GPU family, format and sample count.
+	// Apple GPU + single-sample colour → Shared (zero-copy CPU writes, setPurgeableState).
+	// Apple GPU + multisample or depth/stencil → Private.
 	// Non-Apple GPU (Intel/AMD) → Private always (spec requirement for MSAA).
-	storageMode, isShared := textureStorageMode(d.isAppleGPU, sampleCount)
+	storageMode, isShared := textureStorageMode(d.isAppleGPU, desc.Format, sampleCount)
 	_ = MsgSend(texDesc, Sel("setStorageMode:"), uintptr(storageMode))
 
 	raw := MsgSend(d.raw, Sel("newTextureWithDescriptor:"), uintptr(texDesc))

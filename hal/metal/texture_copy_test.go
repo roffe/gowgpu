@@ -722,3 +722,30 @@ func TestCreateTextureRejectsUnmappedFormat(t *testing.T) {
 		t.Fatal("CreateTexture of a BC1 texture succeeded; Metal maps no BC format")
 	}
 }
+
+// TestDepthStencilTexturesArePrivate checks the storage mode of depth and
+// stencil textures, which the iOS Simulator only takes as Private.
+func TestDepthStencilTexturesArePrivate(t *testing.T) {
+	device, _ := newMetalTextureCopyTestDevice(t)
+	for _, format := range []gputypes.TextureFormat{
+		gputypes.TextureFormatDepth16Unorm, gputypes.TextureFormatDepth32Float,
+		gputypes.TextureFormatDepth24PlusStencil8, gputypes.TextureFormatStencil8,
+	} {
+		raw, err := device.CreateTexture(&hal.TextureDescriptor{
+			Size:          hal.Extent3D{Width: 4, Height: 4, DepthOrArrayLayers: 1},
+			MipLevelCount: 1,
+			SampleCount:   1,
+			Dimension:     gputypes.TextureDimension2D,
+			Format:        format,
+			Usage:         gputypes.TextureUsageRenderAttachment | gputypes.TextureUsageCopyDst,
+		})
+		if err != nil {
+			t.Fatalf("CreateTexture(%s) failed: %v", format, err)
+		}
+		texture := raw.(*Texture)
+		if mode := MTLStorageMode(MsgSendUint(texture.raw, Sel("storageMode"))); mode != MTLStorageModePrivate || texture.isShared {
+			t.Errorf("%s: storage mode %d, isShared %v; want Private", format, mode, texture.isShared)
+		}
+		texture.Destroy()
+	}
+}

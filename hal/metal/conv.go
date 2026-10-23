@@ -143,11 +143,14 @@ func textureUsageToMTL(usage gputypes.TextureUsage) MTLTextureUsage {
 // Apple GPU + multisample: Private — MSAA textures are never CPU-read, have a
 // one-frame lifetime, and gain no benefit from Shared storage.
 //
+// Depth and stencil: Private, as the iOS Simulator only takes depth, stencil
+// and MSAA textures with private storage.
+//
 // Non-Apple GPU (Intel, AMD): Private always — Metal spec requires Private storage
 // for multisample textures on non-Apple GPU families, and Shared offers no advantage
 // on discrete/non-UMA architectures.
-func textureStorageMode(isAppleGPU bool, sampleCount uint32) (MTLStorageMode, bool) {
-	if isAppleGPU && sampleCount <= 1 {
+func textureStorageMode(isAppleGPU bool, format gputypes.TextureFormat, sampleCount uint32) (MTLStorageMode, bool) {
+	if isAppleGPU && sampleCount <= 1 && !format.IsDepthStencil() {
 		return MTLStorageModeShared, true
 	}
 	return MTLStorageModePrivate, false
