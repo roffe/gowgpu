@@ -52,8 +52,7 @@ func (s *Surface) Configure(device hal.Device, config *hal.SurfaceConfiguration)
 	if s.configured && !sizeChanged &&
 		s.format == config.Format && s.device == mtlDevice {
 		s.presentMode = config.PresentMode
-		vsync := config.PresentMode == hal.PresentModeFifo
-		setDisplaySync(s.layer, vsync)
+		setDisplaySync(s.layer, displaySync(config.PresentMode))
 		return nil
 	}
 
@@ -111,8 +110,7 @@ func (s *Surface) Configure(device hal.Device, config *hal.SurfaceConfiguration)
 
 	// Set present mode
 	s.presentMode = config.PresentMode
-	// VSync is controlled by displaySyncEnabled (available since macOS 10.13)
-	vsync := config.PresentMode == hal.PresentModeFifo
+	vsync := displaySync(config.PresentMode)
 	setDisplaySync(s.layer, vsync)
 
 	// presentsWithTransaction default is false: normal rendering presents via
@@ -159,6 +157,13 @@ func (s *Surface) Configure(device hal.Device, config *hal.SurfaceConfiguration)
 
 	s.configured = true
 	return nil
+}
+
+// displaySync is CAMetalLayer.displaySyncEnabled for a present mode. Metal
+// has no mailbox: only Immediate may tear, every other mode waits for the
+// display, as in Dawn.
+func displaySync(mode gputypes.PresentMode) bool {
+	return mode != hal.PresentModeImmediate
 }
 
 // setDisplaySync sets CAMetalLayer.displaySyncEnabled, which only macOS

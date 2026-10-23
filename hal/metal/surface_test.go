@@ -7,6 +7,7 @@ package metal
 
 import (
 	"bytes"
+	"runtime"
 	"testing"
 	"unsafe"
 
@@ -215,4 +216,36 @@ func TestHostingWindowOfLayers(t *testing.T) {
 		t.Errorf("layer whose superlayer's delegate is no view: window %#x, want none", w)
 	}
 	_ = MsgSend(parent, Sel("setDelegate:"), 0)
+}
+
+// TestSurfaceDisplaySyncFollowsPresentMode checks that only Immediate turns
+// display sync off: Mailbox must not tear.
+func TestSurfaceDisplaySyncFollowsPresentMode(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("displaySyncEnabled is macOS only")
+	}
+	surface, open := newSurfaceTest(t)
+	for _, test := range []struct {
+		mode gputypes.PresentMode
+		want bool
+	}{
+		{hal.PresentModeFifo, true},
+		{hal.PresentModeMailbox, true},
+		{hal.PresentModeImmediate, false},
+		{hal.PresentModeMailbox, true},
+	} {
+		if err := surface.Configure(open.Device, &hal.SurfaceConfiguration{
+			Format:      gputypes.TextureFormatBGRA8Unorm,
+			Width:       16,
+			Height:      16,
+			PresentMode: test.mode,
+			Usage:       gputypes.TextureUsageRenderAttachment,
+			AlphaMode:   hal.CompositeAlphaModeOpaque,
+		}); err != nil {
+			t.Fatalf("Configure(%v) failed: %v", test.mode, err)
+		}
+		if got := MsgSendBool(surface.layer, Sel("displaySyncEnabled")); got != test.want {
+			t.Errorf("present mode %v: displaySyncEnabled %v, want %v", test.mode, got, test.want)
+		}
+	}
 }
