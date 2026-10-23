@@ -53,6 +53,23 @@ func ValidateViewFormats(f gputypes.TextureFormat, viewFormats []gputypes.Textur
 	return nil
 }
 
+// RequireViewFormats checks viewFormats, the view formats of a texture of
+// format f, with ValidateViewFormats, and that the device has flag when
+// one of them is not f: DownlevelFlagsViewFormats for a texture's view
+// formats, DownlevelFlagsSurfaceViewFormats for a surface's.
+//
+// Reference: wgpu-core device/resource.rs validate_texture_descriptor_inner,
+// instance.rs Surface::configure
+func (d *Device) RequireViewFormats(f gputypes.TextureFormat, viewFormats []gputypes.TextureFormat, flag gputypes.DownlevelFlags) error {
+	if err := ValidateViewFormats(f, viewFormats); err != nil {
+		return err
+	}
+	if slices.ContainsFunc(viewFormats, func(vf gputypes.TextureFormat) bool { return vf != f }) {
+		return d.RequireDownlevelFlags(flag)
+	}
+	return nil
+}
+
 // srgbTwins reports whether a and b differ only in being sRGB. Every sRGB
 // format follows its linear twin in the enum.
 func srgbTwins(a, b gputypes.TextureFormat) bool {

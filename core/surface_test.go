@@ -101,6 +101,7 @@ func TestSurfaceConfigure(t *testing.T) {
 func TestSurfaceConfigureCopiesInputConfig(t *testing.T) {
 	surface, device, _ := newTestSurface(t)
 	config := testSurfaceConfig()
+	config.ViewFormats = []gputypes.TextureFormat{gputypes.TextureFormatBGRA8UnormSrgb}
 
 	if err := surface.Configure(device, config); err != nil {
 		t.Fatalf("Configure: %v", err)
@@ -109,6 +110,7 @@ func TestSurfaceConfigureCopiesInputConfig(t *testing.T) {
 	config.Width = 1024
 	config.Height = 768
 	config.EnableDamagePresent = true
+	config.ViewFormats[0] = gputypes.TextureFormatRGBA8UnormSrgb
 
 	got := surface.Config()
 	if got == nil {
@@ -117,14 +119,16 @@ func TestSurfaceConfigureCopiesInputConfig(t *testing.T) {
 	if got == config {
 		t.Fatal("Configure retained the caller's configuration pointer")
 	}
-	if got.Width != 800 || got.Height != 600 || got.EnableDamagePresent {
+	if got.Width != 800 || got.Height != 600 || got.EnableDamagePresent || got.ViewFormats[0] != gputypes.TextureFormatBGRA8UnormSrgb {
 		t.Fatalf("stored config changed with caller mutation: %+v", *got)
 	}
 }
 
 func TestSurfaceConfigReturnsCopy(t *testing.T) {
 	surface, device, _ := newTestSurface(t)
-	if err := surface.Configure(device, testSurfaceConfig()); err != nil {
+	config := testSurfaceConfig()
+	config.ViewFormats = []gputypes.TextureFormat{gputypes.TextureFormatBGRA8UnormSrgb}
+	if err := surface.Configure(device, config); err != nil {
 		t.Fatalf("Configure: %v", err)
 	}
 
@@ -135,6 +139,7 @@ func TestSurfaceConfigReturnsCopy(t *testing.T) {
 	got.Width = 1024
 	got.Height = 768
 	got.EnableDamagePresent = true
+	got.ViewFormats[0] = gputypes.TextureFormatRGBA8UnormSrgb
 
 	stored := surface.Config()
 	if stored == nil {
@@ -143,7 +148,7 @@ func TestSurfaceConfigReturnsCopy(t *testing.T) {
 	if stored == got {
 		t.Fatal("Config() returned the internal configuration pointer")
 	}
-	if stored.Width != 800 || stored.Height != 600 || stored.EnableDamagePresent {
+	if stored.Width != 800 || stored.Height != 600 || stored.EnableDamagePresent || stored.ViewFormats[0] != gputypes.TextureFormatBGRA8UnormSrgb {
 		t.Fatalf("returned config mutation changed surface state: %+v", *stored)
 	}
 }

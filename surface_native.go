@@ -8,6 +8,7 @@ import (
 	"image"
 	"os"
 	"runtime"
+	"slices"
 
 	"github.com/roffe/gowgpu/core"
 	"github.com/roffe/gowgpu/gputypes"
@@ -68,6 +69,10 @@ type Surface struct {
 	// a new core.Texture (and TrackerIndex) was allocated every frame, causing
 	// monotonic index growth and unbounded memory usage (#307).
 	swapchainTexture *core.Texture
+
+	// viewFormats are the configuration's view formats, which
+	// SurfaceTexture.CreateView takes besides its format.
+	viewFormats []gputypes.TextureFormat
 }
 
 // CreateSurface creates a rendering surface from legacy platform-specific
@@ -280,13 +285,9 @@ func (s *Surface) Configure(device *Device, config *SurfaceConfiguration) (err e
 		return core.ErrSurfaceConfigureWhileAcquired
 	}
 
-	halConfig := &hal.SurfaceConfiguration{
-		Width:       config.Width,
-		Height:      config.Height,
-		Format:      config.Format,
-		Usage:       config.Usage,
-		PresentMode: config.PresentMode,
-		AlphaMode:   config.AlphaMode,
+	halConfig := config.toHAL()
+	if err := device.core.RequireViewFormats(config.Format, config.ViewFormats, gputypes.DownlevelFlagsSurfaceViewFormats); err != nil {
+		return fmt.Errorf("wgpu: Surface.Configure: %w", err)
 	}
 
 	// Create or re-create the HAL surface on the correct backend's HAL instance.
@@ -316,6 +317,7 @@ func (s *Surface) Configure(device *Device, config *SurfaceConfiguration) (err e
 		return err
 	}
 	s.device = device
+	s.viewFormats = slices.Clone(config.ViewFormats)
 	return nil
 }
 
@@ -683,6 +685,7 @@ func (st *SurfaceTexture) AsTexture() *Texture {
 	return &Texture{
 		hal:          st.hal,
 		device:       st.device,
+		viewFormats:  st.surface.viewFormats,
 		surface:      st.surface.core,
 		surfaceLease: st.lease,
 		coreTexture:  st.coreTexture,
@@ -713,7 +716,7 @@ func (st *SurfaceTexture) CreateView(desc *TextureViewDescriptor) (*TextureView,
 		}
 	}
 	if st.coreTexture != nil {
-		resolved, err := core.ResolveTextureViewDescriptor(st.coreTexture, nil, &halDesc)
+		resolved, err := core.ResolveTextureViewDescriptor(st.coreTexture, st.surface.viewFormats, &halDesc)
 		if err != nil {
 			return nil, fmt.Errorf("wgpu: SurfaceTexture.CreateView: %w", err)
 		}
@@ -725,7 +728,7 @@ func (st *SurfaceTexture) CreateView(desc *TextureViewDescriptor) (*TextureView,
 		return nil, fmt.Errorf("wgpu: failed to create surface texture view: %w", err)
 	}
 
-	texture := &Texture{hal: st.hal, device: st.device, surface: st.surface.core, surfaceLease: st.lease, coreTexture: st.coreTexture}
+	texture := &Texture{hal: st.hal, device: st.device, viewFormats: st.surface.viewFormats, surface: st.surface.core, surfaceLease: st.lease, coreTexture: st.coreTexture}
 	view := &TextureView{hal: halView, device: st.device, texture: texture, desc: halDesc, surface: st.surface.core, surfaceLease: st.lease}
 	return view.withRef(halDesc.Label), nil
 }

@@ -571,6 +571,11 @@ type SurfaceConfiguration struct {
 	Usage       gputypes.TextureUsage
 	PresentMode gputypes.PresentMode
 	AlphaMode   gputypes.CompositeAlphaMode
+
+	// ViewFormats lists the formats, besides Format, that views of the
+	// surface's textures may have. As in WebGPU, each may only differ from
+	// Format in being sRGB or not, such as BGRA8UnormSrgb for BGRA8Unorm.
+	ViewFormats []gputypes.TextureFormat
 }
 
 // toHAL converts a SurfaceConfiguration to a hal.SurfaceConfiguration.
@@ -582,6 +587,7 @@ func (c *SurfaceConfiguration) toHAL() *hal.SurfaceConfiguration {
 		Usage:       c.Usage,
 		PresentMode: c.PresentMode,
 		AlphaMode:   c.AlphaMode,
+		ViewFormats: c.ViewFormats,
 	}
 }
 

@@ -137,3 +137,30 @@ func TestValidateViewFormats(t *testing.T) {
 		t.Errorf("RGBA8Unorm with BGRA8UnormSrgb: %v, want ErrInvalidTextureView", err)
 	}
 }
+
+// A view format besides the texture's own needs the downlevel flag the
+// caller names, and the texture's own format needs none.
+func TestRequireViewFormats(t *testing.T) {
+	without := &Device{}
+	with := &Device{downlevel: gputypes.DownlevelCapabilities{Flags: gputypes.DownlevelFlagsSurfaceViewFormats}}
+	own := []gputypes.TextureFormat{gputypes.TextureFormatBGRA8Unorm}
+	srgb := []gputypes.TextureFormat{gputypes.TextureFormatBGRA8Unorm, gputypes.TextureFormatBGRA8UnormSrgb}
+	for _, tc := range []struct {
+		name        string
+		device      *Device
+		viewFormats []gputypes.TextureFormat
+		flag        gputypes.DownlevelFlags
+		ok          bool
+	}{
+		{"own format without the flag", without, own, gputypes.DownlevelFlagsSurfaceViewFormats, true},
+		{"sRGB twin without the flag", without, srgb, gputypes.DownlevelFlagsSurfaceViewFormats, false},
+		{"sRGB twin with the flag", with, srgb, gputypes.DownlevelFlagsSurfaceViewFormats, true},
+		{"sRGB twin with another flag", with, srgb, gputypes.DownlevelFlagsViewFormats, false},
+		{"another format", with, []gputypes.TextureFormat{gputypes.TextureFormatRGBA8UnormSrgb}, gputypes.DownlevelFlagsSurfaceViewFormats, false},
+	} {
+		err := tc.device.RequireViewFormats(gputypes.TextureFormatBGRA8Unorm, tc.viewFormats, tc.flag)
+		if tc.ok != (err == nil) {
+			t.Errorf("%s: %v", tc.name, err)
+		}
+	}
+}

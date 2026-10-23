@@ -5,6 +5,7 @@ package core
 import (
 	"errors"
 	"image"
+	"slices"
 	"unsafe"
 
 	"github.com/roffe/gowgpu/hal"
@@ -96,6 +97,7 @@ func (s *Surface) Configure(device *Device, config *hal.SurfaceConfiguration) er
 	// inspect the configuration after Configure returns, so pass the copy to
 	// the HAL as well as storing it only after a successful configure.
 	configCopy := *config
+	configCopy.ViewFormats = slices.Clone(config.ViewFormats)
 	if err := s.raw.Configure(halDevice, &configCopy); err != nil {
 		return err
 	}
@@ -355,6 +357,7 @@ func (s *Surface) Config() *hal.SurfaceConfiguration {
 		return nil
 	}
 	configCopy := *s.config
+	configCopy.ViewFormats = slices.Clone(s.config.ViewFormats)
 	return &configCopy
 }
 
