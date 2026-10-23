@@ -1321,6 +1321,12 @@ func (sc *Swapchain) SetImageLayout(imageIndex uint32, layout vk.ImageLayout) {
 	}
 }
 
+// currentImageUndefined reports whether the image acquired last is in
+// UNDEFINED as far as the commands recorded so far go: nothing drew it.
+func (sc *Swapchain) currentImageUndefined() bool {
+	return sc != nil && int(sc.currentImage) < len(sc.imageLayouts) && sc.imageLayouts[sc.currentImage] == vk.ImageLayoutUndefined
+}
+
 // ensurePresentLayout transitions the swapchain image to PRESENT_SRC_KHR if needed.
 //
 // ADR-060: In the common case (render pass targeting swapchain), the inline barrier

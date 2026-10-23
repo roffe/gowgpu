@@ -1319,11 +1319,20 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 			targetLayout = resolveLayout
 		}
 
+		// A swapchain image nothing drew since its acquire has undefined
+		// contents and is in UNDEFINED, which a pass loading it cannot
+		// start from: the pass clears it to zero instead, as wgpu-core
+		// does for a surface texture nothing initialised.
+		loadOp, clearValue := ca.LoadOp, ca.ClearValue
+		if loadOp == gputypes.LoadOpLoad && !hasMSAAResolve && view.isSwapchain && view.swapchain.currentImageUndefined() {
+			loadOp, clearValue = gputypes.LoadOpClear, gputypes.Color{}
+		}
+
 		// ADR-060: Inline present barrier for swapchain targets.
 		// Only the FIRST swapchain attachment drives the barrier; additional
 		// swapchain attachments are unusual and would need separate tracking.
 		if e.swapchainImage == 0 {
-			e.setupInlinePresentBarrier(view, resolveView, hasMSAAResolve, targetLayout, ca.LoadOp)
+			e.setupInlinePresentBarrier(view, resolveView, hasMSAAResolve, targetLayout, loadOp)
 		}
 
 		// BUG-WGPU-VK-006: Update swapchain image layout tracking.
@@ -1331,7 +1340,7 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 
 		rpKey.Colors[i] = ColorAttachmentKeyEntry{
 			Format:        view.vkFormat,
-			LoadOp:        loadOpToVk(ca.LoadOp),
+			LoadOp:        loadOpToVk(loadOp),
 			StoreOp:       storeOpToVk(ca.StoreOp),
 			FinalLayout:   colorLayout,
 			HasResolve:    hasMSAAResolve,
@@ -1342,7 +1351,7 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 		fbKey.Views[fbKey.ViewCount] = view.handle
 		fbKey.ViewCount++
 
-		clearValues = append(clearValues, colorClearValue(view.format, ca.ClearValue))
+		clearValues = append(clearValues, colorClearValue(view.format, clearValue))
 		if rpKey.Colors[i].LoadOp == vk.AttachmentLoadOpClear {
 			clearCount = len(clearValues)
 		}
