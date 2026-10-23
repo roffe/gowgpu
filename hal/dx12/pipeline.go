@@ -7,9 +7,11 @@ package dx12
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
 	"os"
 	"runtime"
+	"sync"
 	"unsafe"
 
 	"github.com/gogpu/naga/hlsl"
@@ -151,11 +153,34 @@ type PipelineLayout struct {
 	groupMappings     []rootParamMapping // actual root param indices per bind group
 	samplerRootIndex  int                // root param index for global sampler heap table, or -1
 	nagaOptions       *hlsl.Options      // HLSL compile options with proper BindingMap
-	device            *Device
+
+	// specialConstantsIndex is the root param index of the constants
+	// naga reads first_vertex, first_instance and num_workgroups from.
+	specialConstantsIndex int
+
+	// indirect are the command signatures that set those constants
+	// from the indirect records, made on first use.
+	indirect     indirectSignatures
+	indirectOnce sync.Once
+	indirectErr  error
+
+	device *Device
+}
+
+// indirectSignatures are command signatures of one root signature for
+// indirect records with the special constants ahead of the arguments.
+type indirectSignatures struct {
+	draw, drawIndexed, dispatch *d3d12.ID3D12CommandSignature
 }
 
 // Destroy releases the pipeline layout resources.
 func (l *PipelineLayout) Destroy() {
+	for _, sig := range []*d3d12.ID3D12CommandSignature{l.indirect.draw, l.indirect.drawIndexed, l.indirect.dispatch} {
+		if sig != nil {
+			sig.Release()
+		}
+	}
+	l.indirect = indirectSignatures{}
 	if l.rootSignature != nil {
 		l.rootSignature.Release()
 		l.rootSignature = nil
@@ -241,11 +266,12 @@ type dynamicBuffer struct {
 
 // pipelineLayoutResult holds the output of root signature creation.
 type pipelineLayoutResult struct {
-	rootSignature     *d3d12.ID3D12RootSignature
-	rootSignatureHash [32]byte
-	groupMappings     []rootParamMapping
-	samplerRootIndex  int
-	nagaOptions       *hlsl.Options
+	rootSignature         *d3d12.ID3D12RootSignature
+	rootSignatureHash     [32]byte
+	groupMappings         []rootParamMapping
+	samplerRootIndex      int
+	specialConstantsIndex int
+	nagaOptions           *hlsl.Options
 }
 
 // createRootSignatureFromLayouts creates a D3D12 root signature from bind group layouts.
@@ -498,6 +524,22 @@ func (d *Device) createRootSignatureFromLayouts(layouts []hal.BindGroupLayout) (
 		rootParams = append(rootParams, param)
 	}
 
+	// Root constants naga reads first_vertex and first_instance, or the
+	// workgroup counts, from, at the next CBV register, as in Rust's
+	// wgpu-hal: SV_VertexID, SV_InstanceID and SV_GroupID hold none of them.
+	specialConstantsIndex := len(rootParams)
+	specialConstants := hlsl.BindTarget{Space: 0, Register: bindCBV}
+	specialParam := d3d12.D3D12_ROOT_PARAMETER{
+		ParameterType:    d3d12.D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
+		ShaderVisibility: d3d12.D3D12_SHADER_VISIBILITY_ALL,
+	}
+	*(*d3d12.D3D12_ROOT_CONSTANTS)(unsafe.Pointer(&specialParam.Union[0])) = d3d12.D3D12_ROOT_CONSTANTS{
+		ShaderRegister: bindCBV,
+		Num32BitValues: 3,
+	}
+	rootParams = append(rootParams, specialParam)
+	bindCBV++
+
 	// Build root signature description
 	desc := d3d12.D3D12_ROOT_SIGNATURE_DESC{
 		Flags: d3d12.D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT,
@@ -550,14 +592,92 @@ func (d *Device) createRootSignatureFromLayouts(layouts []hal.BindGroupLayout) (
 		StandardSamplers:   hlsl.BindTarget{Space: 0, Register: 0},
 		ComparisonSamplers: hlsl.BindTarget{Space: 0, Register: 2048},
 	}
+	nagaOpts.SpecialConstantsBinding = &specialConstants
 
 	return &pipelineLayoutResult{
-		rootSignature:     rootSig,
-		rootSignatureHash: rootSigHash,
-		groupMappings:     groupMappings,
-		samplerRootIndex:  samplerRootIndex,
-		nagaOptions:       nagaOpts,
+		rootSignature:         rootSig,
+		rootSignatureHash:     rootSigHash,
+		groupMappings:         groupMappings,
+		samplerRootIndex:      samplerRootIndex,
+		specialConstantsIndex: specialConstantsIndex,
+		nagaOptions:           nagaOpts,
 	}, nil
+}
+
+// indirectSignatures returns the layout's command signatures that set the
+// special constants from the indirect records, as Rust's wgpu-hal makes
+// them for a layout: the constants, two of them for a draw, the workgroup
+// counts for a dispatch, ahead of the arguments of each record.
+func (l *PipelineLayout) indirectSignatures() (indirectSignatures, error) {
+	l.indirectOnce.Do(func() {
+		create := func(argType d3d12.D3D12_INDIRECT_ARGUMENT_TYPE, constants, argBytes uint32) *d3d12.ID3D12CommandSignature {
+			if l.indirectErr != nil {
+				return nil
+			}
+			args := [2]d3d12.D3D12_INDIRECT_ARGUMENT_DESC{{Type: d3d12.D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT}, {Type: argType}}
+			binary.LittleEndian.PutUint32(args[0].Union[0:], uint32(l.specialConstantsIndex))
+			binary.LittleEndian.PutUint32(args[0].Union[4:], 0)
+			binary.LittleEndian.PutUint32(args[0].Union[8:], constants)
+			sig, err := l.device.raw.CreateCommandSignature(&d3d12.D3D12_COMMAND_SIGNATURE_DESC{
+				ByteStride:       constants*4 + argBytes,
+				NumArgumentDescs: 2,
+				ArgumentDescs:    &args[0],
+			}, l.rootSignature)
+			runtime.KeepAlive(&args)
+			l.indirectErr = err
+			return sig
+		}
+		l.indirect.draw = create(d3d12.D3D12_INDIRECT_ARGUMENT_TYPE_DRAW, 2, drawRecordSize)
+		l.indirect.drawIndexed = create(d3d12.D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED, 2, drawIndexedRecordSize)
+		l.indirect.dispatch = create(d3d12.D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH, 3, dispatchRecordSize)
+	})
+	return l.indirect, l.indirectErr
+}
+
+// Bytes in an indirect draw, indexed draw and dispatch record.
+const (
+	drawRecordSize        = 16
+	drawIndexedRecordSize = 20
+	dispatchRecordSize    = 12
+)
+
+// readsSpecialConstants reports whether the entry point reads a builtin
+// naga takes from the special constants: vertex_index and instance_index
+// in a vertex stage, num_workgroups in a compute stage.
+func readsSpecialConstants(module *ShaderModule, entryPoint string) bool {
+	ep, ok := module.entryPoint(entryPoint)
+	if !ok {
+		return false
+	}
+	special := func(b *ir.Binding) bool {
+		if b == nil {
+			return false
+		}
+		builtin, ok := (*b).(ir.BuiltinBinding)
+		if !ok {
+			return false
+		}
+		switch builtin.Builtin {
+		case ir.BuiltinVertexIndex, ir.BuiltinInstanceIndex, ir.BuiltinNumWorkGroups:
+			return true
+		}
+		return false
+	}
+	for _, arg := range ep.Function.Arguments {
+		if special(arg.Binding) {
+			return true
+		}
+		if int(arg.Type) < len(module.irModule.Types) {
+			if st, ok := module.irModule.Types[arg.Type].Inner.(ir.StructType); ok {
+				for _, m := range st.Members {
+					if special(m.Binding) {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
 }
 
 // bindingTypeToD3D12DescriptorRangeType converts binding type to D3D12 descriptor range type.
@@ -880,6 +1000,11 @@ type RenderPipeline struct {
 	samplerRootIndex int                        // root param index for global sampler heap, or -1
 	topology         d3d12.D3D_PRIMITIVE_TOPOLOGY
 	vertexStrides    []uint32 // Strides per vertex buffer slot
+
+	// specialConstants is the pipeline's layout when its vertex stage
+	// reads vertex_index or instance_index, which then take the special
+	// constants the draws set.
+	specialConstants *PipelineLayout
 }
 
 // Destroy releases the render pipeline resources.
@@ -923,6 +1048,11 @@ type ComputePipeline struct {
 	rootSignature    *d3d12.ID3D12RootSignature // Reference, not owned
 	groupMappings    []rootParamMapping         // bind group → root param index mapping
 	samplerRootIndex int                        // root param index for global sampler heap, or -1
+
+	// specialConstants is the pipeline's layout when its compute stage
+	// reads num_workgroups, which then takes the special constants the
+	// dispatches set.
+	specialConstants *PipelineLayout
 }
 
 // Destroy releases the compute pipeline resources.

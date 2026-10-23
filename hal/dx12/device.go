@@ -2112,13 +2112,14 @@ func (d *Device) CreatePipelineLayout(desc *hal.PipelineLayoutDescriptor) (hal.P
 	)
 
 	return &PipelineLayout{
-		rootSignature:     result.rootSignature,
-		rootSignatureHash: result.rootSignatureHash,
-		bindGroupLayouts:  bgLayouts,
-		groupMappings:     result.groupMappings,
-		samplerRootIndex:  result.samplerRootIndex,
-		nagaOptions:       result.nagaOptions,
-		device:            d,
+		rootSignature:         result.rootSignature,
+		rootSignatureHash:     result.rootSignatureHash,
+		bindGroupLayouts:      bgLayouts,
+		groupMappings:         result.groupMappings,
+		samplerRootIndex:      result.samplerRootIndex,
+		specialConstantsIndex: result.specialConstantsIndex,
+		nagaOptions:           result.nagaOptions,
+		device:                d,
 	}, nil
 }
 
@@ -2516,6 +2517,11 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		"elapsed", time.Since(start),
 	)
 
+	var specialConstants *PipelineLayout
+	if vsModule, ok := desc.Vertex.Module.(*ShaderModule); ok && pipelineLayout != nil && readsSpecialConstants(vsModule, desc.Vertex.EntryPoint) {
+		specialConstants = pipelineLayout
+	}
+
 	return &RenderPipeline{
 		pso:              pso,
 		rootSignature:    rootSig,
@@ -2523,6 +2529,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		samplerRootIndex: samplerRootIdx,
 		topology:         primitiveTopologyToD3D12(desc.Primitive.Topology),
 		vertexStrides:    vertexStrides,
+		specialConstants: specialConstants,
 	}, nil
 }
 
@@ -2619,11 +2626,17 @@ func (d *Device) CreateComputePipeline(desc *hal.ComputePipelineDescriptor) (hal
 		"elapsed", time.Since(start),
 	)
 
+	var specialConstants *PipelineLayout
+	if module, ok := desc.Compute.Module.(*ShaderModule); ok && pipelineLayout != nil && readsSpecialConstants(module, desc.Compute.EntryPoint) {
+		specialConstants = pipelineLayout
+	}
+
 	return &ComputePipeline{
 		pso:              pso,
 		rootSignature:    rootSig,
 		groupMappings:    groupMappings,
 		samplerRootIndex: samplerRootIdx,
+		specialConstants: specialConstants,
 	}, nil
 }
 

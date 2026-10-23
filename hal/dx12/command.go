@@ -63,6 +63,10 @@ type CommandEncoder struct {
 	// GPU is done with the command lists (ResetAll).
 	scratch []*Buffer
 
+	// indirect holds the indirect records copied behind their special
+	// constants (specialIndirect), rewound by ResetAll.
+	indirect scratchArena
+
 	// err is the first command that could not be recorded; EndEncoding
 	// returns it in place of a command buffer that lacks the command.
 	err error
@@ -95,6 +99,86 @@ func (e *CommandEncoder) releaseScratch() {
 		b.Destroy()
 	}
 	e.scratch = e.scratch[:0]
+}
+
+// scratchArenaChunk is the size of a chunk of a scratchArena.
+const scratchArenaChunk = 64 << 10
+
+// scratchArena hands out ranges of chunk buffers that indirect records are
+// copied to. The chunks are kept for later recordings: reset rewinds the
+// arena once the GPU is done with every range it handed out.
+type scratchArena struct {
+	chunks []*Buffer
+	cur    int
+	used   uint64
+}
+
+func (a *scratchArena) alloc(device *Device, size uint64) (*Buffer, uint64, error) {
+	size = (size + 3) &^ 3
+	for ; a.cur < len(a.chunks); a.cur, a.used = a.cur+1, 0 {
+		if a.used+size <= a.chunks[a.cur].size {
+			offset := a.used
+			a.used += size
+			return a.chunks[a.cur], offset, nil
+		}
+	}
+	raw, err := device.CreateBuffer(&hal.BufferDescriptor{
+		Label: "(wgpu internal) indirect scratch",
+		Size:  max(size, scratchArenaChunk),
+		Usage: gputypes.BufferUsageCopyDst | gputypes.BufferUsageIndirect,
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	buf := raw.(*Buffer)
+	a.chunks = append(a.chunks, buf)
+	a.cur, a.used = len(a.chunks)-1, size
+	return buf, 0, nil
+}
+
+func (a *scratchArena) reset() {
+	a.cur, a.used = 0, 0
+}
+
+func (a *scratchArena) destroy() {
+	for _, b := range a.chunks {
+		b.Destroy()
+	}
+	a.chunks = nil
+	a.reset()
+}
+
+// specialIndirect copies count indirect records of recordSize bytes from
+// offset in buf to scratch memory, each behind its special constants: the
+// constants words of the record from constantsOffset on. A layout's
+// indirectSignatures read the records from where it returns, setting the
+// constants as they go, which is the layout Rust's wgpu-core writes for
+// wgpu-hal's DX12 backend.
+func (e *CommandEncoder) specialIndirect(buf *Buffer, offset uint64, count, recordSize, constantsOffset, constants uint32) (*Buffer, uint64, bool) {
+	stride := uint64(constants*4 + recordSize)
+	scratch, scratchOffset, err := e.indirect.alloc(e.device, stride*uint64(count))
+	if err != nil {
+		e.fail(fmt.Errorf("dx12: indirect special constants: %w", err))
+		return nil, 0, false
+	}
+	plans := make([]stateBarrierPlan, 0, 2)
+	if before, target, needsBarrier := e.stateTracker.transitionBufferRead(buf, d3d12.D3D12_RESOURCE_STATE_COPY_SOURCE); needsBarrier {
+		plans = append(plans, stateBarrierPlan{resource: buf, subresource: d3d12.D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, before: before, after: target})
+	}
+	if before, needsBarrier := e.stateTracker.transitionBuffer(scratch, d3d12.D3D12_RESOURCE_STATE_COPY_DEST); needsBarrier {
+		plans = append(plans, stateBarrierPlan{resource: scratch, subresource: d3d12.D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, before: before, after: d3d12.D3D12_RESOURCE_STATE_COPY_DEST})
+	}
+	e.emitStateBarrierPlans(plans)
+	for i := uint64(0); i < uint64(count); i++ {
+		record := offset + i*uint64(recordSize)
+		dst := scratchOffset + i*stride
+		e.cmdList.CopyBufferRegion(scratch.raw, dst, buf.raw, record+uint64(constantsOffset), uint64(constants*4))
+		e.cmdList.CopyBufferRegion(scratch.raw, dst+uint64(constants*4), buf.raw, record, uint64(recordSize))
+	}
+	if before, target, needsBarrier := e.stateTracker.transitionBufferRead(scratch, d3d12.D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT); needsBarrier {
+		e.emitStateBarrierPlans([]stateBarrierPlan{{resource: scratch, subresource: d3d12.D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, before: before, after: target}})
+	}
+	return scratch, scratchOffset, true
 }
 
 // BeginEncoding begins command recording.
@@ -188,6 +272,7 @@ func (e *CommandEncoder) ResetAll(commandBuffers []hal.CommandBuffer) {
 		}
 	}
 	e.releaseScratch()
+	e.indirect.reset()
 }
 
 // Destroy releases the allocator and all pooled command lists.
@@ -206,6 +291,7 @@ func (e *CommandEncoder) Destroy() {
 		e.allocator = nil
 	}
 	e.releaseScratch()
+	e.indirect.destroy()
 }
 
 // TransitionBuffers transitions buffer states for synchronization.
@@ -584,6 +670,11 @@ type RenderPassEncoder struct {
 	// Rust wgpu-hal reference: dx12/mod.rs end_of_pass_timer_query field.
 	endOfPassTimerHeap  *d3d12.ID3D12QueryHeap
 	endOfPassTimerIndex uint32
+
+	// special are the first vertex and first instance the special
+	// constants hold, when specialSet.
+	special    [2]uint32
+	specialSet bool
 }
 
 // End finishes the render pass.
@@ -687,6 +778,7 @@ func (e *RenderPassEncoder) SetPipeline(pipeline hal.RenderPipeline) {
 	e.encoder.cmdList.IASetPrimitiveTopology(p.topology)
 	if prev == nil || prev.rootSignature != p.rootSignature {
 		e.groups.bind(e.encoder, false, p.groupMappings)
+		e.specialSet = false
 	}
 	for slot, stride := range p.vertexStrides {
 		if slot < len(e.vertexBuffers) && e.vertexBuffers[slot].StrideInBytes != stride {
@@ -841,6 +933,23 @@ func (e *RenderPassEncoder) SetStencilReference(ref uint32) {
 	e.encoder.cmdList.OMSetStencilRef(ref)
 }
 
+// setSpecialConstants sets the first vertex and first instance of a draw
+// in the special constants, when the pipeline reads them and they changed.
+func (e *RenderPassEncoder) setSpecialConstants(firstVertex, firstInstance uint32) {
+	p := e.pipeline
+	if p == nil || p.specialConstants == nil {
+		return
+	}
+	v := [2]uint32{firstVertex, firstInstance}
+	if e.specialSet && e.special == v {
+		return
+	}
+	for i, value := range v {
+		e.encoder.cmdList.SetGraphicsRoot32BitConstant(uint32(p.specialConstants.specialConstantsIndex), value, uint32(i))
+	}
+	e.special, e.specialSet = v, true
+}
+
 // Draw draws primitives.
 func (e *RenderPassEncoder) Draw(args gputypes.DrawArgs) {
 	if !e.encoder.isRecording {
@@ -848,6 +957,7 @@ func (e *RenderPassEncoder) Draw(args gputypes.DrawArgs) {
 	}
 
 	e.setVertexBuffers()
+	e.setSpecialConstants(args.FirstVertex, args.FirstInstance)
 	e.encoder.cmdList.DrawInstanced(args.VertexCount, args.InstanceCount, args.FirstVertex, args.FirstInstance)
 }
 
@@ -858,6 +968,7 @@ func (e *RenderPassEncoder) DrawIndexed(args gputypes.DrawIndexedArgs) {
 	}
 
 	e.setVertexBuffers()
+	e.setSpecialConstants(uint32(args.BaseVertex), args.FirstInstance)
 	e.encoder.cmdList.DrawIndexedInstanced(args.IndexCount, args.InstanceCount, args.FirstIndex, args.BaseVertex, args.FirstInstance)
 }
 
@@ -865,50 +976,57 @@ func (e *RenderPassEncoder) DrawIndexed(args gputypes.DrawIndexedArgs) {
 // The buffer must contain a D3D12_DRAW_ARGUMENTS struct at the given offset
 // (vertexCountPerInstance, instanceCount, startVertexLocation, startInstanceLocation — 16 bytes).
 func (e *RenderPassEncoder) DrawIndirect(buffer hal.Buffer, offset uint64, drawCount uint32) {
-	buf, ok := buffer.(*Buffer)
-	if !ok || !e.encoder.isRecording || drawCount == 0 {
-		return
-	}
-	if !indirect.RangeFits(buf.size, offset, 16, drawCount) {
-		return
-	}
-	if _, ok := indirect.RecordOffset(offset, 16, drawCount-1); !ok {
-		return
-	}
-	if before, target, needsBarrier := e.encoder.stateTracker.transitionBufferRead(buf, d3d12.D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT); needsBarrier {
-		e.encoder.emitStateBarrierPlans([]stateBarrierPlan{{resource: buf, subresource: d3d12.D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, before: before, after: target}})
-	}
-
-	e.setVertexBuffers()
-	e.encoder.cmdList.ExecuteIndirect(
-		e.encoder.device.cmdSignatures.draw,
-		drawCount, buf.raw, offset, nil, 0,
-	)
+	e.drawIndirect(buffer, offset, drawCount, drawRecordSize, 8)
 }
 
 // DrawIndexedIndirect draws indexed primitives with GPU-generated parameters.
 // The buffer must contain a D3D12_DRAW_INDEXED_ARGUMENTS struct at the given offset
 // (indexCountPerInstance, instanceCount, startIndexLocation, baseVertexLocation, startInstanceLocation — 20 bytes).
 func (e *RenderPassEncoder) DrawIndexedIndirect(buffer hal.Buffer, offset uint64, drawCount uint32) {
+	e.drawIndirect(buffer, offset, drawCount, drawIndexedRecordSize, 12)
+}
+
+// drawIndirect records drawCount indirect draws whose records of
+// recordSize bytes have the first vertex (or base vertex) and first
+// instance from constantsOffset on. A pipeline that reads vertex_index or
+// instance_index takes them in its special constants, through a copy of
+// the records (CommandEncoder.specialIndirect).
+func (e *RenderPassEncoder) drawIndirect(buffer hal.Buffer, offset uint64, drawCount, recordSize, constantsOffset uint32) {
 	buf, ok := buffer.(*Buffer)
 	if !ok || !e.encoder.isRecording || drawCount == 0 {
 		return
 	}
-	if !indirect.RangeFits(buf.size, offset, 20, drawCount) {
+	if !indirect.RangeFits(buf.size, offset, uint64(recordSize), drawCount) {
 		return
 	}
-	if _, ok := indirect.RecordOffset(offset, 20, drawCount-1); !ok {
+	if _, ok := indirect.RecordOffset(offset, uint64(recordSize), drawCount-1); !ok {
 		return
 	}
-	if before, target, needsBarrier := e.encoder.stateTracker.transitionBufferRead(buf, d3d12.D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT); needsBarrier {
+	signature := e.encoder.device.cmdSignatures.draw
+	if recordSize == drawIndexedRecordSize {
+		signature = e.encoder.device.cmdSignatures.drawIndexed
+	}
+	args, argsOffset := buf, offset
+	if p := e.pipeline; p != nil && p.specialConstants != nil {
+		signatures, err := p.specialConstants.indirectSignatures()
+		if err != nil {
+			e.encoder.fail(fmt.Errorf("dx12: indirect command signatures: %w", err))
+			return
+		}
+		signature = signatures.draw
+		if recordSize == drawIndexedRecordSize {
+			signature = signatures.drawIndexed
+		}
+		if args, argsOffset, ok = e.encoder.specialIndirect(buf, offset, drawCount, recordSize, constantsOffset, 2); !ok {
+			return
+		}
+		e.specialSet = false
+	} else if before, target, needsBarrier := e.encoder.stateTracker.transitionBufferRead(buf, d3d12.D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT); needsBarrier {
 		e.encoder.emitStateBarrierPlans([]stateBarrierPlan{{resource: buf, subresource: d3d12.D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, before: before, after: target}})
 	}
 
 	e.setVertexBuffers()
-	e.encoder.cmdList.ExecuteIndirect(
-		e.encoder.device.cmdSignatures.drawIndexed,
-		drawCount, buf.raw, offset, nil, 0,
-	)
+	e.encoder.cmdList.ExecuteIndirect(signature, drawCount, args.raw, argsOffset, nil, 0)
 }
 
 // DrawIndirectCount draws using maxDrawCount when GPU count buffer is unavailable.
@@ -955,6 +1073,11 @@ type ComputePassEncoder struct {
 	// timestamp write. Set during BeginComputePass, consumed in End().
 	endOfPassTimerHeap  *d3d12.ID3D12QueryHeap
 	endOfPassTimerIndex uint32
+
+	// special are the workgroup counts the special constants hold, when
+	// specialSet.
+	special    [3]uint32
+	specialSet bool
 }
 
 // End finishes the compute pass.
@@ -985,6 +1108,7 @@ func (e *ComputePassEncoder) SetPipeline(pipeline hal.ComputePipeline) {
 	}
 	if prev == nil || prev.rootSignature != p.rootSignature {
 		e.groups.bind(e.encoder, true, p.groupMappings)
+		e.specialSet = false
 	}
 
 	// Bind the global sampler descriptor heap to the sampler root parameter.
@@ -1041,6 +1165,12 @@ func (e *ComputePassEncoder) Dispatch(x, y, z uint32) {
 		}
 	}
 	e.encoder.emitStateBarrierPlans(plans)
+	if p := e.pipeline; p != nil && p.specialConstants != nil && (!e.specialSet || e.special != [3]uint32{x, y, z}) {
+		for i, value := range [3]uint32{x, y, z} {
+			e.encoder.cmdList.SetComputeRoot32BitConstant(uint32(p.specialConstants.specialConstantsIndex), value, uint32(i))
+		}
+		e.special, e.specialSet = [3]uint32{x, y, z}, true
+	}
 	e.encoder.cmdList.Dispatch(x, y, z)
 	e.insertUAVBarrier()
 
@@ -1063,7 +1193,19 @@ func (e *ComputePassEncoder) DispatchIndirect(buffer hal.Buffer, offset uint64) 
 		return
 	}
 	plans := make([]stateBarrierPlan, 0, 1+len(e.boundStorageBuffers))
-	if before, target, needsBarrier := e.encoder.stateTracker.transitionBufferRead(buf, d3d12.D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT); needsBarrier {
+	signature, args, argsOffset := e.encoder.device.cmdSignatures.dispatch, buf, offset
+	if p := e.pipeline; p != nil && p.specialConstants != nil {
+		signatures, err := p.specialConstants.indirectSignatures()
+		if err != nil {
+			e.encoder.fail(fmt.Errorf("dx12: indirect command signatures: %w", err))
+			return
+		}
+		signature = signatures.dispatch
+		if args, argsOffset, ok = e.encoder.specialIndirect(buf, offset, 1, dispatchRecordSize, 0, 3); !ok {
+			return
+		}
+		e.specialSet = false
+	} else if before, target, needsBarrier := e.encoder.stateTracker.transitionBufferRead(buf, d3d12.D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT); needsBarrier {
 		plans = append(plans, stateBarrierPlan{resource: buf, subresource: d3d12.D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, before: before, after: target})
 	}
 	for _, storage := range e.boundStorageBuffers {
@@ -1073,10 +1215,7 @@ func (e *ComputePassEncoder) DispatchIndirect(buffer hal.Buffer, offset uint64) 
 	}
 	e.encoder.emitStateBarrierPlans(plans)
 
-	e.encoder.cmdList.ExecuteIndirect(
-		e.encoder.device.cmdSignatures.dispatch,
-		1, buf.raw, offset, nil, 0,
-	)
+	e.encoder.cmdList.ExecuteIndirect(signature, 1, args.raw, argsOffset, nil, 0)
 	e.insertUAVBarrier()
 
 	// Mark bound storage buffers as UNORDERED_ACCESS, matching Dispatch() pattern.
