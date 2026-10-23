@@ -231,7 +231,7 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst hal.Texture, regions []ha
 func (e *CommandEncoder) ResolveQuerySet(querySet hal.QuerySet, firstQuery, queryCount uint32, destination hal.Buffer, destinationOffset uint64) {
 	qs, qsOK := querySet.(*QuerySet)
 	dstBuf, bufOK := destination.(*Buffer)
-	if !qsOK || !bufOK || qs == nil || dstBuf == nil {
+	if !qsOK || !bufOK || qs == nil || dstBuf == nil || queryCount == 0 {
 		return
 	}
 
@@ -2162,13 +2162,12 @@ func (c *ResolveQuerySetCommand) Execute(ctx *gl.Context) {
 		ctx.GetQueryObjectui64v(c.querySet.queries[idx], gl.QUERY_RESULT, &results[i])
 	}
 
-	// Write results into the destination GL buffer via glBufferSubData.
-	if c.dstBuffer.id != 0 {
-		queryData := unsafe.Slice((*byte)(unsafe.Pointer(&results[0])), len(results)*8)
-		ctx.BindBuffer(c.dstBuffer.target, c.dstBuffer.id)
-		ctx.BufferSubData(c.dstBuffer.target, int(c.dstOffset), len(queryData),
-			unsafe.Pointer(&queryData[0]))
-		ctx.BindBuffer(c.dstBuffer.target, 0)
+	// Through COPY_WRITE_BUFFER, as the other copies: the buffer's own
+	// target may be the ARRAY_BUFFER the shadow says is bound.
+	if c.dstBuffer.id != 0 && len(results) > 0 {
+		ctx.BindBuffer(gl.COPY_WRITE_BUFFER, c.dstBuffer.id)
+		ctx.BufferSubData(gl.COPY_WRITE_BUFFER, int(c.dstOffset), 8*len(results), unsafe.Pointer(&results[0]))
+		ctx.BindBuffer(gl.COPY_WRITE_BUFFER, 0)
 	}
 }
 

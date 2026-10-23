@@ -65,3 +65,16 @@ func TestStorageBufferBarrierCoversPixelBuffers(t *testing.T) {
 		t.Errorf("barrier bits %#x lack PIXEL_BUFFER_BARRIER_BIT", b)
 	}
 }
+
+// A resolve of no queries records nothing: its command indexed the first
+// of no results and panicked inside Submit.
+func TestResolveNoQueries(t *testing.T) {
+	enc := &CommandEncoder{}
+	if err := enc.BeginEncoding("resolve"); err != nil {
+		t.Fatal(err)
+	}
+	enc.ResolveQuerySet(&QuerySet{queries: []uint32{1, 2}}, 0, 0, &Buffer{id: 3, size: 16}, 0)
+	if len(enc.commands) != 0 {
+		t.Errorf("recorded %d commands", len(enc.commands))
+	}
+}
