@@ -22,8 +22,8 @@ package vk
 
 /*
 #include "trampolines.h"
-#cgo noescape gvk_q_hp
-#cgo nocallback gvk_q_hp
+#cgo noescape gvk_h_hp
+#cgo nocallback gvk_h_hp
 #cgo noescape gvk_v_hp
 #cgo nocallback gvk_v_hp
 */
@@ -92,7 +92,7 @@ func procAddr(fn unsafe.Pointer, handle uintptr, name string) unsafe.Pointer {
 	}
 	cname := make([]byte, len(name)+1)
 	copy(cname, name)
-	r := C.gvk_q_hp(C.uintptr_t(uintptr(fn)), C.uint64_t(handle), (*C.uint8_t)(unsafe.Pointer(&cname[0])))
+	r := C.gvk_h_hp(C.uintptr_t(uintptr(fn)), C.uintptr_t(handle), (*C.uint8_t)(unsafe.Pointer(&cname[0])))
 	return cPointer(uintptr(r))
 }
 
@@ -134,7 +134,7 @@ func DestroyDevice(proc unsafe.Pointer, device Device, allocator *AllocationCall
 	if proc == nil {
 		return
 	}
-	C.gvk_v_hp(C.uintptr_t(uintptr(proc)), C.uint64_t(device), (*C.uint8_t)(unsafe.Pointer(allocator)))
+	C.gvk_v_hp(C.uintptr_t(uintptr(proc)), C.uintptr_t(device), (*C.uint8_t)(unsafe.Pointer(allocator)))
 }
 
 // Close releases the Vulkan library.

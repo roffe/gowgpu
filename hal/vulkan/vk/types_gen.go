@@ -276,17 +276,17 @@ type (
 )
 
 // Union types (largest member size, widest member's alignment)
-type ClearValue [4]uint32                                 // Union: ClearColorValue or ClearDepthStencilValue
-type ClearColorValue [4]uint32                            // Union: float32[4], int32[4], or uint32[4]
-type PerformanceValueDataINTEL [1]uint64                  // Union: value32, value64, valueFloat, valueBool, valueString
-type PipelineExecutableStatisticValueKHR [1]uint64        // Union: b32, i64, u64, f64
-type PerformanceCounterResultKHR [1]uint64                // Union: int32, int64, uint32, uint64, float32, float64
-type DeviceOrHostAddressKHR uintptr                       // Union: deviceAddress or hostAddress
-type DeviceOrHostAddressConstKHR uintptr                  // Union: deviceAddress or hostAddress
-type AccelerationStructureGeometryDataKHR [8]uint64       // Union: triangles, aabbs, instances
-type AccelerationStructureMotionInstanceDataNV [18]uint64 // Union: static, matrix, srt instances
-type ClusterAccelerationStructureOpInputNV uintptr        // Union: various cluster inputs
-type DescriptorDataEXT uintptr                            // Union: descriptor data variants
+type ClearValue [4]uint32                                                               // Union: ClearColorValue or ClearDepthStencilValue
+type ClearColorValue [4]uint32                                                          // Union: float32[4], int32[4], or uint32[4]
+type PerformanceValueDataINTEL [1]uint64                                                // Union: value32, value64, valueFloat, valueBool, valueString
+type PipelineExecutableStatisticValueKHR [1]uint64                                      // Union: b32, i64, u64, f64
+type PerformanceCounterResultKHR [1]uint64                                              // Union: int32, int64, uint32, uint64, float32, float64
+type DeviceOrHostAddressKHR uint64                                                      // Union: deviceAddress or hostAddress
+type DeviceOrHostAddressConstKHR uint64                                                 // Union: deviceAddress or hostAddress
+type AccelerationStructureGeometryDataKHR AccelerationStructureGeometryTrianglesDataKHR // Union: triangles, aabbs, instances; triangles is the largest everywhere
+type AccelerationStructureMotionInstanceDataNV [18]uint64                               // Union: static, matrix, srt instances
+type ClusterAccelerationStructureOpInputNV uintptr                                      // Union: various cluster inputs
+type DescriptorDataEXT uint64                                                           // Union: descriptor data variants, a VkDeviceAddress among them
 
 // Extension type aliases
 type AccelerationStructureTypeNV = AccelerationStructureTypeKHR
@@ -365,7 +365,7 @@ type (
 
 // More extension types
 type MemoryDecompressionMethodFlagsNV = Flags64
-type DeviceOrHostAddressConstAMDX uintptr
+type DeviceOrHostAddressConstAMDX uint64
 type PipelineCreateFlags2KHR = Flags64
 
 // OpenHarmony platform types
@@ -380,61 +380,61 @@ type (
 	Device                        uintptr
 	Queue                         uintptr
 	CommandBuffer                 uintptr
-	DeviceMemory                  uintptr
-	CommandPool                   uintptr
-	Buffer                        uintptr
-	BufferView                    uintptr
-	Image                         uintptr
-	ImageView                     uintptr
-	ShaderModule                  uintptr
-	Pipeline                      uintptr
-	PipelineLayout                uintptr
-	Sampler                       uintptr
-	DescriptorSet                 uintptr
-	DescriptorSetLayout           uintptr
-	DescriptorPool                uintptr
-	Fence                         uintptr
-	Semaphore                     uintptr
-	Event                         uintptr
-	QueryPool                     uintptr
-	Framebuffer                   uintptr
-	RenderPass                    uintptr
-	PipelineCache                 uintptr
-	PipelineBinaryKHR             uintptr
-	IndirectCommandsLayoutNV      uintptr
-	IndirectCommandsLayoutEXT     uintptr
-	IndirectExecutionSetEXT       uintptr
-	DescriptorUpdateTemplate      uintptr
-	DescriptorUpdateTemplateKHR   uintptr
-	SamplerYcbcrConversion        uintptr
-	SamplerYcbcrConversionKHR     uintptr
-	ValidationCacheEXT            uintptr
-	AccelerationStructureKHR      uintptr
-	AccelerationStructureNV       uintptr
-	PerformanceConfigurationINTEL uintptr
-	BufferCollectionFUCHSIA       uintptr
-	DeferredOperationKHR          uintptr
-	PrivateDataSlot               uintptr
-	PrivateDataSlotEXT            uintptr
-	CuModuleNVX                   uintptr
-	CuFunctionNVX                 uintptr
-	OpticalFlowSessionNV          uintptr
-	MicromapEXT                   uintptr
-	ShaderEXT                     uintptr
-	TensorARM                     uintptr
-	TensorViewARM                 uintptr
-	DataGraphPipelineSessionARM   uintptr
-	DisplayKHR                    uintptr
-	DisplayModeKHR                uintptr
-	SurfaceKHR                    uintptr
-	SwapchainKHR                  uintptr
-	DebugReportCallbackEXT        uintptr
-	DebugUtilsMessengerEXT        uintptr
-	VideoSessionKHR               uintptr
-	VideoSessionParametersKHR     uintptr
-	SemaphoreSciSyncPoolNV        uintptr
-	CudaModuleNV                  uintptr
-	CudaFunctionNV                uintptr
+	DeviceMemory                  uint64
+	CommandPool                   uint64
+	Buffer                        uint64
+	BufferView                    uint64
+	Image                         uint64
+	ImageView                     uint64
+	ShaderModule                  uint64
+	Pipeline                      uint64
+	PipelineLayout                uint64
+	Sampler                       uint64
+	DescriptorSet                 uint64
+	DescriptorSetLayout           uint64
+	DescriptorPool                uint64
+	Fence                         uint64
+	Semaphore                     uint64
+	Event                         uint64
+	QueryPool                     uint64
+	Framebuffer                   uint64
+	RenderPass                    uint64
+	PipelineCache                 uint64
+	PipelineBinaryKHR             uint64
+	IndirectCommandsLayoutNV      uint64
+	IndirectCommandsLayoutEXT     uint64
+	IndirectExecutionSetEXT       uint64
+	DescriptorUpdateTemplate      uint64
+	DescriptorUpdateTemplateKHR   uint64
+	SamplerYcbcrConversion        uint64
+	SamplerYcbcrConversionKHR     uint64
+	ValidationCacheEXT            uint64
+	AccelerationStructureKHR      uint64
+	AccelerationStructureNV       uint64
+	PerformanceConfigurationINTEL uint64
+	BufferCollectionFUCHSIA       uint64
+	DeferredOperationKHR          uint64
+	PrivateDataSlot               uint64
+	PrivateDataSlotEXT            uint64
+	CuModuleNVX                   uint64
+	CuFunctionNVX                 uint64
+	OpticalFlowSessionNV          uint64
+	MicromapEXT                   uint64
+	ShaderEXT                     uint64
+	TensorARM                     uint64
+	TensorViewARM                 uint64
+	DataGraphPipelineSessionARM   uint64
+	DisplayKHR                    uint64
+	DisplayModeKHR                uint64
+	SurfaceKHR                    uint64
+	SwapchainKHR                  uint64
+	DebugReportCallbackEXT        uint64
+	DebugUtilsMessengerEXT        uint64
+	VideoSessionKHR               uint64
+	VideoSessionParametersKHR     uint64
+	SemaphoreSciSyncPoolNV        uint64
+	CudaModuleNV                  uint64
+	CudaFunctionNV                uint64
 	ExternalComputeQueueNV        uintptr
 )
 
@@ -505,19 +505,6 @@ type ComponentMapping struct {
 	G ComponentSwizzle
 	B ComponentSwizzle
 	A ComponentSwizzle
-}
-
-// VkPhysicalDeviceProperties
-type PhysicalDeviceProperties struct {
-	ApiVersion        uint32
-	DriverVersion     uint32
-	VendorID          uint32
-	DeviceID          uint32
-	DeviceType        PhysicalDeviceType
-	DeviceName        [256]byte
-	PipelineCacheUUID [16]uint8
-	Limits            PhysicalDeviceLimits
-	SparseProperties  PhysicalDeviceSparseProperties
 }
 
 // VkExtensionProperties
@@ -607,21 +594,6 @@ type PhysicalDeviceMemoryProperties struct {
 	MemoryHeaps     [16]MemoryHeap
 }
 
-// VkMemoryAllocateInfo
-type MemoryAllocateInfo struct {
-	SType           StructureType
-	PNext           *uintptr
-	AllocationSize  DeviceSize
-	MemoryTypeIndex uint32
-}
-
-// VkMemoryRequirements
-type MemoryRequirements struct {
-	Size           DeviceSize
-	Alignment      DeviceSize
-	MemoryTypeBits uint32
-}
-
 // VkSparseImageFormatProperties
 type SparseImageFormatProperties struct {
 	AspectMask       ImageAspectFlags
@@ -642,12 +614,6 @@ type SparseImageMemoryRequirements struct {
 type MemoryType struct {
 	PropertyFlags MemoryPropertyFlags
 	HeapIndex     uint32
-}
-
-// VkMemoryHeap
-type MemoryHeap struct {
-	Size  DeviceSize
-	Flags MemoryHeapFlags
 }
 
 // VkMappedMemoryRange
@@ -682,68 +648,11 @@ type DescriptorBufferInfo struct {
 	Range  DeviceSize
 }
 
-// VkDescriptorImageInfo
-type DescriptorImageInfo struct {
-	Sampler     Sampler
-	ImageView   ImageView
-	ImageLayout ImageLayout
-}
-
-// VkWriteDescriptorSet
-type WriteDescriptorSet struct {
-	SType            StructureType
-	PNext            *uintptr
-	DstSet           DescriptorSet
-	DstBinding       uint32
-	DstArrayElement  uint32
-	DescriptorCount  uint32
-	DescriptorType   DescriptorType
-	PImageInfo       *DescriptorImageInfo
-	PBufferInfo      *DescriptorBufferInfo
-	PTexelBufferView *BufferView
-}
-
-// VkCopyDescriptorSet
-type CopyDescriptorSet struct {
-	SType           StructureType
-	PNext           *uintptr
-	SrcSet          DescriptorSet
-	SrcBinding      uint32
-	SrcArrayElement uint32
-	DstSet          DescriptorSet
-	DstBinding      uint32
-	DstArrayElement uint32
-	DescriptorCount uint32
-}
-
 // VkBufferUsageFlags2CreateInfo
 type BufferUsageFlags2CreateInfo struct {
 	SType StructureType
 	PNext *uintptr
 	Usage BufferUsageFlags2
-}
-
-// VkBufferCreateInfo
-type BufferCreateInfo struct {
-	SType                 StructureType
-	PNext                 *uintptr
-	Flags                 BufferCreateFlags
-	Size                  DeviceSize
-	Usage                 BufferUsageFlags
-	SharingMode           SharingMode
-	QueueFamilyIndexCount uint32
-	PQueueFamilyIndices   *uint32
-}
-
-// VkBufferViewCreateInfo
-type BufferViewCreateInfo struct {
-	SType  StructureType
-	PNext  *uintptr
-	Flags  BufferViewCreateFlags
-	Buffer Buffer
-	Format Format
-	Offset DeviceSize
-	Range  DeviceSize
 }
 
 // VkImageSubresource
@@ -791,20 +700,6 @@ type BufferMemoryBarrier struct {
 	Size                DeviceSize
 }
 
-// VkImageMemoryBarrier
-type ImageMemoryBarrier struct {
-	SType               StructureType
-	PNext               *uintptr
-	SrcAccessMask       AccessFlags
-	DstAccessMask       AccessFlags
-	OldLayout           ImageLayout
-	NewLayout           ImageLayout
-	SrcQueueFamilyIndex uint32
-	DstQueueFamilyIndex uint32
-	Image               Image
-	SubresourceRange    ImageSubresourceRange
-}
-
 // VkImageCreateInfo
 type ImageCreateInfo struct {
 	SType                 StructureType
@@ -833,42 +728,11 @@ type SubresourceLayout struct {
 	DepthPitch DeviceSize
 }
 
-// VkImageViewCreateInfo
-type ImageViewCreateInfo struct {
-	SType            StructureType
-	PNext            *uintptr
-	Flags            ImageViewCreateFlags
-	Image            Image
-	ViewType         ImageViewType
-	Format           Format
-	Components       ComponentMapping
-	SubresourceRange ImageSubresourceRange
-}
-
 // VkBufferCopy
 type BufferCopy struct {
 	SrcOffset DeviceSize
 	DstOffset DeviceSize
 	Size      DeviceSize
-}
-
-// VkSparseMemoryBind
-type SparseMemoryBind struct {
-	ResourceOffset DeviceSize
-	Size           DeviceSize
-	Memory         DeviceMemory
-	MemoryOffset   DeviceSize
-	Flags          SparseMemoryBindFlags
-}
-
-// VkSparseImageMemoryBind
-type SparseImageMemoryBind struct {
-	Subresource  ImageSubresource
-	Offset       Offset3D
-	Extent       Extent3D
-	Memory       DeviceMemory
-	MemoryOffset DeviceSize
-	Flags        SparseMemoryBindFlags
 }
 
 // VkSparseBufferMemoryBindInfo
@@ -947,16 +811,6 @@ type CopyMemoryIndirectCommandKHR struct {
 	SrcAddress DeviceAddress
 	DstAddress DeviceAddress
 	Size       DeviceSize
-}
-
-// VkCopyMemoryIndirectInfoKHR
-type CopyMemoryIndirectInfoKHR struct {
-	SType            StructureType
-	PNext            *uintptr
-	SrcCopyFlags     AddressCopyFlagsKHR
-	DstCopyFlags     AddressCopyFlagsKHR
-	CopyCount        uint32
-	CopyAddressRange StridedDeviceAddressRangeKHR
 }
 
 // VkCopyMemoryToImageIndirectCommandKHR
@@ -1066,17 +920,6 @@ type PipelineShaderStageCreateInfo struct {
 	Module              ShaderModule
 	PName               *byte
 	PSpecializationInfo *SpecializationInfo
-}
-
-// VkComputePipelineCreateInfo
-type ComputePipelineCreateInfo struct {
-	SType              StructureType
-	PNext              *uintptr
-	Flags              PipelineCreateFlags
-	Stage              PipelineShaderStageCreateInfo
-	Layout             PipelineLayout
-	BasePipelineHandle Pipeline
-	BasePipelineIndex  int32
 }
 
 // VkComputePipelineIndirectBufferInfoNV
@@ -1239,29 +1082,6 @@ type PipelineDepthStencilStateCreateInfo struct {
 	MaxDepthBounds        float32
 }
 
-// VkGraphicsPipelineCreateInfo
-type GraphicsPipelineCreateInfo struct {
-	SType               StructureType
-	PNext               *uintptr
-	Flags               PipelineCreateFlags
-	StageCount          uint32
-	PStages             *PipelineShaderStageCreateInfo
-	PVertexInputState   *PipelineVertexInputStateCreateInfo
-	PInputAssemblyState *PipelineInputAssemblyStateCreateInfo
-	PTessellationState  *PipelineTessellationStateCreateInfo
-	PViewportState      *PipelineViewportStateCreateInfo
-	PRasterizationState *PipelineRasterizationStateCreateInfo
-	PMultisampleState   *PipelineMultisampleStateCreateInfo
-	PDepthStencilState  *PipelineDepthStencilStateCreateInfo
-	PColorBlendState    *PipelineColorBlendStateCreateInfo
-	PDynamicState       *PipelineDynamicStateCreateInfo
-	Layout              PipelineLayout
-	RenderPass          RenderPass
-	Subpass             uint32
-	BasePipelineHandle  Pipeline
-	BasePipelineIndex   int32
-}
-
 // VkPipelineCacheCreateInfo
 type PipelineCacheCreateInfo struct {
 	SType           StructureType
@@ -1321,15 +1141,6 @@ type PushConstantRange struct {
 	StageFlags ShaderStageFlags
 	Offset     uint32
 	Size       uint32
-}
-
-// VkPipelineBinaryCreateInfoKHR
-type PipelineBinaryCreateInfoKHR struct {
-	SType               StructureType
-	PNext               *uintptr
-	PKeysAndDataInfo    *PipelineBinaryKeysAndDataKHR
-	Pipeline            Pipeline
-	PPipelineCreateInfo *PipelineCreateInfoKHR
 }
 
 // VkPipelineBinaryHandlesInfoKHR
@@ -1437,18 +1248,6 @@ type CommandBufferAllocateInfo struct {
 	CommandPool        CommandPool
 	Level              CommandBufferLevel
 	CommandBufferCount uint32
-}
-
-// VkCommandBufferInheritanceInfo
-type CommandBufferInheritanceInfo struct {
-	SType                StructureType
-	PNext                *uintptr
-	RenderPass           RenderPass
-	Subpass              uint32
-	Framebuffer          Framebuffer
-	OcclusionQueryEnable Bool32
-	QueryFlags           QueryControlFlags
-	PipelineStatistics   QueryPipelineStatisticFlags
 }
 
 // VkCommandBufferBeginInfo
@@ -1622,116 +1421,6 @@ type PhysicalDeviceSparseProperties struct {
 	ResidencyNonResidentStrict               Bool32
 }
 
-// VkPhysicalDeviceLimits
-type PhysicalDeviceLimits struct {
-	MaxImageDimension1D                             uint32
-	MaxImageDimension2D                             uint32
-	MaxImageDimension3D                             uint32
-	MaxImageDimensionCube                           uint32
-	MaxImageArrayLayers                             uint32
-	MaxTexelBufferElements                          uint32
-	MaxUniformBufferRange                           uint32
-	MaxStorageBufferRange                           uint32
-	MaxPushConstantsSize                            uint32
-	MaxMemoryAllocationCount                        uint32
-	MaxSamplerAllocationCount                       uint32
-	BufferImageGranularity                          DeviceSize
-	SparseAddressSpaceSize                          DeviceSize
-	MaxBoundDescriptorSets                          uint32
-	MaxPerStageDescriptorSamplers                   uint32
-	MaxPerStageDescriptorUniformBuffers             uint32
-	MaxPerStageDescriptorStorageBuffers             uint32
-	MaxPerStageDescriptorSampledImages              uint32
-	MaxPerStageDescriptorStorageImages              uint32
-	MaxPerStageDescriptorInputAttachments           uint32
-	MaxPerStageResources                            uint32
-	MaxDescriptorSetSamplers                        uint32
-	MaxDescriptorSetUniformBuffers                  uint32
-	MaxDescriptorSetUniformBuffersDynamic           uint32
-	MaxDescriptorSetStorageBuffers                  uint32
-	MaxDescriptorSetStorageBuffersDynamic           uint32
-	MaxDescriptorSetSampledImages                   uint32
-	MaxDescriptorSetStorageImages                   uint32
-	MaxDescriptorSetInputAttachments                uint32
-	MaxVertexInputAttributes                        uint32
-	MaxVertexInputBindings                          uint32
-	MaxVertexInputAttributeOffset                   uint32
-	MaxVertexInputBindingStride                     uint32
-	MaxVertexOutputComponents                       uint32
-	MaxTessellationGenerationLevel                  uint32
-	MaxTessellationPatchSize                        uint32
-	MaxTessellationControlPerVertexInputComponents  uint32
-	MaxTessellationControlPerVertexOutputComponents uint32
-	MaxTessellationControlPerPatchOutputComponents  uint32
-	MaxTessellationControlTotalOutputComponents     uint32
-	MaxTessellationEvaluationInputComponents        uint32
-	MaxTessellationEvaluationOutputComponents       uint32
-	MaxGeometryShaderInvocations                    uint32
-	MaxGeometryInputComponents                      uint32
-	MaxGeometryOutputComponents                     uint32
-	MaxGeometryOutputVertices                       uint32
-	MaxGeometryTotalOutputComponents                uint32
-	MaxFragmentInputComponents                      uint32
-	MaxFragmentOutputAttachments                    uint32
-	MaxFragmentDualSrcAttachments                   uint32
-	MaxFragmentCombinedOutputResources              uint32
-	MaxComputeSharedMemorySize                      uint32
-	MaxComputeWorkGroupCount                        [3]uint32
-	MaxComputeWorkGroupInvocations                  uint32
-	MaxComputeWorkGroupSize                         [3]uint32
-	SubPixelPrecisionBits                           uint32
-	SubTexelPrecisionBits                           uint32
-	MipmapPrecisionBits                             uint32
-	MaxDrawIndexedIndexValue                        uint32
-	MaxDrawIndirectCount                            uint32
-	MaxSamplerLodBias                               float32
-	MaxSamplerAnisotropy                            float32
-	MaxViewports                                    uint32
-	MaxViewportDimensions                           [2]uint32
-	ViewportBoundsRange                             [2]float32
-	ViewportSubPixelBits                            uint32
-	MinMemoryMapAlignment                           uintptr
-	MinTexelBufferOffsetAlignment                   DeviceSize
-	MinUniformBufferOffsetAlignment                 DeviceSize
-	MinStorageBufferOffsetAlignment                 DeviceSize
-	MinTexelOffset                                  int32
-	MaxTexelOffset                                  uint32
-	MinTexelGatherOffset                            int32
-	MaxTexelGatherOffset                            uint32
-	MinInterpolationOffset                          float32
-	MaxInterpolationOffset                          float32
-	SubPixelInterpolationOffsetBits                 uint32
-	MaxFramebufferWidth                             uint32
-	MaxFramebufferHeight                            uint32
-	MaxFramebufferLayers                            uint32
-	FramebufferColorSampleCounts                    SampleCountFlags
-	FramebufferDepthSampleCounts                    SampleCountFlags
-	FramebufferStencilSampleCounts                  SampleCountFlags
-	FramebufferNoAttachmentsSampleCounts            SampleCountFlags
-	MaxColorAttachments                             uint32
-	SampledImageColorSampleCounts                   SampleCountFlags
-	SampledImageIntegerSampleCounts                 SampleCountFlags
-	SampledImageDepthSampleCounts                   SampleCountFlags
-	SampledImageStencilSampleCounts                 SampleCountFlags
-	StorageImageSampleCounts                        SampleCountFlags
-	MaxSampleMaskWords                              uint32
-	TimestampComputeAndGraphics                     Bool32
-	TimestampPeriod                                 float32
-	MaxClipDistances                                uint32
-	MaxCullDistances                                uint32
-	MaxCombinedClipAndCullDistances                 uint32
-	DiscreteQueuePriorities                         uint32
-	PointSizeRange                                  [2]float32
-	LineWidthRange                                  [2]float32
-	PointSizeGranularity                            float32
-	LineWidthGranularity                            float32
-	StrictLines                                     Bool32
-	StandardSampleLocations                         Bool32
-	OptimalBufferCopyOffsetAlignment                DeviceSize
-	OptimalBufferCopyRowPitchAlignment              DeviceSize
-	NonCoherentAtomSize                             DeviceSize
-}
-
 // VkSemaphoreCreateInfo
 type SemaphoreCreateInfo struct {
 	SType StructureType
@@ -1747,19 +1436,6 @@ type QueryPoolCreateInfo struct {
 	QueryType          QueryType
 	QueryCount         uint32
 	PipelineStatistics QueryPipelineStatisticFlags
-}
-
-// VkFramebufferCreateInfo
-type FramebufferCreateInfo struct {
-	SType           StructureType
-	PNext           *uintptr
-	Flags           FramebufferCreateFlags
-	RenderPass      RenderPass
-	AttachmentCount uint32
-	PAttachments    *ImageView
-	Width           uint32
-	Height          uint32
-	Layers          uint32
 }
 
 // VkDrawIndirectCommand
@@ -1823,22 +1499,10 @@ type DisplayPropertiesKHR struct {
 	PersistentContent    Bool32
 }
 
-// VkDisplayPlanePropertiesKHR
-type DisplayPlanePropertiesKHR struct {
-	CurrentDisplay    DisplayKHR
-	CurrentStackIndex uint32
-}
-
 // VkDisplayModeParametersKHR
 type DisplayModeParametersKHR struct {
 	VisibleRegion Extent2D
 	RefreshRate   uint32
-}
-
-// VkDisplayModePropertiesKHR
-type DisplayModePropertiesKHR struct {
-	DisplayMode DisplayModeKHR
-	Parameters  DisplayModeParametersKHR
 }
 
 // VkDisplayModeCreateInfoKHR
@@ -1860,20 +1524,6 @@ type DisplayPlaneCapabilitiesKHR struct {
 	MaxDstPosition Offset2D
 	MinDstExtent   Extent2D
 	MaxDstExtent   Extent2D
-}
-
-// VkDisplaySurfaceCreateInfoKHR
-type DisplaySurfaceCreateInfoKHR struct {
-	SType           StructureType
-	PNext           *uintptr
-	Flags           DisplaySurfaceCreateFlagsKHR
-	DisplayMode     DisplayModeKHR
-	PlaneIndex      uint32
-	PlaneStackIndex uint32
-	Transform       SurfaceTransformFlagBitsKHR
-	GlobalAlpha     float32
-	AlphaMode       DisplayPlaneAlphaFlagBitsKHR
-	ImageExtent     Extent2D
 }
 
 // VkDisplaySurfaceStereoCreateInfoNV
@@ -1998,28 +1648,6 @@ type SurfaceFormatKHR struct {
 	ColorSpace ColorSpaceKHR
 }
 
-// VkSwapchainCreateInfoKHR
-type SwapchainCreateInfoKHR struct {
-	SType                 StructureType
-	PNext                 *uintptr
-	Flags                 SwapchainCreateFlagsKHR
-	Surface               SurfaceKHR
-	MinImageCount         uint32
-	ImageFormat           Format
-	ImageColorSpace       ColorSpaceKHR
-	ImageExtent           Extent2D
-	ImageArrayLayers      uint32
-	ImageUsage            ImageUsageFlags
-	ImageSharingMode      SharingMode
-	QueueFamilyIndexCount uint32
-	PQueueFamilyIndices   *uint32
-	PreTransform          SurfaceTransformFlagBitsKHR
-	CompositeAlpha        CompositeAlphaFlagBitsKHR
-	PresentMode           PresentModeKHR
-	Clipped               Bool32
-	OldSwapchain          SwapchainKHR
-}
-
 // VkPresentInfoKHR
 type PresentInfoKHR struct {
 	SType              StructureType
@@ -2076,41 +1704,11 @@ type LayerSettingEXT struct {
 	PValues      *uintptr
 }
 
-// VkApplicationParametersEXT
-type ApplicationParametersEXT struct {
-	SType    StructureType
-	PNext    *uintptr
-	VendorID uint32
-	DeviceID uint32
-	Key      uint32
-	Value    uint64
-}
-
 // VkPipelineRasterizationStateRasterizationOrderAMD
 type PipelineRasterizationStateRasterizationOrderAMD struct {
 	SType              StructureType
 	PNext              *uintptr
 	RasterizationOrder RasterizationOrderAMD
-}
-
-// VkDebugMarkerObjectNameInfoEXT
-type DebugMarkerObjectNameInfoEXT struct {
-	SType       StructureType
-	PNext       *uintptr
-	ObjectType  DebugReportObjectTypeEXT
-	Object      uint64
-	PObjectName *byte
-}
-
-// VkDebugMarkerObjectTagInfoEXT
-type DebugMarkerObjectTagInfoEXT struct {
-	SType      StructureType
-	PNext      *uintptr
-	ObjectType DebugReportObjectTypeEXT
-	Object     uint64
-	TagName    uint64
-	TagSize    uintptr
-	PTag       *uintptr
 }
 
 // VkDebugMarkerMarkerInfoEXT
@@ -2141,14 +1739,6 @@ type DedicatedAllocationMemoryAllocateInfoNV struct {
 	PNext  *uintptr
 	Image  Image
 	Buffer Buffer
-}
-
-// VkExternalImageFormatPropertiesNV
-type ExternalImageFormatPropertiesNV struct {
-	ImageFormatProperties         ImageFormatProperties
-	ExternalMemoryFeatures        ExternalMemoryFeatureFlagsNV
-	ExportFromImportedHandleTypes ExternalMemoryHandleTypeFlagsNV
-	CompatibleHandleTypes         ExternalMemoryHandleTypeFlagsNV
 }
 
 // VkExternalMemoryImageCreateInfoNV
@@ -2194,14 +1784,6 @@ type ImportMemorySciBufInfoNV struct {
 	PNext      *uintptr
 	HandleType ExternalMemoryHandleTypeFlagBits
 	Handle     NvSciBufObj
-}
-
-// VkMemoryGetSciBufInfoNV
-type MemoryGetSciBufInfoNV struct {
-	SType      StructureType
-	PNext      *uintptr
-	Memory     DeviceMemory
-	HandleType ExternalMemoryHandleTypeFlagBits
 }
 
 // VkMemorySciBufPropertiesNV
@@ -2436,20 +2018,6 @@ type ClusterAccelerationStructureInputInfoNV struct {
 	OpInput                       ClusterAccelerationStructureOpInputNV
 }
 
-// VkClusterAccelerationStructureCommandsInfoNV
-type ClusterAccelerationStructureCommandsInfoNV struct {
-	SType                  StructureType
-	PNext                  *uintptr
-	Input                  ClusterAccelerationStructureInputInfoNV
-	DstImplicitData        DeviceAddress
-	ScratchData            DeviceAddress
-	DstAddressesArray      StridedDeviceAddressRegionKHR
-	DstSizesArray          StridedDeviceAddressRegionKHR
-	SrcInfosArray          StridedDeviceAddressRegionKHR
-	SrcInfosCount          DeviceAddress
-	AddressResolutionFlags ClusterAccelerationStructureAddressResolutionFlagsNV
-}
-
 // VkPhysicalDeviceMultiDrawPropertiesEXT
 type PhysicalDeviceMultiDrawPropertiesEXT struct {
 	SType             StructureType
@@ -2507,25 +2075,6 @@ type IndirectCommandsStreamNV struct {
 	Offset DeviceSize
 }
 
-// VkIndirectCommandsLayoutTokenNV
-type IndirectCommandsLayoutTokenNV struct {
-	SType                        StructureType
-	PNext                        *uintptr
-	TokenType                    IndirectCommandsTokenTypeNV
-	Stream                       uint32
-	Offset                       uint32
-	VertexBindingUnit            uint32
-	VertexDynamicStride          Bool32
-	PushconstantPipelineLayout   PipelineLayout
-	PushconstantShaderStageFlags ShaderStageFlags
-	PushconstantOffset           uint32
-	PushconstantSize             uint32
-	IndirectStateFlags           IndirectStateFlagsNV
-	IndexTypeCount               uint32
-	PIndexTypes                  *IndexType
-	PIndexTypeValues             *uint32
-}
-
 // VkIndirectCommandsLayoutCreateInfoNV
 type IndirectCommandsLayoutCreateInfoNV struct {
 	SType             StructureType
@@ -2536,43 +2085,6 @@ type IndirectCommandsLayoutCreateInfoNV struct {
 	PTokens           *IndirectCommandsLayoutTokenNV
 	StreamCount       uint32
 	PStreamStrides    *uint32
-}
-
-// VkGeneratedCommandsInfoNV
-type GeneratedCommandsInfoNV struct {
-	SType                  StructureType
-	PNext                  *uintptr
-	PipelineBindPoint      PipelineBindPoint
-	Pipeline               Pipeline
-	IndirectCommandsLayout IndirectCommandsLayoutNV
-	StreamCount            uint32
-	PStreams               *IndirectCommandsStreamNV
-	SequencesCount         uint32
-	PreprocessBuffer       Buffer
-	PreprocessOffset       DeviceSize
-	PreprocessSize         DeviceSize
-	SequencesCountBuffer   Buffer
-	SequencesCountOffset   DeviceSize
-	SequencesIndexBuffer   Buffer
-	SequencesIndexOffset   DeviceSize
-}
-
-// VkGeneratedCommandsMemoryRequirementsInfoNV
-type GeneratedCommandsMemoryRequirementsInfoNV struct {
-	SType                  StructureType
-	PNext                  *uintptr
-	PipelineBindPoint      PipelineBindPoint
-	Pipeline               Pipeline
-	IndirectCommandsLayout IndirectCommandsLayoutNV
-	MaxSequencesCount      uint32
-}
-
-// VkPipelineIndirectDeviceAddressInfoNV
-type PipelineIndirectDeviceAddressInfoNV struct {
-	SType             StructureType
-	PNext             *uintptr
-	PipelineBindPoint PipelineBindPoint
-	Pipeline          Pipeline
 }
 
 // VkBindPipelineIndirectCommandNV
@@ -2807,27 +2319,11 @@ type MemoryZirconHandlePropertiesFUCHSIA struct {
 	MemoryTypeBits uint32
 }
 
-// VkMemoryGetZirconHandleInfoFUCHSIA
-type MemoryGetZirconHandleInfoFUCHSIA struct {
-	SType      StructureType
-	PNext      *uintptr
-	Memory     DeviceMemory
-	HandleType ExternalMemoryHandleTypeFlagBits
-}
-
 // VkMemoryWin32HandlePropertiesKHR
 type MemoryWin32HandlePropertiesKHR struct {
 	SType          StructureType
 	PNext          *uintptr
 	MemoryTypeBits uint32
-}
-
-// VkMemoryGetWin32HandleInfoKHR
-type MemoryGetWin32HandleInfoKHR struct {
-	SType      StructureType
-	PNext      *uintptr
-	Memory     DeviceMemory
-	HandleType ExternalMemoryHandleTypeFlagBits
 }
 
 // VkImportMemoryFdInfoKHR
@@ -2843,14 +2339,6 @@ type MemoryFdPropertiesKHR struct {
 	SType          StructureType
 	PNext          *uintptr
 	MemoryTypeBits uint32
-}
-
-// VkMemoryGetFdInfoKHR
-type MemoryGetFdInfoKHR struct {
-	SType      StructureType
-	PNext      *uintptr
-	Memory     DeviceMemory
-	HandleType ExternalMemoryHandleTypeFlagBits
 }
 
 // VkWin32KeyedMutexAcquireReleaseInfoKHR
@@ -2879,14 +2367,6 @@ type MemoryMetalHandlePropertiesEXT struct {
 	SType          StructureType
 	PNext          *uintptr
 	MemoryTypeBits uint32
-}
-
-// VkMemoryGetMetalHandleInfoEXT
-type MemoryGetMetalHandleInfoEXT struct {
-	SType      StructureType
-	PNext      *uintptr
-	Memory     DeviceMemory
-	HandleType ExternalMemoryHandleTypeFlagBits
 }
 
 // VkPhysicalDeviceExternalSemaphoreInfo
@@ -2942,50 +2422,6 @@ type D3D12FenceSubmitInfoKHR struct {
 	PSignalSemaphoreValues     *uint64
 }
 
-// VkSemaphoreGetWin32HandleInfoKHR
-type SemaphoreGetWin32HandleInfoKHR struct {
-	SType      StructureType
-	PNext      *uintptr
-	Semaphore  Semaphore
-	HandleType ExternalSemaphoreHandleTypeFlagBits
-}
-
-// VkImportSemaphoreFdInfoKHR
-type ImportSemaphoreFdInfoKHR struct {
-	SType      StructureType
-	PNext      *uintptr
-	Semaphore  Semaphore
-	Flags      SemaphoreImportFlags
-	HandleType ExternalSemaphoreHandleTypeFlagBits
-	Fd         int32
-}
-
-// VkSemaphoreGetFdInfoKHR
-type SemaphoreGetFdInfoKHR struct {
-	SType      StructureType
-	PNext      *uintptr
-	Semaphore  Semaphore
-	HandleType ExternalSemaphoreHandleTypeFlagBits
-}
-
-// VkImportSemaphoreZirconHandleInfoFUCHSIA
-type ImportSemaphoreZirconHandleInfoFUCHSIA struct {
-	SType        StructureType
-	PNext        *uintptr
-	Semaphore    Semaphore
-	Flags        SemaphoreImportFlags
-	HandleType   ExternalSemaphoreHandleTypeFlagBits
-	ZirconHandle uint32
-}
-
-// VkSemaphoreGetZirconHandleInfoFUCHSIA
-type SemaphoreGetZirconHandleInfoFUCHSIA struct {
-	SType      StructureType
-	PNext      *uintptr
-	Semaphore  Semaphore
-	HandleType ExternalSemaphoreHandleTypeFlagBits
-}
-
 // VkPhysicalDeviceExternalFenceInfo
 type PhysicalDeviceExternalFenceInfo struct {
 	SType      StructureType
@@ -3029,32 +2465,6 @@ type ExportFenceWin32HandleInfoKHR struct {
 	Name        uintptr
 }
 
-// VkFenceGetWin32HandleInfoKHR
-type FenceGetWin32HandleInfoKHR struct {
-	SType      StructureType
-	PNext      *uintptr
-	Fence      Fence
-	HandleType ExternalFenceHandleTypeFlagBits
-}
-
-// VkImportFenceFdInfoKHR
-type ImportFenceFdInfoKHR struct {
-	SType      StructureType
-	PNext      *uintptr
-	Fence      Fence
-	Flags      FenceImportFlags
-	HandleType ExternalFenceHandleTypeFlagBits
-	Fd         int32
-}
-
-// VkFenceGetFdInfoKHR
-type FenceGetFdInfoKHR struct {
-	SType      StructureType
-	PNext      *uintptr
-	Fence      Fence
-	HandleType ExternalFenceHandleTypeFlagBits
-}
-
 // VkExportFenceSciSyncInfoNV
 type ExportFenceSciSyncInfoNV struct {
 	SType       StructureType
@@ -3071,14 +2481,6 @@ type ImportFenceSciSyncInfoNV struct {
 	Handle     *uintptr
 }
 
-// VkFenceGetSciSyncInfoNV
-type FenceGetSciSyncInfoNV struct {
-	SType      StructureType
-	PNext      *uintptr
-	Fence      Fence
-	HandleType ExternalFenceHandleTypeFlagBits
-}
-
 // VkExportSemaphoreSciSyncInfoNV
 type ExportSemaphoreSciSyncInfoNV struct {
 	SType       StructureType
@@ -3093,14 +2495,6 @@ type ImportSemaphoreSciSyncInfoNV struct {
 	Semaphore  Semaphore
 	HandleType ExternalSemaphoreHandleTypeFlagBits
 	Handle     *uintptr
-}
-
-// VkSemaphoreGetSciSyncInfoNV
-type SemaphoreGetSciSyncInfoNV struct {
-	SType      StructureType
-	PNext      *uintptr
-	Semaphore  Semaphore
-	HandleType ExternalSemaphoreHandleTypeFlagBits
 }
 
 // VkSciSyncAttributesInfoNV
@@ -3136,14 +2530,6 @@ type SemaphoreSciSyncPoolCreateInfoNV struct {
 	SType  StructureType
 	PNext  *uintptr
 	Handle NvSciSyncObj
-}
-
-// VkSemaphoreSciSyncCreateInfoNV
-type SemaphoreSciSyncCreateInfoNV struct {
-	SType         StructureType
-	PNext         *uintptr
-	SemaphorePool SemaphoreSciSyncPoolNV
-	PFence        *NvSciSyncFence
 }
 
 // VkDeviceSemaphoreSciSyncPoolReservationCreateInfoNV
@@ -3331,25 +2717,6 @@ type ImageSwapchainCreateInfoKHR struct {
 	Swapchain SwapchainKHR
 }
 
-// VkBindImageMemorySwapchainInfoKHR
-type BindImageMemorySwapchainInfoKHR struct {
-	SType      StructureType
-	PNext      *uintptr
-	Swapchain  SwapchainKHR
-	ImageIndex uint32
-}
-
-// VkAcquireNextImageInfoKHR
-type AcquireNextImageInfoKHR struct {
-	SType      StructureType
-	PNext      *uintptr
-	Swapchain  SwapchainKHR
-	Timeout    uint64
-	Semaphore  Semaphore
-	Fence      Fence
-	DeviceMask uint32
-}
-
 // VkDeviceGroupPresentInfoKHR
 type DeviceGroupPresentInfoKHR struct {
 	SType          StructureType
@@ -3382,20 +2749,6 @@ type DescriptorUpdateTemplateEntry struct {
 	DescriptorType  DescriptorType
 	Offset          uintptr
 	Stride          uintptr
-}
-
-// VkDescriptorUpdateTemplateCreateInfo
-type DescriptorUpdateTemplateCreateInfo struct {
-	SType                      StructureType
-	PNext                      *uintptr
-	Flags                      DescriptorUpdateTemplateCreateFlags
-	DescriptorUpdateEntryCount uint32
-	PDescriptorUpdateEntries   *DescriptorUpdateTemplateEntry
-	TemplateType               DescriptorUpdateTemplateType
-	DescriptorSetLayout        DescriptorSetLayout
-	PipelineBindPoint          PipelineBindPoint
-	PipelineLayout             PipelineLayout
-	Set                        uint32
 }
 
 // VkXYColorEXT
@@ -3492,20 +2845,6 @@ type SwapchainTimeDomainPropertiesEXT struct {
 	PTimeDomainIds  *uint64
 }
 
-// VkPresentStageTimeEXT
-type PresentStageTimeEXT struct {
-	Stage PresentStageFlagsEXT
-	Time  uint64
-}
-
-// VkPastPresentationTimingInfoEXT
-type PastPresentationTimingInfoEXT struct {
-	SType     StructureType
-	PNext     *uintptr
-	Flags     PastPresentationTimingFlagsEXT
-	Swapchain SwapchainKHR
-}
-
 // VkPastPresentationTimingPropertiesEXT
 type PastPresentationTimingPropertiesEXT struct {
 	SType                   StructureType
@@ -3516,45 +2855,12 @@ type PastPresentationTimingPropertiesEXT struct {
 	PPresentationTimings    *PastPresentationTimingEXT
 }
 
-// VkPastPresentationTimingEXT
-type PastPresentationTimingEXT struct {
-	SType             StructureType
-	PNext             *uintptr
-	PresentId         uint64
-	TargetTime        uint64
-	PresentStageCount uint32
-	PPresentStages    *PresentStageTimeEXT
-	TimeDomain        TimeDomainKHR
-	TimeDomainId      uint64
-	ReportComplete    Bool32
-}
-
 // VkPresentTimingsInfoEXT
 type PresentTimingsInfoEXT struct {
 	SType          StructureType
 	PNext          *uintptr
 	SwapchainCount uint32
 	PTimingInfos   *PresentTimingInfoEXT
-}
-
-// VkPresentTimingInfoEXT
-type PresentTimingInfoEXT struct {
-	SType                        StructureType
-	PNext                        *uintptr
-	Flags                        PresentTimingInfoFlagsEXT
-	TargetTime                   uint64
-	TimeDomainId                 uint64
-	PresentStageQueries          PresentStageFlagsEXT
-	TargetTimeDomainPresentStage PresentStageFlagsEXT
-}
-
-// VkSwapchainCalibratedTimestampInfoEXT
-type SwapchainCalibratedTimestampInfoEXT struct {
-	SType        StructureType
-	PNext        *uintptr
-	Swapchain    SwapchainKHR
-	PresentStage PresentStageFlagsEXT
-	TimeDomainId uint64
 }
 
 // VkHdrMetadataEXT
@@ -3598,27 +2904,12 @@ type RefreshCycleDurationGOOGLE struct {
 	RefreshDuration uint64
 }
 
-// VkPastPresentationTimingGOOGLE
-type PastPresentationTimingGOOGLE struct {
-	PresentID           uint32
-	DesiredPresentTime  uint64
-	ActualPresentTime   uint64
-	EarliestPresentTime uint64
-	PresentMargin       uint64
-}
-
 // VkPresentTimesInfoGOOGLE
 type PresentTimesInfoGOOGLE struct {
 	SType          StructureType
 	PNext          *uintptr
 	SwapchainCount uint32
 	PTimes         *PresentTimeGOOGLE
-}
-
-// VkPresentTimeGOOGLE
-type PresentTimeGOOGLE struct {
-	PresentID          uint32
-	DesiredPresentTime uint64
 }
 
 // VkIOSSurfaceCreateInfoMVK
@@ -3763,14 +3054,6 @@ type DisplayModeStereoPropertiesNV struct {
 	SType           StructureType
 	PNext           *uintptr
 	Hdmi3DSupported Bool32
-}
-
-// VkDisplayPlaneInfo2KHR
-type DisplayPlaneInfo2KHR struct {
-	SType      StructureType
-	PNext      *uintptr
-	Mode       DisplayModeKHR
-	PlaneIndex uint32
 }
 
 // VkDisplayPlaneCapabilities2KHR
@@ -3963,15 +3246,6 @@ type TextureLODGatherFormatPropertiesAMD struct {
 	SType                           StructureType
 	PNext                           *uintptr
 	SupportsTextureGatherLODBiasAMD Bool32
-}
-
-// VkConditionalRenderingBeginInfoEXT
-type ConditionalRenderingBeginInfoEXT struct {
-	SType  StructureType
-	PNext  *uintptr
-	Buffer Buffer
-	Offset DeviceSize
-	Flags  ConditionalRenderingFlagsEXT
 }
 
 // VkProtectedSubmitInfo
@@ -4194,14 +3468,6 @@ type ShaderModuleValidationCacheCreateInfoEXT struct {
 	SType           StructureType
 	PNext           *uintptr
 	ValidationCache ValidationCacheEXT
-}
-
-// VkPhysicalDeviceMaintenance3Properties
-type PhysicalDeviceMaintenance3Properties struct {
-	SType                   StructureType
-	PNext                   *uintptr
-	MaxPerSetDescriptors    uint32
-	MaxMemoryAllocationSize DeviceSize
 }
 
 // VkPhysicalDeviceMaintenance4Features
@@ -4480,26 +3746,6 @@ type QueueFamilyGlobalPriorityProperties struct {
 	Priorities    QueueGlobalPriority
 }
 
-// VkDebugUtilsObjectNameInfoEXT
-type DebugUtilsObjectNameInfoEXT struct {
-	SType        StructureType
-	PNext        *uintptr
-	ObjectType   ObjectType
-	ObjectHandle uint64
-	PObjectName  *byte
-}
-
-// VkDebugUtilsObjectTagInfoEXT
-type DebugUtilsObjectTagInfoEXT struct {
-	SType        StructureType
-	PNext        *uintptr
-	ObjectType   ObjectType
-	ObjectHandle uint64
-	TagName      uint64
-	TagSize      uintptr
-	PTag         *uintptr
-}
-
 // VkDebugUtilsLabelEXT
 type DebugUtilsLabelEXT struct {
 	SType      StructureType
@@ -4549,19 +3795,6 @@ type DeviceDeviceMemoryReportCreateInfoEXT struct {
 	Flags           DeviceMemoryReportFlagsEXT
 	PfnUserCallback uintptr
 	PUserData       *uintptr
-}
-
-// VkDeviceMemoryReportCallbackDataEXT
-type DeviceMemoryReportCallbackDataEXT struct {
-	SType          StructureType
-	PNext          *uintptr
-	Flags          DeviceMemoryReportFlagsEXT
-	Type           DeviceMemoryReportEventTypeEXT
-	MemoryObjectId uint64
-	Size           DeviceSize
-	ObjectType     ObjectType
-	ObjectHandle   uint64
-	HeapIndex      uint32
 }
 
 // VkImportMemoryHostPointerInfoEXT
@@ -4820,14 +4053,6 @@ type PhysicalDeviceTimelineSemaphoreProperties struct {
 	MaxTimelineSemaphoreValueDifference uint64
 }
 
-// VkSemaphoreTypeCreateInfo
-type SemaphoreTypeCreateInfo struct {
-	SType         StructureType
-	PNext         *uintptr
-	SemaphoreType SemaphoreType
-	InitialValue  uint64
-}
-
 // VkTimelineSemaphoreSubmitInfo
 type TimelineSemaphoreSubmitInfo struct {
 	SType                     StructureType
@@ -4909,33 +4134,11 @@ type AndroidHardwareBufferUsageANDROID struct {
 	AndroidHardwareBufferUsage uint64
 }
 
-// VkAndroidHardwareBufferPropertiesANDROID
-type AndroidHardwareBufferPropertiesANDROID struct {
-	SType          StructureType
-	PNext          *uintptr
-	AllocationSize DeviceSize
-	MemoryTypeBits uint32
-}
-
 // VkMemoryGetAndroidHardwareBufferInfoANDROID
 type MemoryGetAndroidHardwareBufferInfoANDROID struct {
 	SType  StructureType
 	PNext  *uintptr
 	Memory DeviceMemory
-}
-
-// VkAndroidHardwareBufferFormatPropertiesANDROID
-type AndroidHardwareBufferFormatPropertiesANDROID struct {
-	SType                            StructureType
-	PNext                            *uintptr
-	Format                           Format
-	ExternalFormat                   uint64
-	FormatFeatures                   FormatFeatureFlags
-	SamplerYcbcrConversionComponents ComponentMapping
-	SuggestedYcbcrModel              SamplerYcbcrModelConversion
-	SuggestedYcbcrRange              SamplerYcbcrRange
-	SuggestedXChromaOffset           ChromaLocation
-	SuggestedYChromaOffset           ChromaLocation
 }
 
 // VkCommandBufferInheritanceConditionalRenderingInfoEXT
@@ -5084,22 +4287,6 @@ type PhysicalDeviceTransformFeedbackFeaturesEXT struct {
 	PNext             *uintptr
 	TransformFeedback Bool32
 	GeometryStreams   Bool32
-}
-
-// VkPhysicalDeviceTransformFeedbackPropertiesEXT
-type PhysicalDeviceTransformFeedbackPropertiesEXT struct {
-	SType                                      StructureType
-	PNext                                      *uintptr
-	MaxTransformFeedbackStreams                uint32
-	MaxTransformFeedbackBuffers                uint32
-	MaxTransformFeedbackBufferSize             DeviceSize
-	MaxTransformFeedbackStreamDataSize         uint32
-	MaxTransformFeedbackBufferDataSize         uint32
-	MaxTransformFeedbackBufferDataStride       uint32
-	TransformFeedbackQueries                   Bool32
-	TransformFeedbackStreamsLinesTriangles     Bool32
-	TransformFeedbackRasterizationStreamSelect Bool32
-	TransformFeedbackDraw                      Bool32
 }
 
 // VkPipelineRasterizationStateStreamCreateInfoEXT
@@ -5383,56 +4570,6 @@ type RayTracingShaderGroupCreateInfoKHR struct {
 	PShaderGroupCaptureReplayHandle *uintptr
 }
 
-// VkRayTracingPipelineCreateInfoNV
-type RayTracingPipelineCreateInfoNV struct {
-	SType              StructureType
-	PNext              *uintptr
-	Flags              PipelineCreateFlags
-	StageCount         uint32
-	PStages            *PipelineShaderStageCreateInfo
-	GroupCount         uint32
-	PGroups            *RayTracingShaderGroupCreateInfoNV
-	MaxRecursionDepth  uint32
-	Layout             PipelineLayout
-	BasePipelineHandle Pipeline
-	BasePipelineIndex  int32
-}
-
-// VkRayTracingPipelineCreateInfoKHR
-type RayTracingPipelineCreateInfoKHR struct {
-	SType                        StructureType
-	PNext                        *uintptr
-	Flags                        PipelineCreateFlags
-	StageCount                   uint32
-	PStages                      *PipelineShaderStageCreateInfo
-	GroupCount                   uint32
-	PGroups                      *RayTracingShaderGroupCreateInfoKHR
-	MaxPipelineRayRecursionDepth uint32
-	PLibraryInfo                 *PipelineLibraryCreateInfoKHR
-	PLibraryInterface            *RayTracingPipelineInterfaceCreateInfoKHR
-	PDynamicState                *PipelineDynamicStateCreateInfo
-	Layout                       PipelineLayout
-	BasePipelineHandle           Pipeline
-	BasePipelineIndex            int32
-}
-
-// VkGeometryTrianglesNV
-type GeometryTrianglesNV struct {
-	SType           StructureType
-	PNext           *uintptr
-	VertexData      Buffer
-	VertexOffset    DeviceSize
-	VertexCount     uint32
-	VertexStride    DeviceSize
-	VertexFormat    Format
-	IndexData       Buffer
-	IndexOffset     DeviceSize
-	IndexCount      uint32
-	IndexType       IndexType
-	TransformData   Buffer
-	TransformOffset DeviceSize
-}
-
 // VkGeometryAABBNV
 type GeometryAABBNV struct {
 	SType    StructureType
@@ -5449,15 +4586,6 @@ type GeometryDataNV struct {
 	Aabbs     GeometryAABBNV
 }
 
-// VkGeometryNV
-type GeometryNV struct {
-	SType        StructureType
-	PNext        *uintptr
-	GeometryType GeometryTypeKHR
-	Geometry     GeometryDataNV
-	Flags        GeometryFlagsKHR
-}
-
 // VkAccelerationStructureInfoNV
 type AccelerationStructureInfoNV struct {
 	SType         StructureType
@@ -5467,14 +4595,6 @@ type AccelerationStructureInfoNV struct {
 	InstanceCount uint32
 	GeometryCount uint32
 	PGeometries   *GeometryNV
-}
-
-// VkAccelerationStructureCreateInfoNV
-type AccelerationStructureCreateInfoNV struct {
-	SType         StructureType
-	PNext         *uintptr
-	CompactedSize DeviceSize
-	Info          AccelerationStructureInfoNV
 }
 
 // VkBindAccelerationStructureMemoryInfoNV
@@ -5502,14 +4622,6 @@ type WriteDescriptorSetAccelerationStructureNV struct {
 	PNext                      *uintptr
 	AccelerationStructureCount uint32
 	PAccelerationStructures    *AccelerationStructureNV
-}
-
-// VkAccelerationStructureMemoryRequirementsInfoNV
-type AccelerationStructureMemoryRequirementsInfoNV struct {
-	SType                 StructureType
-	PNext                 *uintptr
-	Type                  AccelerationStructureMemoryRequirementsTypeNV
-	AccelerationStructure AccelerationStructureNV
 }
 
 // VkPhysicalDeviceAccelerationStructureFeaturesKHR
@@ -5541,20 +4653,6 @@ type PhysicalDeviceRayQueryFeaturesKHR struct {
 	RayQuery Bool32
 }
 
-// VkPhysicalDeviceAccelerationStructurePropertiesKHR
-type PhysicalDeviceAccelerationStructurePropertiesKHR struct {
-	SType                                                      StructureType
-	PNext                                                      *uintptr
-	MaxGeometryCount                                           uint64
-	MaxInstanceCount                                           uint64
-	MaxPrimitiveCount                                          uint64
-	MaxPerStageDescriptorAccelerationStructures                uint32
-	MaxPerStageDescriptorUpdateAfterBindAccelerationStructures uint32
-	MaxDescriptorSetAccelerationStructures                     uint32
-	MaxDescriptorSetUpdateAfterBindAccelerationStructures      uint32
-	MinAccelerationStructureScratchOffsetAlignment             uint32
-}
-
 // VkPhysicalDeviceRayTracingPipelinePropertiesKHR
 type PhysicalDeviceRayTracingPipelinePropertiesKHR struct {
 	SType                              StructureType
@@ -5569,20 +4667,6 @@ type PhysicalDeviceRayTracingPipelinePropertiesKHR struct {
 	MaxRayHitAttributeSize             uint32
 }
 
-// VkPhysicalDeviceRayTracingPropertiesNV
-type PhysicalDeviceRayTracingPropertiesNV struct {
-	SType                                  StructureType
-	PNext                                  *uintptr
-	ShaderGroupHandleSize                  uint32
-	MaxRecursionDepth                      uint32
-	MaxShaderGroupStride                   uint32
-	ShaderGroupBaseAlignment               uint32
-	MaxGeometryCount                       uint64
-	MaxInstanceCount                       uint64
-	MaxTriangleCount                       uint64
-	MaxDescriptorSetAccelerationStructures uint32
-}
-
 // VkStridedDeviceAddressRegionKHR
 type StridedDeviceAddressRegionKHR struct {
 	DeviceAddress DeviceAddress
@@ -5595,24 +4679,6 @@ type TraceRaysIndirectCommandKHR struct {
 	Width  uint32
 	Height uint32
 	Depth  uint32
-}
-
-// VkTraceRaysIndirectCommand2KHR
-type TraceRaysIndirectCommand2KHR struct {
-	RaygenShaderRecordAddress         DeviceAddress
-	RaygenShaderRecordSize            DeviceSize
-	MissShaderBindingTableAddress     DeviceAddress
-	MissShaderBindingTableSize        DeviceSize
-	MissShaderBindingTableStride      DeviceSize
-	HitShaderBindingTableAddress      DeviceAddress
-	HitShaderBindingTableSize         DeviceSize
-	HitShaderBindingTableStride       DeviceSize
-	CallableShaderBindingTableAddress DeviceAddress
-	CallableShaderBindingTableSize    DeviceSize
-	CallableShaderBindingTableStride  DeviceSize
-	Width                             uint32
-	Height                            uint32
-	Depth                             uint32
 }
 
 // VkPhysicalDeviceRayTracingMaintenance1FeaturesKHR
@@ -5636,16 +4702,6 @@ type DrmFormatModifierPropertiesEXT struct {
 	DrmFormatModifier               uint64
 	DrmFormatModifierPlaneCount     uint32
 	DrmFormatModifierTilingFeatures FormatFeatureFlags
-}
-
-// VkPhysicalDeviceImageDrmFormatModifierInfoEXT
-type PhysicalDeviceImageDrmFormatModifierInfoEXT struct {
-	SType                 StructureType
-	PNext                 *uintptr
-	DrmFormatModifier     uint64
-	SharingMode           SharingMode
-	QueueFamilyIndexCount uint32
-	PQueueFamilyIndices   *uint32
 }
 
 // VkImageDrmFormatModifierListCreateInfoEXT
@@ -5948,15 +5004,6 @@ type PhysicalDeviceYcbcrImageArraysFeaturesEXT struct {
 	YcbcrImageArrays Bool32
 }
 
-// VkImageViewHandleInfoNVX
-type ImageViewHandleInfoNVX struct {
-	SType          StructureType
-	PNext          *uintptr
-	ImageView      ImageView
-	DescriptorType DescriptorType
-	Sampler        Sampler
-}
-
 // VkImageViewAddressPropertiesNVX
 type ImageViewAddressPropertiesNVX struct {
 	SType         StructureType
@@ -5970,12 +5017,6 @@ type PresentFrameTokenGGP struct {
 	SType      StructureType
 	PNext      *uintptr
 	FrameToken GgpFrameToken
-}
-
-// VkPipelineCreationFeedback
-type PipelineCreationFeedback struct {
-	Flags    PipelineCreationFeedbackFlags
-	Duration uint64
 }
 
 // VkPipelineCreationFeedbackCreateInfo
@@ -6073,14 +5114,6 @@ type QueryPoolPerformanceCreateInfoKHR struct {
 	PCounterIndices   *uint32
 }
 
-// VkAcquireProfilingLockInfoKHR
-type AcquireProfilingLockInfoKHR struct {
-	SType   StructureType
-	PNext   *uintptr
-	Flags   AcquireProfilingLockFlagsKHR
-	Timeout uint64
-}
-
 // VkPerformanceQuerySubmitInfoKHR
 type PerformanceQuerySubmitInfoKHR struct {
 	SType            StructureType
@@ -6132,12 +5165,6 @@ type PhysicalDeviceShaderIntegerFunctions2FeaturesINTEL struct {
 	SType                   StructureType
 	PNext                   *uintptr
 	ShaderIntegerFunctions2 Bool32
-}
-
-// VkPerformanceValueINTEL
-type PerformanceValueINTEL struct {
-	Type PerformanceValueTypeINTEL
-	Data PerformanceValueDataINTEL
 }
 
 // VkInitializePerformanceApiInfoINTEL
@@ -6277,24 +5304,6 @@ type PipelineExecutablePropertiesKHR struct {
 	SubgroupSize uint32
 }
 
-// VkPipelineExecutableInfoKHR
-type PipelineExecutableInfoKHR struct {
-	SType           StructureType
-	PNext           *uintptr
-	Pipeline        Pipeline
-	ExecutableIndex uint32
-}
-
-// VkPipelineExecutableStatisticKHR
-type PipelineExecutableStatisticKHR struct {
-	SType       StructureType
-	PNext       *uintptr
-	Name        [256]byte
-	Description [256]byte
-	Format      PipelineExecutableStatisticFormatKHR
-	Value       PipelineExecutableStatisticValueKHR
-}
-
 // VkPipelineExecutableInternalRepresentationKHR
 type PipelineExecutableInternalRepresentationKHR struct {
 	SType       StructureType
@@ -6318,16 +5327,6 @@ type PhysicalDeviceTexelBufferAlignmentFeaturesEXT struct {
 	SType                StructureType
 	PNext                *uintptr
 	TexelBufferAlignment Bool32
-}
-
-// VkPhysicalDeviceTexelBufferAlignmentProperties
-type PhysicalDeviceTexelBufferAlignmentProperties struct {
-	SType                                        StructureType
-	PNext                                        *uintptr
-	StorageTexelBufferOffsetAlignmentBytes       DeviceSize
-	StorageTexelBufferOffsetSingleTexelAlignment Bool32
-	UniformTexelBufferOffsetAlignmentBytes       DeviceSize
-	UniformTexelBufferOffsetSingleTexelAlignment Bool32
 }
 
 // VkPhysicalDeviceSubgroupSizeControlFeatures
@@ -6355,29 +5354,11 @@ type PipelineShaderStageRequiredSubgroupSizeCreateInfo struct {
 	RequiredSubgroupSize uint32
 }
 
-// VkSubpassShadingPipelineCreateInfoHUAWEI
-type SubpassShadingPipelineCreateInfoHUAWEI struct {
-	SType      StructureType
-	PNext      *uintptr
-	RenderPass RenderPass
-	Subpass    uint32
-}
-
 // VkPhysicalDeviceSubpassShadingPropertiesHUAWEI
 type PhysicalDeviceSubpassShadingPropertiesHUAWEI struct {
 	SType                                     StructureType
 	PNext                                     *uintptr
 	MaxSubpassShadingWorkgroupSizeAspectRatio uint32
-}
-
-// VkPhysicalDeviceClusterCullingShaderPropertiesHUAWEI
-type PhysicalDeviceClusterCullingShaderPropertiesHUAWEI struct {
-	SType                         StructureType
-	PNext                         *uintptr
-	MaxWorkGroupCount             [3]uint32
-	MaxWorkGroupSize              [3]uint32
-	MaxOutputClusterCount         uint32
-	IndirectBufferOffsetAlignment DeviceSize
 }
 
 // VkMemoryOpaqueCaptureAddressAllocateInfo
@@ -6448,27 +5429,6 @@ type PhysicalDeviceVulkan11Features struct {
 	ShaderDrawParameters               Bool32
 }
 
-// VkPhysicalDeviceVulkan11Properties
-type PhysicalDeviceVulkan11Properties struct {
-	SType                             StructureType
-	PNext                             *uintptr
-	DeviceUUID                        [16]uint8
-	DriverUUID                        [16]uint8
-	DeviceLUID                        [8]uint8
-	DeviceNodeMask                    uint32
-	DeviceLUIDValid                   Bool32
-	SubgroupSize                      uint32
-	SubgroupSupportedStages           ShaderStageFlags
-	SubgroupSupportedOperations       SubgroupFeatureFlags
-	SubgroupQuadOperationsInAllStages Bool32
-	PointClippingBehavior             PointClippingBehavior
-	MaxMultiviewViewCount             uint32
-	MaxMultiviewInstanceIndex         uint32
-	ProtectedNoFault                  Bool32
-	MaxPerSetDescriptors              uint32
-	MaxMemoryAllocationSize           DeviceSize
-}
-
 // VkPhysicalDeviceVulkan12Features
 type PhysicalDeviceVulkan12Features struct {
 	SType                                              StructureType
@@ -6522,64 +5482,6 @@ type PhysicalDeviceVulkan12Features struct {
 	SubgroupBroadcastDynamicId                         Bool32
 }
 
-// VkPhysicalDeviceVulkan12Properties
-type PhysicalDeviceVulkan12Properties struct {
-	SType                                                StructureType
-	PNext                                                *uintptr
-	DriverID                                             DriverId
-	DriverName                                           [256]byte
-	DriverInfo                                           [256]byte
-	ConformanceVersion                                   ConformanceVersion
-	DenormBehaviorIndependence                           ShaderFloatControlsIndependence
-	RoundingModeIndependence                             ShaderFloatControlsIndependence
-	ShaderSignedZeroInfNanPreserveFloat16                Bool32
-	ShaderSignedZeroInfNanPreserveFloat32                Bool32
-	ShaderSignedZeroInfNanPreserveFloat64                Bool32
-	ShaderDenormPreserveFloat16                          Bool32
-	ShaderDenormPreserveFloat32                          Bool32
-	ShaderDenormPreserveFloat64                          Bool32
-	ShaderDenormFlushToZeroFloat16                       Bool32
-	ShaderDenormFlushToZeroFloat32                       Bool32
-	ShaderDenormFlushToZeroFloat64                       Bool32
-	ShaderRoundingModeRTEFloat16                         Bool32
-	ShaderRoundingModeRTEFloat32                         Bool32
-	ShaderRoundingModeRTEFloat64                         Bool32
-	ShaderRoundingModeRTZFloat16                         Bool32
-	ShaderRoundingModeRTZFloat32                         Bool32
-	ShaderRoundingModeRTZFloat64                         Bool32
-	MaxUpdateAfterBindDescriptorsInAllPools              uint32
-	ShaderUniformBufferArrayNonUniformIndexingNative     Bool32
-	ShaderSampledImageArrayNonUniformIndexingNative      Bool32
-	ShaderStorageBufferArrayNonUniformIndexingNative     Bool32
-	ShaderStorageImageArrayNonUniformIndexingNative      Bool32
-	ShaderInputAttachmentArrayNonUniformIndexingNative   Bool32
-	RobustBufferAccessUpdateAfterBind                    Bool32
-	QuadDivergentImplicitLod                             Bool32
-	MaxPerStageDescriptorUpdateAfterBindSamplers         uint32
-	MaxPerStageDescriptorUpdateAfterBindUniformBuffers   uint32
-	MaxPerStageDescriptorUpdateAfterBindStorageBuffers   uint32
-	MaxPerStageDescriptorUpdateAfterBindSampledImages    uint32
-	MaxPerStageDescriptorUpdateAfterBindStorageImages    uint32
-	MaxPerStageDescriptorUpdateAfterBindInputAttachments uint32
-	MaxPerStageUpdateAfterBindResources                  uint32
-	MaxDescriptorSetUpdateAfterBindSamplers              uint32
-	MaxDescriptorSetUpdateAfterBindUniformBuffers        uint32
-	MaxDescriptorSetUpdateAfterBindUniformBuffersDynamic uint32
-	MaxDescriptorSetUpdateAfterBindStorageBuffers        uint32
-	MaxDescriptorSetUpdateAfterBindStorageBuffersDynamic uint32
-	MaxDescriptorSetUpdateAfterBindSampledImages         uint32
-	MaxDescriptorSetUpdateAfterBindStorageImages         uint32
-	MaxDescriptorSetUpdateAfterBindInputAttachments      uint32
-	SupportedDepthResolveModes                           ResolveModeFlags
-	SupportedStencilResolveModes                         ResolveModeFlags
-	IndependentResolveNone                               Bool32
-	IndependentResolve                                   Bool32
-	FilterMinmaxSingleComponentFormats                   Bool32
-	FilterMinmaxImageComponentMapping                    Bool32
-	MaxTimelineSemaphoreValueDifference                  uint64
-	FramebufferIntegerColorSampleCounts                  SampleCountFlags
-}
-
 // VkPhysicalDeviceVulkan13Features
 type PhysicalDeviceVulkan13Features struct {
 	SType                                              StructureType
@@ -6599,57 +5501,6 @@ type PhysicalDeviceVulkan13Features struct {
 	DynamicRendering                                   Bool32
 	ShaderIntegerDotProduct                            Bool32
 	Maintenance4                                       Bool32
-}
-
-// VkPhysicalDeviceVulkan13Properties
-type PhysicalDeviceVulkan13Properties struct {
-	SType                                                                         StructureType
-	PNext                                                                         *uintptr
-	MinSubgroupSize                                                               uint32
-	MaxSubgroupSize                                                               uint32
-	MaxComputeWorkgroupSubgroups                                                  uint32
-	RequiredSubgroupSizeStages                                                    ShaderStageFlags
-	MaxInlineUniformBlockSize                                                     uint32
-	MaxPerStageDescriptorInlineUniformBlocks                                      uint32
-	MaxPerStageDescriptorUpdateAfterBindInlineUniformBlocks                       uint32
-	MaxDescriptorSetInlineUniformBlocks                                           uint32
-	MaxDescriptorSetUpdateAfterBindInlineUniformBlocks                            uint32
-	MaxInlineUniformTotalSize                                                     uint32
-	IntegerDotProduct8BitUnsignedAccelerated                                      Bool32
-	IntegerDotProduct8BitSignedAccelerated                                        Bool32
-	IntegerDotProduct8BitMixedSignednessAccelerated                               Bool32
-	IntegerDotProduct4x8BitPackedUnsignedAccelerated                              Bool32
-	IntegerDotProduct4x8BitPackedSignedAccelerated                                Bool32
-	IntegerDotProduct4x8BitPackedMixedSignednessAccelerated                       Bool32
-	IntegerDotProduct16BitUnsignedAccelerated                                     Bool32
-	IntegerDotProduct16BitSignedAccelerated                                       Bool32
-	IntegerDotProduct16BitMixedSignednessAccelerated                              Bool32
-	IntegerDotProduct32BitUnsignedAccelerated                                     Bool32
-	IntegerDotProduct32BitSignedAccelerated                                       Bool32
-	IntegerDotProduct32BitMixedSignednessAccelerated                              Bool32
-	IntegerDotProduct64BitUnsignedAccelerated                                     Bool32
-	IntegerDotProduct64BitSignedAccelerated                                       Bool32
-	IntegerDotProduct64BitMixedSignednessAccelerated                              Bool32
-	IntegerDotProductAccumulatingSaturating8BitUnsignedAccelerated                Bool32
-	IntegerDotProductAccumulatingSaturating8BitSignedAccelerated                  Bool32
-	IntegerDotProductAccumulatingSaturating8BitMixedSignednessAccelerated         Bool32
-	IntegerDotProductAccumulatingSaturating4x8BitPackedUnsignedAccelerated        Bool32
-	IntegerDotProductAccumulatingSaturating4x8BitPackedSignedAccelerated          Bool32
-	IntegerDotProductAccumulatingSaturating4x8BitPackedMixedSignednessAccelerated Bool32
-	IntegerDotProductAccumulatingSaturating16BitUnsignedAccelerated               Bool32
-	IntegerDotProductAccumulatingSaturating16BitSignedAccelerated                 Bool32
-	IntegerDotProductAccumulatingSaturating16BitMixedSignednessAccelerated        Bool32
-	IntegerDotProductAccumulatingSaturating32BitUnsignedAccelerated               Bool32
-	IntegerDotProductAccumulatingSaturating32BitSignedAccelerated                 Bool32
-	IntegerDotProductAccumulatingSaturating32BitMixedSignednessAccelerated        Bool32
-	IntegerDotProductAccumulatingSaturating64BitUnsignedAccelerated               Bool32
-	IntegerDotProductAccumulatingSaturating64BitSignedAccelerated                 Bool32
-	IntegerDotProductAccumulatingSaturating64BitMixedSignednessAccelerated        Bool32
-	StorageTexelBufferOffsetAlignmentBytes                                        DeviceSize
-	StorageTexelBufferOffsetSingleTexelAlignment                                  Bool32
-	UniformTexelBufferOffsetAlignmentBytes                                        DeviceSize
-	UniformTexelBufferOffsetSingleTexelAlignment                                  Bool32
-	MaxBufferSize                                                                 DeviceSize
 }
 
 // VkPhysicalDeviceVulkan14Features
@@ -6791,19 +5642,6 @@ type PhysicalDeviceBorderColorSwizzleFeaturesEXT struct {
 	BorderColorSwizzleFromImage Bool32
 }
 
-// VkAccelerationStructureGeometryTrianglesDataKHR
-type AccelerationStructureGeometryTrianglesDataKHR struct {
-	SType         StructureType
-	PNext         *uintptr
-	VertexFormat  Format
-	VertexData    DeviceOrHostAddressConstKHR
-	VertexStride  DeviceSize
-	MaxVertex     uint32
-	IndexType     IndexType
-	IndexData     DeviceOrHostAddressConstKHR
-	TransformData DeviceOrHostAddressConstKHR
-}
-
 // VkAccelerationStructureGeometryAabbsDataKHR
 type AccelerationStructureGeometryAabbsDataKHR struct {
 	SType  StructureType
@@ -6812,88 +5650,12 @@ type AccelerationStructureGeometryAabbsDataKHR struct {
 	Stride DeviceSize
 }
 
-// VkAccelerationStructureGeometryInstancesDataKHR
-type AccelerationStructureGeometryInstancesDataKHR struct {
-	SType           StructureType
-	PNext           *uintptr
-	ArrayOfPointers Bool32
-	Data            DeviceOrHostAddressConstKHR
-}
-
-// VkAccelerationStructureGeometryLinearSweptSpheresDataNV
-type AccelerationStructureGeometryLinearSweptSpheresDataNV struct {
-	SType        StructureType
-	PNext        *uintptr
-	VertexFormat Format
-	VertexData   DeviceOrHostAddressConstKHR
-	VertexStride DeviceSize
-	RadiusFormat Format
-	RadiusData   DeviceOrHostAddressConstKHR
-	RadiusStride DeviceSize
-	IndexType    IndexType
-	IndexData    DeviceOrHostAddressConstKHR
-	IndexStride  DeviceSize
-	IndexingMode RayTracingLssIndexingModeNV
-	EndCapsMode  RayTracingLssPrimitiveEndCapsModeNV
-}
-
-// VkAccelerationStructureGeometrySpheresDataNV
-type AccelerationStructureGeometrySpheresDataNV struct {
-	SType        StructureType
-	PNext        *uintptr
-	VertexFormat Format
-	VertexData   DeviceOrHostAddressConstKHR
-	VertexStride DeviceSize
-	RadiusFormat Format
-	RadiusData   DeviceOrHostAddressConstKHR
-	RadiusStride DeviceSize
-	IndexType    IndexType
-	IndexData    DeviceOrHostAddressConstKHR
-	IndexStride  DeviceSize
-}
-
-// VkAccelerationStructureGeometryKHR
-type AccelerationStructureGeometryKHR struct {
-	SType        StructureType
-	PNext        *uintptr
-	GeometryType GeometryTypeKHR
-	Geometry     AccelerationStructureGeometryDataKHR
-	Flags        GeometryFlagsKHR
-}
-
-// VkAccelerationStructureBuildGeometryInfoKHR
-type AccelerationStructureBuildGeometryInfoKHR struct {
-	SType                    StructureType
-	PNext                    *uintptr
-	Type                     AccelerationStructureTypeKHR
-	Flags                    BuildAccelerationStructureFlagsKHR
-	Mode                     BuildAccelerationStructureModeKHR
-	SrcAccelerationStructure AccelerationStructureKHR
-	DstAccelerationStructure AccelerationStructureKHR
-	GeometryCount            uint32
-	PGeometries              *AccelerationStructureGeometryKHR
-	PpGeometries             **AccelerationStructureGeometryKHR
-	ScratchData              DeviceOrHostAddressKHR
-}
-
 // VkAccelerationStructureBuildRangeInfoKHR
 type AccelerationStructureBuildRangeInfoKHR struct {
 	PrimitiveCount  uint32
 	PrimitiveOffset uint32
 	FirstVertex     uint32
 	TransformOffset uint32
-}
-
-// VkAccelerationStructureCreateInfoKHR
-type AccelerationStructureCreateInfoKHR struct {
-	SType         StructureType
-	PNext         *uintptr
-	CreateFlags   AccelerationStructureCreateFlagsKHR
-	Buffer        Buffer
-	Offset        DeviceSize
-	Size          DeviceSize
-	Type          AccelerationStructureTypeKHR
-	DeviceAddress DeviceAddress
 }
 
 // VkAabbPositionsKHR
@@ -6935,33 +5697,6 @@ type AccelerationStructureVersionInfoKHR struct {
 	PVersionData *uint8
 }
 
-// VkCopyAccelerationStructureInfoKHR
-type CopyAccelerationStructureInfoKHR struct {
-	SType StructureType
-	PNext *uintptr
-	Src   AccelerationStructureKHR
-	Dst   AccelerationStructureKHR
-	Mode  CopyAccelerationStructureModeKHR
-}
-
-// VkCopyAccelerationStructureToMemoryInfoKHR
-type CopyAccelerationStructureToMemoryInfoKHR struct {
-	SType StructureType
-	PNext *uintptr
-	Src   AccelerationStructureKHR
-	Dst   DeviceOrHostAddressKHR
-	Mode  CopyAccelerationStructureModeKHR
-}
-
-// VkCopyMemoryToAccelerationStructureInfoKHR
-type CopyMemoryToAccelerationStructureInfoKHR struct {
-	SType StructureType
-	PNext *uintptr
-	Src   DeviceOrHostAddressConstKHR
-	Dst   AccelerationStructureKHR
-	Mode  CopyAccelerationStructureModeKHR
-}
-
 // VkRayTracingPipelineInterfaceCreateInfoKHR
 type RayTracingPipelineInterfaceCreateInfoKHR struct {
 	SType                          StructureType
@@ -6976,13 +5711,6 @@ type PipelineLibraryCreateInfoKHR struct {
 	PNext        *uintptr
 	LibraryCount uint32
 	PLibraries   *Pipeline
-}
-
-// VkRefreshObjectKHR
-type RefreshObjectKHR struct {
-	ObjectType   ObjectType
-	ObjectHandle uint64
-	Flags        RefreshObjectFlagsKHR
 }
 
 // VkRefreshObjectListKHR
@@ -7122,19 +5850,6 @@ type PartitionedAccelerationStructureFlagsNV struct {
 	EnablePartitionTranslation Bool32
 }
 
-// VkPartitionedAccelerationStructureWriteInstanceDataNV
-type PartitionedAccelerationStructureWriteInstanceDataNV struct {
-	Transform                           TransformMatrixKHR
-	ExplicitAABB                        [6]float32
-	InstanceID                          uint32
-	InstanceMask                        uint32
-	InstanceContributionToHitGroupIndex uint32
-	InstanceFlags                       PartitionedAccelerationStructureInstanceFlagsNV
-	InstanceIndex                       uint32
-	PartitionIndex                      uint32
-	AccelerationStructure               DeviceAddress
-}
-
 // VkPartitionedAccelerationStructureUpdateInstanceDataNV
 type PartitionedAccelerationStructureUpdateInstanceDataNV struct {
 	InstanceIndex                       uint32
@@ -7167,18 +5882,6 @@ type PartitionedAccelerationStructureInstancesInputNV struct {
 	MaxInstanceInGlobalPartitionCount uint32
 }
 
-// VkBuildPartitionedAccelerationStructureInfoNV
-type BuildPartitionedAccelerationStructureInfoNV struct {
-	SType                        StructureType
-	PNext                        *uintptr
-	Input                        PartitionedAccelerationStructureInstancesInputNV
-	SrcAccelerationStructureData DeviceAddress
-	DstAccelerationStructureData DeviceAddress
-	ScratchData                  DeviceAddress
-	SrcInfos                     DeviceAddress
-	SrcInfosCount                DeviceAddress
-}
-
 // VkPhysicalDeviceDiagnosticsConfigFeaturesNV
 type PhysicalDeviceDiagnosticsConfigFeaturesNV struct {
 	SType             StructureType
@@ -7191,15 +5894,6 @@ type DeviceDiagnosticsConfigCreateInfoNV struct {
 	SType StructureType
 	PNext *uintptr
 	Flags DeviceDiagnosticsConfigFlagsNV
-}
-
-// VkPipelineOfflineCreateInfo
-type PipelineOfflineCreateInfo struct {
-	SType              StructureType
-	PNext              *uintptr
-	PipelineIdentifier [16]uint8
-	MatchControl       PipelineMatchControl
-	PoolEntrySize      DeviceSize
 }
 
 // VkPhysicalDeviceZeroInitializeWorkgroupMemoryFeatures
@@ -7369,65 +6063,6 @@ type CopyBufferInfo2 struct {
 	DstBuffer   Buffer
 	RegionCount uint32
 	PRegions    *BufferCopy2
-}
-
-// VkCopyImageInfo2
-type CopyImageInfo2 struct {
-	SType          StructureType
-	PNext          *uintptr
-	SrcImage       Image
-	SrcImageLayout ImageLayout
-	DstImage       Image
-	DstImageLayout ImageLayout
-	RegionCount    uint32
-	PRegions       *ImageCopy2
-}
-
-// VkBlitImageInfo2
-type BlitImageInfo2 struct {
-	SType          StructureType
-	PNext          *uintptr
-	SrcImage       Image
-	SrcImageLayout ImageLayout
-	DstImage       Image
-	DstImageLayout ImageLayout
-	RegionCount    uint32
-	PRegions       *ImageBlit2
-	Filter         Filter
-}
-
-// VkCopyBufferToImageInfo2
-type CopyBufferToImageInfo2 struct {
-	SType          StructureType
-	PNext          *uintptr
-	SrcBuffer      Buffer
-	DstImage       Image
-	DstImageLayout ImageLayout
-	RegionCount    uint32
-	PRegions       *BufferImageCopy2
-}
-
-// VkCopyImageToBufferInfo2
-type CopyImageToBufferInfo2 struct {
-	SType          StructureType
-	PNext          *uintptr
-	SrcImage       Image
-	SrcImageLayout ImageLayout
-	DstBuffer      Buffer
-	RegionCount    uint32
-	PRegions       *BufferImageCopy2
-}
-
-// VkResolveImageInfo2
-type ResolveImageInfo2 struct {
-	SType          StructureType
-	PNext          *uintptr
-	SrcImage       Image
-	SrcImageLayout ImageLayout
-	DstImage       Image
-	DstImageLayout ImageLayout
-	RegionCount    uint32
-	PRegions       *ImageResolve2
 }
 
 // VkPhysicalDeviceShaderImageAtomicInt64FeaturesEXT
@@ -7681,14 +6316,6 @@ type GeneratedCommandsMemoryRequirementsInfoEXT struct {
 	MaxDrawCount           uint32
 }
 
-// VkIndirectExecutionSetPipelineInfoEXT
-type IndirectExecutionSetPipelineInfoEXT struct {
-	SType            StructureType
-	PNext            *uintptr
-	InitialPipeline  Pipeline
-	MaxPipelineCount uint32
-}
-
 // VkIndirectExecutionSetShaderLayoutInfoEXT
 type IndirectExecutionSetShaderLayoutInfoEXT struct {
 	SType          StructureType
@@ -7715,50 +6342,6 @@ type IndirectExecutionSetCreateInfoEXT struct {
 	PNext *uintptr
 	Type  IndirectExecutionSetInfoTypeEXT
 	Info  IndirectExecutionSetInfoEXT
-}
-
-// VkGeneratedCommandsInfoEXT
-type GeneratedCommandsInfoEXT struct {
-	SType                  StructureType
-	PNext                  *uintptr
-	ShaderStages           ShaderStageFlags
-	IndirectExecutionSet   IndirectExecutionSetEXT
-	IndirectCommandsLayout IndirectCommandsLayoutEXT
-	IndirectAddress        DeviceAddress
-	IndirectAddressSize    DeviceSize
-	PreprocessAddress      DeviceAddress
-	PreprocessSize         DeviceSize
-	MaxSequenceCount       uint32
-	SequenceCountAddress   DeviceAddress
-	MaxDrawCount           uint32
-}
-
-// VkWriteIndirectExecutionSetPipelineEXT
-type WriteIndirectExecutionSetPipelineEXT struct {
-	SType    StructureType
-	PNext    *uintptr
-	Index    uint32
-	Pipeline Pipeline
-}
-
-// VkWriteIndirectExecutionSetShaderEXT
-type WriteIndirectExecutionSetShaderEXT struct {
-	SType  StructureType
-	PNext  *uintptr
-	Index  uint32
-	Shader ShaderEXT
-}
-
-// VkIndirectCommandsLayoutCreateInfoEXT
-type IndirectCommandsLayoutCreateInfoEXT struct {
-	SType          StructureType
-	PNext          *uintptr
-	Flags          IndirectCommandsLayoutUsageFlagsEXT
-	ShaderStages   ShaderStageFlags
-	IndirectStride uint32
-	PipelineLayout PipelineLayout
-	TokenCount     uint32
-	PTokens        *IndirectCommandsLayoutTokenEXT
 }
 
 // VkIndirectCommandsLayoutTokenEXT
@@ -7900,22 +6483,6 @@ type MemoryBarrier2 struct {
 	DstAccessMask AccessFlags2
 }
 
-// VkImageMemoryBarrier2
-type ImageMemoryBarrier2 struct {
-	SType               StructureType
-	PNext               *uintptr
-	SrcStageMask        PipelineStageFlags2
-	SrcAccessMask       AccessFlags2
-	DstStageMask        PipelineStageFlags2
-	DstAccessMask       AccessFlags2
-	OldLayout           ImageLayout
-	NewLayout           ImageLayout
-	SrcQueueFamilyIndex uint32
-	DstQueueFamilyIndex uint32
-	Image               Image
-	SubresourceRange    ImageSubresourceRange
-}
-
 // VkBufferMemoryBarrier2
 type BufferMemoryBarrier2 struct {
 	SType               StructureType
@@ -7952,16 +6519,6 @@ type DependencyInfo struct {
 	PImageMemoryBarriers     *ImageMemoryBarrier2
 }
 
-// VkSemaphoreSubmitInfo
-type SemaphoreSubmitInfo struct {
-	SType       StructureType
-	PNext       *uintptr
-	Semaphore   Semaphore
-	Value       uint64
-	StageMask   PipelineStageFlags2
-	DeviceIndex uint32
-}
-
 // VkCommandBufferSubmitInfo
 type CommandBufferSubmitInfo struct {
 	SType         StructureType
@@ -7988,14 +6545,6 @@ type QueueFamilyCheckpointProperties2NV struct {
 	SType                        StructureType
 	PNext                        *uintptr
 	CheckpointExecutionStageMask PipelineStageFlags2
-}
-
-// VkCheckpointData2NV
-type CheckpointData2NV struct {
-	SType             StructureType
-	PNext             *uintptr
-	Stage             PipelineStageFlags2
-	PCheckpointMarker *uintptr
 }
 
 // VkPhysicalDeviceSynchronization2Features
@@ -8056,51 +6605,6 @@ type ImageToMemoryCopy struct {
 	ImageExtent       Extent3D
 }
 
-// VkCopyMemoryToImageInfo
-type CopyMemoryToImageInfo struct {
-	SType          StructureType
-	PNext          *uintptr
-	Flags          HostImageCopyFlags
-	DstImage       Image
-	DstImageLayout ImageLayout
-	RegionCount    uint32
-	PRegions       *MemoryToImageCopy
-}
-
-// VkCopyImageToMemoryInfo
-type CopyImageToMemoryInfo struct {
-	SType          StructureType
-	PNext          *uintptr
-	Flags          HostImageCopyFlags
-	SrcImage       Image
-	SrcImageLayout ImageLayout
-	RegionCount    uint32
-	PRegions       *ImageToMemoryCopy
-}
-
-// VkCopyImageToImageInfo
-type CopyImageToImageInfo struct {
-	SType          StructureType
-	PNext          *uintptr
-	Flags          HostImageCopyFlags
-	SrcImage       Image
-	SrcImageLayout ImageLayout
-	DstImage       Image
-	DstImageLayout ImageLayout
-	RegionCount    uint32
-	PRegions       *ImageCopy2
-}
-
-// VkHostImageLayoutTransitionInfo
-type HostImageLayoutTransitionInfo struct {
-	SType            StructureType
-	PNext            *uintptr
-	Image            Image
-	OldLayout        ImageLayout
-	NewLayout        ImageLayout
-	SubresourceRange ImageSubresourceRange
-}
-
 // VkSubresourceHostMemcpySize
 type SubresourceHostMemcpySize struct {
 	SType StructureType
@@ -8114,38 +6618,6 @@ type HostImageCopyDevicePerformanceQuery struct {
 	PNext                 *uintptr
 	OptimalDeviceAccess   Bool32
 	IdenticalMemoryLayout Bool32
-}
-
-// VkPhysicalDeviceVulkanSC10Properties
-type PhysicalDeviceVulkanSC10Properties struct {
-	SType                                            StructureType
-	PNext                                            *uintptr
-	DeviceNoDynamicHostAllocations                   Bool32
-	DeviceDestroyFreesMemory                         Bool32
-	CommandPoolMultipleCommandBuffersRecording       Bool32
-	CommandPoolResetCommandBuffer                    Bool32
-	CommandBufferSimultaneousUse                     Bool32
-	SecondaryCommandBufferNullOrImagelessFramebuffer Bool32
-	RecycleDescriptorSetMemory                       Bool32
-	RecyclePipelineMemory                            Bool32
-	MaxRenderPassSubpasses                           uint32
-	MaxRenderPassDependencies                        uint32
-	MaxSubpassInputAttachments                       uint32
-	MaxSubpassPreserveAttachments                    uint32
-	MaxFramebufferAttachments                        uint32
-	MaxDescriptorSetLayoutBindings                   uint32
-	MaxQueryFaultCount                               uint32
-	MaxCallbackFaultCount                            uint32
-	MaxCommandPoolCommandBuffers                     uint32
-	MaxCommandBufferSize                             DeviceSize
-}
-
-// VkPipelinePoolSize
-type PipelinePoolSize struct {
-	SType          StructureType
-	PNext          *uintptr
-	PoolEntrySize  DeviceSize
-	PoolEntryCount uint32
 }
 
 // VkDeviceObjectReservationCreateInfo
@@ -8193,14 +6665,6 @@ type DeviceObjectReservationCreateInfo struct {
 	MaxPipelineStatisticsQueriesPerPool        uint32
 	MaxTimestampQueriesPerPool                 uint32
 	MaxImmutableSamplersPerDescriptorSetLayout uint32
-}
-
-// VkCommandPoolMemoryReservationCreateInfo
-type CommandPoolMemoryReservationCreateInfo struct {
-	SType                        StructureType
-	PNext                        *uintptr
-	CommandPoolReservedSize      DeviceSize
-	CommandPoolMaxCommandBuffers uint32
 }
 
 // VkCommandPoolMemoryConsumption
@@ -8381,49 +6845,6 @@ type VideoProfileInfoKHR struct {
 	ChromaBitDepth      VideoComponentBitDepthFlagsKHR
 }
 
-// VkVideoCapabilitiesKHR
-type VideoCapabilitiesKHR struct {
-	SType                             StructureType
-	PNext                             *uintptr
-	Flags                             VideoCapabilityFlagsKHR
-	MinBitstreamBufferOffsetAlignment DeviceSize
-	MinBitstreamBufferSizeAlignment   DeviceSize
-	PictureAccessGranularity          Extent2D
-	MinCodedExtent                    Extent2D
-	MaxCodedExtent                    Extent2D
-	MaxDpbSlots                       uint32
-	MaxActiveReferencePictures        uint32
-	StdHeaderVersion                  ExtensionProperties
-}
-
-// VkVideoSessionMemoryRequirementsKHR
-type VideoSessionMemoryRequirementsKHR struct {
-	SType              StructureType
-	PNext              *uintptr
-	MemoryBindIndex    uint32
-	MemoryRequirements MemoryRequirements
-}
-
-// VkBindVideoSessionMemoryInfoKHR
-type BindVideoSessionMemoryInfoKHR struct {
-	SType           StructureType
-	PNext           *uintptr
-	MemoryBindIndex uint32
-	Memory          DeviceMemory
-	MemoryOffset    DeviceSize
-	MemorySize      DeviceSize
-}
-
-// VkVideoPictureResourceInfoKHR
-type VideoPictureResourceInfoKHR struct {
-	SType            StructureType
-	PNext            *uintptr
-	CodedOffset      Offset2D
-	CodedExtent      Extent2D
-	BaseArrayLayer   uint32
-	ImageViewBinding ImageView
-}
-
 // VkVideoReferenceSlotInfoKHR
 type VideoReferenceSlotInfoKHR struct {
 	SType            StructureType
@@ -8444,20 +6865,6 @@ type VideoDecodeUsageInfoKHR struct {
 	SType           StructureType
 	PNext           *uintptr
 	VideoUsageHints VideoDecodeUsageFlagsKHR
-}
-
-// VkVideoDecodeInfoKHR
-type VideoDecodeInfoKHR struct {
-	SType               StructureType
-	PNext               *uintptr
-	Flags               VideoDecodeFlagsKHR
-	SrcBuffer           Buffer
-	SrcBufferOffset     DeviceSize
-	SrcBufferRange      DeviceSize
-	DstPictureResource  VideoPictureResourceInfoKHR
-	PSetupReferenceSlot *VideoReferenceSlotInfoKHR
-	ReferenceSlotCount  uint32
-	PReferenceSlots     *VideoReferenceSlotInfoKHR
 }
 
 // VkPhysicalDeviceVideoMaintenance1FeaturesKHR
@@ -8698,15 +7105,6 @@ type VideoSessionCreateInfoKHR struct {
 	PStdHeaderVersion          *ExtensionProperties
 }
 
-// VkVideoSessionParametersCreateInfoKHR
-type VideoSessionParametersCreateInfoKHR struct {
-	SType                          StructureType
-	PNext                          *uintptr
-	Flags                          VideoSessionParametersCreateFlagsKHR
-	VideoSessionParametersTemplate VideoSessionParametersKHR
-	VideoSession                   VideoSessionKHR
-}
-
 // VkVideoSessionParametersUpdateInfoKHR
 type VideoSessionParametersUpdateInfoKHR struct {
 	SType               StructureType
@@ -8726,17 +7124,6 @@ type VideoEncodeSessionParametersFeedbackInfoKHR struct {
 	SType        StructureType
 	PNext        *uintptr
 	HasOverrides Bool32
-}
-
-// VkVideoBeginCodingInfoKHR
-type VideoBeginCodingInfoKHR struct {
-	SType                  StructureType
-	PNext                  *uintptr
-	Flags                  VideoBeginCodingFlagsKHR
-	VideoSession           VideoSessionKHR
-	VideoSessionParameters VideoSessionParametersKHR
-	ReferenceSlotCount     uint32
-	PReferenceSlots        *VideoReferenceSlotInfoKHR
 }
 
 // VkVideoEndCodingInfoKHR
@@ -8760,21 +7147,6 @@ type VideoEncodeUsageInfoKHR struct {
 	VideoUsageHints   VideoEncodeUsageFlagsKHR
 	VideoContentHints VideoEncodeContentFlagsKHR
 	TuningMode        VideoEncodeTuningModeKHR
-}
-
-// VkVideoEncodeInfoKHR
-type VideoEncodeInfoKHR struct {
-	SType                           StructureType
-	PNext                           *uintptr
-	Flags                           VideoEncodeFlagsKHR
-	DstBuffer                       Buffer
-	DstBufferOffset                 DeviceSize
-	DstBufferRange                  DeviceSize
-	SrcPictureResource              VideoPictureResourceInfoKHR
-	PSetupReferenceSlot             *VideoReferenceSlotInfoKHR
-	ReferenceSlotCount              uint32
-	PReferenceSlots                 *VideoReferenceSlotInfoKHR
-	PrecedingExternallyEncodedBytes uint32
 }
 
 // VkVideoEncodeQuantizationMapInfoKHR
@@ -8849,19 +7221,6 @@ type VideoEncodeRateControlLayerInfoKHR struct {
 	MaxBitrate           uint64
 	FrameRateNumerator   uint32
 	FrameRateDenominator uint32
-}
-
-// VkVideoEncodeCapabilitiesKHR
-type VideoEncodeCapabilitiesKHR struct {
-	SType                         StructureType
-	PNext                         *uintptr
-	Flags                         VideoEncodeCapabilityFlagsKHR
-	RateControlModes              VideoEncodeRateControlModeFlagsKHR
-	MaxRateControlLayers          uint32
-	MaxBitrate                    uint64
-	MaxQualityLevels              uint32
-	EncodeInputPictureGranularity Extent2D
-	SupportedEncodeFeedbackFlags  VideoEncodeFeedbackFlagsKHR
 }
 
 // VkVideoEncodeH264CapabilitiesKHR
@@ -9438,32 +7797,6 @@ type CuModuleTexturingModeCreateInfoNVX struct {
 	Use64bitTexturing Bool32
 }
 
-// VkCuFunctionCreateInfoNVX
-type CuFunctionCreateInfoNVX struct {
-	SType  StructureType
-	PNext  *uintptr
-	Module CuModuleNVX
-	PName  *byte
-}
-
-// VkCuLaunchInfoNVX
-type CuLaunchInfoNVX struct {
-	SType          StructureType
-	PNext          *uintptr
-	Function       CuFunctionNVX
-	GridDimX       uint32
-	GridDimY       uint32
-	GridDimZ       uint32
-	BlockDimX      uint32
-	BlockDimY      uint32
-	BlockDimZ      uint32
-	SharedMemBytes uint32
-	ParamCount     uintptr
-	PParams        *uintptr
-	ExtraCount     uintptr
-	PExtras        *uintptr
-}
-
 // VkPhysicalDeviceDescriptorBufferFeaturesEXT
 type PhysicalDeviceDescriptorBufferFeaturesEXT struct {
 	SType                              StructureType
@@ -9474,45 +7807,6 @@ type PhysicalDeviceDescriptorBufferFeaturesEXT struct {
 	DescriptorBufferPushDescriptors    Bool32
 }
 
-// VkPhysicalDeviceDescriptorBufferPropertiesEXT
-type PhysicalDeviceDescriptorBufferPropertiesEXT struct {
-	SType                                                StructureType
-	PNext                                                *uintptr
-	CombinedImageSamplerDescriptorSingleArray            Bool32
-	BufferlessPushDescriptors                            Bool32
-	AllowSamplerImageViewPostSubmitCreation              Bool32
-	DescriptorBufferOffsetAlignment                      DeviceSize
-	MaxDescriptorBufferBindings                          uint32
-	MaxResourceDescriptorBufferBindings                  uint32
-	MaxSamplerDescriptorBufferBindings                   uint32
-	MaxEmbeddedImmutableSamplerBindings                  uint32
-	MaxEmbeddedImmutableSamplers                         uint32
-	BufferCaptureReplayDescriptorDataSize                uintptr
-	ImageCaptureReplayDescriptorDataSize                 uintptr
-	ImageViewCaptureReplayDescriptorDataSize             uintptr
-	SamplerCaptureReplayDescriptorDataSize               uintptr
-	AccelerationStructureCaptureReplayDescriptorDataSize uintptr
-	SamplerDescriptorSize                                uintptr
-	CombinedImageSamplerDescriptorSize                   uintptr
-	SampledImageDescriptorSize                           uintptr
-	StorageImageDescriptorSize                           uintptr
-	UniformTexelBufferDescriptorSize                     uintptr
-	RobustUniformTexelBufferDescriptorSize               uintptr
-	StorageTexelBufferDescriptorSize                     uintptr
-	RobustStorageTexelBufferDescriptorSize               uintptr
-	UniformBufferDescriptorSize                          uintptr
-	RobustUniformBufferDescriptorSize                    uintptr
-	StorageBufferDescriptorSize                          uintptr
-	RobustStorageBufferDescriptorSize                    uintptr
-	InputAttachmentDescriptorSize                        uintptr
-	AccelerationStructureDescriptorSize                  uintptr
-	MaxSamplerDescriptorBufferRange                      DeviceSize
-	MaxResourceDescriptorBufferRange                     DeviceSize
-	SamplerDescriptorBufferAddressSpaceSize              DeviceSize
-	ResourceDescriptorBufferAddressSpaceSize             DeviceSize
-	DescriptorBufferAddressSpaceSize                     DeviceSize
-}
-
 // VkPhysicalDeviceDescriptorBufferDensityMapPropertiesEXT
 type PhysicalDeviceDescriptorBufferDensityMapPropertiesEXT struct {
 	SType                                        StructureType
@@ -9520,36 +7814,11 @@ type PhysicalDeviceDescriptorBufferDensityMapPropertiesEXT struct {
 	CombinedImageSamplerDensityMapDescriptorSize uintptr
 }
 
-// VkDescriptorAddressInfoEXT
-type DescriptorAddressInfoEXT struct {
-	SType   StructureType
-	PNext   *uintptr
-	Address DeviceAddress
-	Range   DeviceSize
-	Format  Format
-}
-
-// VkDescriptorBufferBindingInfoEXT
-type DescriptorBufferBindingInfoEXT struct {
-	SType   StructureType
-	PNext   *uintptr
-	Address DeviceAddress
-	Usage   BufferUsageFlags
-}
-
 // VkDescriptorBufferBindingPushDescriptorBufferHandleEXT
 type DescriptorBufferBindingPushDescriptorBufferHandleEXT struct {
 	SType  StructureType
 	PNext  *uintptr
 	Buffer Buffer
-}
-
-// VkDescriptorGetInfoEXT
-type DescriptorGetInfoEXT struct {
-	SType StructureType
-	PNext *uintptr
-	Type  DescriptorType
-	Data  DescriptorDataEXT
 }
 
 // VkBufferCaptureDescriptorDataInfoEXT
@@ -9760,60 +8029,11 @@ type AccelerationStructureMotionInstanceNV struct {
 	Data  AccelerationStructureMotionInstanceDataNV
 }
 
-// VkMemoryGetRemoteAddressInfoNV
-type MemoryGetRemoteAddressInfoNV struct {
-	SType      StructureType
-	PNext      *uintptr
-	Memory     DeviceMemory
-	HandleType ExternalMemoryHandleTypeFlagBits
-}
-
-// VkImportMemoryBufferCollectionFUCHSIA
-type ImportMemoryBufferCollectionFUCHSIA struct {
-	SType      StructureType
-	PNext      *uintptr
-	Collection BufferCollectionFUCHSIA
-	Index      uint32
-}
-
-// VkBufferCollectionImageCreateInfoFUCHSIA
-type BufferCollectionImageCreateInfoFUCHSIA struct {
-	SType      StructureType
-	PNext      *uintptr
-	Collection BufferCollectionFUCHSIA
-	Index      uint32
-}
-
-// VkBufferCollectionBufferCreateInfoFUCHSIA
-type BufferCollectionBufferCreateInfoFUCHSIA struct {
-	SType      StructureType
-	PNext      *uintptr
-	Collection BufferCollectionFUCHSIA
-	Index      uint32
-}
-
 // VkBufferCollectionCreateInfoFUCHSIA
 type BufferCollectionCreateInfoFUCHSIA struct {
 	SType           StructureType
 	PNext           *uintptr
 	CollectionToken uint32
-}
-
-// VkBufferCollectionPropertiesFUCHSIA
-type BufferCollectionPropertiesFUCHSIA struct {
-	SType                            StructureType
-	PNext                            *uintptr
-	MemoryTypeBits                   uint32
-	BufferCount                      uint32
-	CreateInfoIndex                  uint32
-	SysmemPixelFormat                uint64
-	FormatFeatures                   FormatFeatureFlags
-	SysmemColorSpaceIndex            SysmemColorSpaceFUCHSIA
-	SamplerYcbcrConversionComponents ComponentMapping
-	SuggestedYcbcrModel              SamplerYcbcrModelConversion
-	SuggestedYcbcrRange              SamplerYcbcrRange
-	SuggestedXChromaOffset           ChromaLocation
-	SuggestedYChromaOffset           ChromaLocation
 }
 
 // VkBufferConstraintsInfoFUCHSIA
@@ -9830,18 +8050,6 @@ type SysmemColorSpaceFUCHSIA struct {
 	SType      StructureType
 	PNext      *uintptr
 	ColorSpace uint32
-}
-
-// VkImageFormatConstraintsInfoFUCHSIA
-type ImageFormatConstraintsInfoFUCHSIA struct {
-	SType                  StructureType
-	PNext                  *uintptr
-	ImageCreateInfo        ImageCreateInfo
-	RequiredFormatFeatures FormatFeatureFlags
-	Flags                  ImageFormatConstraintsFlagsFUCHSIA
-	SysmemPixelFormat      uint64
-	ColorSpaceCount        uint32
-	PColorSpaces           *SysmemColorSpaceFUCHSIA
 }
 
 // VkImageConstraintsInfoFUCHSIA
@@ -9873,32 +8081,6 @@ type CudaModuleCreateInfoNV struct {
 	PData    *uintptr
 }
 
-// VkCudaFunctionCreateInfoNV
-type CudaFunctionCreateInfoNV struct {
-	SType  StructureType
-	PNext  *uintptr
-	Module CudaModuleNV
-	PName  *byte
-}
-
-// VkCudaLaunchInfoNV
-type CudaLaunchInfoNV struct {
-	SType          StructureType
-	PNext          *uintptr
-	Function       CudaFunctionNV
-	GridDimX       uint32
-	GridDimY       uint32
-	GridDimZ       uint32
-	BlockDimX      uint32
-	BlockDimY      uint32
-	BlockDimZ      uint32
-	SharedMemBytes uint32
-	ParamCount     uintptr
-	PParams        *uintptr
-	ExtraCount     uintptr
-	PExtras        *uintptr
-}
-
 // VkPhysicalDeviceRGBA10X6FormatsFeaturesEXT
 type PhysicalDeviceRGBA10X6FormatsFeaturesEXT struct {
 	SType                             StructureType
@@ -9921,27 +8103,6 @@ type DrmFormatModifierPropertiesList2EXT struct {
 	PNext                        *uintptr
 	DrmFormatModifierCount       uint32
 	PDrmFormatModifierProperties *DrmFormatModifierProperties2EXT
-}
-
-// VkDrmFormatModifierProperties2EXT
-type DrmFormatModifierProperties2EXT struct {
-	DrmFormatModifier               uint64
-	DrmFormatModifierPlaneCount     uint32
-	DrmFormatModifierTilingFeatures FormatFeatureFlags2
-}
-
-// VkAndroidHardwareBufferFormatProperties2ANDROID
-type AndroidHardwareBufferFormatProperties2ANDROID struct {
-	SType                            StructureType
-	PNext                            *uintptr
-	Format                           Format
-	ExternalFormat                   uint64
-	FormatFeatures                   FormatFeatureFlags2
-	SamplerYcbcrConversionComponents ComponentMapping
-	SuggestedYcbcrModel              SamplerYcbcrModelConversion
-	SuggestedYcbcrRange              SamplerYcbcrRange
-	SuggestedXChromaOffset           ChromaLocation
-	SuggestedYChromaOffset           ChromaLocation
 }
 
 // VkPipelineRenderingCreateInfo
@@ -9973,37 +8134,6 @@ type RenderingInfo struct {
 type RenderingEndInfoKHR struct {
 	SType StructureType
 	PNext *uintptr
-}
-
-// VkRenderingAttachmentInfo
-type RenderingAttachmentInfo struct {
-	SType              StructureType
-	PNext              *uintptr
-	ImageView          ImageView
-	ImageLayout        ImageLayout
-	ResolveMode        ResolveModeFlagBits
-	ResolveImageView   ImageView
-	ResolveImageLayout ImageLayout
-	LoadOp             AttachmentLoadOp
-	StoreOp            AttachmentStoreOp
-	ClearValue         ClearValue
-}
-
-// VkRenderingFragmentShadingRateAttachmentInfoKHR
-type RenderingFragmentShadingRateAttachmentInfoKHR struct {
-	SType                          StructureType
-	PNext                          *uintptr
-	ImageView                      ImageView
-	ImageLayout                    ImageLayout
-	ShadingRateAttachmentTexelSize Extent2D
-}
-
-// VkRenderingFragmentDensityMapAttachmentInfoEXT
-type RenderingFragmentDensityMapAttachmentInfoEXT struct {
-	SType       StructureType
-	PNext       *uintptr
-	ImageView   ImageView
-	ImageLayout ImageLayout
 }
 
 // VkPhysicalDeviceDynamicRenderingFeatures
@@ -10125,14 +8255,6 @@ type PhysicalDeviceDescriptorSetHostMappingFeaturesVALVE struct {
 	SType                    StructureType
 	PNext                    *uintptr
 	DescriptorSetHostMapping Bool32
-}
-
-// VkDescriptorSetBindingReferenceVALVE
-type DescriptorSetBindingReferenceVALVE struct {
-	SType               StructureType
-	PNext               *uintptr
-	DescriptorSetLayout DescriptorSetLayout
-	Binding             uint32
 }
 
 // VkDescriptorSetLayoutHostMappingInfoVALVE
@@ -10274,76 +8396,11 @@ type PhysicalDeviceSubpassMergeFeedbackFeaturesEXT struct {
 	SubpassMergeFeedback Bool32
 }
 
-// VkMicromapBuildInfoEXT
-type MicromapBuildInfoEXT struct {
-	SType               StructureType
-	PNext               *uintptr
-	Type                MicromapTypeEXT
-	Flags               BuildMicromapFlagsEXT
-	Mode                BuildMicromapModeEXT
-	DstMicromap         MicromapEXT
-	UsageCountsCount    uint32
-	PUsageCounts        *MicromapUsageEXT
-	PpUsageCounts       **MicromapUsageEXT
-	Data                DeviceOrHostAddressConstKHR
-	ScratchData         DeviceOrHostAddressKHR
-	TriangleArray       DeviceOrHostAddressConstKHR
-	TriangleArrayStride DeviceSize
-}
-
-// VkMicromapCreateInfoEXT
-type MicromapCreateInfoEXT struct {
-	SType         StructureType
-	PNext         *uintptr
-	CreateFlags   MicromapCreateFlagsEXT
-	Buffer        Buffer
-	Offset        DeviceSize
-	Size          DeviceSize
-	Type          MicromapTypeEXT
-	DeviceAddress DeviceAddress
-}
-
 // VkMicromapVersionInfoEXT
 type MicromapVersionInfoEXT struct {
 	SType        StructureType
 	PNext        *uintptr
 	PVersionData *uint8
-}
-
-// VkCopyMicromapInfoEXT
-type CopyMicromapInfoEXT struct {
-	SType StructureType
-	PNext *uintptr
-	Src   MicromapEXT
-	Dst   MicromapEXT
-	Mode  CopyMicromapModeEXT
-}
-
-// VkCopyMicromapToMemoryInfoEXT
-type CopyMicromapToMemoryInfoEXT struct {
-	SType StructureType
-	PNext *uintptr
-	Src   MicromapEXT
-	Dst   DeviceOrHostAddressKHR
-	Mode  CopyMicromapModeEXT
-}
-
-// VkCopyMemoryToMicromapInfoEXT
-type CopyMemoryToMicromapInfoEXT struct {
-	SType StructureType
-	PNext *uintptr
-	Src   DeviceOrHostAddressConstKHR
-	Dst   MicromapEXT
-	Mode  CopyMicromapModeEXT
-}
-
-// VkMicromapBuildSizesInfoEXT
-type MicromapBuildSizesInfoEXT struct {
-	SType            StructureType
-	PNext            *uintptr
-	MicromapSize     DeviceSize
-	BuildScratchSize DeviceSize
-	Discardable      Bool32
 }
 
 // VkMicromapUsageEXT
@@ -10377,20 +8434,6 @@ type PhysicalDeviceOpacityMicromapPropertiesEXT struct {
 	MaxOpacity4StateSubdivisionLevel uint32
 }
 
-// VkAccelerationStructureTrianglesOpacityMicromapEXT
-type AccelerationStructureTrianglesOpacityMicromapEXT struct {
-	SType            StructureType
-	PNext            *uintptr
-	IndexType        IndexType
-	IndexBuffer      DeviceOrHostAddressConstKHR
-	IndexStride      DeviceSize
-	BaseTriangle     uint32
-	UsageCountsCount uint32
-	PUsageCounts     *MicromapUsageEXT
-	PpUsageCounts    **MicromapUsageEXT
-	Micromap         MicromapEXT
-}
-
 // VkPhysicalDeviceDisplacementMicromapFeaturesNV
 type PhysicalDeviceDisplacementMicromapFeaturesNV struct {
 	SType                StructureType
@@ -10403,28 +8446,6 @@ type PhysicalDeviceDisplacementMicromapPropertiesNV struct {
 	SType                                   StructureType
 	PNext                                   *uintptr
 	MaxDisplacementMicromapSubdivisionLevel uint32
-}
-
-// VkAccelerationStructureTrianglesDisplacementMicromapNV
-type AccelerationStructureTrianglesDisplacementMicromapNV struct {
-	SType                                 StructureType
-	PNext                                 *uintptr
-	DisplacementBiasAndScaleFormat        Format
-	DisplacementVectorFormat              Format
-	DisplacementBiasAndScaleBuffer        DeviceOrHostAddressConstKHR
-	DisplacementBiasAndScaleStride        DeviceSize
-	DisplacementVectorBuffer              DeviceOrHostAddressConstKHR
-	DisplacementVectorStride              DeviceSize
-	DisplacedMicromapPrimitiveFlags       DeviceOrHostAddressConstKHR
-	DisplacedMicromapPrimitiveFlagsStride DeviceSize
-	IndexType                             IndexType
-	IndexBuffer                           DeviceOrHostAddressConstKHR
-	IndexStride                           DeviceSize
-	BaseTriangle                          uint32
-	UsageCountsCount                      uint32
-	PUsageCounts                          *MicromapUsageEXT
-	PpUsageCounts                         **MicromapUsageEXT
-	Micromap                              MicromapEXT
 }
 
 // VkPipelinePropertiesIdentifierEXT
@@ -10483,14 +8504,6 @@ type ExportMetalCommandQueueInfoEXT struct {
 	MtlCommandQueue MTLCommandQueue_id
 }
 
-// VkExportMetalBufferInfoEXT
-type ExportMetalBufferInfoEXT struct {
-	SType     StructureType
-	PNext     *uintptr
-	Memory    DeviceMemory
-	MtlBuffer MTLBuffer_id
-}
-
 // VkImportMetalBufferInfoEXT
 type ImportMetalBufferInfoEXT struct {
 	SType     StructureType
@@ -10517,28 +8530,11 @@ type ImportMetalTextureInfoEXT struct {
 	MtlTexture MTLTexture_id
 }
 
-// VkExportMetalIOSurfaceInfoEXT
-type ExportMetalIOSurfaceInfoEXT struct {
-	SType     StructureType
-	PNext     *uintptr
-	Image     Image
-	IoSurface IOSurfaceRef
-}
-
 // VkImportMetalIOSurfaceInfoEXT
 type ImportMetalIOSurfaceInfoEXT struct {
 	SType     StructureType
 	PNext     *uintptr
 	IoSurface IOSurfaceRef
-}
-
-// VkExportMetalSharedEventInfoEXT
-type ExportMetalSharedEventInfoEXT struct {
-	SType          StructureType
-	PNext          *uintptr
-	Semaphore      Semaphore
-	Event          Event
-	MtlSharedEvent MTLSharedEvent_id
 }
 
 // VkImportMetalSharedEventInfoEXT
@@ -10685,16 +8681,6 @@ type ResolveImageModeInfoKHR struct {
 	StencilResolveMode ResolveModeFlagBits
 }
 
-// VkDeviceAddressBindingCallbackDataEXT
-type DeviceAddressBindingCallbackDataEXT struct {
-	SType       StructureType
-	PNext       *uintptr
-	Flags       DeviceAddressBindingFlagsEXT
-	BaseAddress DeviceAddress
-	Size        DeviceSize
-	BindingType DeviceAddressBindingTypeEXT
-}
-
 // VkPhysicalDeviceOpticalFlowFeaturesNV
 type PhysicalDeviceOpticalFlowFeaturesNV struct {
 	SType       StructureType
@@ -10772,13 +8758,6 @@ type PhysicalDeviceFaultFeaturesEXT struct {
 	PNext                   *uintptr
 	DeviceFault             Bool32
 	DeviceFaultVendorBinary Bool32
-}
-
-// VkDeviceFaultAddressInfoEXT
-type DeviceFaultAddressInfoEXT struct {
-	AddressType      DeviceFaultAddressTypeEXT
-	ReportedAddress  DeviceAddress
-	AddressPrecision DeviceSize
 }
 
 // VkDeviceFaultVendorInfoEXT
@@ -10886,21 +8865,6 @@ type PhysicalDeviceShaderCoreBuiltinsFeaturesARM struct {
 	SType              StructureType
 	PNext              *uintptr
 	ShaderCoreBuiltins Bool32
-}
-
-// VkFrameBoundaryEXT
-type FrameBoundaryEXT struct {
-	SType       StructureType
-	PNext       *uintptr
-	Flags       FrameBoundaryFlagsEXT
-	FrameID     uint64
-	ImageCount  uint32
-	PImages     *Image
-	BufferCount uint32
-	PBuffers    *Buffer
-	TagName     uint64
-	TagSize     uintptr
-	PTag        *uintptr
 }
 
 // VkPhysicalDeviceFrameBoundaryFeaturesEXT
@@ -11117,24 +9081,6 @@ type QueryLowLatencySupportNV struct {
 	PQueriedLowLatencyData *uintptr
 }
 
-// VkMemoryMapInfo
-type MemoryMapInfo struct {
-	SType  StructureType
-	PNext  *uintptr
-	Flags  MemoryMapFlags
-	Memory DeviceMemory
-	Offset DeviceSize
-	Size   DeviceSize
-}
-
-// VkMemoryUnmapInfo
-type MemoryUnmapInfo struct {
-	SType  StructureType
-	PNext  *uintptr
-	Flags  MemoryUnmapFlags
-	Memory DeviceMemory
-}
-
 // VkPhysicalDeviceShaderObjectFeaturesEXT
 type PhysicalDeviceShaderObjectFeaturesEXT struct {
 	SType        StructureType
@@ -11191,29 +9137,6 @@ type ImportScreenBufferInfoQNX struct {
 	SType  StructureType
 	PNext  *uintptr
 	Buffer *ScreenBuffer
-}
-
-// VkScreenBufferPropertiesQNX
-type ScreenBufferPropertiesQNX struct {
-	SType          StructureType
-	PNext          *uintptr
-	AllocationSize DeviceSize
-	MemoryTypeBits uint32
-}
-
-// VkScreenBufferFormatPropertiesQNX
-type ScreenBufferFormatPropertiesQNX struct {
-	SType                            StructureType
-	PNext                            *uintptr
-	Format                           Format
-	ExternalFormat                   uint64
-	ScreenUsage                      uint64
-	FormatFeatures                   FormatFeatureFlags
-	SamplerYcbcrConversionComponents ComponentMapping
-	SuggestedYcbcrModel              SamplerYcbcrModelConversion
-	SuggestedYcbcrRange              SamplerYcbcrRange
-	SuggestedXChromaOffset           ChromaLocation
-	SuggestedYChromaOffset           ChromaLocation
 }
 
 // VkExternalFormatQNX
@@ -11281,19 +9204,6 @@ type PhysicalDeviceShaderEnqueueFeaturesAMDX struct {
 	ShaderMeshEnqueue Bool32
 }
 
-// VkExecutionGraphPipelineCreateInfoAMDX
-type ExecutionGraphPipelineCreateInfoAMDX struct {
-	SType              StructureType
-	PNext              *uintptr
-	Flags              PipelineCreateFlags
-	StageCount         uint32
-	PStages            *PipelineShaderStageCreateInfo
-	PLibraryInfo       *PipelineLibraryCreateInfoKHR
-	Layout             PipelineLayout
-	BasePipelineHandle Pipeline
-	BasePipelineIndex  int32
-}
-
 // VkPipelineShaderStageNodeCreateInfoAMDX
 type PipelineShaderStageNodeCreateInfoAMDX struct {
 	SType StructureType
@@ -11319,13 +9229,6 @@ type DispatchGraphInfoAMDX struct {
 	PayloadStride uint64
 }
 
-// VkDispatchGraphCountInfoAMDX
-type DispatchGraphCountInfoAMDX struct {
-	Count  uint32
-	Infos  DeviceOrHostAddressConstAMDX
-	Stride uint64
-}
-
 // VkPhysicalDeviceAntiLagFeaturesAMD
 type PhysicalDeviceAntiLagFeaturesAMD struct {
 	SType   StructureType
@@ -11340,14 +9243,6 @@ type AntiLagDataAMD struct {
 	Mode              AntiLagModeAMD
 	MaxFPS            uint32
 	PPresentationInfo *AntiLagPresentationInfoAMD
-}
-
-// VkAntiLagPresentationInfoAMD
-type AntiLagPresentationInfoAMD struct {
-	SType      StructureType
-	PNext      *uintptr
-	Stage      AntiLagStageAMD
-	FrameIndex uint64
 }
 
 // VkBindMemoryStatus
@@ -11387,19 +9282,6 @@ type TileMemoryRequirementsQCOM struct {
 	Alignment DeviceSize
 }
 
-// VkBindDescriptorSetsInfo
-type BindDescriptorSetsInfo struct {
-	SType              StructureType
-	PNext              *uintptr
-	StageFlags         ShaderStageFlags
-	Layout             PipelineLayout
-	FirstSet           uint32
-	DescriptorSetCount uint32
-	PDescriptorSets    *DescriptorSet
-	DynamicOffsetCount uint32
-	PDynamicOffsets    *uint32
-}
-
 // VkPushConstantsInfo
 type PushConstantsInfo struct {
 	SType      StructureType
@@ -11411,17 +9293,6 @@ type PushConstantsInfo struct {
 	PValues    *uintptr
 }
 
-// VkPushDescriptorSetInfo
-type PushDescriptorSetInfo struct {
-	SType                StructureType
-	PNext                *uintptr
-	StageFlags           ShaderStageFlags
-	Layout               PipelineLayout
-	Set                  uint32
-	DescriptorWriteCount uint32
-	PDescriptorWrites    *WriteDescriptorSet
-}
-
 // VkPushDescriptorSetWithTemplateInfo
 type PushDescriptorSetWithTemplateInfo struct {
 	SType                    StructureType
@@ -11430,27 +9301,6 @@ type PushDescriptorSetWithTemplateInfo struct {
 	Layout                   PipelineLayout
 	Set                      uint32
 	PData                    *uintptr
-}
-
-// VkSetDescriptorBufferOffsetsInfoEXT
-type SetDescriptorBufferOffsetsInfoEXT struct {
-	SType          StructureType
-	PNext          *uintptr
-	StageFlags     ShaderStageFlags
-	Layout         PipelineLayout
-	FirstSet       uint32
-	SetCount       uint32
-	PBufferIndices *uint32
-	POffsets       *DeviceSize
-}
-
-// VkBindDescriptorBufferEmbeddedSamplersInfoEXT
-type BindDescriptorBufferEmbeddedSamplersInfoEXT struct {
-	SType      StructureType
-	PNext      *uintptr
-	StageFlags ShaderStageFlags
-	Layout     PipelineLayout
-	Set        uint32
 }
 
 // VkPhysicalDeviceCubicClampFeaturesQCOM
@@ -11578,14 +9428,6 @@ type LatencySleepInfoNV struct {
 	PNext           *uintptr
 	SignalSemaphore Semaphore
 	Value           uint64
-}
-
-// VkSetLatencyMarkerInfoNV
-type SetLatencyMarkerInfoNV struct {
-	SType     StructureType
-	PNext     *uintptr
-	PresentID uint64
-	Marker    LatencyMarkerNV
 }
 
 // VkGetLatencyMarkerInfoNV
@@ -11947,19 +9789,6 @@ type PhysicalDeviceDenseGeometryFormatFeaturesAMDX struct {
 	DenseGeometryFormat Bool32
 }
 
-// VkAccelerationStructureDenseGeometryFormatTrianglesDataAMDX
-type AccelerationStructureDenseGeometryFormatTrianglesDataAMDX struct {
-	SType             StructureType
-	PNext             *uintptr
-	CompressedData    DeviceOrHostAddressConstKHR
-	DataSize          DeviceSize
-	NumTriangles      uint32
-	NumVertices       uint32
-	MaxPrimitiveIndex uint32
-	MaxGeometryIndex  uint32
-	Format            CompressedTriangleFormatAMDX
-}
-
 // VkPhysicalDeviceDepthClampZeroOneFeaturesKHR
 type PhysicalDeviceDepthClampZeroOneFeaturesKHR struct {
 	SType             StructureType
@@ -11995,24 +9824,6 @@ type PhysicalDeviceCooperativeVectorPropertiesNV struct {
 	CooperativeVectorTrainingFloat16Accumulation Bool32
 	CooperativeVectorTrainingFloat32Accumulation Bool32
 	MaxCooperativeVectorComponents               uint32
-}
-
-// VkConvertCooperativeVectorMatrixInfoNV
-type ConvertCooperativeVectorMatrixInfoNV struct {
-	SType            StructureType
-	PNext            *uintptr
-	SrcSize          uintptr
-	SrcData          DeviceOrHostAddressConstKHR
-	PDstSize         *uintptr
-	DstData          DeviceOrHostAddressKHR
-	SrcComponentType ComponentTypeKHR
-	DstComponentType ComponentTypeKHR
-	NumRows          uint32
-	NumColumns       uint32
-	SrcLayout        CooperativeVectorMatrixLayoutNV
-	SrcStride        uintptr
-	DstLayout        CooperativeVectorMatrixLayoutNV
-	DstStride        uintptr
 }
 
 // VkPhysicalDeviceTileShadingFeaturesQCOM
@@ -12150,18 +9961,6 @@ type PhysicalDeviceFormatPackFeaturesARM struct {
 	FormatPack Bool32
 }
 
-// VkTensorDescriptionARM
-type TensorDescriptionARM struct {
-	SType          StructureType
-	PNext          *uintptr
-	Tiling         TensorTilingARM
-	Format         Format
-	DimensionCount uint32
-	PDimensions    *int64
-	PStrides       *int64
-	Usage          TensorUsageFlagsARM
-}
-
 // VkTensorCreateInfoARM
 type TensorCreateInfoARM struct {
 	SType                 StructureType
@@ -12171,15 +9970,6 @@ type TensorCreateInfoARM struct {
 	SharingMode           SharingMode
 	QueueFamilyIndexCount uint32
 	PQueueFamilyIndices   *uint32
-}
-
-// VkTensorViewCreateInfoARM
-type TensorViewCreateInfoARM struct {
-	SType  StructureType
-	PNext  *uintptr
-	Flags  TensorViewCreateFlagsARM
-	Tensor TensorARM
-	Format Format
 }
 
 // VkTensorMemoryRequirementsInfoARM
@@ -12212,25 +10002,6 @@ type TensorFormatPropertiesARM struct {
 	PNext                       *uintptr
 	OptimalTilingTensorFeatures FormatFeatureFlags2
 	LinearTilingTensorFeatures  FormatFeatureFlags2
-}
-
-// VkPhysicalDeviceTensorPropertiesARM
-type PhysicalDeviceTensorPropertiesARM struct {
-	SType                                              StructureType
-	PNext                                              *uintptr
-	MaxTensorDimensionCount                            uint32
-	MaxTensorElements                                  uint64
-	MaxPerDimensionTensorElements                      uint64
-	MaxTensorStride                                    int64
-	MaxTensorSize                                      uint64
-	MaxTensorShaderAccessArrayLength                   uint32
-	MaxTensorShaderAccessSize                          uint32
-	MaxDescriptorSetStorageTensors                     uint32
-	MaxPerStageDescriptorSetStorageTensors             uint32
-	MaxDescriptorSetUpdateAfterBindStorageTensors      uint32
-	MaxPerStageDescriptorUpdateAfterBindStorageTensors uint32
-	ShaderStorageTensorArrayNonUniformIndexingNative   Bool32
-	ShaderTensorSupportedStages                        ShaderStageFlags
 }
 
 // VkTensorMemoryBarrierARM
@@ -12665,28 +10436,6 @@ type NativeBufferUsageOHOS struct {
 	SType                 StructureType
 	PNext                 *uintptr
 	OHOSNativeBufferUsage uint64
-}
-
-// VkNativeBufferPropertiesOHOS
-type NativeBufferPropertiesOHOS struct {
-	SType          StructureType
-	PNext          *uintptr
-	AllocationSize DeviceSize
-	MemoryTypeBits uint32
-}
-
-// VkNativeBufferFormatPropertiesOHOS
-type NativeBufferFormatPropertiesOHOS struct {
-	SType                            StructureType
-	PNext                            *uintptr
-	Format                           Format
-	ExternalFormat                   uint64
-	FormatFeatures                   FormatFeatureFlags
-	SamplerYcbcrConversionComponents ComponentMapping
-	SuggestedYcbcrModel              SamplerYcbcrModelConversion
-	SuggestedYcbcrRange              SamplerYcbcrRange
-	SuggestedXChromaOffset           ChromaLocation
-	SuggestedYChromaOffset           ChromaLocation
 }
 
 // VkImportNativeBufferInfoOHOS

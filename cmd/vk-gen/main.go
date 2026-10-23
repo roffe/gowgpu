@@ -11,11 +11,13 @@
 package main
 
 import (
+	"bytes"
 	"encoding/xml"
 	"flag"
 	"fmt"
 	"go/format"
 	"go/token"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -59,7 +61,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := generateTypes(registry, *outputDir); err != nil {
+	if err := generateTypes(registry, *outputDir, nil); err != nil {
+		fmt.Fprintf(os.Stderr, "Error generating types: %v\n", err)
+		os.Exit(1)
+	}
+	pads, err := align8Pads(*outputDir, bitfieldStructs(registry))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error laying out structs for 32-bit targets: %v\n", err)
+		os.Exit(1)
+	}
+	if err := generateTypes(registry, *outputDir, pads); err != nil {
 		fmt.Fprintf(os.Stderr, "Error generating types: %v\n", err)
 		os.Exit(1)
 	}
@@ -75,7 +86,7 @@ func main() {
 	}
 
 	// Format generated files with gofmt.
-	for _, name := range []string{"const_gen.go", "types_gen.go", "commands_gen.go"} {
+	for _, name := range []string{"const_gen.go", "types_gen.go", "types_align4_gen.go", "types_align8_gen.go", "commands_gen.go"} {
 		path := filepath.Join(*outputDir, name)
 		src, err := os.ReadFile(path)
 		if err != nil {
@@ -431,7 +442,7 @@ func collectExtensionEnums(registry *Registry) map[string][]ExtensionEnumValue {
 	return result
 }
 
-func generateTypes(registry *Registry, outDir string) error {
+func generateTypes(registry *Registry, outDir string, pads map[string][]int64) error {
 	f, err := os.Create(filepath.Join(outDir, "types_gen.go"))
 	if err != nil {
 		return err
@@ -552,12 +563,12 @@ func generateTypes(registry *Registry, outDir string) error {
 	fmt.Fprintln(f, "type PerformanceValueDataINTEL [1]uint64 // Union: value32, value64, valueFloat, valueBool, valueString")
 	fmt.Fprintln(f, "type PipelineExecutableStatisticValueKHR [1]uint64 // Union: b32, i64, u64, f64")
 	fmt.Fprintln(f, "type PerformanceCounterResultKHR [1]uint64 // Union: int32, int64, uint32, uint64, float32, float64")
-	fmt.Fprintln(f, "type DeviceOrHostAddressKHR uintptr // Union: deviceAddress or hostAddress")
-	fmt.Fprintln(f, "type DeviceOrHostAddressConstKHR uintptr // Union: deviceAddress or hostAddress")
-	fmt.Fprintln(f, "type AccelerationStructureGeometryDataKHR [8]uint64 // Union: triangles, aabbs, instances")
+	fmt.Fprintln(f, "type DeviceOrHostAddressKHR uint64 // Union: deviceAddress or hostAddress")
+	fmt.Fprintln(f, "type DeviceOrHostAddressConstKHR uint64 // Union: deviceAddress or hostAddress")
+	fmt.Fprintln(f, "type AccelerationStructureGeometryDataKHR AccelerationStructureGeometryTrianglesDataKHR // Union: triangles, aabbs, instances; triangles is the largest everywhere")
 	fmt.Fprintln(f, "type AccelerationStructureMotionInstanceDataNV [18]uint64 // Union: static, matrix, srt instances")
 	fmt.Fprintln(f, "type ClusterAccelerationStructureOpInputNV uintptr // Union: various cluster inputs")
-	fmt.Fprintln(f, "type DescriptorDataEXT uintptr // Union: descriptor data variants")
+	fmt.Fprintln(f, "type DescriptorDataEXT uint64 // Union: descriptor data variants, a VkDeviceAddress among them")
 	fmt.Fprintln(f, "")
 
 	// Extension type aliases
@@ -646,7 +657,7 @@ func generateTypes(registry *Registry, outDir string) error {
 	// More extension union and bitmask types
 	fmt.Fprintln(f, "// More extension types")
 	fmt.Fprintln(f, "type MemoryDecompressionMethodFlagsNV = Flags64")
-	fmt.Fprintln(f, "type DeviceOrHostAddressConstAMDX uintptr")
+	fmt.Fprintln(f, "type DeviceOrHostAddressConstAMDX uint64")
 	fmt.Fprintln(f, "type PipelineCreateFlags2KHR = Flags64")
 	fmt.Fprintln(f, "")
 
@@ -657,8 +668,12 @@ func generateTypes(registry *Registry, outDir string) error {
 	fmt.Fprintln(f, "type OH_NativeBuffer uintptr")
 	fmt.Fprintln(f, "")
 
-	// Handle types
+	// Handle types. A dispatchable handle is a pointer, a non-dispatchable
+	// one 64 bits wide on every target: vulkan_core.h makes it a uint64_t
+	// where pointers are 32 bits.
 	handles := []string{}
+	dispatchable := map[string]bool{}
+	aliases := map[string]string{}
 	for _, t := range registry.Types.Types {
 		if t.Category == "handle" {
 			name := t.Name
@@ -669,6 +684,11 @@ func generateTypes(registry *Registry, outDir string) error {
 				continue
 			}
 			handles = append(handles, name)
+			if t.Alias != "" {
+				aliases[name] = t.Alias
+			} else {
+				dispatchable[name] = t.InnerType == "VK_DEFINE_HANDLE"
+			}
 		}
 	}
 
@@ -677,7 +697,15 @@ func generateTypes(registry *Registry, outDir string) error {
 		fmt.Fprintln(f, "type (")
 		for _, h := range handles {
 			goName := vkToGoType(h)
-			fmt.Fprintf(f, "\t%s uintptr\n", goName)
+			base := h
+			if a, ok := aliases[h]; ok {
+				base = a
+			}
+			goType := "uint64"
+			if dispatchable[base] {
+				goType = "uintptr"
+			}
+			fmt.Fprintf(f, "\t%s %s\n", goName, goType)
 		}
 		fmt.Fprintln(f, ")")
 		fmt.Fprintln(f, "")
@@ -701,6 +729,10 @@ func generateTypes(registry *Registry, outDir string) error {
 		"IndirectExecutionSetInfoEXT":               true,
 		"IndirectCommandsTokenDataEXT":              true,
 	}
+	// Structs that C lays out with padding Go leaves out where 64-bit
+	// members are aligned to 8 bytes and pointers are 4 bytes wide get a
+	// definition with that padding there, and the plain one elsewhere.
+	var align4, align8 bytes.Buffer
 	for _, t := range registry.Types.Types {
 		if t.Category != "struct" || t.Alias != "" {
 			continue
@@ -717,8 +749,7 @@ func generateTypes(registry *Registry, outDir string) error {
 		}
 		seenTypes[goName] = true
 
-		fmt.Fprintf(f, "// %s\n", name)
-		fmt.Fprintf(f, "type %s struct {\n", goName)
+		var fields [][2]string
 		seenMembers := make(map[string]bool)
 		for _, m := range t.Members {
 			memberName := goFieldName(m.Name)
@@ -727,14 +758,66 @@ func generateTypes(registry *Registry, outDir string) error {
 				continue
 			}
 			seenMembers[memberName] = true
-			memberType := vkToGoFieldType(m.Type, m.RawXML, m.Enum)
-			fmt.Fprintf(f, "\t%s %s\n", memberName, memberType)
+			fields = append(fields, [2]string{memberName, vkToGoFieldType(m.Type, m.RawXML, m.Enum)})
 		}
-		fmt.Fprintln(f, "}")
-		fmt.Fprintln(f, "")
+		pad, padded := pads[goName]
+		if !padded {
+			writeStruct(f, name, goName, fields, nil)
+		} else {
+			writeStruct(&align4, name, goName, fields, nil)
+			writeStruct(&align8, name, goName, fields, pad)
+		}
 	}
 
+	for _, file := range []struct {
+		name, constraint string
+		body             *bytes.Buffer
+	}{
+		{"types_align4_gen.go", "!(arm || mips || mipsle || (windows && 386))", &align4},
+		{"types_align8_gen.go", "arm || mips || mipsle || (windows && 386)", &align8},
+	} {
+		path := filepath.Join(outDir, file.name)
+		if pads == nil {
+			os.Remove(path)
+			continue
+		}
+		var b bytes.Buffer
+		fmt.Fprintf(&b, "//go:build %s\n\n", file.constraint)
+		fmt.Fprintln(&b, "// Code generated by vk-gen. DO NOT EDIT.")
+		fmt.Fprintln(&b, "")
+		fmt.Fprintln(&b, "package vk")
+		fmt.Fprintln(&b, "")
+		fmt.Fprintln(&b, "// The structs C lays out with padding ahead of a 64-bit member, or after")
+		fmt.Fprintln(&b, "// the last, on 32-bit targets that align 64-bit members to 8 bytes: arm,")
+		fmt.Fprintln(&b, "// mips and Windows on 386. Go aligns them to 4 there, so types_align8_gen.go")
+		fmt.Fprintln(&b, "// spells the padding out, and types_align4_gen.go has them as they are for")
+		fmt.Fprintln(&b, "// the targets Go lays them out like C on.")
+		fmt.Fprintln(&b, "")
+		b.Write(file.body.Bytes())
+		if err := os.WriteFile(path, b.Bytes(), 0o644); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+// writeStruct writes a struct definition with its fields, and pad[i] bytes
+// of padding ahead of field i and pad[len(fields)] after the last, if pad is
+// set.
+func writeStruct(w io.Writer, vkName, goName string, fields [][2]string, pad []int64) {
+	fmt.Fprintf(w, "// %s\n", vkName)
+	fmt.Fprintf(w, "type %s struct {\n", goName)
+	for i, field := range fields {
+		if pad != nil && pad[i] > 0 {
+			fmt.Fprintf(w, "\t_ [%d]byte\n", pad[i])
+		}
+		fmt.Fprintf(w, "\t%s %s\n", field[0], field[1])
+	}
+	if pad != nil && pad[len(fields)] > 0 {
+		fmt.Fprintf(w, "\t_ [%d]byte\n", pad[len(fields)])
+	}
+	fmt.Fprintln(w, "}")
+	fmt.Fprintln(w, "")
 }
 
 func generateCommands(registry *Registry, outDir string) error {
