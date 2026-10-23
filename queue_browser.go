@@ -95,6 +95,9 @@ func (q *Queue) WriteTexture(dst *ImageCopyTexture, data []byte, layout *ImageDa
 	if size == nil {
 		return fmt.Errorf("wgpu: WriteTexture: size is nil")
 	}
+	if size.DepthOrArrayLayers > 1 && layout.RowsPerImage == 0 {
+		return fmt.Errorf("wgpu: WriteTexture: rowsPerImage is required for a write of %d layers", size.DepthOrArrayLayers)
+	}
 
 	jsDst := browser.BuildImageCopyTexture(
 		dst.Texture.browser.Ref(),
