@@ -147,7 +147,6 @@ The fixes from the vet on 2026-10-23 (see the [CHANGELOG](CHANGELOG.md)) have on
 - Timestamp queries only work on desktop GL. Vulkan, DX12 and Metal don't offer `FeatureTimestampQuery` yet.
 - Metal has no compressed texture formats yet, so it doesn't offer `TextureCompressionBC`.
 - In the browser a texture descriptor's height, depth, mip level count or sample count of 0 is taken as 1, where native builds return an error, and the 16-bit normalized formats can't be used, as gputypes has no `texture-formats-tier1` feature to ask for.
-- `examples/browser-compute` doesn't build, it was written against an older API.
 
 What's next is in [ROADMAP.md](ROADMAP.md).
 
