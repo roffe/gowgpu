@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/roffe/gowgpu/gputypes"
+	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/vulkan/vk"
 )
 
@@ -481,5 +482,20 @@ func TestCompatibleSets(t *testing.T) {
 				t.Errorf("compatibleSets = %d, want %d", got, tt.want)
 			}
 		})
+	}
+}
+
+// A surface takes no view formats: a view of one of its images in another
+// format is refused, where it came back in the surface's format.
+func TestSurfaceTextureViewFormat(t *testing.T) {
+	d := &Device{}
+	st := &SwapchainTexture{format: gputypes.TextureFormatBGRA8Unorm}
+	if _, err := d.CreateTextureView(st, &hal.TextureViewDescriptor{Format: gputypes.TextureFormatBGRA8UnormSrgb}); err == nil {
+		t.Error("an sRGB view of a BGRA8Unorm surface texture was made")
+	}
+	for _, format := range []gputypes.TextureFormat{gputypes.TextureFormatUndefined, gputypes.TextureFormatBGRA8Unorm} {
+		if _, err := d.CreateTextureView(st, &hal.TextureViewDescriptor{Format: format}); err != nil {
+			t.Errorf("view of format %v: %v", format, err)
+		}
 	}
 }

@@ -756,6 +756,10 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 		if t == nil {
 			return nil, fmt.Errorf("vulkan: nil swapchain texture")
 		}
+		// A surface takes no view formats, so its images are viewed in its own.
+		if desc != nil && desc.Format != gputypes.TextureFormatUndefined && desc.Format != t.format {
+			return nil, fmt.Errorf("vulkan: a view of a surface texture of %v cannot be %v", t.format, desc.Format)
+		}
 		// For swapchain textures, reuse the pre-created view from the swapchain,
 		// which was named when the swapchain made it. Creating new views for
 		// swapchain images can cause rendering issues. The wrapper is made
@@ -781,7 +785,7 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 	// get the wrapper without a VkImageView: no bind group or pass takes
 	// such a texture, the usage rules it out before the HAL.
 	if t, ok := texture.(*Texture); ok && t.usageFlags&viewableImageUsage == 0 {
-		return &TextureView{texture: t, device: d, size: textureSize, image: imageHandle}, nil
+		return &TextureView{texture: t, device: d, size: textureSize, image: imageHandle, vkFormat: d.vkFormat(t.format)}, nil
 	}
 
 	// Handle nil descriptor - use defaults from texture
@@ -811,11 +815,12 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 		arrayLayerCount = defaultViewLayers(viewDimension, desc.BaseArrayLayer, arrayLayers)
 	}
 
+	vkFormat := d.vkFormat(format)
 	createInfo := vk.ImageViewCreateInfo{
 		SType:    vk.StructureTypeImageViewCreateInfo,
 		Image:    imageHandle,
 		ViewType: textureViewDimensionToVk(viewDimension),
-		Format:   d.vkFormat(format),
+		Format:   vkFormat,
 		Components: vk.ComponentMapping{
 			R: vk.ComponentSwizzleIdentity,
 			G: vk.ComponentSwizzleIdentity,
@@ -869,6 +874,7 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 		size:        textureSize,
 		image:       imageHandle,
 		isSwapchain: isSwapchain,
+		vkFormat:    vkFormat,
 	}
 	d.live.imageViews.add(imageView)
 	if desc.Label != "" {

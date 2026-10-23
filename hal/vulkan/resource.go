@@ -98,7 +98,7 @@ type TextureView struct {
 	image       vk.Image   // The underlying VkImage handle (for barriers)
 	isSwapchain bool       // True if this view is for a swapchain image
 	swapchain   *Swapchain // Back-pointer to owning swapchain (VK-006: layout tracking)
-	vkFormat    vk.Format  // Vulkan format (for swapchain views where texture is nil)
+	vkFormat    vk.Format  // the view's format, which a render pass takes its attachment's from
 }
 
 // Destroy releases the texture view.

@@ -1289,14 +1289,6 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 			continue
 		}
 
-		// Determine color format from the view.
-		var colorFormat vk.Format
-		if view.texture != nil {
-			colorFormat = e.device.vkFormat(view.texture.format)
-		} else if view.isSwapchain {
-			colorFormat = view.vkFormat
-		}
-
 		// Check for MSAA resolve target.
 		var resolveView *TextureView
 		if ca.ResolveTarget != nil {
@@ -1326,7 +1318,7 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 		updateSwapchainLayout(view, resolveView, hasMSAAResolve, targetLayout)
 
 		rpKey.Colors[i] = ColorAttachmentKeyEntry{
-			Format:        colorFormat,
+			Format:        view.vkFormat,
 			LoadOp:        loadOpToVk(ca.LoadOp),
 			StoreOp:       storeOpToVk(ca.StoreOp),
 			FinalLayout:   colorLayout,
@@ -1375,7 +1367,7 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 			// attachment, which decides the layout of the barriers.
 			format := dsView.texture.format
 			hasDepth, hasStencil := format.HasDepth(), hasStencilAspect(format)
-			rpKey.DepthFormat = e.device.vkFormat(format)
+			rpKey.DepthFormat = dsView.vkFormat
 			rpKey.DepthReadOnly = (dsa.DepthReadOnly || !hasDepth) && (dsa.StencilReadOnly || !hasStencil)
 			rpKey.DepthLoadOp, rpKey.DepthStoreOp = vk.AttachmentLoadOpDontCare, vk.AttachmentStoreOpDontCare
 			rpKey.StencilLoadOp, rpKey.StencilStoreOp = vk.AttachmentLoadOpDontCare, vk.AttachmentStoreOpDontCare
