@@ -15,6 +15,9 @@ import (
 // validation layer checks.
 func TestQueueWriteBarriersTakeTheWholeTexture(t *testing.T) {
 	device, h := newValidatedDevice(t)
+	if h.backend == gputypes.BackendGL {
+		t.Skip("the GL backend renders into a view's texture, not its layer")
+	}
 
 	tex, err := device.CreateTexture(&TextureDescriptor{
 		Size: Extent3D{Width: pixSide, Height: pixSide, DepthOrArrayLayers: 2}, MipLevelCount: 1, SampleCount: 1,
