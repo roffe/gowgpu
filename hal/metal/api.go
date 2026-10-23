@@ -79,6 +79,11 @@ func (i *Instance) EnumerateAdapters(surfaceHint hal.Surface) []hal.ExposedAdapt
 		// buffers.
 		var features gputypes.Features
 		features.Insert(gputypes.FeatureDepthClipControl)
+		// The arguments of an indirect draw have a base instance, which the
+		// families that draw from a base vertex and instance honour.
+		if DeviceSupportsFamily(device, MTLGPUFamilyApple3) || DeviceSupportsFamily(device, MTLGPUFamilyMac2) {
+			features.Insert(gputypes.FeatureIndirectFirstInstance)
+		}
 		// ponytail: no TextureCompressionBC, textureFormatToMTL maps no BC
 		// format and Metal aborts on pixel format 0. Map them (MTLPixelFormat
 		// 130-153) and check supportsBCTextureCompression to offer it.
