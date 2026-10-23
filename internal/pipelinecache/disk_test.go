@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"testing"
 )
 
@@ -175,5 +176,63 @@ func TestAdapterKeysDeterministic(t *testing.T) {
 	}
 	if DX12AdapterKey(1, 2, 0x1002, 0x73FF, 0xC2) == d1 {
 		t.Fatal("revision should affect DX12AdapterKey")
+	}
+}
+
+// TestLoadBlobRejectsPartialBlobs saves a blob and loads it back cut short,
+// with a byte changed, and from a file SaveBlob did not write.
+func TestLoadBlobRejectsPartialBlobs(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cache.bin")
+	if err := SaveBlob(path, []byte("driver-isa-cache")); err != nil {
+		t.Fatal(err)
+	}
+	whole, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed := bytes.Clone(whole)
+	changed[len(changed)-1] ^= 1
+	for name, file := range map[string][]byte{
+		"cut short":    whole[:len(whole)-3],
+		"byte changed": changed,
+		"foreign":      []byte("driver-isa-cache"),
+	} {
+		if err := os.WriteFile(path, file, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if data, err := LoadBlob(path); err == nil {
+			t.Errorf("%s: LoadBlob returned %q and no error", name, data)
+		}
+	}
+}
+
+// TestConcurrentSavesLeaveOneWholeBlob saves different blobs to one path
+// from several goroutines at once, as processes sharing an adapter's cache
+// do: what is left is one of them, whole.
+func TestConcurrentSavesLeaveOneWholeBlob(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cache.bin")
+	var wg sync.WaitGroup
+	for g := range 8 {
+		wg.Go(func() {
+			blob := bytes.Repeat([]byte{byte('a' + g)}, 64<<10+g)
+			for range 20 {
+				if err := SaveBlob(path, blob); err != nil {
+					t.Error(err)
+					return
+				}
+			}
+		})
+	}
+	wg.Wait()
+	data, err := LoadBlob(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := int(data[0] - 'a')
+	if g < 0 || g >= 8 || !bytes.Equal(data, bytes.Repeat([]byte{data[0]}, 64<<10+g)) {
+		t.Fatalf("left a blob of %d bytes starting %q, not one of those saved", len(data), data[:min(len(data), 8)])
+	}
+	if leftovers, _ := filepath.Glob(path + ".*.tmp"); len(leftovers) != 0 {
+		t.Errorf("temporary files left behind: %v", leftovers)
 	}
 }

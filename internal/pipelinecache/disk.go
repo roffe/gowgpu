@@ -14,6 +14,13 @@ import (
 
 const cacheRoot = "gowgpu"
 
+// blobMagic starts every file SaveBlob writes, followed by the length of
+// the blob and its SHA-256, so that LoadBlob can tell a whole blob from a
+// torn or foreign file.
+var blobMagic = [8]byte{'g', 'o', 'w', 'g', 'p', 'u', 'p', 'c'}
+
+const blobHeaderSize = len(blobMagic) + 8 + sha256.Size
+
 // UserCachePath returns an adapter-scoped cache file path under os.UserCacheDir().
 // Example: ~/.cache/gowgpu/vulkan/<adapterKey>/pipeline.cache
 func UserCachePath(backend, adapterKey, fileName string) (string, error) {
@@ -24,7 +31,8 @@ func UserCachePath(backend, adapterKey, fileName string) (string, error) {
 	return filepath.Join(dir, cacheRoot, backend, adapterKey, fileName), nil
 }
 
-// LoadBlob reads a cache blob from disk. A missing file returns (nil, nil).
+// LoadBlob reads a cache blob SaveBlob wrote. A missing file returns
+// (nil, nil); a file that is not a whole blob returns an error.
 func LoadBlob(path string) ([]byte, error) {
 	data, err := os.ReadFile(path) //nolint:gosec // path is constructed internally from UserCacheDir
 	if os.IsNotExist(err) {
@@ -33,10 +41,17 @@ func LoadBlob(path string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("pipelinecache: read %s: %w", path, err)
 	}
-	return data, nil
+	if len(data) < blobHeaderSize || [8]byte(data) != blobMagic ||
+		binary.LittleEndian.Uint64(data[len(blobMagic):]) != uint64(len(data)-blobHeaderSize) ||
+		[sha256.Size]byte(data[len(blobMagic)+8:]) != sha256.Sum256(data[blobHeaderSize:]) {
+		return nil, fmt.Errorf("pipelinecache: %s is not a whole cache blob", path)
+	}
+	return data[blobHeaderSize:], nil
 }
 
-// SaveBlob atomically writes a cache blob to disk (write temp + rename).
+// SaveBlob writes a cache blob to disk through a temporary file of its own,
+// synced before it is renamed over path, so that a reader sees the old blob
+// or the new one whole, whoever else saves at the same time.
 func SaveBlob(path string, data []byte) error {
 	if len(data) == 0 {
 		return nil
@@ -45,12 +60,31 @@ func SaveBlob(path string, data []byte) error {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("pipelinecache: mkdir %s: %w", dir, err)
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return fmt.Errorf("pipelinecache: write %s: %w", tmp, err)
+	f, err := os.CreateTemp(dir, filepath.Base(path)+".*.tmp")
+	if err != nil {
+		return fmt.Errorf("pipelinecache: create temp in %s: %w", dir, err)
 	}
-	if err := os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
+	var header [blobHeaderSize]byte
+	copy(header[:], blobMagic[:])
+	binary.LittleEndian.PutUint64(header[len(blobMagic):], uint64(len(data)))
+	sum := sha256.Sum256(data)
+	copy(header[len(blobMagic)+8:], sum[:])
+	_, err = f.Write(header[:])
+	if err == nil {
+		_, err = f.Write(data)
+	}
+	if err == nil {
+		err = f.Sync()
+	}
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		_ = os.Remove(f.Name())
+		return fmt.Errorf("pipelinecache: write %s: %w", f.Name(), err)
+	}
+	if err := os.Rename(f.Name(), path); err != nil {
+		_ = os.Remove(f.Name())
 		return fmt.Errorf("pipelinecache: rename %s: %w", path, err)
 	}
 	return nil
