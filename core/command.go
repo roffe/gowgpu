@@ -700,6 +700,7 @@ func (e *CoreCommandEncoder) BeginRenderPass(desc *RenderPassDescriptor) (*CoreR
 	if ds := desc.DepthStencilAttachment; ds != nil && ds.View != nil {
 		pass.depthReadOnly, pass.stencilReadOnly = ds.DepthReadOnly, ds.StencilReadOnly
 	}
+	pass.width, pass.height = passExtent(desc)
 	if e.mutable != nil {
 		pass.scope = &e.mutable.pass
 	}
@@ -1608,6 +1609,9 @@ type CoreRenderPassEncoder struct {
 	// read-only aspects, which no pipeline of the pass may write.
 	depthReadOnly, stencilReadOnly bool
 
+	// width and height are the render extent, which holds the scissor rect.
+	width, height uint32
+
 	// passCtx holds passContext, and halDesc the HAL descriptor the backend
 	// reads until End, so a pass allocates neither.
 	passCtx RenderPassContext
@@ -1742,6 +1746,17 @@ func (p *CoreRenderPassEncoder) SetViewport(vp gputypes.Viewport) {
 	if p.ended {
 		return
 	}
+	var maxDimension uint32
+	if p.device != nil {
+		maxDimension = p.device.Limits.MaxTextureDimension2D
+	}
+	if maxDimension == 0 {
+		maxDimension = gputypes.DefaultLimits().MaxTextureDimension2D
+	}
+	if err := checkViewport(vp, maxDimension); err != nil {
+		p.encoder.SetError(fmt.Errorf("SetViewport: %w", err))
+		return
+	}
 	if p.raw != nil {
 		p.raw.SetViewport(vp)
 	}
@@ -1750,6 +1765,10 @@ func (p *CoreRenderPassEncoder) SetViewport(vp gputypes.Viewport) {
 // SetScissorRect sets the scissor rectangle.
 func (p *CoreRenderPassEncoder) SetScissorRect(rect gputypes.ScissorRect) {
 	if p.ended {
+		return
+	}
+	if err := checkScissor(rect, p.width, p.height); err != nil {
+		p.encoder.SetError(fmt.Errorf("SetScissorRect: %w", err))
 		return
 	}
 	if p.raw != nil {

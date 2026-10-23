@@ -158,3 +158,48 @@ func attachmentChannel(name string, has, readOnly bool, load gputypes.LoadOp, st
 	}
 	return ""
 }
+
+// passExtent is the render extent of a pass's attachments, which
+// validateRenderPassDescriptor has checked agree.
+func passExtent(desc *RenderPassDescriptor) (width, height uint32) {
+	for i := range desc.ColorAttachments {
+		if v := desc.ColorAttachments[i].View; v != nil && v.Parent != nil {
+			return renderExtent(v)
+		}
+	}
+	if ds := desc.DepthStencilAttachment; ds != nil && ds.View != nil && ds.View.Parent != nil {
+		return renderExtent(ds.View)
+	}
+	return 0, 0
+}
+
+// checkViewport checks a viewport the way wgpu-core does: a size from 0 to
+// maxDimension, a position within twice that, which every Vulkan device's
+// viewport bounds range covers, and depths in [0, 1] with the minimum
+// first. A NaN fails every comparison and so each check.
+//
+// Reference: wgpu-core command/render.rs set_viewport
+func checkViewport(vp gputypes.Viewport, maxDimension uint32) error {
+	size := float32(maxDimension)
+	bound := 2 * size
+	switch {
+	case !(vp.Width >= 0 && vp.Width <= size && vp.Height >= 0 && vp.Height <= size):
+		return fmt.Errorf("viewport size %vx%v is not within 0 and %d", vp.Width, vp.Height, maxDimension)
+	case !(vp.X >= -bound && vp.Y >= -bound && vp.X+vp.Width <= bound-1 && vp.Y+vp.Height <= bound-1):
+		return fmt.Errorf("viewport at %v,%v sized %vx%v reaches past %v", vp.X, vp.Y, vp.Width, vp.Height, bound-1)
+	case !(vp.MinDepth >= 0 && vp.MinDepth <= vp.MaxDepth && vp.MaxDepth <= 1):
+		return fmt.Errorf("viewport depths %v to %v are not an ascending range in [0, 1]", vp.MinDepth, vp.MaxDepth)
+	}
+	return nil
+}
+
+// checkScissor checks that a scissor rect lies inside the render extent.
+//
+// Reference: wgpu-core command/render.rs set_scissor
+func checkScissor(r gputypes.ScissorRect, width, height uint32) error {
+	if uint64(r.X)+uint64(r.Width) > uint64(width) || uint64(r.Y)+uint64(r.Height) > uint64(height) {
+		return fmt.Errorf("scissor rect at %d,%d sized %dx%d is not inside the %dx%d render extent",
+			r.X, r.Y, r.Width, r.Height, width, height)
+	}
+	return nil
+}
