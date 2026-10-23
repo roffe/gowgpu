@@ -372,11 +372,7 @@ func (s *Surface) detachSwapchainFromQueue(swapchain *Swapchain) {
 	queue := s.device.queue
 	queue.mu.Lock()
 	defer queue.mu.Unlock()
-	if queue.activeSwapchain != swapchain {
-		return
-	}
-	queue.activeSwapchain = nil
-	queue.acquireUsed = false
+	queue.release(swapchain)
 }
 
 // Unconfigure removes surface configuration.
@@ -422,10 +418,11 @@ func (s *Surface) AcquireTexture(_ hal.Fence) (*hal.AcquiredSurfaceTexture, erro
 	// This ensures the queue waits for image acquisition before rendering
 	// and signals completion before present.
 	if s.device != nil && s.device.queue != nil {
-		s.device.queue.mu.Lock()
-		s.device.queue.activeSwapchain = s.swapchain
-		s.device.queue.acquireUsed = false // Reset for new frame
-		s.device.queue.mu.Unlock()
+		q := s.device.queue
+		q.mu.Lock()
+		s.swapchain.acquireUsed = false
+		q.hold(s.swapchain)
+		q.mu.Unlock()
 	}
 
 	return &hal.AcquiredSurfaceTexture{
@@ -450,13 +447,10 @@ func (s *Surface) DiscardTexture(_ hal.SurfaceTexture) {
 		if s.device != nil && s.device.queue != nil {
 			q := s.device.queue
 			q.mu.Lock()
-			if q.activeSwapchain == s.swapchain {
-				if err := q.consumeAcquire(s.swapchain); err != nil {
-					hal.Logger().Warn("vulkan: discarded frame's acquire semaphore not consumed", "err", err)
-				}
-				q.activeSwapchain = nil
-				q.acquireUsed = false
+			if err := q.consumeAcquire(s.swapchain); err != nil {
+				hal.Logger().Warn("vulkan: discarded frame's acquire semaphore not consumed", "err", err)
 			}
+			q.release(s.swapchain)
 			q.mu.Unlock()
 		}
 	}
