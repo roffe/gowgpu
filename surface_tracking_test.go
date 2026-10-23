@@ -79,12 +79,16 @@ func (*orderDevice) CreateTextureView(tex hal.Texture, _ *hal.TextureViewDescrip
 }
 
 // orderQueue is a batchingQueue that keeps what the command buffers it
-// submits do to textures, in the order they run.
+// submits do to textures, in the order they run. A direct one writes
+// straight away instead of recording the writes, as GL does.
 type orderQueue struct {
 	batchingQueue
-	run []hal.TextureBarrier
-	ops []textureOp
+	direct bool
+	run    []hal.TextureBarrier
+	ops    []textureOp
 }
+
+func (q *orderQueue) SupportsCommandBufferCopies() bool { return !q.direct }
 
 func (q *orderQueue) Submit(cbs []hal.CommandBuffer) (uint64, error) {
 	for _, cb := range cbs {
@@ -96,11 +100,11 @@ func (q *orderQueue) Submit(cbs []hal.CommandBuffer) (uint64, error) {
 	return q.batchingQueue.Submit(cbs)
 }
 
-// newOrderSurface is a device on an orderQueue, and a surface configured
-// on it.
-func newOrderSurface(t *testing.T) (*Device, *orderQueue, *Surface) {
+// newOrderSurface is a device on an orderQueue, direct or not, and a
+// surface configured on it.
+func newOrderSurface(t *testing.T, direct bool) (*Device, *orderQueue, *Surface) {
 	t.Helper()
-	q := &orderQueue{}
+	q := &orderQueue{direct: direct}
 	device, err := NewDeviceFromHAL(&orderDevice{}, q, 0, gputypes.DefaultLimits(), "surface-order")
 	if err != nil {
 		t.Fatalf("NewDeviceFromHAL: %v", err)
@@ -130,7 +134,7 @@ func newOrderSurface(t *testing.T) (*Device, *orderQueue, *Surface) {
 // the barrier into the pass goes from the write's state, and the submit
 // leaves the texture in its present state for the present.
 func TestSurfaceTextureTrackedInExecutionOrder(t *testing.T) {
-	device, q, surface := newOrderSurface(t)
+	device, q, surface := newOrderSurface(t, false)
 	st, _, err := surface.GetCurrentTexture()
 	if err != nil {
 		t.Fatalf("GetCurrentTexture: %v", err)
@@ -181,13 +185,16 @@ func TestSurfaceTextureTrackedInExecutionOrder(t *testing.T) {
 // decided at the submit, in the order the work runs in: a queue write
 // recorded after the pass runs ahead of it and sets the texture, as does a
 // pass that clears it in a command buffer submitted first. A surface
-// texture nothing set is zeroed at the present.
+// texture nothing set is zeroed at the present. The same goes for a queue
+// that writes straight away, as GL does, but for the queue write, which
+// runs there and then.
 func TestSurfaceTextureZeroedInExecutionOrder(t *testing.T) {
 	load, clr := gputypes.LoadOpLoad, gputypes.LoadOpClear
 	tests := []struct {
-		name string
-		run  func(t *testing.T, device *Device, st *SurfaceTexture, view *TextureView)
-		want func(raw hal.Texture) []textureOp
+		name    string
+		batched bool // only on a queue that records its writes
+		run     func(t *testing.T, device *Device, st *SurfaceTexture, view *TextureView)
+		want    func(raw hal.Texture) []textureOp
 	}{
 		{
 			name: "a pass loads it first",
@@ -199,7 +206,8 @@ func TestSurfaceTextureZeroedInExecutionOrder(t *testing.T) {
 			},
 		},
 		{
-			name: "a write recorded after the pass runs first",
+			name:    "a write recorded after the pass runs first",
+			batched: true,
 			run: func(t *testing.T, device *Device, st *SurfaceTexture, view *TextureView) {
 				cb := recordPass(t, device, view, load)
 				if err := device.Queue().WriteTexture(&ImageCopyTexture{Texture: st.AsTexture()}, make([]byte, 4*4*4),
@@ -244,32 +252,46 @@ func TestSurfaceTextureZeroedInExecutionOrder(t *testing.T) {
 			},
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			device, q, surface := newOrderSurface(t)
-			st, _, err := surface.GetCurrentTexture()
-			if err != nil {
-				t.Fatalf("GetCurrentTexture: %v", err)
+	for _, direct := range []bool{false, true} {
+		for _, tt := range tests {
+			if direct && tt.batched {
+				continue
 			}
-			view, err := st.CreateView(nil)
-			if err != nil {
-				t.Fatalf("CreateView: %v", err)
+			name := tt.name
+			if direct {
+				name = "direct/" + name
 			}
-			defer view.Release()
-			tt.run(t, device, st, view)
-			if err := surface.Present(st); err != nil {
-				t.Fatalf("Present: %v", err)
-			}
-			var got []textureOp
-			for _, op := range q.ops {
-				if op.tex == st.hal {
-					got = append(got, op)
-				}
-			}
-			if want := tt.want(st.hal); !slices.Equal(got, want) {
-				t.Errorf("passes and copies on the surface texture = %+v, want %+v", got, want)
-			}
-		})
+			t.Run(name, func(t *testing.T) {
+				testSurfaceZeroOrder(t, direct, tt.run, tt.want)
+			})
+		}
+	}
+}
+
+// testSurfaceZeroOrder runs one case of TestSurfaceTextureZeroedInExecutionOrder.
+func testSurfaceZeroOrder(t *testing.T, direct bool, run func(*testing.T, *Device, *SurfaceTexture, *TextureView), expected func(hal.Texture) []textureOp) {
+	device, q, surface := newOrderSurface(t, direct)
+	st, _, err := surface.GetCurrentTexture()
+	if err != nil {
+		t.Fatalf("GetCurrentTexture: %v", err)
+	}
+	view, err := st.CreateView(nil)
+	if err != nil {
+		t.Fatalf("CreateView: %v", err)
+	}
+	defer view.Release()
+	run(t, device, st, view)
+	if err := surface.Present(st); err != nil {
+		t.Fatalf("Present: %v", err)
+	}
+	var got []textureOp
+	for _, op := range q.ops {
+		if op.tex == st.hal {
+			got = append(got, op)
+		}
+	}
+	if want := expected(st.hal); !slices.Equal(got, want) {
+		t.Errorf("passes and copies on the surface texture = %+v, want %+v", got, want)
 	}
 }
 

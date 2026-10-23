@@ -344,11 +344,11 @@ func dropHeld(destroys []heldDestroy, refs []*core.ResourceRef) {
 }
 
 // newPendingWrites creates a pendingWrites for the given HAL device and queue.
-// For batching backends (DX12/Vulkan/Metal), pool is the shared device-level
-// encoder pool (same pool used by CreateCommandEncoder). This matches Rust
-// wgpu-core which uses a single device.command_allocator for both user command
-// encoders and internal PendingWrites (queue.rs:1373). pool may be nil for
-// non-batching backends (GLES/Software).
+// pool is the shared device-level encoder pool (same pool used by
+// CreateCommandEncoder). This matches Rust wgpu-core which uses a single
+// device.command_allocator for both user command encoders and internal
+// PendingWrites (queue.rs:1373). GL, whose writes go straight to the HAL,
+// records nothing in it but the clear of a surface texture presented unset.
 //
 // The staging belt's maxStagingBufferSize is automatically queried from the HAL
 // device via the optional hal.MaxStagingBufferSizer interface (BUG-VK-001).
@@ -358,12 +358,12 @@ func newPendingWrites(halDevice hal.Device, halQueue hal.Queue, pool *encoderPoo
 	pw := &pendingWrites{
 		halDevice:    halDevice,
 		halQueue:     halQueue,
+		pool:         pool,
 		dstBuffers:   make(map[hal.Buffer]dstBuffer),
 		dstTextures:  make(map[hal.Texture]struct{}),
 		usesBatching: halQueue.SupportsCommandBufferCopies(),
 	}
 	if pw.usesBatching {
-		pw.pool = pool
 		// Query the device for its maximum staging buffer allocation size.
 		// Vulkan devices report min(64MB, maxMemoryAllocationSize) to prevent
 		// vkAllocateMemory from silently failing on oversized requests (BUG-VK-001).
@@ -1219,20 +1219,23 @@ func (pw *pendingWrites) zeroTextureLocked(t *Texture) error {
 }
 
 // zeroForPresent zeroes t, a surface texture about to be presented, when
-// nothing set it since its acquire, in the batch the present submits.
-// ponytail: GL presents such a texture as it is, its queue writes record
-// no pass; one would need a submit of its own.
+// nothing set it since its acquire, with a pass in the batch the present
+// submits, on GL too, whose batches hold nothing else.
 //
 // Reference: wgpu-core device/queue.rs prepare_surface_texture_for_present
 func (pw *pendingWrites) zeroForPresent(t *Texture) error {
 	pw.mu.Lock()
 	defer pw.mu.Unlock()
-	if _, ok := pw.zero[t]; !ok || !pw.usesBatching {
+	if _, ok := pw.zero[t]; !ok || pw.pool == nil {
 		return nil
 	}
 	delete(pw.zero, t)
 	pw.undo.zero = append(pw.undo.zero, t)
-	return pw.zeroTextureLocked(t)
+	raw := t.resolveHAL()
+	if raw == nil {
+		return nil
+	}
+	return pw.clearTextureLocked(t, raw)
 }
 
 // clearTextureLocked zeroes t, a 2D texture, with a render pass per mip level
