@@ -173,7 +173,7 @@ func TestBeginRenderPassTimestampWrites(t *testing.T) {
 	device := newCaptureDevice(h)
 	active := newTestQuerySet(resource, device)
 	released := newTestQuerySet(resource, device)
-	released.released = true
+	released.released.Store(true)
 	occlusion := &QuerySet{core: core.NewQuerySet(resource, device.core, hal.QueryTypeOcclusion, 4, "occlusion"), device: device}
 
 	tests := []struct {
@@ -430,7 +430,7 @@ func TestResolveQuerySetTracksItsResources(t *testing.T) {
 	if err := validateCommandBufferForSubmit(cb, 0); err != nil {
 		t.Fatalf("validateCommandBufferForSubmit() error = %v", err)
 	}
-	querySet.released = true
+	querySet.released.Store(true)
 	if err := validateCommandBufferForSubmit(cb, 0); !errors.Is(err, ErrReleased) {
 		t.Fatalf("validateCommandBufferForSubmit() with a released query set = %v, want ErrReleased", err)
 	}
@@ -447,7 +447,7 @@ func TestResolveQuerySetGuards(t *testing.T) {
 	}
 	querySet := newTestQuerySet(resource, device)
 	releasedQuerySet := newTestQuerySet(resource, device)
-	releasedQuerySet.released = true
+	releasedQuerySet.released.Store(true)
 	activeDestination := &Buffer{released: &atomic.Bool{}}
 	releasedDestination := &Buffer{released: &atomic.Bool{}}
 	releasedDestination.released.Store(true)
@@ -501,7 +501,7 @@ func TestResolveQuerySetRecordsErrors(t *testing.T) {
 		{name: "nil destination", querySet: func(d *Device) *QuerySet { return newTestQuerySet(resource, d) }},
 		{name: "released query set", querySet: func(d *Device) *QuerySet {
 			q := newTestQuerySet(resource, d)
-			q.released = true
+			q.released.Store(true)
 			return q
 		}, destination: &Buffer{released: &atomic.Bool{}}},
 		{name: "released destination", querySet: func(d *Device) *QuerySet { return newTestQuerySet(resource, d) }, destination: func() *Buffer {

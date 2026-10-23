@@ -379,10 +379,9 @@ func TestRenderPassDescriptorToHAL(t *testing.T) {
 func TestImageCopyTextureToHAL(t *testing.T) {
 	tex := ImageCopyTexture{
 		Texture: &Texture{
-			hal:      nil,
-			device:   &Device{},
-			format:   TextureFormatBGRA8Unorm,
-			released: false,
+			hal:    nil,
+			device: &Device{},
+			format: TextureFormatBGRA8Unorm,
 		},
 		MipLevel: 1,
 		Origin:   Origin3D{X: 10, Y: 20, Z: 0},

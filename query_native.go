@@ -4,6 +4,7 @@ package wgpu
 
 import (
 	"fmt"
+	"sync/atomic"
 
 	"github.com/roffe/gowgpu/core"
 	"github.com/roffe/gowgpu/hal"
@@ -13,7 +14,7 @@ import (
 type QuerySet struct {
 	core     *core.QuerySet
 	device   *Device
-	released bool
+	released atomic.Bool
 
 	// mark is the last command encoder that tracked this query set.
 	mark encoderMark
@@ -38,7 +39,7 @@ func (qs *QuerySet) Count() uint32 {
 // halQuerySet returns the underlying HAL query set while holding the device
 // snatch lock, or nil after the query set or its device has been released.
 func (qs *QuerySet) halQuerySet() hal.QuerySet {
-	if qs == nil || qs.core == nil || qs.device == nil || qs.device.core == nil || qs.released {
+	if qs == nil || qs.core == nil || qs.device == nil || qs.device.core == nil || qs.released.Load() {
 		return nil
 	}
 
@@ -49,12 +50,21 @@ func (qs *QuerySet) halQuerySet() hal.QuerySet {
 }
 
 // Release destroys the query set. Destruction is deferred until the GPU
-// completes any submission that may reference this query set.
+// completes any submission that may reference this query set. A Release
+// while another goroutine submits waits for that Submit.
 func (qs *QuerySet) Release() {
-	if qs == nil || qs.released {
+	if qs == nil {
 		return
 	}
-	qs.released = true
+	// A Submit holds the queue lock from checking its query sets until its
+	// submission is the last one, which the destroy below waits for.
+	if qs.device != nil && qs.device.queue != nil {
+		qs.device.queue.mu.Lock()
+		defer qs.device.queue.mu.Unlock()
+	}
+	if qs.released.Swap(true) {
+		return
+	}
 	if qs.core == nil {
 		return
 	}

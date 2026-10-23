@@ -20,7 +20,7 @@ func TestQuerySet_ReleaseNilCore(t *testing.T) {
 	t.Parallel()
 	qs := &QuerySet{device: NewBareDeviceForTest()}
 	qs.Release()
-	if !qs.released {
+	if !qs.released.Load() {
 		t.Fatal("Release should mark query set released")
 	}
 }

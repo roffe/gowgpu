@@ -4,6 +4,7 @@ package wgpu
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"github.com/roffe/gowgpu/core"
 	"github.com/roffe/gowgpu/gputypes"
@@ -16,7 +17,7 @@ type Texture struct {
 	device       *Device
 	format       gputypes.TextureFormat
 	viewFormats  []gputypes.TextureFormat
-	released     bool
+	released     atomic.Bool
 	surface      *core.Surface
 	surfaceLease uint64
 
@@ -56,7 +57,7 @@ type Texture struct {
 func (t *Texture) sharedDefaultView(dev hal.Device, raw hal.Texture) (hal.TextureView, hal.TextureViewDescriptor) {
 	t.viewMu.Lock()
 	defer t.viewMu.Unlock()
-	if t.defaultView == nil && !t.released {
+	if t.defaultView == nil && !t.released.Load() {
 		var desc hal.TextureViewDescriptor
 		if t.coreTexture != nil {
 			resolved, err := core.ResolveTextureViewDescriptor(t.coreTexture, t.viewFormats, nil)
@@ -80,7 +81,7 @@ func (t *Texture) sharedDefaultView(dev hal.Device, raw hal.Texture) (hal.Textur
 // one operation; acquisition and presentation are serialized by the render
 // loop, so the lease remains stable across those calls.
 func (t *Texture) resolveHAL() hal.Texture {
-	if t == nil || t.released || t.hal == nil || t.device == nil || t.device.released.Load() {
+	if t == nil || t.released.Load() || t.hal == nil || t.device == nil || t.device.released.Load() {
 		return nil
 	}
 	if t.surface != nil && !t.surface.AcquisitionValid(t.surfaceLease) {
@@ -94,18 +95,24 @@ func (t *Texture) Format() gputypes.TextureFormat { return t.format }
 
 // Release destroys the texture. The underlying HAL texture is not freed
 // immediately — destruction is deferred until the GPU completes any submission
-// that may reference it. This prevents use-after-free on DX12/Vulkan.
+// that may reference it. This prevents use-after-free on DX12/Vulkan. A Release
+// while another goroutine submits waits for that Submit.
 func (t *Texture) Release() {
-	if t.released {
-		return
-	}
 	// Surface textures are borrowed swapchain images. The wrapper never owns
 	// their HAL lifetime, even while the acquisition is still active.
 	if t.surface != nil {
-		t.released = true
+		t.released.Store(true)
 		return
 	}
-	t.released = true
+	// A Submit holds the queue lock from checking its textures until its
+	// submission is the last one, which the destroy below waits for.
+	if q := t.device.queue; q != nil {
+		q.mu.Lock()
+		defer q.mu.Unlock()
+	}
+	if t.released.Swap(true) {
+		return
+	}
 	if q := t.device.queue; q != nil && q.pending != nil {
 		q.pending.forgetZero(t)
 	}
