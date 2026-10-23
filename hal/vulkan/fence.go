@@ -6,6 +6,7 @@
 package vulkan
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -50,6 +51,9 @@ type deviceFence struct {
 	// isTimeline indicates which path is active.
 	isTimeline bool
 }
+
+// errWaitTimeout is the error of a fence wait that timed out.
+var errWaitTimeout = errors.New("vulkan: fence wait timed out")
 
 // initTimelineFence creates a timeline semaphore for GPU synchronization.
 // Returns an error if the driver does not support timeline semaphores.
@@ -184,7 +188,7 @@ func (f *deviceFence) waitForValue(cmds *vk.Commands, device vk.Device, value ui
 		f.completed(value)
 		return nil
 	case vk.Timeout:
-		return fmt.Errorf("vulkan: timeline semaphore wait timed out (value=%d)", value)
+		return fmt.Errorf("vulkan: timeline semaphore wait timed out (value=%d): %w", value, errWaitTimeout)
 	case vk.ErrorDeviceLost:
 		return hal.ErrDeviceLost
 	default:
