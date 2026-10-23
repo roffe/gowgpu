@@ -1198,6 +1198,21 @@ func (sc *Swapchain) acquireNextImage() (*SwapchainTexture, bool, error) {
 // and the device supports VK_KHR_incremental_present, a VkPresentRegionsKHR
 // structure is chained into VkPresentInfoKHR.PNext as a compositor hint.
 // When empty or unsupported, the present path is identical to a full present.
+// damageRegions appends to dst the damage rects within an image of extent,
+// each clipped to it, leaving out those with nothing inside.
+func damageRegions(dst []vk.RectLayerKHR, rects []image.Rectangle, extent vk.Extent2D) []vk.RectLayerKHR {
+	bounds := image.Rect(0, 0, int(extent.Width), int(extent.Height))
+	for _, r := range rects {
+		if r = r.Intersect(bounds); !r.Empty() {
+			dst = append(dst, vk.RectLayerKHR{
+				Offset: vk.Offset2D{X: int32(r.Min.X), Y: int32(r.Min.Y)},
+				Extent: vk.Extent2D{Width: uint32(r.Dx()), Height: uint32(r.Dy())},
+			})
+		}
+	}
+	return dst
+}
+
 func (sc *Swapchain) present(queue *Queue, damageRects []image.Rectangle) error {
 	if err := sc.stateError("present from"); err != nil {
 		return err
@@ -1260,15 +1275,7 @@ func (sc *Swapchain) present(queue *Queue, damageRects []image.Rectangle) error 
 		presentRegion  vk.PresentRegionKHR
 		presentRegions vk.PresentRegionsKHR
 	)
-	if len(damageRects) > 0 && sc.device.supportsIncrementalPresent {
-		vkRects := stackRects[:0]
-		for _, r := range damageRects {
-			vkRects = append(vkRects, vk.RectLayerKHR{
-				Offset: vk.Offset2D{X: int32(r.Min.X), Y: int32(r.Min.Y)},
-				Extent: vk.Extent2D{Width: uint32(r.Dx()), Height: uint32(r.Dy())},
-				Layer:  0,
-			})
-		}
+	if vkRects := damageRegions(stackRects[:0], damageRects, sc.extent); len(vkRects) > 0 && sc.device.supportsIncrementalPresent {
 		presentRegion = vk.PresentRegionKHR{
 			RectangleCount: uint32(len(vkRects)),
 			PRectangles:    &vkRects[0],
