@@ -637,10 +637,12 @@ func (c *compiledLibrary) release() {
 }
 
 // compileLibrary writes the MSL of the entry point name of stage in module,
-// its resources at the slots layout gives them, and builds it.
+// its resources at the slots layout gives them, and builds it. A vertex
+// stage of a point-list pipeline writes [[point_size]] 1: Metal leaves the
+// size of a point it doesn't write undefined.
 //
 // Reference: Rust wgpu-hal metal/device.rs load_shader.
-func (d *Device) compileLibrary(module *ShaderModule, layout *PipelineLayout, stage ir.ShaderStage, name string) (*compiledLibrary, error) {
+func (d *Device) compileLibrary(module *ShaderModule, layout *PipelineLayout, stage ir.ShaderStage, name string, points bool) (*compiledLibrary, error) {
 	if module == nil || module.irModule == nil {
 		return nil, fmt.Errorf("metal: shader module has no WGSL source")
 	}
@@ -656,6 +658,7 @@ func (d *Device) compileLibrary(module *ShaderModule, layout *PipelineLayout, st
 	if err != nil {
 		return nil, fmt.Errorf("metal: %w", err)
 	}
+	options.AllowAndForcePointSize = points
 	sizesBindings, err := mslmap.SizesBindings(module.irModule, stage, name)
 	if err != nil {
 		return nil, fmt.Errorf("metal: %w", err)
@@ -751,7 +754,8 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 	if !ok || vertexModule == nil {
 		return nil, fmt.Errorf("metal: invalid vertex shader module")
 	}
-	vertex, err := d.compileLibrary(vertexModule, pipeLayout, ir.StageVertex, desc.Vertex.EntryPoint)
+	points := desc.Primitive.Topology == gputypes.PrimitiveTopologyPointList
+	vertex, err := d.compileLibrary(vertexModule, pipeLayout, ir.StageVertex, desc.Vertex.EntryPoint, points)
 	if err != nil {
 		return nil, err
 	}
@@ -763,7 +767,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		if !ok || fragmentModule == nil {
 			return nil, fmt.Errorf("metal: invalid fragment shader module")
 		}
-		fragment, err = d.compileLibrary(fragmentModule, pipeLayout, ir.StageFragment, desc.Fragment.EntryPoint)
+		fragment, err = d.compileLibrary(fragmentModule, pipeLayout, ir.StageFragment, desc.Fragment.EntryPoint, false)
 		if err != nil {
 			return nil, err
 		}
@@ -1039,7 +1043,7 @@ func (d *Device) CreateComputePipeline(desc *hal.ComputePipelineDescriptor) (hal
 		return nil, fmt.Errorf("metal: invalid compute shader module")
 	}
 
-	lib, err := d.compileLibrary(computeModule, pipeLayout, ir.StageCompute, desc.Compute.EntryPoint)
+	lib, err := d.compileLibrary(computeModule, pipeLayout, ir.StageCompute, desc.Compute.EntryPoint, false)
 	if err != nil {
 		return nil, err
 	}
