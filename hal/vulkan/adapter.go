@@ -81,6 +81,9 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 	if ext := externalMemoryExtension(); available[ext] {
 		extensions = append(extensions, ext+"\x00")
 	}
+	if available["VK_KHR_portability_subset"] {
+		extensions = append(extensions, "VK_KHR_portability_subset\x00")
+	}
 	storeOpNone := a.apiVersion() >= vkMakeVersion(1, 3, 0)
 	for _, ext := range []string{"VK_KHR_load_store_op_none", "VK_EXT_load_store_op_none", "VK_QCOM_render_pass_store_ops"} {
 		if !storeOpNone && available[ext] {

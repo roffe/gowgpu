@@ -22,6 +22,7 @@ import (
 const (
 	extensionWaylandSurface = "VK_KHR_wayland_surface\x00"
 	extensionXlibSurface    = "VK_KHR_xlib_surface\x00"
+	portabilityEnumeration  = "VK_KHR_portability_enumeration\x00"
 )
 
 // Backend implements hal.Backend for Vulkan.
@@ -91,7 +92,12 @@ func (Backend) CreateInstance(desc *hal.InstanceDescriptor) (hal.Instance, error
 	if err != nil {
 		return nil, fmt.Errorf("vulkan: enumerate instance extensions: %w", err)
 	}
-	extensions := selectAvailableExtensions(append([]string{"VK_KHR_surface\x00"}, platformSurfaceExtensions()...), availableExtensions)
+	wanted := append([]string{"VK_KHR_surface\x00"}, platformSurfaceExtensions()...)
+	if runtime.GOOS == "darwin" {
+		// MoltenVK is a portability driver: the loader lists it only when asked.
+		wanted = append(wanted, portabilityEnumeration)
+	}
+	extensions := selectAvailableExtensions(wanted, availableExtensions)
 
 	// Optional: validation layers for debug (only if available)
 	var layers []string
@@ -124,6 +130,9 @@ func (Backend) CreateInstance(desc *hal.InstanceDescriptor) (hal.Instance, error
 		EnabledLayerCount:     uint32(len(layers)),
 	}
 
+	if slices.Contains(extensions, portabilityEnumeration) {
+		createInfo.Flags = vk.InstanceCreateFlags(vk.InstanceCreateEnumeratePortabilityBitKhr)
+	}
 	if len(extensionPtrs) > 0 {
 		createInfo.PpEnabledExtensionNames = &extensionPtrs[0]
 	}
