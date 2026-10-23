@@ -112,6 +112,8 @@ type Texture struct {
 	size        hal.Extent3D
 	mipLevels   uint32
 	sampleCount uint32 // 1 for regular textures, >1 for MSAA
+	usage       gputypes.TextureUsage
+	immutable   bool // made with glTexStorage*, which texture views take
 	glCtx       *gl.Context
 
 	// baseLevel and maxLevel are the mip range TEXTURE_BASE_LEVEL and
@@ -162,9 +164,11 @@ func (t *Texture) Destroy() {
 // NativeHandle returns the GL texture object ID.
 func (t *Texture) NativeHandle() uint64 { return uint64(t.id) }
 
-// TextureView implements hal.TextureView for OpenGL. GL has no view
-// objects: the view's mip range and aspect are set on the texture when it is
-// bound, and its mip and layer chosen when it is attached.
+// TextureView implements hal.TextureView for OpenGL. A view the shaders
+// take as its texture is no GL object: its mip range and aspect are set on
+// the texture when it is bound. One of another dimension or of some of the
+// layers is a texture view, id, where the context has them. A view
+// attached to a framebuffer attaches its texture's mip level and layer.
 type TextureView struct {
 	texture    *Texture
 	dimension  gputypes.TextureViewDimension
@@ -173,6 +177,7 @@ type TextureView struct {
 	mipCount   uint32
 	baseLayer  uint32
 	layerCount uint32
+	id, target uint32          // the texture view and its target, 0 for none
 	handle     uint64          // NativeHandle, which bind group entries find the view by
 	isSurface  bool            // true for default framebuffer (surface texture)
 	surfaceTex *SurfaceTexture // non-nil only when isSurface is true
@@ -301,6 +306,9 @@ func newBindGroup(desc *BindGroupDescriptor) (*BindGroup, error) {
 		case gputypes.TextureViewBinding:
 			if b.view = viewByHandle(res.TextureView); b.view == nil {
 				return nil, fmt.Errorf("gles: binding %d: unknown texture view", e.Binding)
+			}
+			if err := b.view.bindable(b.class); err != nil {
+				return nil, fmt.Errorf("gles: binding %d: %w", e.Binding, err)
 			}
 		case gputypes.SamplerBinding:
 			b.sampler = uint32(res.Sampler)

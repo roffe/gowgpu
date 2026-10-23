@@ -99,6 +99,7 @@ type Context struct {
 	// Immutable storage and compressed uploads (GL 4.2)
 	glTexStorage2D            uintptr
 	glTexStorage3D            uintptr
+	glTextureView             uintptr // GL 4.3, ARB_texture_view
 	glCompressedTexSubImage2D uintptr
 	glCompressedTexSubImage3D uintptr
 
@@ -315,6 +316,7 @@ func (c *Context) Load(getProcAddr ProcAddressFunc) error {
 	c.glGenerateMipmap = getProcAddr("glGenerateMipmap")
 	c.glTexStorage2D = getProcAddr("glTexStorage2D")
 	c.glTexStorage3D = getProcAddr("glTexStorage3D")
+	c.glTextureView = getProcAddr("glTextureView")
 	c.glCompressedTexSubImage2D = getProcAddr("glCompressedTexSubImage2D")
 	c.glCompressedTexSubImage3D = getProcAddr("glCompressedTexSubImage3D")
 	c.glTexImage3D = getProcAddr("glTexImage3D")
@@ -817,6 +819,14 @@ func (c *Context) TexStorage2D(target uint32, levels int32, internalformat uint3
 // bound array or 3D texture (GL 4.2, ARB_texture_storage).
 func (c *Context) TexStorage3D(target uint32, levels int32, internalformat uint32, width, height, depth int32) {
 	syscall.SyscallN(c.glTexStorage3D, uintptr(target), uintptr(levels), uintptr(internalformat), uintptr(width), uintptr(height), uintptr(depth))
+}
+
+// TextureView makes texture, a new name, a view of numLevels mip levels from
+// minLevel and numLayers layers from minLayer of origTexture, which has
+// immutable storage, as a texture of target and internalFormat.
+func (c *Context) TextureView(texture, target, origTexture, internalFormat, minLevel, numLevels, minLayer, numLayers uint32) {
+	syscall.SyscallN(c.glTextureView, uintptr(texture), uintptr(target), uintptr(origTexture), uintptr(internalFormat),
+		uintptr(minLevel), uintptr(numLevels), uintptr(minLayer), uintptr(numLayers))
 }
 
 // TexImage3D specifies a level of an array or 3D texture. pixels is 0 for

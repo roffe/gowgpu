@@ -167,14 +167,27 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *TextureViewDescrip
 	if err != nil {
 		return nil, err
 	}
+	if v.wantsTexture(d.formats.textureView) {
+		glCtx := d.ctx.Lock()
+		v.makeTexture(glCtx)
+		d.ctx.Unlock()
+	}
 	return v, nil
 }
 
 // DestroyTextureView destroys a texture view.
 func (d *Device) DestroyTextureView(view hal.TextureView) {
-	if v, ok := view.(*TextureView); ok {
-		v.Destroy()
+	v, ok := view.(*TextureView)
+	if !ok {
+		return
 	}
+	if v.id != 0 && d.ctx != nil {
+		glCtx := d.ctx.Lock()
+		glCtx.DeleteTextures(v.id)
+		d.ctx.Unlock()
+		v.id = 0
+	}
+	v.Destroy()
 }
 
 // CreateSampler creates a texture sampler using GL sampler objects (GL 3.3+).

@@ -3,6 +3,7 @@
 package wgpu
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/roffe/gowgpu/gputypes"
@@ -30,12 +31,10 @@ const viewDefaultsShader = `
 // through a 2D view of layer 1 that leaves the layer count unset. WebGPU
 // makes the first an array of both layers and the second one layer;
 // Vulkan made a 2D view of every layer for the first, which sampled
-// layer 0, and of all remaining layers for the second.
+// layer 0, and of all remaining layers for the second. GL sampled the
+// array texture through the 2D view, which read nothing.
 func TestTextureViewDefaults(t *testing.T) {
 	device, h := newValidatedDevice(t)
-	if h.backend == gputypes.BackendGL {
-		t.Skip("GL ignores the views of a texture, see the README's known issues")
-	}
 	tex, err := device.CreateTexture(&TextureDescriptor{
 		Label:         "two-layers",
 		Size:          Extent3D{Width: pixSide, Height: pixSide, DepthOrArrayLayers: 2},
@@ -104,6 +103,9 @@ func TestTextureViewDefaults(t *testing.T) {
 		{Binding: 0, TextureView: arrayView},
 		{Binding: 1, TextureView: layerView},
 	}})
+	if err != nil && h.backend == gputypes.BackendGL && strings.Contains(err.Error(), "GL texture view") {
+		t.Skipf("no texture views on this GL context: %v", err)
+	}
 	if err != nil {
 		t.Fatalf("CreateBindGroup: %v", err)
 	}

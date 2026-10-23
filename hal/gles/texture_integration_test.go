@@ -737,3 +737,81 @@ func TestTextureZero(t *testing.T) {
 		}
 	})
 }
+
+// A view of one layer, or of another dimension, of a texture the shaders
+// bind is sampled through a texture view of its own, where the context has
+// them: a 2D view of layer 1 of an array texture took the array texture,
+// which a sampler2D reads nothing from. Without texture views a bind group
+// refuses such a view to sample, and takes one layer of it to store to.
+func TestLayerViewsSample(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		ctx   func(*testing.T) *AdapterContext
+		views bool
+	}{{"views", newTestAdapterContext, true}, {"no views", newTestAdapterContext, false}, {"es views", newTestESAdapterContext, true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := tc.ctx(t)
+			t.Cleanup(ctx.Destroy)
+			dev := openTestDevice(t, ctx)
+			if tc.views && !dev.formats.textureView {
+				t.Skip("no texture views on this context")
+			}
+			dev.formats.textureView = tc.views
+			tex, err := dev.CreateTexture(&hal.TextureDescriptor{
+				Size: hal.Extent3D{Width: 4, Height: 4, DepthOrArrayLayers: 2}, MipLevelCount: 1, SampleCount: 1,
+				Dimension: gputypes.TextureDimension2D, Format: gputypes.TextureFormatRGBA8Unorm,
+				Usage: gputypes.TextureUsageTextureBinding | gputypes.TextureUsageStorageBinding,
+			})
+			if err != nil {
+				t.Fatalf("CreateTexture: %v", err)
+			}
+			t.Cleanup(func() { dev.DestroyTexture(tex) })
+			whole, err := dev.CreateTextureView(tex, &hal.TextureViewDescriptor{Dimension: gputypes.TextureViewDimension2DArray})
+			if err != nil {
+				t.Fatalf("CreateTextureView(array): %v", err)
+			}
+			t.Cleanup(func() { dev.DestroyTextureView(whole) })
+			layer, err := dev.CreateTextureView(tex, &hal.TextureViewDescriptor{Dimension: gputypes.TextureViewDimension2D, BaseArrayLayer: 1, ArrayLayerCount: 1})
+			if err != nil {
+				t.Fatalf("CreateTextureView(layer 1): %v", err)
+			}
+			if whole.(*TextureView).id != 0 {
+				t.Error("the view of the whole array has a texture view of its own")
+			}
+			lv := layer.(*TextureView)
+			if got := lv.id != 0; got != tc.views {
+				t.Errorf("the view of layer 1 has a texture view: %v, want %v", got, tc.views)
+			}
+			if tc.views && lv.target != gl.TEXTURE_2D {
+				t.Errorf("its target is %#x, want TEXTURE_2D", lv.target)
+			}
+
+			group := func(entry gputypes.BindGroupLayoutEntry) error {
+				t.Helper()
+				entry.Binding, entry.Visibility = 0, gputypes.ShaderStageFragment
+				bgl, err := dev.CreateBindGroupLayout(&hal.BindGroupLayoutDescriptor{Entries: []gputypes.BindGroupLayoutEntry{entry}})
+				if err != nil {
+					t.Fatalf("CreateBindGroupLayout: %v", err)
+				}
+				_, err = dev.CreateBindGroup(&hal.BindGroupDescriptor{Layout: bgl, Entries: []gputypes.BindGroupEntry{
+					{Binding: 0, Resource: gputypes.TextureViewBinding{TextureView: layer.NativeHandle()}},
+				}})
+				return err
+			}
+			sampled := group(gputypes.BindGroupLayoutEntry{Texture: &gputypes.TextureBindingLayout{
+				SampleType: gputypes.TextureSampleTypeFloat, ViewDimension: gputypes.TextureViewDimension2D}})
+			if (sampled == nil) != tc.views {
+				t.Errorf("a bind group sampling layer 1: %v", sampled)
+			}
+			if err := group(gputypes.BindGroupLayoutEntry{StorageTexture: &gputypes.StorageTextureBindingLayout{
+				Access: gputypes.StorageTextureAccessWriteOnly, Format: gputypes.TextureFormatRGBA8Unorm, ViewDimension: gputypes.TextureViewDimension2D}}); err != nil {
+				t.Errorf("a bind group storing to layer 1: %v", err)
+			}
+
+			dev.DestroyTextureView(layer)
+			if lv.id != 0 {
+				t.Error("the texture view outlived DestroyTextureView")
+			}
+		})
+	}
+}

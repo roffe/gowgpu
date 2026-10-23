@@ -141,6 +141,11 @@ type formatCaps struct {
 	// glTexStorage2DMultisample (GL 4.3, ARB_texture_storage_multisample,
 	// ES 3.1), which multisampled textures to sample are made with on ES.
 	texStorage, texStorageMS bool
+
+	// textureView is glTextureView (GL 4.3, ARB_texture_view, ES
+	// OES/EXT_texture_view), which samples a view of another dimension or
+	// of some of the layers of a texture made with glTexStorage.
+	textureView bool
 }
 
 // newFormatCaps reads the formats a context offers from its capabilities.
@@ -154,6 +159,9 @@ func newFormatCaps(caps *AdapterCapabilities) formatCaps {
 		texStorage: hasTexStorage(caps.Extensions, caps.GLMajor, caps.GLMinor, caps.IsES),
 		texStorageMS: glVersionAtLeast(caps.GLMajor, caps.GLMinor, caps.IsES, [2]int{3, 1}, [2]int{4, 3}) ||
 			hasExtension(caps.Extensions, "GL_ARB_texture_storage_multisample"),
+		textureView: hasTexStorage(caps.Extensions, caps.GLMajor, caps.GLMinor, caps.IsES) &&
+			(!caps.IsES && glVersionAtLeast(caps.GLMajor, caps.GLMinor, false, [2]int{}, [2]int{4, 3}) ||
+				hasExtension(caps.Extensions, "GL_ARB_texture_view", "GL_OES_texture_view", "GL_EXT_texture_view")),
 	}
 }
 

@@ -72,28 +72,16 @@ func createTexture(glCtx *gl.Context, formats formatCaps, maxMSAA int32, desc *T
 		}
 	}
 
+	// Immutable storage: what the compressed formats are made with, and
+	// what texture views take, so every texture has it where the context
+	// has views, as Dawn allocates. ES's unsized BGRA takes none.
+	immutable := glf.compressed() || formats.textureView && glf.internal != gl.BGRA
+
 	id := glCtx.GenTextures(1)
 	glCtx.BindTexture(target, id)
 
 	// Allocate texture storage
 	switch {
-	case glf.compressed():
-		levels, width, height := int32(desc.MipLevelCount), int32(desc.Size.Width), int32(desc.Size.Height)
-		switch target {
-		case gl.TEXTURE_2D, gl.TEXTURE_CUBE_MAP:
-			glCtx.TexStorage2D(target, levels, glf.internal, width, height)
-		case gl.TEXTURE_2D_ARRAY:
-			glCtx.TexStorage3D(target, levels, glf.internal, width, height, int32(desc.Size.DepthOrArrayLayers))
-		default:
-			glCtx.DeleteTextures(id)
-			return nil, fmt.Errorf("gles: %s %s textures are not supported", desc.Dimension, desc.Format)
-		}
-		if glErr := glCtx.GetError(); glErr != 0 {
-			glCtx.DeleteTextures(id)
-			return nil, fmt.Errorf("gles: TexStorage failed: GL error 0x%x (format=0x%x, %dx%dx%d)",
-				glErr, glf.internal, width, height, desc.Size.DepthOrArrayLayers)
-		}
-
 	case target == gl.TEXTURE_2D_MULTISAMPLE:
 		// A multisampled texture to sample: ES has only immutable storage
 		// for one, from 3.1 on, and desktop GL glTexImage2DMultisample.
@@ -112,6 +100,23 @@ func createTexture(glCtx *gl.Context, formats formatCaps, maxMSAA int32, desc *T
 			glCtx.DeleteTextures(id)
 			return nil, fmt.Errorf("gles: TexImage2DMultisample failed: GL error 0x%x (format=0x%x, samples=%d, %dx%d)",
 				glErr, glf.internal, sampleCount, desc.Size.Width, desc.Size.Height)
+		}
+
+	case immutable:
+		levels, width, height := int32(desc.MipLevelCount), int32(desc.Size.Width), int32(desc.Size.Height)
+		switch {
+		case target == gl.TEXTURE_2D || target == gl.TEXTURE_CUBE_MAP:
+			glCtx.TexStorage2D(target, levels, glf.internal, width, height)
+		case target == gl.TEXTURE_2D_ARRAY || target == gl.TEXTURE_3D && !glf.compressed():
+			glCtx.TexStorage3D(target, levels, glf.internal, width, height, int32(desc.Size.DepthOrArrayLayers))
+		default:
+			glCtx.DeleteTextures(id)
+			return nil, fmt.Errorf("gles: %s %s textures are not supported", desc.Dimension, desc.Format)
+		}
+		if glErr := glCtx.GetError(); glErr != 0 {
+			glCtx.DeleteTextures(id)
+			return nil, fmt.Errorf("gles: TexStorage failed: GL error 0x%x (format=0x%x, %dx%dx%d)",
+				glErr, glf.internal, width, height, desc.Size.DepthOrArrayLayers)
 		}
 
 	case target == gl.TEXTURE_2D:
@@ -160,19 +165,7 @@ func createTexture(glCtx *gl.Context, formats formatCaps, maxMSAA int32, desc *T
 		}
 	}
 
-	// Set default texture parameters (multisample textures don't support these).
-	if target != gl.TEXTURE_2D_MULTISAMPLE {
-		// Set NEAREST filter and MAX_LEVEL on all textures for completeness.
-		// Default GL_TEXTURE_MIN_FILTER is GL_NEAREST_MIPMAP_LINEAR and default
-		// GL_TEXTURE_MAX_LEVEL is 1000. For non-mipmapped textures (MipLevelCount=1),
-		// this makes the texture INCOMPLETE — sampling returns (0,0,0,0).
-		// Setting MAX_LEVEL = MipLevelCount-1 tells GL the actual mip chain length.
-		glCtx.TexParameteri(target, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-		glCtx.TexParameteri(target, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-		glCtx.TexParameteri(target, gl.TEXTURE_MAX_LEVEL, int32(desc.MipLevelCount-1))
-		glCtx.TexParameteri(target, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-		glCtx.TexParameteri(target, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-	}
+	setTextureDefaults(glCtx, target, desc.MipLevelCount)
 
 	t := &Texture{
 		id:          id,
@@ -183,6 +176,8 @@ func createTexture(glCtx *gl.Context, formats formatCaps, maxMSAA int32, desc *T
 		size:        desc.Size,
 		mipLevels:   desc.MipLevelCount,
 		sampleCount: sampleCount,
+		usage:       desc.Usage,
+		immutable:   immutable,
 		glCtx:       glCtx,
 		maxLevel:    int32(desc.MipLevelCount) - 1,
 	}
@@ -196,6 +191,24 @@ func createTexture(glCtx *gl.Context, formats formatCaps, maxMSAA int32, desc *T
 		"height", desc.Size.Height,
 	)
 	return t, nil
+}
+
+// setTextureDefaults sets the parameters a texture of levels mip levels,
+// bound to target, samples with where no sampler object is bound.
+func setTextureDefaults(ctx *gl.Context, target, levels uint32) {
+	if target == gl.TEXTURE_2D_MULTISAMPLE {
+		return // a multisampled texture has no sampling parameters
+	}
+	// Set NEAREST filter and MAX_LEVEL on all textures for completeness.
+	// Default GL_TEXTURE_MIN_FILTER is GL_NEAREST_MIPMAP_LINEAR and default
+	// GL_TEXTURE_MAX_LEVEL is 1000. For non-mipmapped textures (MipLevelCount=1),
+	// this makes the texture INCOMPLETE — sampling returns (0,0,0,0).
+	// Setting MAX_LEVEL = MipLevelCount-1 tells GL the actual mip chain length.
+	ctx.TexParameteri(target, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+	ctx.TexParameteri(target, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+	ctx.TexParameteri(target, gl.TEXTURE_MAX_LEVEL, int32(levels-1))
+	ctx.TexParameteri(target, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+	ctx.TexParameteri(target, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
 }
 
 // zero sets every texel of t, a new texture bound to its target, to zero
@@ -576,16 +589,95 @@ func newTextureView(t *Texture, desc *TextureViewDescriptor) (*TextureView, erro
 	return v, nil
 }
 
+// viewTarget is the texture target the shaders take a view of dim as, of a
+// texture of samples samples: a 1D or 2D view is a 2D texture, as in
+// wgpu-hal.
+func viewTarget(dim gputypes.TextureViewDimension, samples uint32) uint32 {
+	switch dim {
+	case gputypes.TextureViewDimension2DArray:
+		return gl.TEXTURE_2D_ARRAY
+	case gputypes.TextureViewDimensionCube:
+		return gl.TEXTURE_CUBE_MAP
+	case gputypes.TextureViewDimensionCubeArray:
+		return gl.TEXTURE_CUBE_MAP_ARRAY
+	case gputypes.TextureViewDimension3D:
+		return gl.TEXTURE_3D
+	}
+	if samples > 1 {
+		return gl.TEXTURE_2D_MULTISAMPLE
+	}
+	return gl.TEXTURE_2D
+}
+
+// layered reports whether v binds to an image unit with all its layers or
+// slices, an array, cube or 3D view, rather than its one layer.
+func (v *TextureView) layered() bool {
+	return v.dimension == gputypes.TextureViewDimension2DArray || v.dimension == gputypes.TextureViewDimension3D ||
+		v.dimension == gputypes.TextureViewDimensionCube || v.dimension == gputypes.TextureViewDimensionCubeArray
+}
+
+// apart reports whether the shaders can't take v through its texture's own
+// target: v's dimension takes another one, or v has only some of the
+// texture's layers.
+func (v *TextureView) apart() bool {
+	t := v.texture
+	return viewTarget(v.dimension, t.sampleCount) != t.target || v.baseLayer != 0 || v.layerCount != t.layers()
+}
+
+// wantsTexture reports whether v is sampled and loaded through a texture of
+// its own, a texture view, on a context with them (views): a view apart
+// from a texture the shaders bind, made with immutable storage, as Dawn
+// makes views on GL.
+func (v *TextureView) wantsTexture(views bool) bool {
+	t := v.texture
+	return views && t.immutable && t.usage&(gputypes.TextureUsageTextureBinding|gputypes.TextureUsageStorageBinding) != 0 && v.apart()
+}
+
+// makeTexture makes v's texture view, of its dimension, mip levels, layers
+// and aspect. The context must be current.
+func (v *TextureView) makeTexture(ctx *gl.Context) {
+	t := v.texture
+	drainGLErrors(ctx)
+	id := ctx.GenTextures(1)
+	target := viewTarget(v.dimension, t.sampleCount)
+	ctx.TextureView(id, target, t.id, t.glf.internal, v.baseMip, v.mipCount, v.baseLayer, v.layerCount)
+	if glErr := ctx.GetError(); glErr != 0 {
+		ctx.DeleteTextures(id)
+		hal.Logger().Warn("gles: glTextureView failed", "error", fmt.Sprintf("0x%x", glErr), "format", t.format, "dimension", v.dimension)
+		return
+	}
+	ctx.BindTexture(target, id)
+	setTextureDefaults(ctx, target, v.mipCount)
+	if v.readsStencil() {
+		ctx.TexParameteri(target, gl.DEPTH_STENCIL_TEXTURE_MODE, gl.STENCIL_INDEX)
+	}
+	ctx.BindTexture(target, 0)
+	v.id, v.target = id, target
+}
+
+// bindable returns why the shaders can't take v as a binding of class, nil
+// when they can: a view apart from its texture needs a texture view of its
+// own to sample, and to bind more than one layer to an image unit.
+func (v *TextureView) bindable(class bindingClass) error {
+	if v.id != 0 || v.texture == nil || !v.apart() || class == bindingClassImage && !v.layered() {
+		return nil
+	}
+	return fmt.Errorf("a %s view of layers %d to %d of a texture of %d layers needs a GL texture view: OpenGL 4.3 or ARB, OES or EXT_texture_view",
+		v.dimension, v.baseLayer, v.baseLayer+v.layerCount-1, v.texture.layers())
+}
+
 // bindImage binds v's mip level to an image unit for shaders to load from
 // and store to: all its layers or slices for an array, cube or 3D view, its
 // one layer otherwise.
 func bindImage(ctx *gl.Context, unit uint32, v *TextureView, access, format uint32) {
+	if v.id != 0 {
+		ctx.BindImageTexture(unit, v.id, 0, v.layered(), 0, access, format)
+		return
+	}
 	if v.texture == nil || v.texture.id == 0 {
 		return
 	}
-	layered := v.dimension == gputypes.TextureViewDimension2DArray || v.dimension == gputypes.TextureViewDimension3D ||
-		v.dimension == gputypes.TextureViewDimensionCube || v.dimension == gputypes.TextureViewDimensionCubeArray
-	ctx.BindImageTexture(unit, v.texture.id, int32(v.baseMip), layered, int32(v.baseLayer), access, format)
+	ctx.BindImageTexture(unit, v.texture.id, int32(v.baseMip), v.layered(), int32(v.baseLayer), access, format)
 }
 
 // viewFormatAllowed reports whether a view of a tex texture can be view:
@@ -641,17 +733,21 @@ func (t *Texture) applyView(ctx *gl.Context, v *TextureView) {
 	}
 }
 
-// bindTexture binds v's texture on unit for the shaders to sample, set to
-// the view's mip range and aspect.
+// bindTexture binds v on unit for the shaders to sample: its texture view,
+// or its texture set to the view's mip range and aspect.
 func bindTexture(ctx *gl.Context, unit uint32, v *TextureView) {
 	t := v.texture
-	if t == nil || t.id == 0 {
-		return
+	id, target := v.id, v.target
+	if id == 0 {
+		if t == nil || t.id == 0 {
+			return
+		}
+		id, target = t.id, t.target
 	}
 	sh := &ctx.Shadow
-	want := gl.ShadowObject{ID: t.id, Target: t.target, Set: true}
+	want := gl.ShadowObject{ID: id, Target: target, Set: true}
 	bound := unit < gl.MaxShadowUnits && sh.Textures[unit] == want
-	if bound && t.viewApplied(v) {
+	if bound && (v.id != 0 || t.viewApplied(v)) {
 		return
 	}
 	if !sh.ActiveUnitSet || sh.ActiveUnit != unit {
@@ -659,10 +755,12 @@ func bindTexture(ctx *gl.Context, unit uint32, v *TextureView) {
 		sh.ActiveUnit, sh.ActiveUnitSet = unit, true
 	}
 	if !bound {
-		ctx.BindTexture(t.target, t.id)
+		ctx.BindTexture(target, id)
 		if unit < gl.MaxShadowUnits {
 			sh.Textures[unit] = want
 		}
 	}
-	t.applyView(ctx, v)
+	if v.id == 0 {
+		t.applyView(ctx, v)
+	}
 }
