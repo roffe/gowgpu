@@ -142,9 +142,13 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		Topology:               primitiveTopologyToVk(desc.Primitive.Topology),
 		PrimitiveRestartEnable: vk.Bool32(vk.False),
 	}
-	// Primitive restart is enabled for strip topologies with explicit index format
-	if desc.Primitive.StripIndexFormat != nil {
-		inputAssemblyState.PrimitiveRestartEnable = vk.Bool32(vk.True)
+	// Primitive restart is enabled for strip topologies with explicit index
+	// format; a list topology cannot have it (VUID-VkPipelineInputAssemblyStateCreateInfo-topology-06252).
+	switch desc.Primitive.Topology {
+	case gputypes.PrimitiveTopologyLineStrip, gputypes.PrimitiveTopologyTriangleStrip:
+		if desc.Primitive.StripIndexFormat != nil {
+			inputAssemblyState.PrimitiveRestartEnable = vk.Bool32(vk.True)
+		}
 	}
 
 	// Viewport state (dynamic)

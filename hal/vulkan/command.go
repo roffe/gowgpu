@@ -1738,6 +1738,12 @@ func (e *RenderPassEncoder) SetViewport(vp gputypes.Viewport) {
 		MinDepth: vp.MinDepth,
 		MaxDepth: vp.MaxDepth,
 	}
+	// WebGPU takes a viewport of no width, Vulkan does not
+	// (VUID-VkViewport-width-01770) but takes one of no height: Dawn's
+	// empty viewport.
+	if viewport.Width == 0 {
+		viewport.X, viewport.Width, viewport.Height = 0, 1, 0
+	}
 
 	vkCmdSetViewport(e.encoder.device.cmds, e.encoder.active, 0, 1, &viewport)
 }
