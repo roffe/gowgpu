@@ -5,6 +5,7 @@ package wgpu
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"sync/atomic"
 
@@ -100,6 +101,10 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (_ uint64, err error) {
 		}
 		if q.device.foreign(cb.device) {
 			return 0, errForeign("Queue.Submit", fmt.Sprintf("command buffer %d", i))
+		}
+		if j := slices.Index(commandBuffers[:i], cb); j >= 0 {
+			return 0, fmt.Errorf("wgpu: Submit: command buffer at index %d is also at index %d: %w",
+				i, j, ErrSubmitCommandBufferInvalid)
 		}
 		if err := validateCommandBufferForSubmit(cb, i); err != nil {
 			return 0, err

@@ -821,3 +821,27 @@ func TestSubmitResourceErrorWinsAcrossBindGroups(t *testing.T) {
 		bgLive.Release()
 	}
 }
+
+// TestSubmitDuplicateCommandBuffer verifies that a Submit that lists the same
+// command buffer twice fails before it reaches the backend, and that the
+// command buffer can still be submitted once.
+func TestSubmitDuplicateCommandBuffer(t *testing.T) {
+	_, _, device := newDevice(t)
+	defer device.Release()
+	requireHAL(t, device)
+
+	enc, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	cmdBuf, err := enc.Finish()
+	if err != nil {
+		t.Fatalf("Finish: %v", err)
+	}
+	if _, err := device.Queue().Submit(cmdBuf, cmdBuf); !errors.Is(err, wgpu.ErrSubmitCommandBufferInvalid) {
+		t.Fatalf("Submit(cb, cb) = %v, want ErrSubmitCommandBufferInvalid", err)
+	}
+	if _, err := device.Queue().Submit(cmdBuf); err != nil {
+		t.Fatalf("Submit(cb) after the refused one: %v", err)
+	}
+}
