@@ -17,6 +17,7 @@ import (
 // createTexture makes the texture desc describes. The context must be
 // current.
 func createTexture(glCtx *gl.Context, formats formatCaps, maxMSAA int32, desc *TextureDescriptor) (*Texture, error) {
+	drainGLErrors(glCtx) // its own calls are checked
 	glf, ok := formats.glFormat(desc.Format)
 	if !ok {
 		return nil, fmt.Errorf("gles: texture format %s is not supported on this context", desc.Format)
@@ -334,6 +335,19 @@ func writeBlocks(glCtx *gl.Context, tex *Texture, dst *hal.ImageCopyTexture, dat
 func compressedRows(format gputypes.TextureFormat, width, height uint32) (rows, rowBytes uint32) {
 	bw, bh := format.BlockDimensions()
 	return (height + bh - 1) / bh, (width + bw - 1) / bw * format.BlockCopySize()
+}
+
+// drainGLErrors clears the errors earlier calls left, so that glGetError
+// speaks for the calls after it; glGetError returns the oldest. A lost
+// context has one for every call, hence the bound.
+func drainGLErrors(ctx *gl.Context) {
+	for range 8 {
+		e := ctx.GetError()
+		if e == 0 {
+			return
+		}
+		hal.Logger().Debug("gles: GL error left by an earlier call", "error", e)
+	}
 }
 
 // newTextureView makes a view of t from desc, with its mip and layer counts

@@ -108,6 +108,8 @@ func queryAdapterCapabilities(glCtx *gl.Context) AdapterCapabilities {
 	// --- 6. Downlevel flags ---
 	caps.DownlevelFlags = queryDownlevelFlags(glCtx, &caps)
 
+	drainGLErrors(glCtx)
+
 	// --- 7. Device type and vendor ID ---
 	caps.DeviceType = inferDeviceType(caps.Vendor, caps.Renderer)
 	caps.VendorID = inferVendorID(caps.Vendor)
@@ -446,17 +448,19 @@ func queryLimits(glCtx *gl.Context, caps *AdapterCapabilities) gputypes.Limits {
 
 	// Vertex buffers
 	var maxVertexBuffers int32
-	var maxVertexStride int32
+	maxVertexStride := int32(2048)
+	if glVersionAtLeast(glMajor, glMinor, isES, [2]int{3, 1}, [2]int{4, 4}) {
+		// GL_MAX_VERTEX_ATTRIB_STRIDE is GL 4.4 and ES 3.1, not
+		// ARB_vertex_attrib_binding; wgpu-hal queries it the same way.
+		if s := getGLInt(glCtx, gl.MAX_VERTEX_ATTRIB_STRIDE, 2048); s > 0 {
+			maxVertexStride = s
+		}
+	}
 	if hasExtension(exts, "GL_ARB_vertex_attrib_binding") ||
 		glVersionAtLeast(glMajor, glMinor, isES, [2]int{3, 1}, [2]int{4, 3}) {
 		maxVertexBuffers = getGLInt(glCtx, gl.MAX_VERTEX_ATTRIB_BINDINGS, 16)
-		maxVertexStride = getGLInt(glCtx, gl.MAX_VERTEX_ATTRIB_STRIDE, 2048)
-		if maxVertexStride == 0 {
-			maxVertexStride = 2048
-		}
 	} else {
 		maxVertexBuffers = 16
-		maxVertexStride = 2048
 	}
 
 	// Varying components (inter-stage shader variables)
@@ -563,7 +567,8 @@ func queryDownlevelFlags(glCtx *gl.Context, caps *AdapterCapabilities) gputypes.
 		flags |= gputypes.DownlevelFlagsBaseVertex
 	}
 
-	if hasExtension(exts, "EXT_texture_filter_anisotropic", "GL_EXT_texture_filter_anisotropic") {
+	if hasExtension(exts, "EXT_texture_filter_anisotropic", "GL_EXT_texture_filter_anisotropic", "GL_ARB_texture_filter_anisotropic") ||
+		!isES && glVersionAtLeast(glMajor, glMinor, false, [2]int{}, [2]int{4, 6}) {
 		var maxAniso int32
 		glCtx.GetIntegerv(gl.MAX_TEXTURE_MAX_ANISOTROPY, &maxAniso)
 		if maxAniso >= 16 {

@@ -13,7 +13,7 @@ import (
 
 // configureSampler allocates a GL sampler object and sets its parameters from the descriptor.
 // Returns the GL sampler object ID, or 0 if sampler objects are not supported.
-func configureSampler(glCtx *gl.Context, desc *hal.SamplerDescriptor) uint32 {
+func configureSampler(glCtx *gl.Context, desc *hal.SamplerDescriptor, anisotropy bool) uint32 {
 	if !glCtx.SupportsSamplerObjects() {
 		return 0
 	}
@@ -44,7 +44,7 @@ func configureSampler(glCtx *gl.Context, desc *hal.SamplerDescriptor) uint32 {
 	glCtx.SamplerParameterf(id, gl.TEXTURE_MAX_LOD, lodMax)
 
 	// Anisotropic filtering (if requested and > 1).
-	if desc.Anisotropy > 1 {
+	if desc.Anisotropy > 1 && anisotropy {
 		aniso := float32(desc.Anisotropy)
 		// Clamp to reasonable max (16 is typical hardware limit).
 		if aniso > 16 {

@@ -337,3 +337,25 @@ func seq(n int) []byte {
 	}
 	return b
 }
+
+// An error an earlier call left doesn't fail the next texture: its checks
+// read glGetError, which returns the oldest error, so one stray error made
+// CreateTexture fail with "TexImage2D failed".
+func TestCreateTextureIgnoresEarlierErrors(t *testing.T) {
+	ctx := newTestAdapterContext(t)
+	t.Cleanup(ctx.Destroy)
+	dev := openTestDevice(t, ctx)
+	t.Cleanup(dev.Destroy)
+	glCtx := ctx.Lock()
+	glCtx.Enable(0xffff) // GL_INVALID_ENUM, left behind
+	ctx.Unlock()
+	tex, err := dev.CreateTexture(&hal.TextureDescriptor{
+		Size: hal.Extent3D{Width: 4, Height: 4, DepthOrArrayLayers: 1}, MipLevelCount: 1, SampleCount: 1,
+		Dimension: gputypes.TextureDimension2D, Format: gputypes.TextureFormatRGBA8Unorm,
+		Usage: gputypes.TextureUsageTextureBinding | gputypes.TextureUsageCopyDst,
+	})
+	if err != nil {
+		t.Fatalf("CreateTexture: %v", err)
+	}
+	dev.DestroyTexture(tex)
+}

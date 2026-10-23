@@ -29,6 +29,7 @@ type Device struct {
 	// independentBlend is blending and write masks per draw buffer (GL 4.0,
 	// ES 3.2, OES/EXT_draw_buffers_indexed).
 	independentBlend bool
+	anisotropy       bool // TEXTURE_MAX_ANISOTROPY
 	// fixedIndexRestart is primitive restart at the largest index (ES 3.0,
 	// GL 4.3, ARB_ES3_compatibility); without it strips restart through
 	// glPrimitiveRestartIndex.
@@ -180,7 +181,7 @@ func (d *Device) CreateSampler(desc *SamplerDescriptor) (hal.Sampler, error) {
 	if desc == nil {
 		return &Sampler{glCtx: glCtx}, nil
 	}
-	id := configureSampler(glCtx, desc)
+	id := configureSampler(glCtx, desc, d.anisotropy)
 	return &Sampler{
 		id:    id,
 		glCtx: glCtx,

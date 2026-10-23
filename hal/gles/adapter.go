@@ -74,6 +74,7 @@ func (a *Adapter) Open(_ gputypes.Features, _ gputypes.Limits) (hal.OpenDevice, 
 		formats:          newFormatCaps(&a.caps),
 		depthClamp:       a.caps.Features.Contains(gputypes.FeatureDepthClipControl),
 		independentBlend: a.caps.DownlevelFlags.Contains(gputypes.DownlevelFlagsIndependentBlend),
+		anisotropy:       a.caps.DownlevelFlags.Contains(gputypes.DownlevelFlagsAnisotropicFiltering),
 		fixedIndexRestart: glVersionAtLeast(a.caps.GLMajor, a.caps.GLMinor, a.caps.IsES, [2]int{3, 0}, [2]int{4, 3}) ||
 			hasExtension(a.caps.Extensions, "GL_ARB_ES3_compatibility"),
 		drawIndirect: glVersionAtLeast(a.caps.GLMajor, a.caps.GLMinor, a.caps.IsES, [2]int{3, 1}, [2]int{4, 0}) ||
