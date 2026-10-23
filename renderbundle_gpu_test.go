@@ -9,7 +9,7 @@ import (
 	"github.com/roffe/gowgpu/gputypes"
 )
 
-func newBundleRig(t *testing.T, device *Device, h *captureHandler) (*dynamicRig, *RenderPipeline, *RenderBundle) {
+func newBundleRig(t *testing.T, device *Device) (*dynamicRig, *RenderPipeline, *RenderBundle) {
 	t.Helper()
 	rig := newDynamicRig(t, device)
 	pipe, err := device.CreateRenderPipeline(&RenderPipelineDescriptor{
@@ -31,9 +31,6 @@ func newBundleRig(t *testing.T, device *Device, h *captureHandler) (*dynamicRig,
 	})
 	if err != nil {
 		t.Fatalf("CreateRenderBundleEncoder: %v", err)
-	}
-	if h.backend == gputypes.BackendGL {
-		be.SetPipeline(pipe) // GL binds a group against the pipeline set at the time, see the README's known issues
 	}
 	// Before the pipeline, at the green of the uniform buffer. The bundle
 	// keeps its own offsets: changing the slice afterwards changes nothing.
@@ -57,7 +54,7 @@ func newBundleRig(t *testing.T, device *Device, h *captureHandler) (*dynamicRig,
 // pass, which NVIDIA crashed on in vkBeginCommandBuffer.
 func TestRenderBundleDraws(t *testing.T) {
 	device, h := newValidatedDevice(t)
-	rig, pipe, bundle := newBundleRig(t, device, h)
+	rig, pipe, bundle := newBundleRig(t, device)
 	tex, view := pixTexture(t, device, "bundle", TextureUsageRenderAttachment|TextureUsageCopySrc)
 	defer releaseTextureView(tex, view)
 	st := readbackBuffer(t, device, "bundle-st")
@@ -95,8 +92,8 @@ func TestRenderBundleDraws(t *testing.T) {
 // pipeline again: WebGPU leaves the pass without one after executeBundles,
 // so the draw is a validation error.
 func TestExecuteBundlesResetsBindings(t *testing.T) {
-	device, h := newValidatedDevice(t)
-	rig, pipe, bundle := newBundleRig(t, device, h)
+	device, _ := newValidatedDevice(t)
+	rig, pipe, bundle := newBundleRig(t, device)
 	tex, view := pixTexture(t, device, "bundle-reset", TextureUsageRenderAttachment)
 	defer releaseTextureView(tex, view)
 

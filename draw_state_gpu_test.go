@@ -115,9 +115,6 @@ func TestDynamicOffsetsDraw(t *testing.T) {
 	}
 	half := float32(pixSide / 2)
 	clearPass(t, enc, view, gputypes.LoadOpClear, gputypes.Color{}, func(p *RenderPassEncoder) {
-		if h.backend == gputypes.BackendGL {
-			p.SetPipeline(pipe) // GL binds a group against the pipeline set at the time, see the README's known issues
-		}
 		// Before the pipeline, so SetPipeline binds the group at these offsets.
 		p.SetBindGroup(0, rig.group, []uint32{256, 0})
 		p.SetPipeline(pipe)
