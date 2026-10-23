@@ -2733,17 +2733,7 @@ func (d *Device) CreateFence() (hal.Fence, error) {
 		return nil, fmt.Errorf("dx12: CreateFence failed: %w", err)
 	}
 
-	// Create Windows event for this fence
-	event, err := windows.CreateEvent(nil, 0, 0, nil)
-	if err != nil {
-		fence.Release()
-		return nil, fmt.Errorf("dx12: CreateEvent for fence failed: %w", err)
-	}
-
-	return &Fence{
-		raw:   fence,
-		event: event,
-	}, nil
+	return &Fence{raw: fence}, nil
 }
 
 // DestroyFence destroys a fence.
@@ -2752,16 +2742,7 @@ func (d *Device) DestroyFence(fence hal.Fence) {
 	if !ok || f == nil {
 		return
 	}
-
-	if f.event != 0 {
-		_ = windows.CloseHandle(f.event)
-		f.event = 0
-	}
-
-	if f.raw != nil {
-		f.raw.Release()
-		f.raw = nil
-	}
+	f.Destroy()
 }
 
 // Wait waits for a fence to reach the specified value.
@@ -2780,8 +2761,15 @@ func (d *Device) Wait(fence hal.Fence, value uint64, timeout time.Duration) (boo
 		return true, nil
 	}
 
-	// Set up event notification
-	if err := f.raw.SetEventOnCompletion(value, uintptr(f.event)); err != nil {
+	// A fresh event per wait: one shared by the fence stays armed after a
+	// timed-out wait and wakes the next wait early, or wakes the wrong one
+	// of two concurrent waits.
+	event, err := windows.CreateEvent(nil, 0, 0, nil)
+	if err != nil {
+		return false, fmt.Errorf("dx12: CreateEvent for fence wait failed: %w", err)
+	}
+	defer func() { _ = windows.CloseHandle(event) }()
+	if err := f.raw.SetEventOnCompletion(value, uintptr(event)); err != nil {
 		return false, fmt.Errorf("dx12: SetEventOnCompletion failed: %w", err)
 	}
 
@@ -2796,7 +2784,7 @@ func (d *Device) Wait(fence hal.Fence, value uint64, timeout time.Duration) (boo
 		}
 	}
 
-	result, err := windows.WaitForSingleObject(f.event, timeoutMs)
+	result, err := windows.WaitForSingleObject(event, timeoutMs)
 	if err != nil {
 		return false, fmt.Errorf("dx12: WaitForSingleObject failed: %w", err)
 	}
@@ -2927,16 +2915,11 @@ func shouldReleaseTerminalOwnedObjects(waitErr error, deviceRemoved bool) bool {
 
 // Fence implements hal.Fence for DirectX 12.
 type Fence struct {
-	raw   *d3d12.ID3D12Fence
-	event windows.Handle
+	raw *d3d12.ID3D12Fence
 }
 
 // Destroy releases the fence resources.
 func (f *Fence) Destroy() {
-	if f.event != 0 {
-		_ = windows.CloseHandle(f.event)
-		f.event = 0
-	}
 	if f.raw != nil {
 		f.raw.Release()
 		f.raw = nil

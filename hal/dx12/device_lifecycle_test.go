@@ -5,10 +5,35 @@
 
 package dx12
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestWaitForGPUAfterDeviceCleanupIsNoop(t *testing.T) {
 	if err := (&Device{}).waitForGPU(); err != nil {
 		t.Fatalf("waitForGPU on cleaned device: %v", err)
+	}
+}
+
+// TestFenceWaitAfterATimedOutWait times a wait out, lets the fence reach
+// the value it waited for, and checks a wait for the next value doesn't
+// return early.
+func TestFenceWaitAfterATimedOutWait(t *testing.T) {
+	dev, _ := openTestDevice(t)
+	raw, err := dev.CreateFence()
+	if err != nil {
+		t.Fatalf("CreateFence: %v", err)
+	}
+	defer dev.DestroyFence(raw)
+	fence := raw.(*Fence)
+	if done, err := dev.Wait(fence, 1, 10*time.Millisecond); err != nil || done {
+		t.Fatalf("Wait(1) before the signal = %v, %v; want a timeout", done, err)
+	}
+	if err := fence.raw.Signal(1); err != nil {
+		t.Fatalf("Signal: %v", err)
+	}
+	if done, err := dev.Wait(fence, 2, 50*time.Millisecond); err != nil || done {
+		t.Fatalf("Wait(2) with the fence at 1 = %v, %v; want a timeout", done, err)
 	}
 }
