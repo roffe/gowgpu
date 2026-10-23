@@ -594,6 +594,11 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 		e.cmdList.OMSetRenderTargets(0, nil, 0, dsvHandle)
 	}
 
+	// A pass starts with WebGPU's stencil reference and blend constant, 0,
+	// not what an earlier pass of the command list set, as in Dawn.
+	e.cmdList.OMSetStencilRef(0)
+	e.cmdList.OMSetBlendFactor(&[4]float32{})
+
 	// Set default viewport and scissor based on first color attachment or depth attachment
 	var width, height uint32
 	if len(desc.ColorAttachments) > 0 {

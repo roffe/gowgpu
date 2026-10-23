@@ -105,3 +105,70 @@ func TestDepthPipelineWithZeroStencilState(t *testing.T) {
 		})
 	}
 }
+
+// TestStencilReferenceStartsAtZeroEachPass sets a stencil reference in one
+// pass and draws with a stencil test Equal against a stencil cleared to 0
+// in the next pass of the same encoder, which starts at reference 0.
+func TestStencilReferenceStartsAtZeroEachPass(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	color, colorView := pixTexture(t, device, "stencil-ref-color", TextureUsageRenderAttachment|TextureUsageCopySrc)
+	defer releaseTextureView(color, colorView)
+	stencil, err := device.CreateTexture(&TextureDescriptor{
+		Label:         "stencil-ref",
+		Size:          Extent3D{Width: pixSide, Height: pixSide, DepthOrArrayLayers: 1},
+		MipLevelCount: 1,
+		SampleCount:   1,
+		Dimension:     TextureDimension2D,
+		Format:        gputypes.TextureFormatDepth24PlusStencil8,
+		Usage:         TextureUsageRenderAttachment,
+	})
+	if err != nil {
+		t.Fatalf("CreateTexture: %v", err)
+	}
+	defer stencil.Release()
+	stencilView, err := device.CreateTextureView(stencil, nil)
+	if err != nil {
+		t.Fatalf("CreateTextureView: %v", err)
+	}
+	defer stencilView.Release()
+
+	equal := StencilFaceState{Compare: gputypes.CompareFunctionEqual, FailOp: gputypes.StencilOperationKeep, DepthFailOp: gputypes.StencilOperationKeep, PassOp: gputypes.StencilOperationKeep}
+	pipe := newGreenPipeline(t, device, &DepthStencilState{
+		Format:           gputypes.TextureFormatDepth24PlusStencil8,
+		DepthCompare:     gputypes.CompareFunctionAlways,
+		StencilFront:     equal,
+		StencilBack:      equal,
+		StencilReadMask:  0xFF,
+		StencilWriteMask: 0xFF,
+	})
+	staging := readbackBuffer(t, device, "stencil-ref-staging")
+	enc, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	for i := range 2 {
+		pass, err := enc.BeginRenderPass(&RenderPassDescriptor{
+			ColorAttachments: []RenderPassColorAttachment{{View: colorView, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore, ClearValue: black}},
+			DepthStencilAttachment: &RenderPassDepthStencilAttachment{
+				View:        stencilView,
+				DepthLoadOp: gputypes.LoadOpClear, DepthStoreOp: gputypes.StoreOpStore, DepthClearValue: 1,
+				StencilLoadOp: gputypes.LoadOpClear, StencilStoreOp: gputypes.StoreOpStore,
+			},
+		})
+		if err != nil {
+			t.Fatalf("BeginRenderPass: %v", err)
+		}
+		pass.SetPipeline(pipe)
+		if i == 0 {
+			pass.SetStencilReference(1)
+		}
+		pass.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1})
+		if err := pass.End(); err != nil {
+			t.Fatalf("End: %v", err)
+		}
+	}
+	copyOut(enc, color, staging)
+	finishAndSubmit(t, device, enc)
+	expectPixels(t, "draw with the reference a new pass starts with", readback(t, staging), 0, 255, 0, 255)
+	assertNoValidation(t, h)
+}
