@@ -19,10 +19,13 @@ import (
 	"github.com/roffe/gowgpu/hal/gles/gl"
 )
 
-// errOtherThread is the answer of Submit, Present, Surface.Configure and the
-// CreateCommandEncoder that makes the VAO from a goroutine other than the one
-// holding the context under InstanceFlagsGLPinnedThread: the helper context
-// they would run on shares no VAO or framebuffer, so nothing would be drawn.
+// errOtherThread is the answer of Submit, Present, the queue's writes,
+// Surface.Configure and the CreateCommandEncoder that makes the VAO from a
+// goroutine other than the one holding the context under
+// InstanceFlagsGLPinnedThread. The helper context they would run on shares
+// no VAO or framebuffer, so nothing would be drawn, and the context sees a
+// texture the helper wrote only once it attaches it again, which its
+// framebuffers don't do for one they have attached.
 var errOtherThread = errors.New("gles: InstanceFlagsGLPinnedThread keeps the GL context on the goroutine that used it first; this call comes from another goroutine")
 
 // opaqueAlpha reports whether a surface configured with mode shows opaque:
@@ -133,6 +136,9 @@ func (q *Queue) WriteBuffer(buffer hal.Buffer, offset uint64, data []byte) error
 	if err := q.ctx.Err(); err != nil {
 		return err
 	}
+	if q.ctx.OnHelper() {
+		return errOtherThread
+	}
 
 	glCtx.BindBuffer(buf.target, buf.id)
 	glCtx.BufferSubData(buf.target, int(offset), len(data), unsafe.Pointer(&data[0]))
@@ -151,6 +157,9 @@ func (q *Queue) WriteTexture(dst *hal.ImageCopyTexture, data []byte, layout *hal
 	defer q.ctx.Unlock()
 	if err := q.ctx.Err(); err != nil {
 		return err
+	}
+	if q.ctx.OnHelper() {
+		return errOtherThread
 	}
 	return writeTexture(glCtx, tex, dst, data, layout, size)
 }

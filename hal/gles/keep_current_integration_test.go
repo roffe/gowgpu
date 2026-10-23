@@ -102,3 +102,41 @@ func TestBindsPerCallByDefault(t *testing.T) {
 		t.Error("the context is still current after Unlock")
 	}
 }
+
+// On the helper context the queue's writes are refused like Submit, and
+// what only the kept context has is deleted at its next lock on it.
+func TestHelperLeavesTheContextsOwnWork(t *testing.T) {
+	adapterCtx := newTestAdapterContext(t)
+	t.Cleanup(adapterCtx.Destroy)
+	adapterCtx.keepCurrent = true
+	adapterCtx.Lock()
+	adapterCtx.Unlock()
+	kept := adapterCtx.eglCtx.EGLContext()
+
+	ranOn := egl.NoContext
+	done := make(chan string, 1)
+	go func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+		q := &Queue{ctx: adapterCtx}
+		if err := q.WriteBuffer(&Buffer{id: 1, target: gl.COPY_WRITE_BUFFER}, 0, []byte{1}); !errors.Is(err, errOtherThread) {
+			done <- fmt.Sprintf("WriteBuffer from another goroutine returned %v, want errOtherThread", err)
+			return
+		}
+		adapterCtx.Lock()
+		adapterCtx.OnMain(func(*gl.Context) { ranOn = egl.GetCurrentContext() })
+		adapterCtx.Unlock()
+		done <- ""
+	}()
+	if msg := <-done; msg != "" {
+		t.Fatal(msg)
+	}
+	if ranOn != egl.NoContext {
+		t.Fatalf("OnMain ran on the helper context 0x%x", ranOn)
+	}
+	adapterCtx.Lock()
+	adapterCtx.Unlock()
+	if ranOn != kept {
+		t.Fatalf("OnMain ran on 0x%x, want the kept context 0x%x", ranOn, kept)
+	}
+}

@@ -42,10 +42,16 @@ type AdapterContext struct {
 	// (fyne's test driver, 2026-10-20). A lock from another thread runs on
 	// helper, a context sharing the objects, which is enough for the fence
 	// waits of gowgpu's map goroutine; it has no VAO or framebuffer, so
-	// Submit and Present refuse to run on it.
+	// Submit and Present refuse to run on it. What a lock on helper changed
+	// is finished before it unlocks, as the context sees another context's
+	// changes only once they are complete.
 	keepCurrent bool
 	helper      *egl.Context
 	onHelper    bool // the lock held now runs on helper
+	// onMain is what the next lock on the context runs first: the deletes
+	// of its VAOs and framebuffers, which helper doesn't share, that a lock
+	// on helper asked for.
+	onMain []func(*gl.Context)
 
 	err error // why the lock held has no current context
 }
@@ -139,6 +145,7 @@ func (c *AdapterContext) bindKept(surf egl.EGLSurface) {
 	ctx := c.eglCtx.EGLContext()
 	held := egl.GetCurrentContext() == ctx
 	if held && (surf == egl.NoSurface || egl.GetCurrentSurface(egl.Draw) == surf) {
+		c.runOnMain()
 		return
 	}
 	if surf == egl.NoSurface {
@@ -151,6 +158,7 @@ func (c *AdapterContext) bindKept(surf egl.EGLSurface) {
 			// Go may otherwise move it, and the context cannot follow.
 			runtime.LockOSThread()
 		}
+		c.runOnMain()
 		return
 	}
 	if err := egl.LastError("eglMakeCurrent"); err.Code != egl.BadAccess {
@@ -194,6 +202,25 @@ func (c *AdapterContext) ReleaseSurface(surf egl.EGLSurface) {
 // only shared objects exist and glFinish finishes nothing of the queue's.
 func (c *AdapterContext) OnHelper() bool { return c.onHelper }
 
+// OnMain runs fn with the context current, for its VAOs and framebuffers,
+// which the helper context doesn't share: now, or, when the lock held runs
+// on the helper, first thing in the next lock on the context. The lock must
+// be held.
+func (c *AdapterContext) OnMain(fn func(*gl.Context)) {
+	if c.onHelper {
+		c.onMain = append(c.onMain, fn)
+		return
+	}
+	fn(c.gl)
+}
+
+func (c *AdapterContext) runOnMain() {
+	for _, fn := range c.onMain {
+		fn(c.gl)
+	}
+	c.onMain = nil
+}
+
 // Err reports why the lock held has no current context, wrapping
 // hal.ErrDeviceLost or hal.ErrSurfaceLost when that is what happened, or
 // nil when the context is current: GL calls without one do nothing.
@@ -206,6 +233,9 @@ func (c *AdapterContext) Err() error { return c.err }
 // if a context is actually current on this thread. Matches Windows Unlock() and
 // Rust WglContext::unmake_current().
 func (c *AdapterContext) Unlock() {
+	if c.onHelper && c.err == nil {
+		c.gl.Finish()
+	}
 	// Check eglCtx first so Unlock is safe before egl.Init (unit tests, teardown).
 	if c.eglCtx != nil && (!c.keepCurrent || c.onHelper) && egl.GetCurrentContext() != egl.NoContext {
 		if egl.MakeCurrent(c.eglCtx.Display(), egl.NoSurface, egl.NoSurface, egl.NoContext) == egl.False {
