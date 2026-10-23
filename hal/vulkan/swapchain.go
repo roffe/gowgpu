@@ -499,6 +499,13 @@ func (s *Surface) createSwapchain(device *Device, config *hal.SurfaceConfigurati
 	if s.instance == nil || device == nil || device.instance == nil || device.instance != s.instance {
 		return fmt.Errorf("vulkan: device does not belong to surface instance")
 	}
+	var presentable vk.Bool32
+	if result := s.instance.cmds.GetPhysicalDeviceSurfaceSupportKHR(device.physicalDevice, device.graphicsFamily, s.handle, &presentable); result != vk.Success {
+		return mapVulkanResult("vkGetPhysicalDeviceSurfaceSupportKHR", result)
+	}
+	if presentable == 0 {
+		return fmt.Errorf("vulkan: queue family %d of the device cannot present to this surface", device.graphicsFamily)
+	}
 
 	// Query every capability used by VkSwapchainCreateInfoKHR and validate the
 	// requested configuration before changing an existing swapchain.
