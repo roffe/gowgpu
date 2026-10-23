@@ -32,7 +32,8 @@ func TestAndroidSurfaceRequestIsWindowOnlyAndStateless(t *testing.T) {
 }
 
 func TestAndroidSurfaceCreateInfoPreservesIndependentRawWindows(t *testing.T) {
-	firstWindow := uintptr(0x87654321) | uintptr(0x10)<<32
+	high := uint64(0x10) << 32 // gone where pointers are 32 bits
+	firstWindow := uintptr(0x87654321) | uintptr(high)
 	secondWindow := uintptr(0x23456789)
 
 	first := vk.AndroidSurfaceCreateInfoKHR{SType: vk.StructureTypeAndroidSurfaceCreateInfoKhr}

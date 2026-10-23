@@ -9,6 +9,8 @@ package vulkan
 #include <stdint.h>
 #if defined(__arm__)
 #define VKAPI_PTR __attribute__((pcs("aapcs-vfp")))
+#elif defined(_WIN32) && !defined(_WIN64)
+#define VKAPI_PTR __stdcall
 #else
 #define VKAPI_PTR
 #endif
