@@ -1532,9 +1532,11 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 		return nil, fmt.Errorf("dx12: texture is not a DX12 texture")
 	}
 
-	// Determine view format
+	// A view of one aspect of a combined depth/stencil texture names the
+	// aspect's format, but its descriptors take the texture's, which D3D12
+	// views the aspect of by plane, as wgpu-core hands the HAL such a view.
 	viewFormat := tex.format
-	if desc != nil && desc.Format != gputypes.TextureFormatUndefined {
+	if desc != nil && desc.Format != gputypes.TextureFormatUndefined && !(tex.format.HasDepth() && tex.format.HasStencil()) {
 		viewFormat = desc.Format
 	}
 
