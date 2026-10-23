@@ -166,6 +166,10 @@ type Texture struct {
 	isExternal   bool                        // True for swapchain images (not owned)
 	currentState d3d12.D3D12_RESOURCE_STATES // Legacy diagnostic state; use stateOwner for tracking.
 	stateOwner   resourceStateOwner
+	// refMu guards pendingRefs and pendingDeath: the queue's maintenance
+	// drops refs under the pending writes' lock, and Destroy runs from a
+	// destroy queue triage that may not hold it.
+	refMu        sync.Mutex
 	pendingRefs  int32 // >0 = PendingWrites in-flight, defer Destroy (BUG-DX12-006)
 	pendingDeath bool  // true = Destroy was called while pendingRefs > 0
 }
@@ -279,14 +283,19 @@ func (t *Texture) subresourceIndex(mipLevel, arrayLayer uint32) uint32 {
 // AddPendingRef increments the pending reference count.
 // Called by PendingWrites when recording CopyBufferToTexture.
 func (t *Texture) AddPendingRef() {
+	t.refMu.Lock()
 	t.pendingRefs++
+	t.refMu.Unlock()
 }
 
 // DecPendingRef decrements the pending reference count.
 // If Destroy was deferred (pendingDeath=true) and refcount reaches 0, releases now.
 func (t *Texture) DecPendingRef() {
+	t.refMu.Lock()
 	t.pendingRefs--
-	if t.pendingRefs <= 0 && t.pendingDeath {
+	destroy := t.pendingRefs <= 0 && t.pendingDeath
+	t.refMu.Unlock()
+	if destroy {
 		t.doDestroy()
 	}
 }
@@ -296,14 +305,17 @@ func (t *Texture) DecPendingRef() {
 // deferred until all references are released. This prevents use-after-free when
 // the GPU is still executing CopyBufferToTexture (BUG-DX12-006).
 func (t *Texture) Destroy() {
+	t.refMu.Lock()
 	if hal.DebugEnabled() {
 		hal.Logger().Debug("dx12: texture Destroy", "refs", t.pendingRefs, "deferred", t.pendingDeath)
 	}
 	if t.pendingRefs > 0 {
 		t.pendingDeath = true
+		t.refMu.Unlock()
 		hal.Logger().Debug("dx12: texture destroy deferred (pending refs)")
 		return
 	}
+	t.refMu.Unlock()
 	t.doDestroy()
 }
 
