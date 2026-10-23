@@ -1330,13 +1330,7 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 		fbKey.Views[fbKey.ViewCount] = view.handle
 		fbKey.ViewCount++
 
-		// Clear value for color attachment
-		clearValues = append(clearValues, vk.ClearValueColor(
-			float32(ca.ClearValue.R),
-			float32(ca.ClearValue.G),
-			float32(ca.ClearValue.B),
-			float32(ca.ClearValue.A),
-		))
+		clearValues = append(clearValues, colorClearValue(view.format, ca.ClearValue))
 		if rpKey.Colors[i].LoadOp == vk.AttachmentLoadOpClear {
 			clearCount = len(clearValues)
 		}
@@ -1348,12 +1342,7 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 
 			// Clear value for resolve attachment, which the render pass
 			// always clears.
-			clearValues = append(clearValues, vk.ClearValueColor(
-				float32(ca.ClearValue.R),
-				float32(ca.ClearValue.G),
-				float32(ca.ClearValue.B),
-				float32(ca.ClearValue.A),
-			))
+			clearValues = append(clearValues, colorClearValue(resolveView.format, ca.ClearValue))
 			clearCount = len(clearValues)
 		}
 	}

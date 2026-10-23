@@ -772,6 +772,7 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 				image:       t.handle,
 				isSwapchain: true,
 				swapchain:   t.swapchain,
+				format:      t.format,
 				vkFormat:    d.vkFormat(t.format),
 			}
 		}
@@ -785,7 +786,7 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 	// get the wrapper without a VkImageView: no bind group or pass takes
 	// such a texture, the usage rules it out before the HAL.
 	if t, ok := texture.(*Texture); ok && t.usageFlags&viewableImageUsage == 0 {
-		return &TextureView{texture: t, device: d, size: textureSize, image: imageHandle, vkFormat: d.vkFormat(t.format)}, nil
+		return &TextureView{texture: t, device: d, size: textureSize, image: imageHandle, format: t.format, vkFormat: d.vkFormat(t.format)}, nil
 	}
 
 	// Handle nil descriptor - use defaults from texture
@@ -874,6 +875,7 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 		size:        textureSize,
 		image:       imageHandle,
 		isSwapchain: isSwapchain,
+		format:      format,
 		vkFormat:    vkFormat,
 	}
 	d.live.imageViews.add(imageView)

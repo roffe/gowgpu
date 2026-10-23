@@ -6,6 +6,8 @@
 package vulkan
 
 import (
+	"math"
+
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/vulkan/vk"
@@ -599,6 +601,27 @@ func textureAspectToVk(aspect gputypes.TextureAspect, format gputypes.TextureFor
 		}
 		return vk.ImageAspectFlags(vk.ImageAspectColorBit)
 	}
+}
+
+// colorClearValue is the clear value of a colour attachment of format, in
+// the union member VkClearColorValue reads for it: uint32 for an unsigned
+// integer format, int32 for a signed one, float32 for the rest, as in
+// wgpu-hal. The integers are clamped to their member's range.
+func colorClearValue(format gputypes.TextureFormat, c gputypes.Color) vk.ClearValue {
+	switch format {
+	case gputypes.TextureFormatR8Uint, gputypes.TextureFormatR16Uint, gputypes.TextureFormatRG8Uint,
+		gputypes.TextureFormatR32Uint, gputypes.TextureFormatRG16Uint, gputypes.TextureFormatRGBA8Uint,
+		gputypes.TextureFormatRGB10A2Uint, gputypes.TextureFormatRG32Uint, gputypes.TextureFormatRGBA16Uint,
+		gputypes.TextureFormatRGBA32Uint:
+		u := func(v float64) uint32 { return uint32(min(max(v, 0), math.MaxUint32)) }
+		return vk.ClearValue{u(c.R), u(c.G), u(c.B), u(c.A)}
+	case gputypes.TextureFormatR8Sint, gputypes.TextureFormatR16Sint, gputypes.TextureFormatRG8Sint,
+		gputypes.TextureFormatR32Sint, gputypes.TextureFormatRG16Sint, gputypes.TextureFormatRGBA8Sint,
+		gputypes.TextureFormatRG32Sint, gputypes.TextureFormatRGBA16Sint, gputypes.TextureFormatRGBA32Sint:
+		i := func(v float64) uint32 { return uint32(int32(min(max(v, math.MinInt32), math.MaxInt32))) }
+		return vk.ClearValue{i(c.R), i(c.G), i(c.B), i(c.A)}
+	}
+	return vk.ClearValueColor(float32(c.R), float32(c.G), float32(c.B), float32(c.A))
 }
 
 // isDepthStencilFormat returns true if the format is a depth or depth-stencil format.
