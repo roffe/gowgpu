@@ -467,9 +467,7 @@ func (s *Surface) Configure(device hal.Device, config *hal.SurfaceConfiguration)
 	// UNLESS the alpha mode changed (Opaque↔Premultiplied requires a
 	// different swap chain creation path: HWND vs DirectComposition).
 	if s.swapchain != nil && s.device == dx12Device {
-		needsDComp := config.AlphaMode == hal.CompositeAlphaModePremultiplied
-		hasDComp := s.dcomp != nil
-		if needsDComp == hasDComp {
+		if useDComp(config) == (s.dcomp != nil) {
 			return s.resizeSwapchain(config)
 		}
 	}

@@ -66,6 +66,12 @@ func (s *Surface) createSwapchain(device *Device, config *hal.SurfaceConfigurati
 		swapEffect = dxgi.DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL
 	}
 
+	dcomp := useDComp(config)
+	alphaMode := dxgi.DXGI_ALPHA_MODE_IGNORE
+	if dcomp {
+		alphaMode = compositeAlphaModeToDXGI(config.AlphaMode)
+	}
+
 	// Create swapchain description
 	desc := dxgi.DXGI_SWAP_CHAIN_DESC1{
 		Width:       config.Width,
@@ -77,21 +83,13 @@ func (s *Surface) createSwapchain(device *Device, config *hal.SurfaceConfigurati
 		BufferCount: defaultBufferCount,
 		Scaling:     dxgi.DXGI_SCALING_STRETCH,
 		SwapEffect:  swapEffect,
-		AlphaMode:   compositeAlphaModeToDXGI(config.AlphaMode),
+		AlphaMode:   alphaMode,
 		Flags:       swapchainFlags,
 	}
 
-	// Determine swap chain creation path.
-	// DirectComposition is required for per-pixel alpha (DXGI_ALPHA_MODE_PREMULTIPLIED)
-	// because CreateSwapChainForHwnd only supports DXGI_ALPHA_MODE_IGNORE.
-	// GOGPU_DX12_FORCE_HWND=1 overrides this for RenderDoc compatibility (RenderDoc
-	// cannot capture frames through DirectComposition).
-	useDComp := config.AlphaMode == hal.CompositeAlphaModePremultiplied &&
-		os.Getenv("GOGPU_DX12_FORCE_HWND") != "1"
-
 	var swapchain1 *dxgi.IDXGISwapChain1
 
-	if useDComp {
+	if dcomp {
 		// DirectComposition path — create swap chain via CreateSwapChainForComposition
 		// and bind it to a DComp visual tree rooted on the HWND.
 		s.dcomp = &dcompState{}
@@ -191,7 +189,7 @@ func (s *Surface) createSwapchain(device *Device, config *hal.SurfaceConfigurati
 		return err
 	}
 
-	if useDComp {
+	if dcomp {
 		hal.Logger().Info("dx12: surface configured (DirectComposition)",
 			"width", config.Width,
 			"height", config.Height,
@@ -210,6 +208,14 @@ func (s *Surface) createSwapchain(device *Device, config *hal.SurfaceConfigurati
 	}
 
 	return nil
+}
+
+// useDComp reports whether a configuration takes a DirectComposition swap
+// chain. Per-pixel alpha needs one, since CreateSwapChainForHwnd only takes
+// DXGI_ALPHA_MODE_IGNORE; GOGPU_DX12_FORCE_HWND=1 trades it for an opaque
+// HWND swap chain, which RenderDoc can capture.
+func useDComp(config *hal.SurfaceConfiguration) bool {
+	return config.AlphaMode == hal.CompositeAlphaModePremultiplied && os.Getenv("GOGPU_DX12_FORCE_HWND") != "1"
 }
 
 // createBackBufferRTVs creates render target views for each back buffer.
