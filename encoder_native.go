@@ -4,6 +4,7 @@ package wgpu
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -89,6 +90,11 @@ type CommandEncoder struct {
 	// clearsFirst are the textures still to be zeroed that a render pass of
 	// this encoder clears whole before the encoder uses them any other way.
 	clearsFirst []*Texture
+
+	// discards are the textures whose contents a pass of the encoder has
+	// discarded so far, which read as zeros until something sets them:
+	// textures of one subresource the queue can zero.
+	discards map[*Texture]struct{}
 }
 
 // encoderSerials hands out CommandEncoder serials. Zero is never handed out,
@@ -109,6 +115,7 @@ func (e *CommandEncoder) recycle() {
 	e.core, e.device, e.halEncoder = nil, nil, nil
 	e.trackedRefs, e.usedBuffers, e.usedTextures, e.usedBindGroups, e.usedQuerySets = nil, nil, nil, nil, nil
 	e.clearsFirst = nil
+	clear(e.discards)
 	e.passSerial = 0
 	e.cb = CommandBuffer{}
 	cmdEncoderObjPool.Put(e)
@@ -598,11 +605,14 @@ func (e *CommandEncoder) BeginRenderPass(desc *RenderPassDescriptor) (*RenderPas
 	// Core reads the descriptor and keeps none of it, so it comes from a pool
 	// and goes straight back.
 	s := passDescPool.Get().(*corePassDescriptor)
-	corePass, err := e.core.BeginRenderPass(s.fill(desc))
+	coreDesc := s.fill(desc)
+	e.clearDiscardedLoads(desc, coreDesc)
+	corePass, err := e.core.BeginRenderPass(coreDesc)
 	s.release()
 	if err != nil {
 		return nil, err
 	}
+	e.noteDiscards(desc)
 
 	// The pass is a usage scope of its own: the bind groups it binds put
 	// their textures in it once each.
@@ -612,11 +622,12 @@ func (e *CommandEncoder) BeginRenderPass(desc *RenderPassDescriptor) (*RenderPas
 }
 
 // noteClears adds to clearsFirst the textures still to be zeroed that the
-// pass of desc clears and stores whole, a color attachment or every aspect
-// of a depth/stencil one, when the encoder hasn't used them before. Submit
+// pass of desc clears whole, a color attachment or every aspect of a
+// depth/stencil one, when the encoder hasn't used them before. Submit
 // takes them off the zero list when the command buffer is the first of the
 // submit to use them, so a clear decides nothing for a command buffer that
-// is dropped or runs after another that reads the texture.
+// is dropped or runs after another that reads the texture. A clear whose
+// store op discards leaves the texture to noteDiscards.
 //
 // Reference: wgpu-core command/render.rs (Clear with Store is an implicit
 // init) and device/queue.rs (init actions applied in submission order)
@@ -639,18 +650,119 @@ func (e *CommandEncoder) noteClears(desc *RenderPassDescriptor) {
 		e.clearsFirst = append(e.clearsFirst, t)
 	}
 	for _, ca := range desc.ColorAttachments {
-		if ca.LoadOp == gputypes.LoadOpClear && ca.StoreOp == gputypes.StoreOpStore && ca.View != nil && ca.View.texture != nil {
+		if ca.LoadOp == gputypes.LoadOpClear && ca.View != nil && ca.View.texture != nil {
 			note(ca.View.texture)
 		}
 	}
 	if ds := desc.DepthStencilAttachment; ds != nil && ds.View != nil && ds.View.texture != nil {
 		f := ds.View.texture.format
-		clears := func(has bool, load gputypes.LoadOp, store gputypes.StoreOp) bool {
-			return !has || load == gputypes.LoadOpClear && store == gputypes.StoreOpStore
-		}
-		if clears(f.HasDepth(), ds.DepthLoadOp, ds.DepthStoreOp) && clears(f.HasStencil(), ds.StencilLoadOp, ds.StencilStoreOp) {
+		if (!f.HasDepth() || ds.DepthLoadOp == gputypes.LoadOpClear) && (!f.HasStencil() || ds.StencilLoadOp == gputypes.LoadOpClear) {
 			note(ds.View.texture)
 		}
+	}
+}
+
+// clearDiscardedLoads turns a load of an attachment whose contents an
+// earlier pass of the encoder discarded into a clear to zero in coreDesc,
+// the core descriptor of desc: a discarded texture reads as zeros.
+//
+// Reference: Dawn CommandBuffer.cpp LazyClearRenderPassAttachments
+func (e *CommandEncoder) clearDiscardedLoads(desc *RenderPassDescriptor, coreDesc *core.RenderPassDescriptor) {
+	if desc == nil || len(e.discards) == 0 {
+		return
+	}
+	discarded := func(v *TextureView) bool {
+		if v == nil {
+			return false
+		}
+		_, ok := e.discards[v.texture]
+		return ok
+	}
+	for i, ca := range desc.ColorAttachments {
+		if ca.LoadOp == gputypes.LoadOpLoad && discarded(ca.View) {
+			coreDesc.ColorAttachments[i].LoadOp = gputypes.LoadOpClear
+			coreDesc.ColorAttachments[i].ClearValue = gputypes.Color{}
+		}
+	}
+	if ds := desc.DepthStencilAttachment; ds != nil && discarded(ds.View) {
+		cds := coreDesc.DepthStencilAttachment
+		if ds.DepthLoadOp == gputypes.LoadOpLoad {
+			cds.DepthLoadOp, cds.DepthClearValue = gputypes.LoadOpClear, 0
+		}
+		if ds.StencilLoadOp == gputypes.LoadOpLoad {
+			cds.StencilLoadOp, cds.StencilClearValue = gputypes.LoadOpClear, 0
+		}
+	}
+}
+
+// noteDiscards records which attachments of desc's pass end with their
+// contents discarded, every aspect they have, and which with them set: a
+// texture of one subresource the queue can zero. What is still discarded
+// when the command buffer runs goes back on the zero list after its Submit.
+//
+// Reference: wgpu-core command/render.rs (StoreOp::Discard registers a
+// discard), Dawn CommandBuffer.cpp (SetIsSubresourceContentInitialized
+// false on discard)
+func (e *CommandEncoder) noteDiscards(desc *RenderPassDescriptor) {
+	if desc == nil {
+		return
+	}
+	note := func(v *TextureView, discarded bool) {
+		if v == nil || v.texture == nil || !v.texture.zeroable {
+			return
+		}
+		t := v.texture
+		if ct := t.coreTexture; ct == nil || ct.MipLevelCount() > 1 || ct.Size().DepthOrArrayLayers > 1 {
+			return
+		}
+		if !discarded {
+			delete(e.discards, t)
+			return
+		}
+		if e.discards == nil {
+			e.discards = make(map[*Texture]struct{})
+		}
+		e.discards[t] = struct{}{}
+	}
+	for _, ca := range desc.ColorAttachments {
+		note(ca.View, ca.StoreOp == gputypes.StoreOpDiscard)
+		note(ca.ResolveTarget, false)
+	}
+	if ds := desc.DepthStencilAttachment; ds != nil && ds.View != nil && ds.View.texture != nil {
+		f := ds.View.texture.format
+		note(ds.View, (!f.HasDepth() || ds.DepthStoreOp == gputypes.StoreOpDiscard) &&
+			(!f.HasStencil() || ds.StencilStoreOp == gputypes.StoreOpDiscard))
+	}
+}
+
+// zeroDiscarded clears t when a pass of the encoder discarded its contents,
+// before a copy reads it or writes part of it.
+func (e *CommandEncoder) zeroDiscarded(t *Texture) {
+	if _, ok := e.discards[t]; !ok {
+		return
+	}
+	delete(e.discards, t)
+	view, err := e.device.CreateTextureView(t, nil)
+	if err != nil {
+		e.setError(err)
+		return
+	}
+	defer view.Release()
+	desc := &RenderPassDescriptor{}
+	if f := t.format; f.IsDepthStencil() {
+		ds := &RenderPassDepthStencilAttachment{View: view}
+		if f.HasDepth() {
+			ds.DepthLoadOp, ds.DepthStoreOp = gputypes.LoadOpClear, gputypes.StoreOpStore
+		}
+		if f.HasStencil() {
+			ds.StencilLoadOp, ds.StencilStoreOp = gputypes.LoadOpClear, gputypes.StoreOpStore
+		}
+		desc.DepthStencilAttachment = ds
+	} else {
+		desc.ColorAttachments = []RenderPassColorAttachment{{View: view, LoadOp: gputypes.LoadOpClear, StoreOp: gputypes.StoreOpStore}}
+	}
+	if pass, err := e.BeginRenderPass(desc); err == nil {
+		_ = pass.End()
 	}
 }
 
@@ -791,6 +903,7 @@ func (e *CommandEncoder) CopyTextureToBuffer(src *Texture, dst *Buffer, regions 
 		e.setError(err)
 		return
 	}
+	e.zeroDiscarded(src)
 	raw := e.core.RecordingEncoder()
 	if raw == nil {
 		return
@@ -869,6 +982,8 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst *Texture, regions []Textu
 	// A region with nothing in it is valid and copies nothing, which no
 	// backend takes.
 	halRegions = slices.DeleteFunc(halRegions, func(r hal.TextureCopy) bool { return emptyExtent(r.Size) })
+	e.zeroDiscarded(src)
+	e.zeroDiscarded(dst)
 	raw := e.core.RecordingEncoder()
 	if raw == nil {
 		return
@@ -1039,6 +1154,7 @@ func (e *CommandEncoder) CopyBufferToTexture(src *Buffer, dst *Texture, regions 
 		e.setError(err)
 		return
 	}
+	e.zeroDiscarded(dst)
 	raw := e.core.RecordingEncoder()
 	if raw == nil {
 		return
@@ -1347,6 +1463,7 @@ func (e *CommandEncoder) Finish() (_ *CommandBuffer, err error) {
 		usedBindGroups: e.usedBindGroups,
 		usedQuerySets:  e.usedQuerySets,
 		clearsFirst:    e.clearsFirst,
+		discards:       slices.Collect(maps.Keys(e.discards)),
 		enc:            e,
 		serial:         e.id(),
 	}
@@ -1357,6 +1474,7 @@ func (e *CommandEncoder) Finish() (_ *CommandBuffer, err error) {
 	e.usedBindGroups = nil // ownership transferred
 	e.usedQuerySets = nil  // ownership transferred
 	e.clearsFirst = nil
+	clear(e.discards)
 	return cb, nil
 }
 
@@ -1525,8 +1643,9 @@ type CommandBuffer struct {
 	// causes an error.
 	usedQuerySets []*QuerySet
 
-	// clearsFirst is the encoder's clearsFirst, for Submit.
-	clearsFirst []*Texture
+	// clearsFirst is the encoder's clearsFirst, and discards the textures
+	// it left discarded, for Submit.
+	clearsFirst, discards []*Texture
 
 	// submitted is set to true after this command buffer has been submitted
 	// to a queue. A command buffer cannot be submitted twice.

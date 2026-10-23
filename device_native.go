@@ -180,7 +180,7 @@ func (d *Device) CreateTexture(desc *TextureDescriptor) (_ *Texture, err error) 
 		}
 	}
 
-	tex := &Texture{hal: halTexture, device: d, format: desc.Format, viewFormats: slices.Clone(desc.ViewFormats), coreTexture: coreTexture}
+	tex := &Texture{hal: halTexture, device: d, format: desc.Format, viewFormats: slices.Clone(desc.ViewFormats), coreTexture: coreTexture, zeroable: zero}
 	if zero {
 		d.queue.pending.queueZero(tex)
 	}

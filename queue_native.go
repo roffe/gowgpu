@@ -117,6 +117,7 @@ func (q *Queue) Submit(commandBuffers ...*CommandBuffer) (_ uint64, err error) {
 		q.pending.forgetClearsLocked(commandBuffers)
 		var err error
 		pendingCmdBuf, flushedEncoder, flushedDstTextures, flushedDstBuffers, err = q.pending.flush()
+		q.pending.queueDiscardedLocked(commandBuffers)
 		q.pending.mu.Unlock()
 		if err != nil {
 			return 0, fmt.Errorf("wgpu: flush pending writes: %w", err)

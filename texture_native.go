@@ -37,6 +37,10 @@ type Texture struct {
 	// mark is the last command encoder that tracked this texture.
 	mark encoderMark
 
+	// zeroable is set when the queue can zero the texture, as it zeroes new
+	// ones, which a texture whose contents a pass discarded needs again.
+	zeroable bool
+
 	// defaultView is the HAL view CreateTextureView hands out for a nil
 	// descriptor: one per texture, shared by every TextureView made that way
 	// and destroyed with the texture. A view a frame of the same texture is

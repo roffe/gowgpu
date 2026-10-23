@@ -918,6 +918,47 @@ func (pw *pendingWrites) forgetZero(t *Texture) {
 	delete(pw.zero, t)
 }
 
+// queueDiscardedLocked puts back on the zero list the textures whose
+// contents a pass of cbs, a submit's command buffers in order, discarded
+// and no later one of them used: they read as zeros, so the next submit
+// zeroes them unless a pass of it clears them first. pw.mu is held.
+//
+// Reference: wgpu-core command/memory_init.rs (discarded surfaces are
+// initialized again before their next use)
+func (pw *pendingWrites) queueDiscardedLocked(cbs []*CommandBuffer) {
+	var discarded map[*Texture]bool
+	for _, cb := range cbs {
+		if discarded != nil {
+			for _, t := range cb.usedTextures {
+				if discarded[t] {
+					discarded[t] = false
+				}
+			}
+			for _, g := range cb.usedBindGroups {
+				for _, t := range g.boundTextures {
+					if discarded[t] {
+						discarded[t] = false
+					}
+				}
+			}
+		}
+		for _, t := range cb.discards {
+			if discarded == nil {
+				discarded = make(map[*Texture]bool)
+			}
+			discarded[t] = true
+		}
+	}
+	for t, d := range discarded {
+		if d {
+			if pw.zero == nil {
+				pw.zero = make(map[*Texture]struct{})
+			}
+			pw.zero[t] = struct{}{}
+		}
+	}
+}
+
 // zeroing reports whether t is on the list of textures to zero.
 func (pw *pendingWrites) zeroing(t *Texture) bool {
 	pw.mu.Lock()
