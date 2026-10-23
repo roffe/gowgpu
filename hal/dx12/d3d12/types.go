@@ -644,6 +644,15 @@ type D3D12_FEATURE_DATA_D3D12_OPTIONS struct {
 	ResourceHeapTier                                                           uint32 // D3D12_RESOURCE_HEAP_TIER
 }
 
+// D3D12_FEATURE_DATA_D3D12_OPTIONS3 describes D3D12 options 3 feature data.
+type D3D12_FEATURE_DATA_D3D12_OPTIONS3 struct {
+	CopyQueueTimestampQueriesSupported int32  // BOOL
+	CastingFullyTypedFormatSupported   int32  // BOOL
+	WriteBufferImmediateSupportFlags   uint32 // D3D12_COMMAND_LIST_SUPPORT_FLAGS
+	ViewInstancingTier                 uint32 // D3D12_VIEW_INSTANCING_TIER
+	BarycentricsSupported              int32  // BOOL
+}
+
 // D3D12_FEATURE_DATA_FEATURE_LEVELS describes feature levels.
 type D3D12_FEATURE_DATA_FEATURE_LEVELS struct {
 	NumFeatureLevels         uint32

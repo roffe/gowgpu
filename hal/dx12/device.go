@@ -95,6 +95,9 @@ type Device struct {
 	featureLevel d3d12.D3D_FEATURE_LEVEL
 	vendorID     uint32
 
+	// castingFullyTyped reports D3D12_OPTIONS3.CastingFullyTypedFormatSupported.
+	castingFullyTyped bool
+
 	// Shared empty root signature for pipelines without bind groups.
 	// DX12 requires a valid root signature for every PSO, even if the shader
 	// has no resource bindings. This is lazily created on first use and shared
@@ -292,6 +295,10 @@ func newDevice(instance *Instance, adapterPtr unsafe.Pointer, adapterDesc *dxgi.
 		instance:     instance,
 		featureLevel: featureLevel,
 		vendorID:     adapterDesc.VendorID,
+	}
+	var options3 d3d12.D3D12_FEATURE_DATA_D3D12_OPTIONS3
+	if rawDevice.CheckFeatureSupport(d3d12.D3D12_FEATURE_D3D12_OPTIONS3, unsafe.Pointer(&options3), uint32(unsafe.Sizeof(options3))) == nil {
+		dev.castingFullyTyped = options3.CastingFullyTypedFormatSupported != 0
 	}
 
 	// Create the direct (graphics) command queue
@@ -1399,6 +1406,10 @@ func (d *Device) CreateTexture(desc *hal.TextureDescriptor) (hal.Texture, error)
 		createFormat = depthFormatToTypeless(desc.Format)
 		if createFormat == d3d12.DXGI_FORMAT_UNKNOWN {
 			createFormat = dxgiFormat
+		}
+	} else if !d.castingFullyTyped && slices.ContainsFunc(desc.ViewFormats, func(f gputypes.TextureFormat) bool { return f != desc.Format }) {
+		if typeless := castableTypeless(desc.Format); typeless != d3d12.DXGI_FORMAT_UNKNOWN {
+			createFormat = typeless
 		}
 	}
 

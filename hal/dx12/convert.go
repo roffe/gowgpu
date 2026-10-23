@@ -374,6 +374,28 @@ func depthFormatToTypeless(format gputypes.TextureFormat) d3d12.DXGI_FORMAT {
 	}
 }
 
+// castableTypeless returns the TYPELESS format a texture of format needs
+// for views in its sRGB or linear counterpart when the device can't cast
+// fully typed formats, or DXGI_FORMAT_UNKNOWN for formats without one.
+func castableTypeless(format gputypes.TextureFormat) d3d12.DXGI_FORMAT {
+	switch format {
+	case gputypes.TextureFormatRGBA8Unorm, gputypes.TextureFormatRGBA8UnormSrgb:
+		return d3d12.DXGI_FORMAT_R8G8B8A8_TYPELESS
+	case gputypes.TextureFormatBGRA8Unorm, gputypes.TextureFormatBGRA8UnormSrgb:
+		return d3d12.DXGI_FORMAT_B8G8R8A8_TYPELESS
+	case gputypes.TextureFormatBC1RGBAUnorm, gputypes.TextureFormatBC1RGBAUnormSrgb:
+		return d3d12.DXGI_FORMAT_BC1_TYPELESS
+	case gputypes.TextureFormatBC2RGBAUnorm, gputypes.TextureFormatBC2RGBAUnormSrgb:
+		return d3d12.DXGI_FORMAT_BC2_TYPELESS
+	case gputypes.TextureFormatBC3RGBAUnorm, gputypes.TextureFormatBC3RGBAUnormSrgb:
+		return d3d12.DXGI_FORMAT_BC3_TYPELESS
+	case gputypes.TextureFormatBC7RGBAUnorm, gputypes.TextureFormatBC7RGBAUnormSrgb:
+		return d3d12.DXGI_FORMAT_BC7_TYPELESS
+	default:
+		return d3d12.DXGI_FORMAT_UNKNOWN
+	}
+}
+
 // depthFormatToSRV converts a depth format to its SRV-compatible format.
 func depthFormatToSRV(format gputypes.TextureFormat) d3d12.DXGI_FORMAT {
 	switch format {
