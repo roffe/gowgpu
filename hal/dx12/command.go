@@ -239,8 +239,8 @@ func (e *CommandEncoder) TransitionTextures(barriers []hal.TextureBarrier) {
 
 	plans := make([]stateBarrierPlan, 0, len(barriers))
 	for _, b := range barriers {
-		tex, ok := b.Texture.(*Texture)
-		if !ok || tex.raw == nil {
+		tex, ok := textureOf(b.Texture)
+		if !ok {
 			hal.Logger().Warn("TransitionTextures: skipping invalid texture (nil or destroyed)")
 			continue
 		}
@@ -345,7 +345,7 @@ func (e *CommandEncoder) CopyBufferToTexture(src hal.Buffer, dst hal.Texture, re
 		return
 	}
 	srcBuf, srcOK := src.(*Buffer)
-	dstTex, dstOK := dst.(*Texture)
+	dstTex, dstOK := textureOf(dst)
 	if !srcOK || !dstOK {
 		return
 	}
@@ -358,7 +358,7 @@ func (e *CommandEncoder) CopyTextureToBuffer(src hal.Texture, dst hal.Buffer, re
 	if !e.isRecording {
 		return
 	}
-	srcTex, srcOK := src.(*Texture)
+	srcTex, srcOK := textureOf(src)
 	dstBuf, dstOK := dst.(*Buffer)
 	if !srcOK || !dstOK {
 		return
@@ -371,8 +371,8 @@ func (e *CommandEncoder) CopyTextureToTexture(src, dst hal.Texture, regions []ha
 	if !e.isRecording {
 		return
 	}
-	srcTex, srcOK := src.(*Texture)
-	dstTex, dstOK := dst.(*Texture)
+	srcTex, srcOK := textureOf(src)
+	dstTex, dstOK := textureOf(dst)
 	if !srcOK || !dstOK {
 		return
 	}

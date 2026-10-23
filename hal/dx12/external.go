@@ -70,8 +70,8 @@ func (q *Queue) signalExternal() error {
 // in the COMMON state, which the copy promotes it from and it decays back to.
 // A fence the submit waits for orders the copy after the filling.
 func (e *CommandEncoder) CopyExternalBuffer(src uintptr, bytesPerRow uint32, dst hal.Texture) {
-	t, ok := dst.(*Texture)
-	if !e.isRecording || src == 0 || !ok || t.raw == nil {
+	t, ok := textureOf(dst)
+	if !e.isRecording || src == 0 || !ok {
 		return
 	}
 	if before, barrier := e.stateTracker.transitionTexture(t, 0, d3d12.D3D12_RESOURCE_STATE_COPY_DEST); barrier {
@@ -104,8 +104,8 @@ func (e *CommandEncoder) CopyExternalPlanes(src uintptr, layout, slice uint32, d
 	res := fromHandle[d3d12.ID3D12Resource](src)
 	layers := max(uint32(res.GetDesc().DepthOrArraySize), 1)
 	for i, dst := range dsts {
-		t, ok := dst.(*Texture)
-		if !ok || t.raw == nil {
+		t, ok := textureOf(dst)
+		if !ok {
 			continue
 		}
 		if before, barrier := e.stateTracker.transitionTexture(t, 0, d3d12.D3D12_RESOURCE_STATE_COPY_DEST); barrier {

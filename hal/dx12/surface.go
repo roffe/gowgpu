@@ -523,6 +523,21 @@ type SurfaceTexture struct {
 	suboptimal bool
 }
 
+// textureOf is the texture a HAL texture names: a texture of this device,
+// or the back buffer of a surface texture. ok is false for anything else
+// and for a destroyed texture.
+func textureOf(t hal.Texture) (*Texture, bool) {
+	switch t := t.(type) {
+	case *Texture:
+		return t, t != nil && t.raw != nil
+	case *SurfaceTexture:
+		if t != nil && t.stateOwner != nil && t.stateOwner.raw != nil {
+			return t.stateOwner, true
+		}
+	}
+	return nil, false
+}
+
 // CurrentUsage returns the queue-scheduled usage of the shared back-buffer owner.
 func (t *SurfaceTexture) CurrentUsage() gputypes.TextureUsage {
 	if t == nil || t.stateOwner == nil {

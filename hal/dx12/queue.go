@@ -680,8 +680,8 @@ func (q *Queue) WriteTexture(dst *hal.ImageCopyTexture, data []byte, layout *hal
 	if dst == nil || dst.Texture == nil || layout == nil || len(data) == 0 || size == nil {
 		return fmt.Errorf("dx12: WriteTexture: invalid arguments")
 	}
-	dstTex, ok := dst.Texture.(*Texture)
-	if !ok || dstTex.raw == nil {
+	dstTex, ok := textureOf(dst.Texture)
+	if !ok {
 		return fmt.Errorf("dx12: WriteTexture: invalid texture type")
 	}
 	info, nativeLayout, sourceBPR, _, valid := writeTextureNativeLayout(dstTex, dst.Aspect, *layout, *size)
@@ -774,7 +774,7 @@ func (q *Queue) WriteTexture(dst *hal.ImageCopyTexture, data []byte, layout *hal
 // and the surface was configured with EnableDamagePresent (FLIP_SEQUENTIAL),
 // IDXGISwapChain1::Present1 is called with DXGI_PRESENT_PARAMETERS containing
 // the dirty rects. Otherwise, the standard Present() path is used.
-func (q *Queue) Present(surface hal.Surface, _ hal.SurfaceTexture, damageRects []image.Rectangle) error {
+func (q *Queue) Present(surface hal.Surface, texture hal.SurfaceTexture, damageRects []image.Rectangle) error {
 	if err := q.lockOpen(); err != nil {
 		return err
 	}
@@ -789,9 +789,11 @@ func (q *Queue) Present(surface hal.Surface, _ hal.SurfaceTexture, damageRects [
 		return fmt.Errorf("dx12: surface not configured")
 	}
 
-	// Note: Resource barriers (render target -> present) should be
-	// handled in the command buffer encoding before this call.
-	// The present call here just flips the swapchain.
+	if backBuffer, ok := textureOf(texture); ok {
+		if err := q.ensurePresentState(backBuffer); err != nil {
+			return err
+		}
+	}
 
 	// Determine sync interval and flags based on present mode
 	var syncInterval uint32
@@ -862,6 +864,34 @@ func (q *Queue) Present(surface hal.Surface, _ hal.SurfaceTexture, damageRects [
 	// Drain debug messages after present.
 	q.device.DrainDebugMessages()
 
+	return nil
+}
+
+// ensurePresentState puts a back buffer in PRESENT, the state DXGI presents
+// it from, when the last command list to use it left it in another, such as
+// a copy's. A render pass returns it to PRESENT itself.
+func (q *Queue) ensurePresentState(backBuffer *Texture) error {
+	before := backBuffer.scheduledStateSnapshot(0)
+	if before == d3d12.D3D12_RESOURCE_STATE_PRESENT {
+		return nil
+	}
+	preamble, err := q.buildPreamble([]stateBarrierPlan{{
+		resource:    backBuffer,
+		subresource: d3d12.D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+		before:      before,
+		after:       d3d12.D3D12_RESOURCE_STATE_PRESENT,
+	}})
+	if err != nil {
+		return err
+	}
+	q.raw.ExecuteCommandLists(1, &preamble.cmdList)
+	backBuffer.commitScheduledStates([]d3d12.D3D12_RESOURCE_STATES{d3d12.D3D12_RESOURCE_STATE_PRESENT})
+	if err := q.device.signalFrameFence(); err != nil {
+		q.retainPreamblesWithoutFence([]preambleInFlight{preamble})
+		return err
+	}
+	preamble.submission = q.device.currentFrameFenceValue()
+	q.state.preambleInFlight = append(q.state.preambleInFlight, preamble)
 	return nil
 }
 
