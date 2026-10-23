@@ -2,7 +2,10 @@
 
 package egl
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 func TestSelectWindowKindHonorsExplicitTarget(t *testing.T) {
 	x11 := WindowKindX11
@@ -33,5 +36,39 @@ func TestSelectWindowKindHonorsExplicitTarget(t *testing.T) {
 				t.Fatalf("detector calls = %d, want %d", calls, test.wantCalls)
 			}
 		})
+	}
+}
+
+// EGL 1.4 takes the OpenGL ES major version alone; the rest needs EGL 1.5
+// or EGL_KHR_create_context, which name the debug flag differently.
+func TestContextAttribs(t *testing.T) {
+	desktop := DefaultContextConfig()
+	desktop.Debug = true
+	es := ContextConfig{GLVersionMajor: 3, GLVersionMinor: 0, GLES: true, Debug: true}
+	tests := []struct {
+		name       string
+		cfg        ContextConfig
+		egl15, khr bool
+		want       []EGLInt // nil: refused
+	}{
+		{"ES on EGL 1.4", es, false, false, []EGLInt{ContextMajorVersion, 3, None}},
+		{"desktop on EGL 1.4", desktop, false, false, nil},
+		{"ES with KHR_create_context", es, false, true, []EGLInt{ContextMajorVersion, 3, ContextMinorVersion, 0, ContextFlagsKHR, ContextOpenGLDebugBitKHR, None}},
+		{"desktop with KHR_create_context", desktop, false, true, []EGLInt{ContextMajorVersion, 3, ContextMinorVersion, 3,
+			ContextOpenGLProfileMask, ContextOpenGLCoreProfileBit, ContextFlagsKHR, ContextOpenGLDebugBitKHR, None}},
+		{"desktop on EGL 1.5", desktop, true, false, []EGLInt{ContextMajorVersion, 3, ContextMinorVersion, 3,
+			ContextOpenGLProfileMask, ContextOpenGLCoreProfileBit, ContextOpenGLDebug, EGLInt(True), None}},
+	}
+	for _, test := range tests {
+		got, err := contextAttribs(test.cfg, test.egl15, test.khr)
+		if test.want == nil {
+			if err == nil {
+				t.Errorf("%s: %v, want it refused", test.name, got)
+			}
+			continue
+		}
+		if err != nil || !slices.Equal(got, test.want) {
+			t.Errorf("%s: %v, %v, want %v", test.name, got, err, test.want)
+		}
 	}
 }

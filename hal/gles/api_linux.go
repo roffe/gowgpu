@@ -72,7 +72,7 @@ func (Backend) CreateInstance(desc *hal.InstanceDescriptor) (hal.Instance, error
 	// context, and Destroy from another thread only marks it for deletion.
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
-	eglCtx, err := egl.NewContext(config)
+	eglCtx, config, err := newEGLContext(config)
 	if err != nil {
 		hal.Logger().Info("gles: instance context unavailable (expected on Wayland)", "err", err)
 		return &Instance{pinned: pinned}, nil
@@ -171,8 +171,6 @@ func (i *Instance) CreateSurface(target hal.SurfaceTarget) (hal.Surface, error) 
 	}
 
 	// Path B: create new context (Wayland — Instance had no wl_display* at init).
-	// Try desktop GL first, fall back to GLES 3.0 — Mesa Wayland EGL may only
-	// expose EGL_OPENGL_ES3_BIT configs, not EGL_OPENGL_BIT. Found by @lkmavi (PR #215).
 	// One pinned thread for the whole setup, and released before returning,
 	// like the instance context in CreateInstance.
 	runtime.LockOSThread()
@@ -180,16 +178,9 @@ func (i *Instance) CreateSurface(target hal.SurfaceTarget) (hal.Surface, error) 
 	config := egl.DefaultContextConfig()
 	config.NativeDisplay = displayHandle
 	config.WindowKind = &targetWindowKind
-	eglCtx, err := egl.NewContext(config)
+	eglCtx, config, err := newEGLContext(config)
 	if err != nil {
-		config.GLES = true
-		config.GLVersionMajor = 3
-		config.GLVersionMinor = 0
-		config.CoreProfile = false
-		eglCtx, err = egl.NewContext(config)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("gles: failed to create EGL context (tried desktop GL and GLES 3.0): %w", err)
+		return nil, fmt.Errorf("gles: failed to create EGL context: %w", err)
 	}
 
 	if err := eglCtx.MakeCurrent(); err != nil {
@@ -230,6 +221,25 @@ func (i *Instance) CreateSurface(target hal.SurfaceTarget) (hal.Surface, error) 
 		version:       version,
 		renderer:      renderer,
 	}, nil
+}
+
+// newEGLContext makes the context config asks for, falling back from
+// desktop OpenGL to OpenGL ES 3.0 where the display has no desktop context
+// to give, as wgpu-hal does: Mesa's Wayland EGL may expose ES configs only
+// (found by @lkmavi, PR #215), and EGL 1.4 without EGL_KHR_create_context
+// makes ES contexts only. It returns the config of the context it made.
+func newEGLContext(config egl.ContextConfig) (*egl.Context, egl.ContextConfig, error) {
+	ctx, err := egl.NewContext(config)
+	if err == nil || config.GLES {
+		return ctx, config, err
+	}
+	es := config
+	es.GLES, es.GLVersionMajor, es.GLVersionMinor, es.CoreProfile = true, 3, 0, false
+	ctx, esErr := egl.NewContext(es)
+	if esErr != nil {
+		return nil, config, fmt.Errorf("desktop GL: %w; GLES 3.0: %w", err, esErr)
+	}
+	return ctx, es, nil
 }
 
 // adoptContext makes ctx the instance AdapterContext and returns the one it

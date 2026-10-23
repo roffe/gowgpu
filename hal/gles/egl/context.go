@@ -92,6 +92,7 @@ func NewContext(config ContextConfig) (*Context, error) {
 		closeOwner()
 		return nil, err
 	}
+	displayExts := QueryString(display, Extensions)
 
 	// Bind OpenGL or OpenGL ES API
 	api := OpenGLAPI
@@ -108,17 +109,15 @@ func NewContext(config ContextConfig) (*Context, error) {
 		return fail(fmt.Errorf("failed to choose EGL config: %w", err))
 	}
 
-	// Create EGL context
-	eglContext := createEGLContext(display, eglConfig, config, NoContext)
-	if eglContext == NoContext {
-		return fail(fmt.Errorf("eglCreateContext failed: error 0x%x", GetError()))
+	eglContext, err := createEGLContext(display, eglConfig, config, NoContext, major, minor, displayExts)
+	if err != nil {
+		return fail(err)
 	}
 
 	// Surfaceless context: EGL 1.5+ or EGL_KHR_surfaceless_context allows
 	// MakeCurrent with EGL_NO_SURFACE. Skip pbuffer creation in that case.
 	// Fallback to 1×1 pbuffer for older drivers.
 	// Matches Rust wgpu-hal egl.rs:735-758.
-	displayExts := QueryString(display, Extensions)
 	hasSurfaceless := (major > 1 || (major == 1 && minor >= 5)) ||
 		strings.Contains(displayExts, "EGL_KHR_surfaceless_context")
 
@@ -183,8 +182,11 @@ func releaseDisplay(display EGLDisplay) {
 }
 
 // HasExtension reports whether the context's display has the EGL extension.
-func (c *Context) HasExtension(name string) bool {
-	for _, e := range strings.Fields(c.extensions) {
+func (c *Context) HasExtension(name string) bool { return hasExtension(c.extensions, name) }
+
+// hasExtension reports whether the extension string exts lists name.
+func hasExtension(exts, name string) bool {
+	for _, e := range strings.Fields(exts) {
 		if e == name {
 			return true
 		}
@@ -271,35 +273,45 @@ func chooseEGLConfig(display EGLDisplay, config ContextConfig, windowKind Window
 	return 0, fmt.Errorf("no suitable EGL configs found (tried window+pbuffer and pbuffer-only)")
 }
 
-// createEGLContext creates an EGL rendering context.
-func createEGLContext(display EGLDisplay, config EGLConfig, cfg ContextConfig, share EGLContext) EGLContext {
-	var attribs []EGLInt
-
-	// Set OpenGL version
-	attribs = append(attribs,
-		ContextMajorVersion, EGLInt(cfg.GLVersionMajor),
-		ContextMinorVersion, EGLInt(cfg.GLVersionMinor),
-	)
-
-	// Set profile (core vs compatibility) — desktop OpenGL only.
-	// EGL_CONTEXT_OPENGL_PROFILE_MASK is invalid for GLES; some drivers reject it.
-	if cfg.CoreProfile && !cfg.GLES {
-		attribs = append(attribs,
-			ContextOpenGLProfileMask, ContextOpenGLCoreProfileBit,
-		)
+// createEGLContext creates an EGL rendering context on a display of EGL
+// version major.minor with the extensions exts.
+func createEGLContext(display EGLDisplay, config EGLConfig, cfg ContextConfig, share EGLContext, major, minor EGLInt, exts string) (EGLContext, error) {
+	attribs, err := contextAttribs(cfg, major > 1 || major == 1 && minor >= 5, hasExtension(exts, "EGL_KHR_create_context"))
+	if err != nil {
+		return NoContext, err
 	}
+	ctx := CreateContext(display, config, share, &attribs[0])
+	if ctx == NoContext {
+		return NoContext, LastError("eglCreateContext")
+	}
+	return ctx, nil
+}
 
-	// Enable debug context if requested
+// contextAttribs are the eglCreateContext attributes for cfg. EGL 1.4
+// takes EGL_CONTEXT_CLIENT_VERSION alone, the OpenGL ES major version: the
+// minor version, the profile, the debug flag and any desktop OpenGL context
+// need EGL 1.5 (egl15) or EGL_KHR_create_context (khr).
+func contextAttribs(cfg ContextConfig, egl15, khr bool) ([]EGLInt, error) {
+	if !cfg.GLES && !egl15 && !khr {
+		return nil, fmt.Errorf("an OpenGL %d.%d context needs EGL 1.5 or EGL_KHR_create_context", cfg.GLVersionMajor, cfg.GLVersionMinor)
+	}
+	attribs := []EGLInt{ContextMajorVersion, EGLInt(cfg.GLVersionMajor)}
+	if egl15 || khr {
+		attribs = append(attribs, ContextMinorVersion, EGLInt(cfg.GLVersionMinor))
+		// The profile is desktop OpenGL's; some drivers reject it for ES.
+		if cfg.CoreProfile && !cfg.GLES {
+			attribs = append(attribs, ContextOpenGLProfileMask, ContextOpenGLCoreProfileBit)
+		}
+	}
 	if cfg.Debug {
-		attribs = append(attribs,
-			ContextFlagsKHR, ContextOpenGLDebugBitKHR,
-		)
+		switch {
+		case egl15:
+			attribs = append(attribs, ContextOpenGLDebug, EGLInt(True))
+		case khr:
+			attribs = append(attribs, ContextFlagsKHR, ContextOpenGLDebugBitKHR)
+		}
 	}
-
-	// Terminate attribute list
-	attribs = append(attribs, None)
-
-	return CreateContext(display, config, share, &attribs[0])
+	return append(attribs, None), nil
 }
 
 // createPbufferSurface creates a minimal pbuffer surface for the context.
@@ -392,9 +404,9 @@ func (c *Context) NewShared() (*Context, error) {
 	if BindAPI(api) == False {
 		return nil, fmt.Errorf("eglBindAPI (shared) failed: error 0x%x", GetError())
 	}
-	ctx := createEGLContext(c.display, c.config, c.cfg, c.context)
-	if ctx == NoContext {
-		return nil, fmt.Errorf("eglCreateContext (shared) failed: error 0x%x", GetError())
+	ctx, err := createEGLContext(c.display, c.config, c.cfg, c.context, c.major, c.minor, c.extensions)
+	if err != nil {
+		return nil, fmt.Errorf("shared context: %w", err)
 	}
 	pbuffer := NoSurface
 	if c.pbuffer != NoSurface {
