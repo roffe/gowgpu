@@ -359,3 +359,37 @@ func TestCreateTextureIgnoresEarlierErrors(t *testing.T) {
 	}
 	dev.DestroyTexture(tex)
 }
+
+// A pipeline without a fragment stage, as a depth-only pass has, links on
+// ES, which links no program without a fragment shader.
+func TestVertexOnlyPipelineOnES(t *testing.T) {
+	ctx := newTestESAdapterContext(t)
+	t.Cleanup(ctx.Destroy)
+	dev := openTestDevice(t, ctx)
+	t.Cleanup(dev.Destroy)
+	module, err := dev.CreateShaderModule(&hal.ShaderModuleDescriptor{Source: hal.ShaderSource{WGSL: `
+@vertex fn vs_main(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4<f32> {
+	return vec4<f32>(f32(vi), 0.0, 0.0, 1.0);
+}`}})
+	if err != nil {
+		t.Fatalf("CreateShaderModule: %v", err)
+	}
+	defer dev.DestroyShaderModule(module)
+	layout, err := dev.CreatePipelineLayout(&hal.PipelineLayoutDescriptor{})
+	if err != nil {
+		t.Fatalf("CreatePipelineLayout: %v", err)
+	}
+	defer dev.DestroyPipelineLayout(layout)
+	p, err := dev.CreateRenderPipeline(&hal.RenderPipelineDescriptor{
+		Layout:    layout,
+		Vertex:    hal.VertexState{Module: module, EntryPoint: "vs_main"},
+		Primitive: gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList},
+		DepthStencil: &hal.DepthStencilState{Format: gputypes.TextureFormatDepth32Float, DepthWriteEnabled: true,
+			DepthCompare: gputypes.CompareFunctionLess},
+		Multisample: gputypes.MultisampleState{Count: 1, Mask: 0xFFFFFFFF},
+	})
+	if err != nil {
+		t.Fatalf("CreateRenderPipeline: %v", err)
+	}
+	dev.DestroyRenderPipeline(p)
+}
