@@ -4,6 +4,7 @@ package wgpu
 
 import (
 	"errors"
+	"strings"
 	"syscall/js"
 	"testing"
 
@@ -89,5 +90,34 @@ func TestBrowserLostDeviceRefusesWork(t *testing.T) {
 	buf := &Buffer{browser: &browser.Buffer{}, device: d, size: 16, usage: BufferUsageMapRead}
 	if _, err := buf.MapAsync(MapModeRead, 0, 16); !errors.Is(err, ErrMapDeviceLost) {
 		t.Errorf("MapAsync on a lost device: %v, want ErrMapDeviceLost", err)
+	}
+}
+
+func TestBrowserExceptionsBecomeErrors(t *testing.T) {
+	dev := jsEval(`{
+		queue: {},
+		createTexture() { throw new TypeError("feature-gated format") },
+		createShaderModule() { throw new TypeError("missing code") },
+		createRenderPipeline() { throw new TypeError("mask out of range") },
+	}`)
+	d := &Device{browser: browser.NewDevice(dev), limits: gputypes.DefaultLimits()}
+
+	if _, err := d.CreateTexture(&TextureDescriptor{Format: gputypes.TextureFormatR16Unorm}); err == nil {
+		t.Error("CreateTexture: nil error for a throwing createTexture")
+	}
+	if _, err := d.CreateShaderModule(&ShaderModuleDescriptor{}); err == nil {
+		t.Error("CreateShaderModule: nil error for a throwing createShaderModule")
+	}
+	if _, err := d.CreateRenderPipeline(&RenderPipelineDescriptor{}); err == nil {
+		t.Error("CreateRenderPipeline: nil error for a throwing createRenderPipeline")
+	}
+}
+
+func TestBrowserCreateTextureNeedsTheFormatsFeature(t *testing.T) {
+	dev := jsEval(`{queue: {}, createTexture() { throw new Error("createTexture reached") }}`)
+	d := &Device{browser: browser.NewDevice(dev), limits: gputypes.DefaultLimits()}
+	_, err := d.CreateTexture(&TextureDescriptor{Format: gputypes.TextureFormatBC1RGBAUnorm})
+	if err == nil || !strings.Contains(err.Error(), "TextureCompressionBC") {
+		t.Fatalf("CreateTexture(BC1) without the feature = %v, want an error naming TextureCompressionBC", err)
 	}
 }

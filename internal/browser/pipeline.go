@@ -18,11 +18,14 @@ func NewRenderPipeline(ref js.Value) *RenderPipeline {
 // Ref returns the underlying GPURenderPipeline js.Value.
 func (p *RenderPipeline) Ref() js.Value { return p.ref_ }
 
-// GetBindGroupLayout returns the bind group layout at the given index.
-// Wraps GPURenderPipeline.getBindGroupLayout(index).
-func (p *RenderPipeline) GetBindGroupLayout(index uint32) *BindGroupLayout {
-	jsLayout := p.ref_.Call("getBindGroupLayout", index)
-	return NewBindGroupLayout(jsLayout)
+// GetBindGroupLayout returns the bind group layout at the given index, or
+// the exception GPURenderPipeline.getBindGroupLayout(index) throws as an error.
+func (p *RenderPipeline) GetBindGroupLayout(index uint32) (*BindGroupLayout, error) {
+	var jsLayout js.Value
+	if err := catchJS(func() { jsLayout = p.ref_.Call("getBindGroupLayout", index) }); err != nil {
+		return nil, err
+	}
+	return NewBindGroupLayout(jsLayout), nil
 }
 
 // ComputePipeline wraps a browser GPUComputePipeline.
@@ -39,9 +42,12 @@ func NewComputePipeline(ref js.Value) *ComputePipeline {
 // Ref returns the underlying GPUComputePipeline js.Value.
 func (p *ComputePipeline) Ref() js.Value { return p.ref_ }
 
-// GetBindGroupLayout returns the bind group layout at the given index.
-// Wraps GPUComputePipeline.getBindGroupLayout(index).
-func (p *ComputePipeline) GetBindGroupLayout(index uint32) *BindGroupLayout {
-	jsLayout := p.ref_.Call("getBindGroupLayout", index)
-	return NewBindGroupLayout(jsLayout)
+// GetBindGroupLayout returns the bind group layout at the given index, or
+// the exception GPUComputePipeline.getBindGroupLayout(index) throws as an error.
+func (p *ComputePipeline) GetBindGroupLayout(index uint32) (*BindGroupLayout, error) {
+	var jsLayout js.Value
+	if err := catchJS(func() { jsLayout = p.ref_.Call("getBindGroupLayout", index) }); err != nil {
+		return nil, err
+	}
+	return NewBindGroupLayout(jsLayout), nil
 }

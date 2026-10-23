@@ -516,14 +516,16 @@ func TestStorageTextureAccessToJS(t *testing.T) {
 // TestTextureFormatMapCompleteness verifies that every non-Undefined format in
 // gputypes has a mapping. Missing entries would cause silent empty strings at runtime.
 func TestTextureFormatMapCompleteness(t *testing.T) {
-	// All non-Undefined, non-Unorm16/Snorm16 formats from gputypes
+	// All non-Undefined formats from gputypes
 	allFormats := []gputypes.TextureFormat{
 		gputypes.TextureFormatR8Unorm, gputypes.TextureFormatR8Snorm,
 		gputypes.TextureFormatR8Uint, gputypes.TextureFormatR8Sint,
+		gputypes.TextureFormatR16Unorm, gputypes.TextureFormatR16Snorm,
 		gputypes.TextureFormatR16Uint, gputypes.TextureFormatR16Sint, gputypes.TextureFormatR16Float,
 		gputypes.TextureFormatRG8Unorm, gputypes.TextureFormatRG8Snorm,
 		gputypes.TextureFormatRG8Uint, gputypes.TextureFormatRG8Sint,
 		gputypes.TextureFormatR32Float, gputypes.TextureFormatR32Uint, gputypes.TextureFormatR32Sint,
+		gputypes.TextureFormatRG16Unorm, gputypes.TextureFormatRG16Snorm,
 		gputypes.TextureFormatRG16Uint, gputypes.TextureFormatRG16Sint, gputypes.TextureFormatRG16Float,
 		gputypes.TextureFormatRGBA8Unorm, gputypes.TextureFormatRGBA8UnormSrgb,
 		gputypes.TextureFormatRGBA8Snorm, gputypes.TextureFormatRGBA8Uint, gputypes.TextureFormatRGBA8Sint,
@@ -531,6 +533,7 @@ func TestTextureFormatMapCompleteness(t *testing.T) {
 		gputypes.TextureFormatRGB10A2Uint, gputypes.TextureFormatRGB10A2Unorm,
 		gputypes.TextureFormatRG11B10Ufloat, gputypes.TextureFormatRGB9E5Ufloat,
 		gputypes.TextureFormatRG32Float, gputypes.TextureFormatRG32Uint, gputypes.TextureFormatRG32Sint,
+		gputypes.TextureFormatRGBA16Unorm, gputypes.TextureFormatRGBA16Snorm,
 		gputypes.TextureFormatRGBA16Uint, gputypes.TextureFormatRGBA16Sint, gputypes.TextureFormatRGBA16Float,
 		gputypes.TextureFormatRGBA32Float, gputypes.TextureFormatRGBA32Uint, gputypes.TextureFormatRGBA32Sint,
 		gputypes.TextureFormatStencil8, gputypes.TextureFormatDepth16Unorm,
@@ -596,6 +599,28 @@ func TestVertexFormatMapCompleteness(t *testing.T) {
 		s := VertexFormatToJS(f)
 		if s == "" {
 			t.Errorf("VertexFormatToJS(%v) returned empty string — missing mapping", f)
+		}
+	}
+}
+
+func TestTextureFormatFeature(t *testing.T) {
+	tests := []struct {
+		format gputypes.TextureFormat
+		want   gputypes.Feature
+	}{
+		{gputypes.TextureFormatRGBA8Unorm, 0},
+		{gputypes.TextureFormatDepth24PlusStencil8, 0},
+		{gputypes.TextureFormatDepth32FloatStencil8, gputypes.FeatureDepth32FloatStencil8},
+		{gputypes.TextureFormatBC1RGBAUnorm, gputypes.FeatureTextureCompressionBC},
+		{gputypes.TextureFormatBC7RGBAUnormSrgb, gputypes.FeatureTextureCompressionBC},
+		{gputypes.TextureFormatETC2RGB8Unorm, gputypes.FeatureTextureCompressionETC2},
+		{gputypes.TextureFormatEACRG11Snorm, gputypes.FeatureTextureCompressionETC2},
+		{gputypes.TextureFormatASTC4x4Unorm, gputypes.FeatureTextureCompressionASTC},
+		{gputypes.TextureFormatASTC12x12UnormSrgb, gputypes.FeatureTextureCompressionASTC},
+	}
+	for _, tc := range tests {
+		if got := TextureFormatFeature(tc.format); got != tc.want {
+			t.Errorf("TextureFormatFeature(%v) = %v, want %v", tc.format, got, tc.want)
 		}
 	}
 }

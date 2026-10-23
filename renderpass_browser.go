@@ -3,6 +3,8 @@
 package wgpu
 
 import (
+	"fmt"
+
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/internal/browser"
 	"github.com/roffe/gowgpu/internal/indirect"
@@ -12,7 +14,16 @@ import (
 // On browser, this wraps a GPURenderPassEncoder via internal/browser.RenderPassEncoder.
 type RenderPassEncoder struct {
 	browser  *browser.RenderPassEncoder
+	encoder  *CommandEncoder
 	released bool
+}
+
+// setError records err on the pass's command encoder, whose Finish returns
+// it.
+func (p *RenderPassEncoder) setError(method string, err error) {
+	if err != nil && p.encoder != nil {
+		p.encoder.setError(fmt.Errorf("wgpu: RenderPass.%s: %w", method, err))
+	}
 }
 
 // SetPipeline sets the active render pipeline.
@@ -49,12 +60,12 @@ func (p *RenderPassEncoder) SetIndexBuffer(buffer *Buffer, format gputypes.Index
 	}
 	formatStr := browser.IndexFormatToJS(format)
 	// size=0 tells the browser layer to omit the size parameter.
-	p.browser.SetIndexBuffer(buffer.browser.Ref(), formatStr, offset, 0)
+	p.setError("SetIndexBuffer", p.browser.SetIndexBuffer(buffer.browser.Ref(), formatStr, offset, 0))
 }
 
 // SetViewport sets the viewport transformation.
 func (p *RenderPassEncoder) SetViewport(vp gputypes.Viewport) {
-	p.browser.SetViewport(vp.X, vp.Y, vp.Width, vp.Height, vp.MinDepth, vp.MaxDepth)
+	p.setError("SetViewport", p.browser.SetViewport(vp.X, vp.Y, vp.Width, vp.Height, vp.MinDepth, vp.MaxDepth))
 }
 
 // SetScissorRect sets the scissor rectangle for clipping.
@@ -68,7 +79,7 @@ func (p *RenderPassEncoder) SetBlendConstant(color *gputypes.Color) {
 		return
 	}
 	jsColor := browser.BuildColorDict(color.R, color.G, color.B, color.A)
-	p.browser.SetBlendConstant(jsColor)
+	p.setError("SetBlendConstant", p.browser.SetBlendConstant(jsColor))
 }
 
 // SetStencilReference sets the stencil reference value.

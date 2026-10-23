@@ -43,17 +43,25 @@ func NewCommandEncoder(ref js.Value) *CommandEncoder {
 }
 
 // BeginRenderPass begins a render pass with the given JS descriptor.
-// Returns a RenderPassEncoder wrapping the browser GPURenderPassEncoder.
-func (e *CommandEncoder) BeginRenderPass(desc js.Value) *RenderPassEncoder {
-	jsPass := e.fnBeginRenderPass.Invoke(desc)
-	return NewRenderPassEncoder(jsPass)
+// Returns a RenderPassEncoder wrapping the browser GPURenderPassEncoder, or
+// the exception beginRenderPass throws as an error.
+func (e *CommandEncoder) BeginRenderPass(desc js.Value) (*RenderPassEncoder, error) {
+	jsPass, err := invoke(e.fnBeginRenderPass, desc)
+	if err != nil {
+		return nil, err
+	}
+	return NewRenderPassEncoder(jsPass), nil
 }
 
 // BeginComputePass begins a compute pass with the given JS descriptor.
-// Returns a ComputePassEncoder wrapping the browser GPUComputePassEncoder.
-func (e *CommandEncoder) BeginComputePass(desc js.Value) *ComputePassEncoder {
-	jsPass := e.fnBeginComputePass.Invoke(desc)
-	return NewComputePassEncoder(jsPass)
+// Returns a ComputePassEncoder wrapping the browser GPUComputePassEncoder,
+// or the exception beginComputePass throws as an error.
+func (e *CommandEncoder) BeginComputePass(desc js.Value) (*ComputePassEncoder, error) {
+	jsPass, err := invoke(e.fnBeginComputePass, desc)
+	if err != nil {
+		return nil, err
+	}
+	return NewComputePassEncoder(jsPass), nil
 }
 
 // CopyBufferToBuffer records a buffer-to-buffer copy command.

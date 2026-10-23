@@ -22,6 +22,8 @@ var textureFormatMap = map[gputypes.TextureFormat]string{
 	gputypes.TextureFormatR8Sint:  "r8sint",
 
 	// 16-bit
+	gputypes.TextureFormatR16Unorm: "r16unorm",
+	gputypes.TextureFormatR16Snorm: "r16snorm",
 	gputypes.TextureFormatR16Uint:  "r16uint",
 	gputypes.TextureFormatR16Sint:  "r16sint",
 	gputypes.TextureFormatR16Float: "r16float",
@@ -34,6 +36,8 @@ var textureFormatMap = map[gputypes.TextureFormat]string{
 	gputypes.TextureFormatR32Float:       "r32float",
 	gputypes.TextureFormatR32Uint:        "r32uint",
 	gputypes.TextureFormatR32Sint:        "r32sint",
+	gputypes.TextureFormatRG16Unorm:      "rg16unorm",
+	gputypes.TextureFormatRG16Snorm:      "rg16snorm",
 	gputypes.TextureFormatRG16Uint:       "rg16uint",
 	gputypes.TextureFormatRG16Sint:       "rg16sint",
 	gputypes.TextureFormatRG16Float:      "rg16float",
@@ -55,6 +59,8 @@ var textureFormatMap = map[gputypes.TextureFormat]string{
 	gputypes.TextureFormatRG32Float:   "rg32float",
 	gputypes.TextureFormatRG32Uint:    "rg32uint",
 	gputypes.TextureFormatRG32Sint:    "rg32sint",
+	gputypes.TextureFormatRGBA16Unorm: "rgba16unorm",
+	gputypes.TextureFormatRGBA16Snorm: "rgba16snorm",
 	gputypes.TextureFormatRGBA16Uint:  "rgba16uint",
 	gputypes.TextureFormatRGBA16Sint:  "rgba16sint",
 	gputypes.TextureFormatRGBA16Float: "rgba16float",
@@ -129,6 +135,23 @@ var textureFormatMap = map[gputypes.TextureFormat]string{
 	gputypes.TextureFormatASTC12x10UnormSrgb: "astc-12x10-unorm-srgb",
 	gputypes.TextureFormatASTC12x12Unorm:     "astc-12x12-unorm",
 	gputypes.TextureFormatASTC12x12UnormSrgb: "astc-12x12-unorm-srgb",
+}
+
+// TextureFormatFeature returns the feature a device needs to create a
+// texture of format f, or 0 when the format needs none.
+func TextureFormatFeature(f gputypes.TextureFormat) gputypes.Feature {
+	switch {
+	case f == gputypes.TextureFormatDepth32FloatStencil8:
+		return gputypes.FeatureDepth32FloatStencil8
+	case f >= gputypes.TextureFormatBC1RGBAUnorm && f <= gputypes.TextureFormatBC7RGBAUnormSrgb:
+		return gputypes.FeatureTextureCompressionBC
+	case f >= gputypes.TextureFormatETC2RGB8Unorm && f <= gputypes.TextureFormatEACRG11Snorm:
+		return gputypes.FeatureTextureCompressionETC2
+	case f >= gputypes.TextureFormatASTC4x4Unorm && f <= gputypes.TextureFormatASTC12x12UnormSrgb:
+		return gputypes.FeatureTextureCompressionASTC
+	default:
+		return 0
+	}
 }
 
 // TextureDimensionToJS converts a gputypes.TextureDimension to the WebGPU JS string.

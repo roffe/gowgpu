@@ -317,7 +317,10 @@ func (st *SurfaceTexture) CreateView(desc *TextureViewDescriptor) (*TextureView,
 		jsDesc = js.Undefined()
 	}
 
-	bv := st.texture.browser.CreateView(jsDesc)
+	bv, err := st.texture.browser.CreateView(jsDesc)
+	if err != nil {
+		return nil, fmt.Errorf("wgpu: SurfaceTexture.CreateView: %w", err)
+	}
 	return &TextureView{
 		browser: bv,
 		texture: st.AsTexture(),

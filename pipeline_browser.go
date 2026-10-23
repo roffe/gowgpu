@@ -16,13 +16,17 @@ type RenderPipeline struct {
 	released bool
 }
 
-// GetBindGroupLayout returns the bind group layout at the given index.
-// This wraps GPURenderPipeline.getBindGroupLayout(index) for "auto" layouts.
+// GetBindGroupLayout returns the bind group layout at the given index, or nil
+// when the browser throws for the index. This wraps
+// GPURenderPipeline.getBindGroupLayout(index) for "auto" layouts.
 func (p *RenderPipeline) GetBindGroupLayout(index uint32) *BindGroupLayout {
 	if p.browser == nil {
 		return nil
 	}
-	bl := p.browser.GetBindGroupLayout(index)
+	bl, err := p.browser.GetBindGroupLayout(index)
+	if err != nil {
+		return nil
+	}
 	return &BindGroupLayout{
 		browser: bl,
 	}
@@ -42,13 +46,17 @@ type ComputePipeline struct {
 	released bool
 }
 
-// GetBindGroupLayout returns the bind group layout at the given index.
-// This wraps GPUComputePipeline.getBindGroupLayout(index) for "auto" layouts.
+// GetBindGroupLayout returns the bind group layout at the given index, or nil
+// when the browser throws for the index. This wraps
+// GPUComputePipeline.getBindGroupLayout(index) for "auto" layouts.
 func (p *ComputePipeline) GetBindGroupLayout(index uint32) *BindGroupLayout {
 	if p.browser == nil {
 		return nil
 	}
-	bl := p.browser.GetBindGroupLayout(index)
+	bl, err := p.browser.GetBindGroupLayout(index)
+	if err != nil {
+		return nil
+	}
 	return &BindGroupLayout{
 		browser: bl,
 	}

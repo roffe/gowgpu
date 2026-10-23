@@ -38,15 +38,21 @@ func (t *Texture) Height() uint32 { return t.height }
 func (t *Texture) Format() string { return t.format }
 
 // CreateView calls GPUTexture.createView() with the given descriptor.
-// Pass js.Undefined() for default view parameters.
-func (t *Texture) CreateView(desc js.Value) *TextureView {
+// Pass js.Undefined() for default view parameters. It returns the exception
+// createView throws, if any, as an error.
+func (t *Texture) CreateView(desc js.Value) (*TextureView, error) {
 	var jsView js.Value
-	if desc.IsUndefined() || desc.IsNull() {
-		jsView = t.ref_.Call("createView")
-	} else {
-		jsView = t.ref_.Call("createView", desc)
+	err := catchJS(func() {
+		if desc.IsUndefined() || desc.IsNull() {
+			jsView = t.ref_.Call("createView")
+		} else {
+			jsView = t.ref_.Call("createView", desc)
+		}
+	})
+	if err != nil {
+		return nil, err
 	}
-	return &TextureView{ref_: jsView}
+	return &TextureView{ref_: jsView}, nil
 }
 
 // Destroy calls GPUTexture.destroy() to release GPU memory.

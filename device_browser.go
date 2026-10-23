@@ -124,6 +124,9 @@ func (d *Device) CreateTexture(desc *TextureDescriptor) (*Texture, error) {
 	if desc == nil {
 		return nil, fmt.Errorf("wgpu: texture descriptor is nil")
 	}
+	if f := browser.TextureFormatFeature(desc.Format); f != 0 && !d.features.Contains(f) {
+		return nil, fmt.Errorf("wgpu: CreateTexture: format %s needs the %s feature", desc.Format, f)
+	}
 	jsDesc := browser.BuildTextureDescriptor(
 		desc.Label,
 		desc.Size.Width, desc.Size.Height, desc.Size.DepthOrArrayLayers,
@@ -131,7 +134,10 @@ func (d *Device) CreateTexture(desc *TextureDescriptor) (*Texture, error) {
 		desc.Dimension, desc.Format, desc.Usage,
 		desc.ViewFormats,
 	)
-	bt := d.browser.CreateTextureFromDesc(jsDesc)
+	bt, err := d.browser.CreateTextureFromDesc(jsDesc)
+	if err != nil {
+		return nil, fmt.Errorf("wgpu: CreateTexture: %w", err)
+	}
 	return &Texture{
 		browser:  bt,
 		format:   desc.Format,
@@ -156,7 +162,10 @@ func (d *Device) CreateTextureView(texture *Texture, desc *TextureViewDescriptor
 		desc.BaseMipLevel, desc.MipLevelCount,
 		desc.BaseArrayLayer, desc.ArrayLayerCount,
 	)
-	bv := texture.browser.CreateView(jsDesc)
+	bv, err := texture.browser.CreateView(jsDesc)
+	if err != nil {
+		return nil, fmt.Errorf("wgpu: CreateTextureView: %w", err)
+	}
 	return &TextureView{
 		browser:  bv,
 		texture:  texture,
@@ -179,7 +188,10 @@ func (d *Device) CreateSampler(desc *SamplerDescriptor) (*Sampler, error) {
 		desc.LodMinClamp, desc.LodMaxClamp,
 		desc.Compare, desc.Anisotropy,
 	)
-	bs := d.browser.CreateSamplerFromDesc(jsDesc)
+	bs, err := d.browser.CreateSamplerFromDesc(jsDesc)
+	if err != nil {
+		return nil, fmt.Errorf("wgpu: CreateSampler: %w", err)
+	}
 	return &Sampler{
 		browser:  bs,
 		released: false,
@@ -197,7 +209,10 @@ func (d *Device) CreateShaderModule(desc *ShaderModuleDescriptor) (*ShaderModule
 		return nil, fmt.Errorf("wgpu: shader module descriptor is nil")
 	}
 	jsDesc := browser.BuildShaderModuleDescriptor(desc.Label, desc.WGSL)
-	bm := d.browser.CreateShaderModuleFromDesc(jsDesc)
+	bm, err := d.browser.CreateShaderModuleFromDesc(jsDesc)
+	if err != nil {
+		return nil, fmt.Errorf("wgpu: CreateShaderModule: %w", err)
+	}
 	return &ShaderModule{
 		browser:  bm,
 		released: false,
@@ -214,7 +229,10 @@ func (d *Device) CreateBindGroupLayout(desc *BindGroupLayoutDescriptor) (*BindGr
 	}
 	entries := convertBindGroupLayoutEntries(desc.Entries)
 	jsDesc := browser.BuildBindGroupLayoutDescriptor(desc.Label, entries)
-	bl := d.browser.CreateBindGroupLayoutFromDesc(jsDesc)
+	bl, err := d.browser.CreateBindGroupLayoutFromDesc(jsDesc)
+	if err != nil {
+		return nil, fmt.Errorf("wgpu: CreateBindGroupLayout: %w", err)
+	}
 	return &BindGroupLayout{
 		browser:  bl,
 		released: false,
@@ -238,7 +256,10 @@ func (d *Device) CreatePipelineLayout(desc *PipelineLayoutDescriptor) (*Pipeline
 		}
 	}
 	jsDesc := browser.BuildPipelineLayoutDescriptor(desc.Label, refs)
-	bp := d.browser.CreatePipelineLayoutFromDesc(jsDesc)
+	bp, err := d.browser.CreatePipelineLayoutFromDesc(jsDesc)
+	if err != nil {
+		return nil, fmt.Errorf("wgpu: CreatePipelineLayout: %w", err)
+	}
 	return &PipelineLayout{
 		browser:  bp,
 		released: false,
@@ -261,7 +282,10 @@ func (d *Device) CreateBindGroup(desc *BindGroupDescriptor) (*BindGroup, error) 
 	}
 	entries := convertBindGroupEntries(desc.Entries)
 	jsDesc := browser.BuildBindGroupDescriptor(desc.Label, layoutRef, entries)
-	bg := d.browser.CreateBindGroupFromDesc(jsDesc)
+	bg, err := d.browser.CreateBindGroupFromDesc(jsDesc)
+	if err != nil {
+		return nil, fmt.Errorf("wgpu: CreateBindGroup: %w", err)
+	}
 	return &BindGroup{
 		browser:  bg,
 		released: false,
@@ -277,7 +301,10 @@ func (d *Device) CreateRenderPipeline(desc *RenderPipelineDescriptor) (*RenderPi
 		return nil, fmt.Errorf("wgpu: render pipeline descriptor is nil")
 	}
 	jsDesc := convertRenderPipelineDescriptor(desc)
-	bp := d.browser.CreateRenderPipelineFromDesc(jsDesc)
+	bp, err := d.browser.CreateRenderPipelineFromDesc(jsDesc)
+	if err != nil {
+		return nil, fmt.Errorf("wgpu: CreateRenderPipeline: %w", err)
+	}
 	return &RenderPipeline{
 		browser:  bp,
 		released: false,
@@ -307,7 +334,10 @@ func (d *Device) CreateComputePipeline(desc *ComputePipelineDescriptor) (*Comput
 	jsDesc := browser.BuildComputePipelineDescriptor(
 		desc.Label, layoutRef, moduleRef, desc.EntryPoint, desc.Constants,
 	)
-	bp := d.browser.CreateComputePipelineFromDesc(jsDesc)
+	bp, err := d.browser.CreateComputePipelineFromDesc(jsDesc)
+	if err != nil {
+		return nil, fmt.Errorf("wgpu: CreateComputePipeline: %w", err)
+	}
 	return &ComputePipeline{
 		browser:  bp,
 		released: false,

@@ -3,6 +3,7 @@
 package wgpu
 
 import (
+	"fmt"
 	"syscall/js"
 
 	"github.com/roffe/gowgpu/internal/browser"
@@ -13,6 +14,16 @@ import (
 type CommandEncoder struct {
 	browser  *browser.CommandEncoder
 	released bool
+
+	// err is the first error a recorded command raised; Finish returns it.
+	err error
+}
+
+// setError keeps the first error for Finish to return.
+func (e *CommandEncoder) setError(err error) {
+	if e.err == nil {
+		e.err = err
+	}
 }
 
 // BeginRenderPass begins a render pass.
@@ -21,9 +32,15 @@ func (e *CommandEncoder) BeginRenderPass(desc *RenderPassDescriptor) (*RenderPas
 		return nil, ErrReleased
 	}
 	jsDesc := buildRenderPassDescriptorJS(desc)
-	bp := e.browser.BeginRenderPass(jsDesc)
+	bp, err := e.browser.BeginRenderPass(jsDesc)
+	if err != nil {
+		err = fmt.Errorf("wgpu: BeginRenderPass: %w", err)
+		e.setError(err)
+		return nil, err
+	}
 	return &RenderPassEncoder{
 		browser:  bp,
+		encoder:  e,
 		released: false,
 	}, nil
 }
@@ -38,7 +55,12 @@ func (e *CommandEncoder) BeginComputePass(desc *ComputePassDescriptor) (*Compute
 		label = desc.Label
 	}
 	jsDesc := browser.BuildComputePassDescriptor(label)
-	bp := e.browser.BeginComputePass(jsDesc)
+	bp, err := e.browser.BeginComputePass(jsDesc)
+	if err != nil {
+		err = fmt.Errorf("wgpu: BeginComputePass: %w", err)
+		e.setError(err)
+		return nil, err
+	}
 	return &ComputePassEncoder{
 		browser:  bp,
 		released: false,
@@ -159,6 +181,9 @@ func (e *CommandEncoder) Finish() (*CommandBuffer, error) {
 		return nil, ErrReleased
 	}
 	e.released = true
+	if e.err != nil {
+		return nil, e.err
+	}
 	bcb := e.browser.Finish(js.Undefined())
 	return &CommandBuffer{
 		browser:  bcb,

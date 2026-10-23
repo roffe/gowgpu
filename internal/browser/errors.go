@@ -80,3 +80,11 @@ func catchJS(fn func()) (err error) {
 	fn()
 	return nil
 }
+
+// invoke calls fn with args and returns its result, or the exception it
+// throws as an error.
+func invoke(fn js.Value, args ...any) (js.Value, error) {
+	var result js.Value
+	err := catchJS(func() { result = fn.Invoke(args...) })
+	return result, err
+}

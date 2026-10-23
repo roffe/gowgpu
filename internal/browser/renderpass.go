@@ -92,12 +92,15 @@ func (p *RenderPassEncoder) SetVertexBuffer(slot uint32, buffer js.Value, offset
 // format is a WebGPU string: "uint16" or "uint32".
 // If size is 0, the size parameter is omitted (meaning "rest of buffer"),
 // matching Rust wgpu's set_index_buffer_with_f64 (no size variant).
-func (p *RenderPassEncoder) SetIndexBuffer(buffer js.Value, format string, offset uint64, size uint64) {
-	if size == 0 {
-		p.fnSetIndexBuffer.Invoke(buffer, format, float64(offset))
-	} else {
-		p.fnSetIndexBuffer.Invoke(buffer, format, float64(offset), float64(size))
-	}
+// It returns the exception setIndexBuffer throws, if any, as an error.
+func (p *RenderPassEncoder) SetIndexBuffer(buffer js.Value, format string, offset uint64, size uint64) error {
+	return catchJS(func() {
+		if size == 0 {
+			p.fnSetIndexBuffer.Invoke(buffer, format, float64(offset))
+		} else {
+			p.fnSetIndexBuffer.Invoke(buffer, format, float64(offset), float64(size))
+		}
+	})
 }
 
 // Draw draws primitives.
@@ -123,9 +126,10 @@ func (p *RenderPassEncoder) DrawIndexedIndirect(buffer js.Value, offset uint64) 
 	p.fnDrawIndexedIndirect.Invoke(buffer, float64(offset))
 }
 
-// SetViewport sets the viewport transformation.
-func (p *RenderPassEncoder) SetViewport(x, y, w, h, minDepth, maxDepth float32) {
-	p.fnSetViewport.Invoke(x, y, w, h, minDepth, maxDepth)
+// SetViewport sets the viewport transformation. It returns the exception
+// setViewport throws, if any, as an error.
+func (p *RenderPassEncoder) SetViewport(x, y, w, h, minDepth, maxDepth float32) error {
+	return catchJS(func() { p.fnSetViewport.Invoke(x, y, w, h, minDepth, maxDepth) })
 }
 
 // SetScissorRect sets the scissor rectangle for clipping.
@@ -134,9 +138,10 @@ func (p *RenderPassEncoder) SetScissorRect(x, y, w, h uint32) {
 }
 
 // SetBlendConstant sets the blend constant color via a GPUColorDict.
-// Matches Rust: set_blend_constant_with_gpu_color_dict.
-func (p *RenderPassEncoder) SetBlendConstant(color js.Value) {
-	p.fnSetBlendConstant.Invoke(color)
+// Matches Rust: set_blend_constant_with_gpu_color_dict. It returns the
+// exception setBlendConstant throws, if any, as an error.
+func (p *RenderPassEncoder) SetBlendConstant(color js.Value) error {
+	return catchJS(func() { p.fnSetBlendConstant.Invoke(color) })
 }
 
 // SetStencilReference sets the stencil reference value.

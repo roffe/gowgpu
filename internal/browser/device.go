@@ -172,63 +172,94 @@ func (d *Device) CreateSampler() js.Value { return d.fnCreateSampler }
 // CreateQuerySet returns the pre-bound createQuerySet function.
 func (d *Device) CreateQuerySet() js.Value { return d.fnCreateQuerySet }
 
-// CreateBufferFromDesc creates a GPUBuffer from a JS descriptor object. It
-// returns the exception createBuffer throws, if any, as an error.
+// CreateBufferFromDesc creates a GPUBuffer from a JS descriptor object, or
+// returns the exception createBuffer throws as an error.
 func (d *Device) CreateBufferFromDesc(desc js.Value) (*Buffer, error) {
-	var jsBuffer js.Value
-	err := catchJS(func() { jsBuffer = d.fnCreateBuffer.Invoke(desc) })
+	ref, err := invoke(d.fnCreateBuffer, desc)
 	if err != nil {
 		return nil, err
 	}
-	return NewBuffer(jsBuffer), nil
+	return NewBuffer(ref), nil
 }
 
-// CreateTextureFromDesc creates a GPUTexture from a JS descriptor object.
-func (d *Device) CreateTextureFromDesc(desc js.Value) *Texture {
-	jsTexture := d.fnCreateTexture.Invoke(desc)
-	return NewTexture(jsTexture)
+// CreateTextureFromDesc creates a GPUTexture from a JS descriptor object, or
+// returns the exception createTexture throws as an error.
+func (d *Device) CreateTextureFromDesc(desc js.Value) (*Texture, error) {
+	ref, err := invoke(d.fnCreateTexture, desc)
+	if err != nil {
+		return nil, err
+	}
+	return NewTexture(ref), nil
 }
 
-// CreateSamplerFromDesc creates a GPUSampler from a JS descriptor object.
-func (d *Device) CreateSamplerFromDesc(desc js.Value) *Sampler {
-	jsSampler := d.fnCreateSampler.Invoke(desc)
-	return NewSampler(jsSampler)
+// CreateSamplerFromDesc creates a GPUSampler from a JS descriptor object, or
+// returns the exception createSampler throws as an error.
+func (d *Device) CreateSamplerFromDesc(desc js.Value) (*Sampler, error) {
+	ref, err := invoke(d.fnCreateSampler, desc)
+	if err != nil {
+		return nil, err
+	}
+	return NewSampler(ref), nil
 }
 
-// CreateShaderModuleFromDesc creates a GPUShaderModule from a JS descriptor object.
-func (d *Device) CreateShaderModuleFromDesc(desc js.Value) *ShaderModule {
-	jsModule := d.fnCreateShaderModule.Invoke(desc)
-	return NewShaderModule(jsModule)
+// CreateShaderModuleFromDesc creates a GPUShaderModule from a JS descriptor object, or
+// returns the exception createShaderModule throws as an error.
+func (d *Device) CreateShaderModuleFromDesc(desc js.Value) (*ShaderModule, error) {
+	ref, err := invoke(d.fnCreateShaderModule, desc)
+	if err != nil {
+		return nil, err
+	}
+	return NewShaderModule(ref), nil
 }
 
-// CreateBindGroupLayoutFromDesc creates a GPUBindGroupLayout from a JS descriptor object.
-func (d *Device) CreateBindGroupLayoutFromDesc(desc js.Value) *BindGroupLayout {
-	jsLayout := d.fnCreateBindGroupLayout.Invoke(desc)
-	return NewBindGroupLayout(jsLayout)
+// CreateBindGroupLayoutFromDesc creates a GPUBindGroupLayout from a JS descriptor object, or
+// returns the exception createBindGroupLayout throws as an error.
+func (d *Device) CreateBindGroupLayoutFromDesc(desc js.Value) (*BindGroupLayout, error) {
+	ref, err := invoke(d.fnCreateBindGroupLayout, desc)
+	if err != nil {
+		return nil, err
+	}
+	return NewBindGroupLayout(ref), nil
 }
 
-// CreateBindGroupFromDesc creates a GPUBindGroup from a JS descriptor object.
-func (d *Device) CreateBindGroupFromDesc(desc js.Value) *BindGroup {
-	jsGroup := d.fnCreateBindGroup.Invoke(desc)
-	return NewBindGroup(jsGroup)
+// CreateBindGroupFromDesc creates a GPUBindGroup from a JS descriptor object, or
+// returns the exception createBindGroup throws as an error.
+func (d *Device) CreateBindGroupFromDesc(desc js.Value) (*BindGroup, error) {
+	ref, err := invoke(d.fnCreateBindGroup, desc)
+	if err != nil {
+		return nil, err
+	}
+	return NewBindGroup(ref), nil
 }
 
-// CreatePipelineLayoutFromDesc creates a GPUPipelineLayout from a JS descriptor object.
-func (d *Device) CreatePipelineLayoutFromDesc(desc js.Value) *PipelineLayout {
-	jsLayout := d.fnCreatePipelineLayout.Invoke(desc)
-	return NewPipelineLayout(jsLayout)
+// CreatePipelineLayoutFromDesc creates a GPUPipelineLayout from a JS descriptor object, or
+// returns the exception createPipelineLayout throws as an error.
+func (d *Device) CreatePipelineLayoutFromDesc(desc js.Value) (*PipelineLayout, error) {
+	ref, err := invoke(d.fnCreatePipelineLayout, desc)
+	if err != nil {
+		return nil, err
+	}
+	return NewPipelineLayout(ref), nil
 }
 
-// CreateRenderPipelineFromDesc creates a GPURenderPipeline from a JS descriptor object.
-func (d *Device) CreateRenderPipelineFromDesc(desc js.Value) *RenderPipeline {
-	jsPipeline := d.fnCreateRenderPipeline.Invoke(desc)
-	return NewRenderPipeline(jsPipeline)
+// CreateRenderPipelineFromDesc creates a GPURenderPipeline from a JS descriptor object, or
+// returns the exception createRenderPipeline throws as an error.
+func (d *Device) CreateRenderPipelineFromDesc(desc js.Value) (*RenderPipeline, error) {
+	ref, err := invoke(d.fnCreateRenderPipeline, desc)
+	if err != nil {
+		return nil, err
+	}
+	return NewRenderPipeline(ref), nil
 }
 
-// CreateComputePipelineFromDesc creates a GPUComputePipeline from a JS descriptor object.
-func (d *Device) CreateComputePipelineFromDesc(desc js.Value) *ComputePipeline {
-	jsPipeline := d.fnCreateComputePipeline.Invoke(desc)
-	return NewComputePipeline(jsPipeline)
+// CreateComputePipelineFromDesc creates a GPUComputePipeline from a JS descriptor object, or
+// returns the exception createComputePipeline throws as an error.
+func (d *Device) CreateComputePipelineFromDesc(desc js.Value) (*ComputePipeline, error) {
+	ref, err := invoke(d.fnCreateComputePipeline, desc)
+	if err != nil {
+		return nil, err
+	}
+	return NewComputePipeline(ref), nil
 }
 
 // PushErrorScope pushes an error scope for filter, a GPUErrorFilter string.
