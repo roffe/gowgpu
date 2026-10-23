@@ -102,11 +102,9 @@ type Device struct {
 	// Matches Rust wgpu-core's LifetimeTracker pattern.
 	destroyQueue *DestroyQueue
 
-	// pendingMapTrackerSlot holds a lazily-allocated deviceMapTracker
-	// (FEAT-WGPU-MAPPING-001) through an indirection so that the outer
-	// Device struct remains copyable (the legacy ID-based Hub API still
-	// passes Device by value). The slot wraps an atomic.Pointer.
-	pendingMapTrackerSlot *mapTrackerSlot
+	// maps holds the buffers waiting for a submission before they are
+	// mapped. nil for devices made without NewDevice, which cannot map.
+	maps *deviceMapTracker
 
 	// === Common fields ===
 
@@ -196,6 +194,7 @@ func NewDevice(
 		snatchLock:     NewSnatchLock(),
 		trackerIndices: NewTrackerIndexAllocators(),
 		destroyQueue:   NewDestroyQueue(),
+		maps:           newDeviceMapTracker(),
 		tracker:        NewDeviceTracker(),
 		scopes:         &scopePool{},
 		Label:          label,

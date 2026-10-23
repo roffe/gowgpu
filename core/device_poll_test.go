@@ -3,6 +3,7 @@
 package core
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/roffe/gowgpu/gputypes"
@@ -282,4 +283,34 @@ func TestPollMaps_IgnoresCanceledRequests(t *testing.T) {
 			t.Errorf("waiter = %v, %v, want done without error", done, err)
 		}
 	})
+}
+
+// The first maps of a device, registered on several goroutines at once, all
+// resolve: the tracker comes with the device, not with whichever of them
+// installs it first.
+func TestRegisterPendingMap_ConcurrentFirstMaps(t *testing.T) {
+	device := NewDevice(&mockHALDevice{}, &Adapter{}, gputypes.Features(0), gputypes.DefaultLimits(), "PollTest")
+	bufs := make([]*Buffer, 8)
+	for i := range bufs {
+		bufs[i] = NewBuffer(mockBuffer{}, device, gputypes.BufferUsageMapRead, 256, "buf")
+		if err := bufs[i].BeginMap(MapModeInternalRead, 0, 256); err != nil {
+			t.Fatalf("BeginMap: %v", err)
+		}
+	}
+	var start, done sync.WaitGroup
+	start.Add(1)
+	for _, buf := range bufs {
+		done.Go(func() {
+			start.Wait()
+			device.RegisterPendingMap(1, buf)
+		})
+	}
+	start.Done()
+	done.Wait()
+	device.PollMaps(1)
+	for i, buf := range bufs {
+		if got := buf.CurrentMapState(); got != BufferMapStateMapped {
+			t.Errorf("buffer %d: state = %v, want Mapped", i, got)
+		}
+	}
 }

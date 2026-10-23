@@ -7,7 +7,6 @@ package core
 
 import (
 	"sync"
-	"sync/atomic"
 
 	"github.com/roffe/gowgpu/hal"
 )
@@ -24,10 +23,7 @@ import (
 // touching per-buffer state. This avoids the textbook lock-inversion
 // deadlock.
 
-// deviceMapTracker is reached from core.Device through an indirection
-// slot so the outer Device struct remains copyable (required by the
-// legacy ID-based Hub API). Lazily allocated on first RegisterPendingMap
-// call.
+// deviceMapTracker holds a device's pending maps, from NewDevice on.
 //
 // The tracker maintains a free-list of empty buffer slices so that
 // PollMaps can recycle the slice capacity back to RegisterPendingMap —
@@ -47,36 +43,10 @@ type pendingMap struct {
 	request uint64
 }
 
-// mapTrackerSlot holds an atomic.Pointer[deviceMapTracker]. The outer
-// Device holds *mapTrackerSlot (copyable), and the atomic lives inside
-// the slot for lock-free lazy initialization.
-type mapTrackerSlot struct {
-	ptr atomic.Pointer[deviceMapTracker]
-}
-
 func newDeviceMapTracker() *deviceMapTracker {
 	return &deviceMapTracker{
 		buckets: make(map[uint64][]pendingMap, 8),
 	}
-}
-
-// mapTracker returns the device's pending-map tracker, creating it on
-// first use via compare-and-swap. Called from RegisterPendingMap;
-// PollMaps can then observe the already-initialized pointer.
-func (d *Device) mapTracker() *deviceMapTracker {
-	slot := d.pendingMapTrackerSlot
-	if slot == nil {
-		slot = &mapTrackerSlot{}
-		d.pendingMapTrackerSlot = slot
-	}
-	if t := slot.ptr.Load(); t != nil {
-		return t
-	}
-	fresh := newDeviceMapTracker()
-	if slot.ptr.CompareAndSwap(nil, fresh) {
-		return fresh
-	}
-	return slot.ptr.Load()
 }
 
 // RegisterPendingMap queues a Buffer for map resolution after the GPU
@@ -89,11 +59,14 @@ func (d *Device) mapTracker() *deviceMapTracker {
 // Submit call. In that case the caller should follow up with
 // PollMaps(completedIdx=0) or device.Poll which will drain the bucket.
 func (d *Device) RegisterPendingMap(submissionIndex uint64, buf *Buffer) {
+	t := d.maps
+	if t == nil {
+		return
+	}
 	entry := pendingMap{buf: buf}
 	if buf != nil {
 		entry.request = buf.mapRequest()
 	}
-	t := d.mapTracker()
 	t.mu.Lock()
 	existing, ok := t.buckets[submissionIndex]
 	if !ok {
@@ -112,16 +85,6 @@ func (d *Device) RegisterPendingMap(submissionIndex uint64, buf *Buffer) {
 	t.mu.Unlock()
 }
 
-// loadMapTracker returns the tracker if one has been installed or nil
-// otherwise. Read-only accessor used by PollMaps / HasPendingMaps /
-// MaxKnownSubmissionIndex.
-func (d *Device) loadMapTracker() *deviceMapTracker {
-	if d.pendingMapTrackerSlot == nil {
-		return nil
-	}
-	return d.pendingMapTrackerSlot.ptr.Load()
-}
-
 // PollMaps resolves every pending map whose submission index is <=
 // completedIdx. For each drained buffer the HAL MapBuffer call is issued
 // and the buffer's waiter is signaled.
@@ -131,7 +94,7 @@ func (d *Device) loadMapTracker() *deviceMapTracker {
 // Thread-safe for concurrent calls: the first goroutine to observe a
 // bucket drains it; subsequent goroutines see an empty bucket.
 func (d *Device) PollMaps(completedIdx uint64) (didWork bool) {
-	t := d.loadMapTracker()
+	t := d.maps
 	if t == nil {
 		return false
 	}
@@ -203,7 +166,7 @@ func (d *Device) PollMaps(completedIdx uint64) (didWork bool) {
 // requests. Used by tests and by wgpu.Device.Poll(PollWait) to decide
 // whether it's worth walking the fence.
 func (d *Device) HasPendingMaps() bool {
-	t := d.loadMapTracker()
+	t := d.maps
 	if t == nil {
 		return false
 	}
@@ -217,7 +180,7 @@ func (d *Device) HasPendingMaps() bool {
 // ever been registered for pending map resolution. Used by the public
 // Device.Poll(PollWait) to determine what fence value to wait on.
 func (d *Device) MaxKnownSubmissionIndex() uint64 {
-	t := d.loadMapTracker()
+	t := d.maps
 	if t == nil {
 		return 0
 	}
