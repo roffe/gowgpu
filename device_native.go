@@ -132,6 +132,9 @@ func (d *Device) CreateTexture(desc *TextureDescriptor) (*Texture, error) {
 	if err := core.ValidateTextureDescriptor(halDesc, d.core.Limits, d.core.Features); err != nil {
 		return nil, err
 	}
+	if err := core.ValidateViewFormats(desc.Format, desc.ViewFormats); err != nil {
+		return nil, fmt.Errorf("wgpu: CreateTexture: %w", err)
+	}
 	var zero, pass bool
 	if d.queue != nil && d.queue.pending != nil {
 		zero, pass = zeroableTexture(halDesc, d.queue.pending.usesBatching)
@@ -174,7 +177,7 @@ func (d *Device) CreateTexture(desc *TextureDescriptor) (*Texture, error) {
 		}
 	}
 
-	tex := &Texture{hal: halTexture, device: d, format: desc.Format, coreTexture: coreTexture}
+	tex := &Texture{hal: halTexture, device: d, format: desc.Format, viewFormats: slices.Clone(desc.ViewFormats), coreTexture: coreTexture}
 	if zero {
 		d.queue.pending.queueZero(tex)
 	}
@@ -218,6 +221,13 @@ func (d *Device) CreateTextureView(texture *Texture, desc *TextureViewDescriptor
 		halDesc.MipLevelCount = desc.MipLevelCount
 		halDesc.BaseArrayLayer = desc.BaseArrayLayer
 		halDesc.ArrayLayerCount = desc.ArrayLayerCount
+	}
+	if texture.coreTexture != nil {
+		resolved, err := core.ResolveTextureViewDescriptor(texture.coreTexture, texture.viewFormats, halDesc)
+		if err != nil {
+			return nil, fmt.Errorf("wgpu: CreateTextureView: %w", err)
+		}
+		*halDesc = resolved
 	}
 
 	halView, err := halDevice.CreateTextureView(halTexture, halDesc)

@@ -15,6 +15,7 @@ type Texture struct {
 	hal          hal.Texture
 	device       *Device
 	format       gputypes.TextureFormat
+	viewFormats  []gputypes.TextureFormat
 	released     bool
 	surface      *core.Surface
 	surfaceLease uint64
@@ -51,7 +52,15 @@ func (t *Texture) sharedDefaultView(dev hal.Device, raw hal.Texture) hal.Texture
 	t.viewMu.Lock()
 	defer t.viewMu.Unlock()
 	if t.defaultView == nil && !t.released {
-		v, err := dev.CreateTextureView(raw, &hal.TextureViewDescriptor{})
+		desc := &hal.TextureViewDescriptor{}
+		if t.coreTexture != nil {
+			resolved, err := core.ResolveTextureViewDescriptor(t.coreTexture, t.viewFormats, nil)
+			if err != nil {
+				return nil
+			}
+			desc = &resolved
+		}
+		v, err := dev.CreateTextureView(raw, desc)
 		if err != nil {
 			return nil
 		}
