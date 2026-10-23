@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"unsafe"
 
+	"golang.org/x/sys/windows"
+
 	"github.com/roffe/gowgpu/hal/dx12/d3d12"
 )
 
@@ -22,9 +24,9 @@ var (
 
 // DXGILib provides access to DXGI functions.
 type DXGILib struct {
-	dll                *syscall.LazyDLL
-	createDXGIFactory1 *syscall.LazyProc
-	createDXGIFactory2 *syscall.LazyProc
+	dll                *windows.LazyDLL
+	createDXGIFactory1 *windows.LazyProc
+	createDXGIFactory2 *windows.LazyProc
 }
 
 // LoadDXGI loads the DXGI library. Safe to call multiple times.
@@ -36,7 +38,7 @@ func LoadDXGI() (*DXGILib, error) {
 }
 
 func loadDXGIInternal() (*DXGILib, error) {
-	dll := syscall.NewLazyDLL("dxgi.dll")
+	dll := windows.NewLazySystemDLL("dxgi.dll")
 	if err := dll.Load(); err != nil {
 		return nil, fmt.Errorf("failed to load dxgi.dll: %w", err)
 	}

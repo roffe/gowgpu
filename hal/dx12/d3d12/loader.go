@@ -8,8 +8,9 @@ package d3d12
 import (
 	"fmt"
 	"sync"
-	"syscall"
 	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 var (
@@ -20,11 +21,11 @@ var (
 
 // D3D12Lib provides access to D3D12 functions.
 type D3D12Lib struct {
-	dll                                  *syscall.LazyDLL
-	d3d12CreateDevice                    *syscall.LazyProc
-	d3d12GetDebugInterface               *syscall.LazyProc
-	d3d12SerializeRootSignature          *syscall.LazyProc
-	d3d12SerializeVersionedRootSignature *syscall.LazyProc
+	dll                                  *windows.LazyDLL
+	d3d12CreateDevice                    *windows.LazyProc
+	d3d12GetDebugInterface               *windows.LazyProc
+	d3d12SerializeRootSignature          *windows.LazyProc
+	d3d12SerializeVersionedRootSignature *windows.LazyProc
 }
 
 // LoadD3D12 loads the D3D12 library. Safe to call multiple times.
@@ -36,7 +37,7 @@ func LoadD3D12() (*D3D12Lib, error) {
 }
 
 func loadD3D12Internal() (*D3D12Lib, error) {
-	dll := syscall.NewLazyDLL("d3d12.dll")
+	dll := windows.NewLazySystemDLL("d3d12.dll")
 	if err := dll.Load(); err != nil {
 		return nil, fmt.Errorf("failed to load d3d12.dll: %w", err)
 	}

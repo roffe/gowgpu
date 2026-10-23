@@ -21,6 +21,8 @@ import (
 	"syscall"
 	"unsafe"
 
+	"golang.org/x/sys/windows"
+
 	"github.com/roffe/gowgpu/hal/dx12/d3d12"
 	"github.com/roffe/gowgpu/hal/dx12/dxgi"
 )
@@ -31,14 +33,14 @@ import (
 
 var (
 	dcompOnce          sync.Once
-	dcompDLL           *syscall.LazyDLL
-	dcompCreateDevice2 *syscall.LazyProc
+	dcompDLL           *windows.LazyDLL
+	dcompCreateDevice2 *windows.LazyProc
 	errDCompLoad       error
 )
 
 func loadDComp() error {
 	dcompOnce.Do(func() {
-		dcompDLL = syscall.NewLazyDLL("dcomp.dll")
+		dcompDLL = windows.NewLazySystemDLL("dcomp.dll")
 		dcompCreateDevice2 = dcompDLL.NewProc("DCompositionCreateDevice2")
 		errDCompLoad = dcompCreateDevice2.Find()
 	})
