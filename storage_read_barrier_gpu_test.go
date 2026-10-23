@@ -40,8 +40,8 @@ fn fs_main(in: VOut) -> @location(0) vec4<f32> {
 // with, where the UAV state does not.
 func TestVertexAndReadOnlyStorageOfOneBuffer(t *testing.T) {
 	device, h := newValidatedDevice(t)
-	if h.backend == gputypes.BackendGL {
-		t.Skip("GL compiles the shader as GLSL 3.30, where naga makes storage buffers uniform blocks")
+	if !device.core.DownlevelCapabilitiesRef().Flags.Contains(gputypes.DownlevelFlagsVertexStorage) {
+		t.Skip("no storage buffers in vertex shaders on this adapter")
 	}
 	queue := device.Queue()
 

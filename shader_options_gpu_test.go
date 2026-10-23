@@ -34,6 +34,7 @@ func runU32Compute(t *testing.T, device *Device, wgsl string, constants map[stri
 	defer module.Release()
 	pipe, err := device.CreateComputePipeline(&ComputePipelineDescriptor{Label: "u32-compute", Layout: pl, Module: module, EntryPoint: "cs_main", Constants: constants})
 	if err != nil {
+		skipWithoutComputeShaders(t, err)
 		t.Fatalf("CreateComputePipeline: %v", err)
 	}
 	defer pipe.Release()
@@ -114,9 +115,6 @@ const oobShader = `
 // compiled WGSL without bounds checks, and NVIDIA read 4000.
 func TestOutOfBoundsIndexStaysInBounds(t *testing.T) {
 	device, h := newValidatedDevice(t)
-	if h.backend == gputypes.BackendGL {
-		t.Skip("GL compiles compute shaders as GLSL 3.30, see the README's known issues")
-	}
 	if got := runU32Compute(t, device, oobShader, nil, []uint32{1000, 1})[1]; got != 99 && got != 0 {
 		t.Errorf("a[1000] of a four-element array of 99 read %d, want 99 or 0", got)
 	}
@@ -141,7 +139,7 @@ override required: u32;
 func TestComputePipelineConstants(t *testing.T) {
 	device, h := newValidatedDevice(t)
 	if h.backend == gputypes.BackendGL {
-		t.Skip("GL compiles compute shaders as GLSL 3.30, see the README's known issues")
+		t.Skip("the GL backend compiles a module without its pipeline's constants, which naga refuses for overrides")
 	}
 	got := runU32Compute(t, device, overrideShader, map[string]float64{"answer": 42, "required": 7}, []uint32{0, 0})
 	if got[0] != 42 || got[1] != 7 {
