@@ -8,7 +8,7 @@ require (
 )
 
 require (
-	github.com/roffe/naga v0.0.0-20261023154236-1c7aa3a6b264 // indirect
+	github.com/roffe/naga v0.0.0-20261023172624-47367d9cca6f // indirect
 	golang.org/x/sys v0.47.0 // indirect
 )
 
