@@ -130,6 +130,18 @@ func (d *Device) CreateTexture(desc *TextureDescriptor) (*Texture, error) {
 	if desc == nil {
 		return nil, fmt.Errorf("wgpu: texture descriptor is nil")
 	}
+	// The browser takes a size, mip level count or sample count left out
+	// as 1, which native builds refuse as 0.
+	if s := desc.Size; s.Width == 0 || s.Height == 0 || s.DepthOrArrayLayers == 0 {
+		return nil, fmt.Errorf("wgpu: CreateTexture: texture %q: dimensions must be greater than 0 (got %dx%dx%d)",
+			desc.Label, s.Width, s.Height, s.DepthOrArrayLayers)
+	}
+	if desc.MipLevelCount == 0 {
+		return nil, fmt.Errorf("wgpu: CreateTexture: texture %q: mip level count must be at least 1", desc.Label)
+	}
+	if desc.SampleCount == 0 {
+		return nil, fmt.Errorf("wgpu: CreateTexture: texture %q: invalid sample count 0 (must be 1 or 4)", desc.Label)
+	}
 	if f := browser.TextureFormatFeature(desc.Format); f != 0 && !d.features.Contains(f) {
 		return nil, fmt.Errorf("wgpu: CreateTexture: format %s needs the %s feature", desc.Format, f)
 	}

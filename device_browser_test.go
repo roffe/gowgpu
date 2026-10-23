@@ -102,7 +102,8 @@ func TestBrowserExceptionsBecomeErrors(t *testing.T) {
 	}`)
 	d := &Device{browser: browser.NewDevice(dev), limits: gputypes.DefaultLimits()}
 
-	if _, err := d.CreateTexture(&TextureDescriptor{Format: gputypes.TextureFormatR16Unorm}); err == nil {
+	if _, err := d.CreateTexture(&TextureDescriptor{Size: Extent3D{Width: 1, Height: 1, DepthOrArrayLayers: 1},
+		MipLevelCount: 1, SampleCount: 1, Format: gputypes.TextureFormatR16Unorm}); err == nil {
 		t.Error("CreateTexture: nil error for a throwing createTexture")
 	}
 	if _, err := d.CreateShaderModule(&ShaderModuleDescriptor{}); err == nil {
@@ -116,9 +117,45 @@ func TestBrowserExceptionsBecomeErrors(t *testing.T) {
 func TestBrowserCreateTextureNeedsTheFormatsFeature(t *testing.T) {
 	dev := jsEval(`{queue: {}, createTexture() { throw new Error("createTexture reached") }}`)
 	d := &Device{browser: browser.NewDevice(dev), limits: gputypes.DefaultLimits()}
-	_, err := d.CreateTexture(&TextureDescriptor{Format: gputypes.TextureFormatBC1RGBAUnorm})
+	_, err := d.CreateTexture(&TextureDescriptor{Size: Extent3D{Width: 4, Height: 4, DepthOrArrayLayers: 1},
+		MipLevelCount: 1, SampleCount: 1, Format: gputypes.TextureFormatBC1RGBAUnorm})
 	if err == nil || !strings.Contains(err.Error(), "TextureCompressionBC") {
 		t.Fatalf("CreateTexture(BC1) without the feature = %v, want an error naming TextureCompressionBC", err)
+	}
+}
+
+// A texture descriptor's sizes, mip level count and sample count of 0 are
+// refused before the browser sees them, as native builds refuse them: the
+// browser would take them as 1.
+func TestBrowserCreateTextureRefusesZeros(t *testing.T) {
+	dev := jsEval(`{queue: {}, created: 0, createTexture(desc) { this.created++; return {width: desc.size.width, height: desc.size.height ?? 1, format: desc.format} }}`)
+	d := &Device{browser: browser.NewDevice(dev), limits: gputypes.DefaultLimits()}
+	valid := TextureDescriptor{Size: Extent3D{Width: 4, Height: 4, DepthOrArrayLayers: 1}, MipLevelCount: 1, SampleCount: 1,
+		Dimension: gputypes.TextureDimension2D, Format: gputypes.TextureFormatRGBA8Unorm, Usage: TextureUsageTextureBinding}
+	for _, tc := range []struct {
+		name string
+		zero func(*TextureDescriptor)
+	}{
+		{"width", func(d *TextureDescriptor) { d.Size.Width = 0 }},
+		{"height", func(d *TextureDescriptor) { d.Size.Height = 0 }},
+		{"depthOrArrayLayers", func(d *TextureDescriptor) { d.Size.DepthOrArrayLayers = 0 }},
+		{"mipLevelCount", func(d *TextureDescriptor) { d.MipLevelCount = 0 }},
+		{"sampleCount", func(d *TextureDescriptor) { d.SampleCount = 0 }},
+	} {
+		desc := valid
+		tc.zero(&desc)
+		if _, err := d.CreateTexture(&desc); err == nil {
+			t.Errorf("CreateTexture with a %s of 0: nil error", tc.name)
+		}
+	}
+	if n := dev.Get("created").Int(); n != 0 {
+		t.Fatalf("createTexture reached %d times for descriptors with zeros", n)
+	}
+	if _, err := d.CreateTexture(&valid); err != nil {
+		t.Fatalf("CreateTexture(%+v): %v", valid, err)
+	}
+	if n := dev.Get("created").Int(); n != 1 {
+		t.Fatalf("createTexture reached %d times for a valid descriptor, want 1", n)
 	}
 }
 

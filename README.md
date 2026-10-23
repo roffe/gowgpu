@@ -146,7 +146,7 @@ The fixes from the vet on 2026-10-23 (see the [CHANGELOG](CHANGELOG.md)) have on
 - GL has no views in another format, so it offers neither `DownlevelFlagsViewFormats` nor surface view formats, and it reads no compressed texture back: `CopyTextureToBuffer` of one logs an error and copies nothing, as in wgpu-hal. GLES reads no depth or stencil back either, and refuses a write into the stencil of a combined depth/stencil texture.
 - Timestamp queries only work on desktop GL. Vulkan, DX12 and Metal don't offer `FeatureTimestampQuery` yet.
 - Metal has no compressed texture formats yet, so it doesn't offer `TextureCompressionBC`.
-- In the browser a texture descriptor's height, depth, mip level count or sample count of 0 is taken as 1, where native builds return an error, and the 16-bit normalized formats can't be used, as gputypes has no `texture-formats-tier1` feature to ask for.
+- In the browser the 16-bit normalized formats can't be used, as gputypes has no `texture-formats-tier1` feature to ask for.
 
 What's next is in [ROADMAP.md](ROADMAP.md).
 
