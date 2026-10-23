@@ -2225,7 +2225,10 @@ func hlslToDXILSamplerHeapTargets(t hlsl.SamplerHeapBindTargets) *dxil.SamplerHe
 // stageBytecode compiles the entry point of module a pipeline with layout
 // runs. Its resources take the registers the layout's root signature gives
 // them, so a module is compiled again for each layout it is used with, as
-// Rust's wgpu-hal does in load_shader.
+// Rust's wgpu-hal does in load_shader. A vertex stage is compiled with the
+// pipeline's fragment stage, since the fragment inputs can be a subset of
+// the vertex outputs and the two signatures have to match register for
+// register.
 func (d *Device) stageBytecode(module hal.ShaderModule, entryPoint string, layout *PipelineLayout, fragment *hlsl.FragmentEntryPoint) ([]byte, error) {
 	sm, ok := module.(*ShaderModule)
 	if !ok || sm == nil {
@@ -2252,6 +2255,23 @@ func (d *Device) stageBytecode(module hal.ShaderModule, entryPoint string, layou
 		return d.compileDXIL(sm, ep, &opts)
 	}
 	return d.compileHLSL(sm, ep, &opts)
+}
+
+// fragmentEntryPoint is the fragment stage a vertex stage is compiled with,
+// nil when the pipeline has none in WGSL.
+func fragmentEntryPoint(fragment *hal.FragmentState) *hlsl.FragmentEntryPoint {
+	if fragment == nil {
+		return nil
+	}
+	sm, ok := fragment.Module.(*ShaderModule)
+	if !ok || sm == nil {
+		return nil
+	}
+	ep, ok := sm.entryPoint(fragment.EntryPoint)
+	if !ok {
+		return nil
+	}
+	return &hlsl.FragmentEntryPoint{Module: sm.irModule, Function: &ep.Function}
 }
 
 // compileHLSL compiles an entry point to DXBC through HLSL and FXC
@@ -2412,7 +2432,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 	}
 	var vs, ps []byte
 	if desc.Vertex.Module != nil {
-		bytecode, err := d.stageBytecode(desc.Vertex.Module, desc.Vertex.EntryPoint, pipelineLayout, nil)
+		bytecode, err := d.stageBytecode(desc.Vertex.Module, desc.Vertex.EntryPoint, pipelineLayout, fragmentEntryPoint(desc.Fragment))
 		if err == nil {
 			vs, err = overrideBytecode(bytecode, "GOGPU_DX12_DXIL_OVERRIDE_VS")
 		}

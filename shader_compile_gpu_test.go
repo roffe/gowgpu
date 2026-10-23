@@ -181,3 +181,60 @@ func TestConcurrentPipelineCreationFromOneModule(t *testing.T) {
 		t.Errorf("CreateComputePipeline: %v", err)
 	}
 }
+
+const subsetVaryingsShader = `
+struct VOut {
+	@builtin(position) pos: vec4<f32>,
+	@location(0) a: vec4<f32>,
+	@location(1) b: vec4<f32>,
+}
+@vertex fn vs_main(@builtin(vertex_index) vi: u32) -> VOut {
+	var o: VOut;
+	let x = f32(i32(vi & 1u) * 4 - 1);
+	let y = f32(i32(vi >> 1u) * 4 - 1);
+	o.pos = vec4<f32>(x, y, 0.5, 1.0);
+	o.a = vec4<f32>(1.0, 0.0, 0.0, 1.0);
+	o.b = vec4<f32>(0.0, 1.0, 0.0, 1.0);
+	return o;
+}
+@fragment fn fs_main(@location(1) b: vec4<f32>) -> @location(0) vec4<f32> {
+	return b;
+}
+`
+
+// TestFragmentReadsASubsetOfTheVertexOutputs draws with a fragment stage
+// that reads the second of two vertex outputs only.
+func TestFragmentReadsASubsetOfTheVertexOutputs(t *testing.T) {
+	device, h := newValidatedDevice(t)
+	module, err := device.CreateShaderModule(&ShaderModuleDescriptor{Label: "subset-varyings", WGSL: subsetVaryingsShader})
+	if err != nil {
+		t.Fatalf("CreateShaderModule: %v", err)
+	}
+	defer module.Release()
+	pipe, err := device.CreateRenderPipeline(&RenderPipelineDescriptor{
+		Label:     "subset-varyings",
+		Vertex:    VertexState{Module: module, EntryPoint: "vs_main"},
+		Primitive: gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList},
+		Fragment: &FragmentState{Module: module, EntryPoint: "fs_main",
+			Targets: []gputypes.ColorTargetState{{Format: gputypes.TextureFormatRGBA8Unorm, WriteMask: gputypes.ColorWriteMaskAll}}},
+	})
+	if err != nil {
+		t.Fatalf("CreateRenderPipeline: %v", err)
+	}
+	defer pipe.Release()
+	tex, view := pixTexture(t, device, "subset-varyings", TextureUsageRenderAttachment|TextureUsageCopySrc)
+	defer releaseTextureView(tex, view)
+	staging := readbackBuffer(t, device, "subset-varyings")
+	enc, err := device.CreateCommandEncoder(nil)
+	if err != nil {
+		t.Fatalf("CreateCommandEncoder: %v", err)
+	}
+	clearPass(t, enc, view, gputypes.LoadOpClear, black, func(pass *RenderPassEncoder) {
+		pass.SetPipeline(pipe)
+		pass.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1})
+	})
+	copyOut(enc, tex, staging)
+	finishAndSubmit(t, device, enc)
+	expectPixels(t, "fragment reading location 1", readback(t, staging), 0, 255, 0, 255)
+	assertNoValidation(t, h)
+}
