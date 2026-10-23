@@ -263,8 +263,9 @@ func (e *CommandEncoder) ReadAccelerationStructureCompactSize(_ hal.Acceleration
 // BeginRenderPass begins a render pass.
 func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.RenderPassEncoder {
 	rpe := &RenderPassEncoder{
-		encoder: e,
-		desc:    desc,
+		encoder:    e,
+		desc:       desc,
+		depthRange: [2]float32{0, 1},
 	}
 
 	// Bind the persistent VAO. Core Profile requires a VAO to be bound for any
@@ -485,6 +486,10 @@ type RenderPassEncoder struct {
 	stencilRef    uint32
 	fbHeight      uint32 // Framebuffer height for MSAA resolve blit Y-flip
 
+	// depthRange is the viewport's depth range, which fragment shaders
+	// clamp the frag_depth they write to.
+	depthRange [2]float32
+
 	// resolves are the MSAA resolves End records, one per colour attachment
 	// with a resolve target.
 	resolves []MSAAResolveCommand
@@ -541,6 +546,7 @@ func (e *RenderPassEncoder) SetPipeline(pipeline hal.RenderPipeline) {
 		}),
 		st.attribs.put(DisableVertexAttribsCommand{keep: p.attribs}),
 	)
+	e.setFragDepthRange()
 	// The vertex attributes are set from the pipeline's layout when a vertex
 	// buffer is bound, and WebGPU keeps vertex buffers bound across pipeline
 	// changes, so the buffers bound already are bound again under this
@@ -633,6 +639,20 @@ func (e *RenderPassEncoder) SetViewport(vp gputypes.Viewport) {
 		x: vp.X, y: vp.Y, width: vp.Width, height: vp.Height,
 		minDepth: vp.MinDepth, maxDepth: vp.MaxDepth,
 	}))
+	e.depthRange = [2]float32{vp.MinDepth, vp.MaxDepth}
+	e.setFragDepthRange()
+}
+
+// setFragDepthRange gives the fragment shader of the pipeline set, when it
+// clamps the frag_depth it writes, the viewport's depth range to clamp to:
+// WebGPU clamps it there, and GL stores gl_FragDepth as written.
+func (e *RenderPassEncoder) setFragDepthRange() {
+	if e.pipeline == nil || !e.pipeline.clampsFragDepth {
+		return
+	}
+	e.encoder.commands = append(e.encoder.commands, &SetFragDepthRangeCommand{
+		location: e.pipeline.fragDepthRangeLoc, depthRange: e.depthRange,
+	})
 }
 
 // SetScissorRect sets the scissor rectangle.
@@ -1627,6 +1647,17 @@ type SetViewportCommand struct {
 func (c *SetViewportCommand) Execute(ctx *gl.Context) {
 	ctx.Viewport(int32(c.x), int32(c.y), int32(c.width), int32(c.height))
 	ctx.DepthRange(float64(c.minDepth), float64(c.maxDepth))
+}
+
+// SetFragDepthRangeCommand sets the frag_depth clamp range of the program
+// in use, at its uniform location.
+type SetFragDepthRangeCommand struct {
+	location   int32
+	depthRange [2]float32
+}
+
+func (c *SetFragDepthRangeCommand) Execute(ctx *gl.Context) {
+	ctx.Uniform2f(c.location, c.depthRange[0], c.depthRange[1])
 }
 
 // SetScissorCommand sets the scissor rectangle.

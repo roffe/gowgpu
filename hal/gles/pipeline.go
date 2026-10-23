@@ -143,6 +143,8 @@ func (d *Device) createRenderPipeline(glCtx *gl.Context, desc *RenderPipelineDes
 	// naga writes instance_index as gl_InstanceID plus this uniform, and
 	// gl_InstanceID starts at 0 even in a base instance draw.
 	pipeline.firstInstanceLoc = glCtx.GetUniformLocation(programID, "naga_vs_first_instance")
+	pipeline.fragDepthRangeLoc = glCtx.GetUniformLocation(programID, glsl.FragDepthRangeUniform)
+	pipeline.clampsFragDepth = pipeline.fragDepthRangeLoc >= 0
 
 	return pipeline, nil
 }

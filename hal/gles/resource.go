@@ -411,6 +411,11 @@ type RenderPipeline struct {
 	// value the program has in it.
 	firstInstanceLoc int32
 	firstInstance    uint32
+
+	// clampsFragDepth is set when the fragment shader clamps the frag_depth
+	// it writes to the range in naga's uniform at fragDepthRangeLoc.
+	clampsFragDepth   bool
+	fragDepthRangeLoc int32
 }
 
 // setFirstInstance gives the program in use, p's, the first instance of the

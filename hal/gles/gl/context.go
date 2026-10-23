@@ -1155,6 +1155,11 @@ func (c *Context) Uniform1i(location, value int32) {
 	syscall.SyscallN(c.glUniform1i, uintptr(location), uintptr(value))
 }
 
+// Uniform2f sets a vec2 uniform of the program in use.
+func (c *Context) Uniform2f(location int32, x, y float32) {
+	syscall.SyscallN(c.glUniform2f, uintptr(location), uintptr(math.Float32bits(x)), uintptr(math.Float32bits(y)))
+}
+
 // --- Blending ---
 
 func (c *Context) BlendFunc(sfactor, dfactor uint32) {

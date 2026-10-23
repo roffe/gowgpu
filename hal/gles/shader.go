@@ -96,7 +96,8 @@ func compileWGSLToGLSL(version glsl.Version, source hal.ShaderSource, stage ir.S
 		// the flip, gl_FragCoord.y=0 is at the top (WebGPU convention), not bottom
 		// (GL convention). Without it, rrect_clip_coverage() in fragment shaders
 		// gets wrong Y values (BUG-GLES-SCROLLBAR-001).
-		WriterFlags: glsl.WriterFlagAdjustCoordinateSpace | glsl.WriterFlagForcePointSize,
+		WriterFlags:    glsl.WriterFlagAdjustCoordinateSpace | glsl.WriterFlagForcePointSize,
+		ClampFragDepth: true,
 	})
 	if err != nil {
 		return "", glsl.TranslationInfo{}, fmt.Errorf("gles: GLSL compile error for entry point %q: %w", entryPoint, err)

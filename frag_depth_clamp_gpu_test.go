@@ -21,16 +21,19 @@ struct Out {
 @fragment fn fs_main() -> Out {
 	return Out(vec4<f32>(1.0), 0.75);
 }
+@fragment fn fs_low() -> @builtin(frag_depth) f32 {
+	return 0.125;
+}
 `
 
-// TestFragDepthClampsToViewport draws with a viewport depth range of 0 to
-// 0.5 and a fragment shader that writes depth 0.75. WebGPU clamps a
-// written depth to the viewport's depth range, so 0.5 is stored.
+// TestFragDepthClampsToViewport draws the left half with a viewport depth
+// range of 0 to 0.5 and a fragment shader that writes depth 0.75, then the
+// right half with a range of 0.625 to 1 and one that writes 0.125, setting
+// the viewport after the pipeline the first time and before it the second.
+// WebGPU clamps a written depth to the viewport's depth range, so 0.5 and
+// 0.625 are stored.
 func TestFragDepthClampsToViewport(t *testing.T) {
 	device, h := newValidatedDevice(t)
-	if h.backend == gputypes.BackendGL {
-		t.Skip("the GL backend doesn't clamp frag_depth to the viewport's depth range")
-	}
 	module, err := device.CreateShaderModule(&ShaderModuleDescriptor{Label: "frag-depth", WGSL: fragDepthClampShader})
 	if err != nil {
 		t.Fatalf("CreateShaderModule: %v", err)
@@ -41,19 +44,23 @@ func TestFragDepthClampsToViewport(t *testing.T) {
 		t.Fatalf("CreatePipelineLayout: %v", err)
 	}
 	defer pl.Release()
-	pipe, err := device.CreateRenderPipeline(&RenderPipelineDescriptor{
-		Label:        "frag-depth",
-		Layout:       pl,
-		Vertex:       VertexState{Module: module, EntryPoint: "vs_main"},
-		Primitive:    gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList},
-		DepthStencil: &DepthStencilState{Format: TextureFormatDepth32Float, DepthWriteEnabled: true, DepthCompare: gputypes.CompareFunctionAlways},
-		Fragment: &FragmentState{Module: module, EntryPoint: "fs_main",
-			Targets: []gputypes.ColorTargetState{{Format: gputypes.TextureFormatRGBA8Unorm, WriteMask: gputypes.ColorWriteMaskAll}}},
-	})
-	if err != nil {
-		t.Fatalf("CreateRenderPipeline: %v", err)
+	pipeline := func(entry string) *RenderPipeline {
+		pipe, err := device.CreateRenderPipeline(&RenderPipelineDescriptor{
+			Label:        "frag-depth-" + entry,
+			Layout:       pl,
+			Vertex:       VertexState{Module: module, EntryPoint: "vs_main"},
+			Primitive:    gputypes.PrimitiveState{Topology: gputypes.PrimitiveTopologyTriangleList},
+			DepthStencil: &DepthStencilState{Format: TextureFormatDepth32Float, DepthWriteEnabled: true, DepthCompare: gputypes.CompareFunctionAlways},
+			Fragment: &FragmentState{Module: module, EntryPoint: entry,
+				Targets: []gputypes.ColorTargetState{{Format: gputypes.TextureFormatRGBA8Unorm, WriteMask: gputypes.ColorWriteMaskAll}}},
+		})
+		if err != nil {
+			t.Fatalf("CreateRenderPipeline(%s): %v", entry, err)
+		}
+		t.Cleanup(pipe.Release)
+		return pipe
 	}
-	defer pipe.Release()
+	high, low := pipeline("fs_main"), pipeline("fs_low")
 	tex, view := depthStencilTexture(t, device, gputypes.TextureFormatDepth32Float, TextureUsageRenderAttachment|TextureUsageCopySrc)
 	color, colorView := pixTexture(t, device, "frag-depth-color", TextureUsageRenderAttachment)
 	defer releaseTextureView(color, colorView)
@@ -70,8 +77,12 @@ func TestFragDepthClampsToViewport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BeginRenderPass: %v", err)
 	}
-	pass.SetPipeline(pipe)
-	pass.SetViewport(gputypes.Viewport{Width: pixSide, Height: pixSide, MinDepth: 0, MaxDepth: 0.5})
+	const half = pixSide / 2
+	pass.SetPipeline(high)
+	pass.SetViewport(gputypes.Viewport{Width: half, Height: pixSide, MinDepth: 0, MaxDepth: 0.5})
+	pass.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1})
+	pass.SetViewport(gputypes.Viewport{X: half, Width: half, Height: pixSide, MinDepth: 0.625, MaxDepth: 1})
+	pass.SetPipeline(low)
 	pass.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1})
 	if err := pass.End(); err != nil {
 		t.Fatalf("RenderPass.End: %v", err)
@@ -81,8 +92,12 @@ func TestFragDepthClampsToViewport(t *testing.T) {
 	got := readTextureAspect(t, device, tex, gputypes.TextureAspectAll)
 	for y := range pixSide {
 		for x := range pixSide {
-			if d := math.Float32frombits(binary.LittleEndian.Uint32(got[y*pixRow+x*4:])); d != 0.5 {
-				t.Fatalf("depth at %d,%d = %v, want 0.5", x, y, d)
+			want := float32(0.5)
+			if x >= half {
+				want = 0.625
+			}
+			if d := math.Float32frombits(binary.LittleEndian.Uint32(got[y*pixRow+x*4:])); d != want {
+				t.Fatalf("depth at %d,%d = %v, want %v", x, y, d, want)
 			}
 		}
 	}

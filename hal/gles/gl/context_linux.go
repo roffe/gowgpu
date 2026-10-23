@@ -53,6 +53,8 @@ package gl
 #cgo nocallback gl_v_i
 #cgo noescape gl_v_ii
 #cgo nocallback gl_v_ii
+#cgo noescape gl_v_iff
+#cgo nocallback gl_v_iff
 #cgo noescape gl_v_iif
 #cgo nocallback gl_v_iif
 #cgo noescape gl_v_iii
@@ -1366,6 +1368,11 @@ func (c *Context) Uniform1ui(location int32, value uint32) {
 // Uniform1i sets an integer uniform value.
 func (c *Context) Uniform1i(location, value int32) {
 	C.gl_v_ii(C.uintptr_t(uintptr(c.glUniform1i)), C.uint32_t(location), C.uint32_t(value))
+}
+
+// Uniform2f sets a vec2 uniform of the program in use.
+func (c *Context) Uniform2f(location int32, x, y float32) {
+	C.gl_v_iff(C.uintptr_t(uintptr(c.glUniform2f)), C.uint32_t(location), C.float(x), C.float(y))
 }
 
 // --- Depth/Stencil ---
