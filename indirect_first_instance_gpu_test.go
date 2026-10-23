@@ -22,6 +22,7 @@ func TestIndirectDrawWithAFirstInstanceIsANoOp(t *testing.T) {
 	case h.backend == gputypes.BackendGL:
 		t.Skip("the GL backend draws nothing indirect")
 	}
+	skipRootConstantIndirectOnWine(t, h)
 	shader, err := device.CreateShaderModule(&ShaderModuleDescriptor{WGSL: solidShader})
 	if err != nil {
 		t.Fatalf("CreateShaderModule: %v", err)
