@@ -1424,6 +1424,12 @@ func (c *SetBindGroupCommand) Execute(ctx *gl.Context) {
 				continue
 			}
 			bindTexture(ctx, glBinding, b.view)
+			// A texture no sampler pairs with gets no sampler object, as
+			// in wgpu-hal: one left there by another pipeline would
+			// filter it (an integer texture with it reads 0).
+			if c.samplerBindMap != nil && glBinding < maxTextureSlots && c.samplerBindMap[glBinding] < 0 {
+				bindSampler(ctx, glBinding, 0)
+			}
 
 		case bindingClassSampler:
 			if b.sampler == 0 {
@@ -1435,19 +1441,13 @@ func (c *SetBindGroupCommand) Execute(ctx *gl.Context) {
 			// sampler's own WGSL binding. SamplerBindMap provides this mapping.
 			// Matches Rust wgpu-hal GLES SamplerBindMap (command.rs:247).
 			// A sampler shared by several textures goes to every unit that
-			// samples with it; a sampler nothing maps goes to its own binding.
-			bound := false
+			// samples with it; one the shaders don't use goes nowhere.
 			if c.samplerBindMap != nil {
 				for texUnit := range c.samplerBindMap {
-					if c.samplerBindMap[texUnit] != int8(glBinding) {
-						continue
+					if c.samplerBindMap[texUnit] == int8(glBinding) {
+						bindSampler(ctx, uint32(texUnit), b.sampler)
 					}
-					bindSampler(ctx, uint32(texUnit), b.sampler)
-					bound = true
 				}
-			}
-			if !bound {
-				bindSampler(ctx, glBinding, b.sampler)
 			}
 		}
 	}
