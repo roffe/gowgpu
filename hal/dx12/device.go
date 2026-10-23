@@ -9,11 +9,13 @@ import (
 	"cmp"
 	"crypto/sha256"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"runtime"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -84,7 +86,8 @@ type Device struct {
 	// DX12 requires a valid root signature for every PSO, even if the shader
 	// has no resource bindings. This is lazily created on first use and shared
 	// across all pipelines that don't provide an explicit PipelineLayout.
-	emptyRootSignature *d3d12.ID3D12RootSignature
+	emptyRootSignature   *d3d12.ID3D12RootSignature
+	emptyRootSignatureMu sync.Mutex
 
 	// zeroBuf is what ClearBuffer copies zeros from, see zeroBuffer.
 	zeroBuf   *Buffer
@@ -94,7 +97,7 @@ type Device struct {
 	infoQueue *d3d12.ID3D12InfoQueue
 
 	// Debug: operation step counter for tracking which call kills the device.
-	debugStep int
+	debugStep atomic.Uint64
 
 	// Per-frame tracking for CPU/GPU overlap (DX12-OPT-002).
 	frames         [maxFramesInFlight]frameState
@@ -687,6 +690,8 @@ func (d *Device) completedFrameFenceValue() uint64 {
 // DX12 requires a valid root signature for every PSO — even with zero parameters.
 // Created lazily on first use, reused for all such pipelines on this device.
 func (d *Device) getOrCreateEmptyRootSignature() (*d3d12.ID3D12RootSignature, error) {
+	d.emptyRootSignatureMu.Lock()
+	defer d.emptyRootSignatureMu.Unlock()
 	if d.emptyRootSignature != nil {
 		return d.emptyRootSignature, nil
 	}
@@ -718,6 +723,18 @@ func (d *Device) getOrCreateEmptyRootSignature() (*d3d12.ID3D12RootSignature, er
 	return rootSig, nil
 }
 
+// emptyRootHash is the hash of the empty root signature, nil before it is
+// made.
+func (d *Device) emptyRootHash() *[32]byte {
+	d.emptyRootSignatureMu.Lock()
+	defer d.emptyRootSignatureMu.Unlock()
+	if !d.hasEmptyRootSignatureHash {
+		return nil
+	}
+	h := d.emptyRootSignatureHash
+	return &h
+}
+
 // zeroBufferSize is the size of the zero buffer ClearBuffer copies from.
 const zeroBufferSize = 256 << 10
 
@@ -741,12 +758,12 @@ func (d *Device) zeroBuffer() (*Buffer, error) {
 // checkHealth verifies the device is still alive and logs the current step.
 // Returns an error if the device has been removed.
 func (d *Device) checkHealth(operation string) error {
-	d.debugStep++
+	step := d.debugStep.Add(1)
 	d.DrainDebugMessages()
 	if reason := d.raw.GetDeviceRemovedReason(); reason != nil {
-		hal.Logger().Error("dx12: device removed", "step", d.debugStep, "operation", operation, "reason", reason)
+		hal.Logger().Error("dx12: device removed", "step", step, "operation", operation, "reason", reason)
 		d.logDREDBreadcrumbs()
-		return fmt.Errorf("dx12: device removed at step %d (%s): %w", d.debugStep, operation, reason)
+		return fmt.Errorf("dx12: device removed at step %d (%s): %w", step, operation, reason)
 	}
 	return nil
 }
@@ -2112,11 +2129,9 @@ func (d *Device) DestroyPipelineLayout(layout hal.PipelineLayout) {
 	}
 }
 
-// CreateShaderModule creates a shader module.
-// For WGSL source, compilation is deferred to pipeline creation time when the
-// PipelineLayout (with proper naga HLSL options) is available. This matches
-// Rust wgpu-hal which compiles shaders in create_render_pipeline.
-// For pre-compiled SPIR-V, bytecode is stored directly.
+// CreateShaderModule creates a shader module. WGSL is lowered to naga IR
+// here and compiled when a pipeline is made with it, for that pipeline's
+// layout, as Rust's wgpu-hal does. Pre-compiled SPIR-V is stored as it is.
 func (d *Device) CreateShaderModule(desc *hal.ShaderModuleDescriptor) (hal.ShaderModule, error) {
 	if desc == nil {
 		return nil, fmt.Errorf("BUG: shader module descriptor is nil in DX12.CreateShaderModule — core validation gap")
@@ -2129,11 +2144,16 @@ func (d *Device) CreateShaderModule(desc *hal.ShaderModuleDescriptor) (hal.Shade
 
 	switch {
 	case desc.Source.WGSL != "":
-		// Store raw WGSL for deferred compilation during pipeline creation.
+		ast, err := naga.Parse(desc.Source.WGSL)
+		if err != nil {
+			return nil, fmt.Errorf("dx12: WGSL parse: %w", err)
+		}
+		irModule, err := naga.LowerWithSource(ast, desc.Source.WGSL)
+		if err != nil {
+			return nil, fmt.Errorf("dx12: WGSL lower: %w", err)
+		}
 		module.wgslSource = desc.Source.WGSL
-		hal.Logger().Debug("dx12: shader module created (deferred compilation)",
-			"source", "WGSL",
-		)
+		module.irModule = irModule
 	case len(desc.Source.SPIRV) > 0:
 		// Legacy: pre-compiled SPIR-V stored as single entry "main"
 		bytecode := make([]byte, len(desc.Source.SPIRV)*4)
@@ -2152,29 +2172,6 @@ func (d *Device) CreateShaderModule(desc *hal.ShaderModuleDescriptor) (hal.Shade
 		return nil, err
 	}
 	return module, nil
-}
-
-// compileWGSLModule compiles WGSL source to per-entry-point bytecode.
-// Routes to either DXIL direct compilation or HLSL→FXC based on Device.useDXIL.
-// The naga options must come from the PipelineLayout, which contains the proper
-// BindingMap and SamplerBufferBindingMap matching the root signature layout.
-func (d *Device) compileWGSLModule(wgslSource string, nagaOpts *hlsl.Options, module *ShaderModule) error {
-	// Step 1: Parse WGSL to AST
-	ast, err := naga.Parse(wgslSource)
-	if err != nil {
-		return fmt.Errorf("WGSL parse: %w", err)
-	}
-
-	// Step 2: Lower to IR
-	irModule, err := naga.LowerWithSource(ast, wgslSource)
-	if err != nil {
-		return fmt.Errorf("WGSL lower: %w", err)
-	}
-
-	if d.useDXIL {
-		return d.compileWGSLModuleDXIL(wgslSource, irModule, nagaOpts, module)
-	}
-	return d.compileWGSLModuleHLSL(irModule, nagaOpts, module)
 }
 
 // hlslToDXILBindingMap converts an hlsl.BindingMap (used to build the
@@ -2225,167 +2222,158 @@ func hlslToDXILSamplerHeapTargets(t hlsl.SamplerHeapBindTargets) *dxil.SamplerHe
 	}
 }
 
-// compileWGSLModuleHLSL compiles IR to per-entry-point DXBC via HLSL→FXC.
-// Pipeline: IR → HLSL → D3DCompile (d3dcompiler_47.dll) → DXBC
-func (d *Device) compileWGSLModuleHLSL(irModule *ir.Module, nagaOpts *hlsl.Options, module *ShaderModule) error {
-	// Generate HLSL using pipeline-specific naga options.
-	// The options contain BindingMap (register assignments matching root signature)
-	// and SamplerBufferBindingMap (sampler index buffer locations), ensuring the
-	// shader's register usage matches the root signature exactly.
-	hlslSource, info, err := hlsl.Compile(irModule, nagaOpts)
+// stageBytecode compiles the entry point of module a pipeline with layout
+// runs. Its resources take the registers the layout's root signature gives
+// them, so a module is compiled again for each layout it is used with, as
+// Rust's wgpu-hal does in load_shader.
+func (d *Device) stageBytecode(module hal.ShaderModule, entryPoint string, layout *PipelineLayout, fragment *hlsl.FragmentEntryPoint) ([]byte, error) {
+	sm, ok := module.(*ShaderModule)
+	if !ok || sm == nil {
+		return nil, fmt.Errorf("invalid shader module type")
+	}
+	if sm.irModule == nil {
+		bytecode := sm.EntryPointBytecode(entryPoint)
+		if len(bytecode) == 0 {
+			return nil, fmt.Errorf("entry point %q not found in module", entryPoint)
+		}
+		return bytecode, nil
+	}
+	ep, ok := sm.entryPoint(entryPoint)
+	if !ok {
+		return nil, fmt.Errorf("entry point %q not found in module", entryPoint)
+	}
+	if layout == nil || layout.nagaOptions == nil {
+		return nil, fmt.Errorf("WGSL compilation requires a PipelineLayout with naga options")
+	}
+	opts := *layout.nagaOptions
+	opts.EntryPoint = entryPoint
+	opts.FragmentEntryPoint = fragment
+	if d.useDXIL {
+		return d.compileDXIL(sm, ep, &opts)
+	}
+	return d.compileHLSL(sm, ep, &opts)
+}
+
+// compileHLSL compiles an entry point to DXBC through HLSL and FXC
+// (d3dcompiler_47.dll). The cache key is the HLSL, which holds the
+// registers, with the entry point, stage and target, as Rust's ShaderCache
+// has it.
+func (d *Device) compileHLSL(module *ShaderModule, ep *ir.EntryPoint, opts *hlsl.Options) ([]byte, error) {
+	hlslSource, info, err := hlsl.Compile(module.irModule, opts)
 	if err != nil {
-		return fmt.Errorf("HLSL generation: %w", err)
+		return nil, fmt.Errorf("HLSL generation: %w", err)
+	}
+	target := shaderStageToTarget(ep.Stage)
+	hlslName := ep.Name
+	if info != nil {
+		if mapped, ok := info.EntryPointNames[ep.Name]; ok {
+			hlslName = mapped
+		}
 	}
 
-	hal.Logger().Debug("dx12: compiling HLSL",
-		"sourceLen", len(hlslSource),
-		"entryPoints", len(irModule.EntryPoints),
-	)
-
-	// Load d3dcompiler_47.dll (deferred until cache miss)
-	var compiler *d3dcompile.Lib
-
-	// Compile each entry point separately, using shader cache.
-	// Cache key = SHA-256(HLSL source) + entry point + stage + target.
-	// This matches Rust wgpu's ShaderCache pattern (device.rs:390-428).
-	for i := range irModule.EntryPoints {
-		ep := &irModule.EntryPoints[i]
-		target := shaderStageToTarget(ep.Stage)
-
-		// Use the HLSL entry point name (naga may rename it)
-		hlslName := ep.Name
-		if info != nil && info.EntryPointNames != nil {
-			if mapped, ok := info.EntryPointNames[ep.Name]; ok {
-				hlslName = mapped
-			}
-		}
-
-		// Check shader cache before calling FXC.
-		cacheKey := NewShaderCacheKey(hlslSource, hlslName, ep.Stage, target)
-		if cached, ok := d.shaderCache.Get(cacheKey); ok {
-			module.entryPoints[ep.Name] = cached
-			continue
-		}
-
-		// Cache miss — load compiler if not yet loaded and compile via FXC.
-		if compiler == nil {
-			compiler, err = d3dcompile.Load()
-			if err != nil {
-				return fmt.Errorf("load d3dcompiler: %w", err)
-			}
-		}
-
-		bytecode, err := compiler.Compile(hlslSource, hlslName, target)
-		if err != nil {
-			return fmt.Errorf("D3DCompile entry point %q (hlsl: %q, target: %s): %w",
-				ep.Name, hlslName, target, err)
-		}
-
-		// Store in cache for future pipelines using the same shader.
-		d.shaderCache.Put(cacheKey, bytecode)
-		module.entryPoints[ep.Name] = bytecode
+	cacheKey := NewShaderCacheKey(hlslSource, hlslName, ep.Stage, target)
+	if cached, ok := d.shaderCache.Get(cacheKey); ok {
+		return cached, nil
 	}
-
-	return nil
+	compiler, err := d3dcompile.Load()
+	if err != nil {
+		return nil, fmt.Errorf("load d3dcompiler: %w", err)
+	}
+	bytecode, err := compiler.Compile(hlslSource, hlslName, target)
+	if err != nil {
+		return nil, fmt.Errorf("D3DCompile entry point %q (hlsl: %q, target: %s): %w", ep.Name, hlslName, target, err)
+	}
+	d.shaderCache.Put(cacheKey, bytecode)
+	return bytecode, nil
 }
 
-// compileWGSLModuleDXIL compiles IR to per-entry-point DXIL bytecode directly.
-// Pipeline: IR → naga dxil.Compile → DXBC container (with DXIL bitcode + BYPASS hash)
-// Eliminates the HLSL→FXC dependency — no d3dcompiler_47.dll needed.
-//
-// The binding map from nagaOpts (built by PipelineLayout to match the D3D12
-// root signature) is converted to dxil.BindingMap and passed to the DXIL
-// backend so it emits (space, register) pairs matching the root signature.
-// Without this, DXIL would use raw WGSL @group/@binding numbers and D3D12
-// would reject the PSO with E_INVALIDARG (see FEAT-DXIL-002, BUG-DX12-011).
-func (d *Device) compileWGSLModuleDXIL(wgslSource string, irModule *ir.Module, nagaOpts *hlsl.Options, module *ShaderModule) error {
-	hal.Logger().Debug("dx12: compiling DXIL direct",
-		"entryPoints", len(irModule.EntryPoints),
-	)
-
+// compileDXIL compiles an entry point to DXIL with naga's DXIL backend,
+// with the registers of the layout's binding map converted from the HLSL
+// options. dxil.Compile compiles the first entry point of a module, so the
+// entry point gets a module of its own that shares everything else.
+func (d *Device) compileDXIL(module *ShaderModule, ep *ir.EntryPoint, nagaOpts *hlsl.Options) ([]byte, error) {
 	opts := dxil.DefaultOptions()
-	if nagaOpts != nil {
-		// ponytail: naga's DXIL backend has no dynamic storage buffer
-		// offsets, so a DXIL shader uses a dynamic storage buffer at its
-		// bind group offset, whatever the dynamic one. Needs naga to take
-		// DynamicStorageBufferOffsetsTargets for DXIL as it does for HLSL.
-		opts.BindingMap = hlslToDXILBindingMap(nagaOpts.BindingMap)
-		opts.SamplerBufferBindingMap = hlslToDXILSamplerBufferBindingMap(nagaOpts.SamplerBufferBindingMap)
-		opts.SamplerHeapTargets = hlslToDXILSamplerHeapTargets(nagaOpts.SamplerHeapTargets)
+	// ponytail: naga's DXIL backend has no dynamic storage buffer
+	// offsets, so a DXIL shader uses a dynamic storage buffer at its
+	// bind group offset, whatever the dynamic one. Needs naga to take
+	// DynamicStorageBufferOffsetsTargets for DXIL as it does for HLSL.
+	opts.BindingMap = hlslToDXILBindingMap(nagaOpts.BindingMap)
+	opts.SamplerBufferBindingMap = hlslToDXILSamplerBufferBindingMap(nagaOpts.SamplerBufferBindingMap)
+	opts.SamplerHeapTargets = hlslToDXILSamplerHeapTargets(nagaOpts.SamplerHeapTargets)
+
+	cacheKey := NewShaderCacheKey(dxilCacheSource(module.wgslSource, ep.Name, opts), ep.Name, ep.Stage, "dxil")
+	if cached, ok := d.shaderCache.Get(cacheKey); ok {
+		return cached, nil
 	}
 
-	// Compile each entry point separately by creating a single-entry-point IR module.
-	// dxil.Compile always compiles EntryPoints[0], so we isolate each entry point
-	// into its own module copy. This matches the per-entry-point granularity of the
-	// HLSL→FXC path and the shader cache.
-	for i := range irModule.EntryPoints {
-		ep := &irModule.EntryPoints[i]
-
-		// Check shader cache before compiling.
-		// DXIL cache key: SHA-256(WGSL source + entry point name) + "dxil" target.
-		// Using WGSL source (not HLSL) because the DXIL path bypasses HLSL generation.
-		cacheKey := NewShaderCacheKey(
-			dxilCacheSource(wgslSource, ep.Name),
-			ep.Name, ep.Stage, "dxil",
-		)
-		if cached, ok := d.shaderCache.Get(cacheKey); ok {
-			module.entryPoints[ep.Name] = cached
-			continue
-		}
-
-		// Create a single-entry-point module for dxil.Compile.
-		// dxil.Compile always processes EntryPoints[0], so we need to isolate
-		// the target entry point. Shared module data (types, constants, globals)
-		// is referenced, not copied — only the EntryPoints slice differs.
-		singleEPModule := &ir.Module{
-			Types:             irModule.Types,
-			Constants:         irModule.Constants,
-			GlobalVariables:   irModule.GlobalVariables,
-			GlobalExpressions: irModule.GlobalExpressions,
-			Functions:         irModule.Functions,
-			EntryPoints:       []ir.EntryPoint{irModule.EntryPoints[i]},
-			Overrides:         irModule.Overrides,
-			SpecialTypes:      irModule.SpecialTypes,
-		}
-
-		dxilBytes, err := dxil.Compile(singleEPModule, opts)
-		if err != nil {
-			return fmt.Errorf("dx12: DXIL compile entry point %q: %w", ep.Name, err)
-		}
-
-		// Pre-validate via naga's IDxcValidator wrapper when
-		// GOGPU_DX12_DXIL_VALIDATE=1 is set. Surfaces the exact
-		// HRESULT+text that dxil.dll would emit, instead of the
-		// opaque E_INVALIDARG that D3D12 CreateGraphicsPipelineState
-		// folds everything into. Also dumps the offending blob to
-		// tmp/ for post-mortem dxilval --corpus replay.
-		if d.dxilValidate {
-			if verr := dxil.Validate(dxilBytes, dxil.ValidateFull); verr != nil {
-				_ = os.WriteFile(
-					fmt.Sprintf("D:/projects/gogpu/wgpu/tmp/dbg_stage%d_%s.dxil", int(ep.Stage), ep.Name),
-					dxilBytes, 0o644,
-				)
-				return fmt.Errorf("dx12: DXIL validation rejected %q (stage %d): %w", ep.Name, ep.Stage, verr)
-			}
-		}
-
-		// Store in cache for future pipelines using the same shader.
-		d.shaderCache.Put(cacheKey, dxilBytes)
-		module.entryPoints[ep.Name] = dxilBytes
+	irModule := module.irModule
+	single := *irModule
+	single.EntryPoints = []ir.EntryPoint{*ep}
+	dxilBytes, err := dxil.Compile(&single, opts)
+	if err != nil {
+		return nil, fmt.Errorf("dx12: DXIL compile entry point %q: %w", ep.Name, err)
 	}
 
-	return nil
+	// Pre-validate via naga's IDxcValidator wrapper when
+	// GOGPU_DX12_DXIL_VALIDATE=1 is set. Surfaces the exact
+	// HRESULT+text that dxil.dll would emit, instead of the
+	// opaque E_INVALIDARG that D3D12 CreateGraphicsPipelineState
+	// folds everything into. Also dumps the offending blob to
+	// tmp/ for post-mortem dxilval --corpus replay.
+	if d.dxilValidate {
+		if verr := dxil.Validate(dxilBytes, dxil.ValidateFull); verr != nil {
+			_ = os.WriteFile(
+				fmt.Sprintf("D:/projects/gogpu/wgpu/tmp/dbg_stage%d_%s.dxil", int(ep.Stage), ep.Name),
+				dxilBytes, 0o644,
+			)
+			return nil, fmt.Errorf("dx12: DXIL validation rejected %q (stage %d): %w", ep.Name, ep.Stage, verr)
+		}
+	}
+
+	d.shaderCache.Put(cacheKey, dxilBytes)
+	return dxilBytes, nil
 }
 
-// dxilCacheSource creates a unique cache source string for DXIL compilation.
-// Combines WGSL source with entry point name to ensure different entry points
-// from the same WGSL source get distinct cache keys.
-func dxilCacheSource(wgslSource, entryPoint string) string {
-	// Use SHA-256 of combined source to keep the key compact while unique.
-	// NewShaderCacheKey will hash this again, but the intermediate string
-	// needs to be deterministic and unique per (source, entry) pair.
-	h := sha256.Sum256([]byte(wgslSource + "\x00" + entryPoint))
-	return string(h[:])
+// dxilCacheSource is the source the DXIL shader cache keys an entry point
+// on: the WGSL, the entry point and the register bindings of the layout the
+// DXIL is compiled for, which the bytecode holds.
+func dxilCacheSource(wgslSource, entryPoint string, opts dxil.Options) string {
+	h := sha256.New()
+	h.Write([]byte(wgslSource))
+	h.Write([]byte{0})
+	h.Write([]byte(entryPoint))
+	fmt.Fprintf(h, "\x00sm%d", opts.ShaderModel)
+	locations := make([]dxil.BindingLocation, 0, len(opts.BindingMap))
+	for loc := range opts.BindingMap {
+		locations = append(locations, loc)
+	}
+	slices.SortFunc(locations, func(a, b dxil.BindingLocation) int {
+		return cmp.Or(cmp.Compare(a.Group, b.Group), cmp.Compare(a.Binding, b.Binding))
+	})
+	for _, loc := range locations {
+		writeDXILBindTarget(h, fmt.Sprintf("b%d.%d", loc.Group, loc.Binding), opts.BindingMap[loc])
+	}
+	groups := make([]uint32, 0, len(opts.SamplerBufferBindingMap))
+	for group := range opts.SamplerBufferBindingMap {
+		groups = append(groups, group)
+	}
+	slices.Sort(groups)
+	for _, group := range groups {
+		writeDXILBindTarget(h, fmt.Sprintf("s%d", group), opts.SamplerBufferBindingMap[group])
+	}
+	if t := opts.SamplerHeapTargets; t != nil {
+		writeDXILBindTarget(h, "heap", t.StandardSamplers)
+		writeDXILBindTarget(h, "cmp", t.ComparisonSamplers)
+	}
+	return string(h.Sum(nil))
+}
+
+func writeDXILBindTarget(w io.Writer, name string, t dxil.BindTarget) {
+	size := uint32(0)
+	if t.BindingArraySize != nil {
+		size = *t.BindingArraySize
+	}
+	fmt.Fprintf(w, "\x00%s=%d,%d,%d", name, t.Space, t.Register, size)
 }
 
 // shaderStageToTarget maps naga IR shader stage to D3DCompile target profile.
@@ -2409,18 +2397,6 @@ func (d *Device) DestroyShaderModule(module hal.ShaderModule) {
 	}
 }
 
-// ensureShaderCompiled performs deferred WGSL compilation if needed.
-// Must be called during pipeline creation when the PipelineLayout is available.
-func (d *Device) ensureShaderCompiled(module *ShaderModule, layout *PipelineLayout) error {
-	if !module.IsDeferred() {
-		return nil // Already compiled (SPIR-V or previously compiled WGSL)
-	}
-	if layout == nil || layout.nagaOptions == nil {
-		return fmt.Errorf("dx12: deferred WGSL compilation requires PipelineLayout with naga options")
-	}
-	return d.compileWGSLModule(module.wgslSource, layout.nagaOptions, module)
-}
-
 // CreateRenderPipeline creates a render pipeline.
 func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.RenderPipeline, error) {
 	start := time.Now()
@@ -2428,45 +2404,39 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		return nil, fmt.Errorf("BUG: render pipeline descriptor is nil in DX12.CreateRenderPipeline — core validation gap")
 	}
 
-	// Deferred shader compilation: compile WGSL with pipeline-specific naga options.
 	var pipelineLayout *PipelineLayout
 	if desc.Layout != nil {
 		if pl, ok := desc.Layout.(*PipelineLayout); ok {
 			pipelineLayout = pl
 		}
 	}
+	var vs, ps []byte
 	if desc.Vertex.Module != nil {
-		if sm, ok := desc.Vertex.Module.(*ShaderModule); ok {
-			if err := d.ensureShaderCompiled(sm, pipelineLayout); err != nil {
-				return nil, fmt.Errorf("dx12: vertex shader compilation failed: %w", err)
-			}
+		bytecode, err := d.stageBytecode(desc.Vertex.Module, desc.Vertex.EntryPoint, pipelineLayout, nil)
+		if err == nil {
+			vs, err = overrideBytecode(bytecode, "GOGPU_DX12_DXIL_OVERRIDE_VS")
+		}
+		if err != nil {
+			return nil, fmt.Errorf("dx12: vertex shader: %w", err)
 		}
 	}
 	if desc.Fragment != nil && desc.Fragment.Module != nil {
-		if sm, ok := desc.Fragment.Module.(*ShaderModule); ok {
-			if err := d.ensureShaderCompiled(sm, pipelineLayout); err != nil {
-				return nil, fmt.Errorf("dx12: fragment shader compilation failed: %w", err)
-			}
+		bytecode, err := d.stageBytecode(desc.Fragment.Module, desc.Fragment.EntryPoint, pipelineLayout, nil)
+		if err == nil {
+			ps, err = overrideBytecode(bytecode, "GOGPU_DX12_DXIL_OVERRIDE_PS")
+		}
+		if err != nil {
+			return nil, fmt.Errorf("dx12: fragment shader: %w", err)
 		}
 	}
 
-	// Build input layout from vertex buffers
 	inputElements, semanticNames := buildInputLayout(desc.Vertex.Buffers)
-
-	// Keep semantic names alive until pipeline creation
-	_ = semanticNames
-
-	// Build PSO description
-	psoDesc, err := d.buildGraphicsPipelineStateDesc(desc, inputElements, semanticNames)
+	psoDesc, err := d.buildGraphicsPipelineStateDesc(desc, inputElements, semanticNames, vs, ps)
 	if err != nil {
 		return nil, err
 	}
 
-	var emptyRootHash *[32]byte
-	if d.hasEmptyRootSignatureHash {
-		emptyRootHash = &d.emptyRootSignatureHash
-	}
-	cacheKey := graphicsPSOCacheKey(desc, psoDesc, rootSignatureHashForLayout(pipelineLayout, emptyRootHash))
+	cacheKey := graphicsPSOCacheKey(desc, psoDesc, rootSignatureHashForLayout(pipelineLayout, d.emptyRootHash()))
 	var cachedBlob []byte
 	if d.psoCache != nil {
 		cachedBlob, _ = d.psoCache.Load(cacheKey)
@@ -2561,12 +2531,6 @@ func (d *Device) CreateComputePipeline(desc *hal.ComputePipelineDescriptor) (hal
 		return nil, fmt.Errorf("BUG: compute pipeline descriptor is nil in DX12.CreateComputePipeline — core validation gap")
 	}
 
-	// Get shader module
-	shaderModule, ok := desc.Compute.Module.(*ShaderModule)
-	if !ok {
-		return nil, fmt.Errorf("dx12: invalid compute shader module type")
-	}
-
 	// Get root signature and group mappings from layout.
 	// DX12 requires a valid root signature for every PSO.
 	var rootSig *d3d12.ID3D12RootSignature
@@ -2590,32 +2554,20 @@ func (d *Device) CreateComputePipeline(desc *hal.ComputePipelineDescriptor) (hal
 		rootSig = emptyRS
 	}
 
-	// Deferred shader compilation: compile WGSL with pipeline-specific naga options.
-	if err := d.ensureShaderCompiled(shaderModule, pipelineLayout); err != nil {
-		return nil, fmt.Errorf("dx12: compute shader compilation failed: %w", err)
+	bytecode, err := d.stageBytecode(desc.Compute.Module, desc.Compute.EntryPoint, pipelineLayout, nil)
+	if err != nil {
+		return nil, fmt.Errorf("dx12: compute shader: %w", err)
 	}
-
-	// Build compute pipeline state desc
 	psoDesc := d3d12.D3D12_COMPUTE_PIPELINE_STATE_DESC{
 		RootSignature: rootSig,
 		NodeMask:      0,
-	}
-
-	bytecode := shaderModule.EntryPointBytecode(desc.Compute.EntryPoint)
-	if len(bytecode) > 0 {
-		psoDesc.CS = d3d12.D3D12_SHADER_BYTECODE{
+		CS: d3d12.D3D12_SHADER_BYTECODE{
 			ShaderBytecode: unsafe.Pointer(&bytecode[0]),
 			BytecodeLength: uintptr(len(bytecode)),
-		}
-	} else {
-		return nil, fmt.Errorf("dx12: compute shader entry point %q not found in module", desc.Compute.EntryPoint)
+		},
 	}
 
-	var emptyRootHash *[32]byte
-	if d.hasEmptyRootSignatureHash {
-		emptyRootHash = &d.emptyRootSignatureHash
-	}
-	cacheKey := computePSOCacheKey(desc, &psoDesc, rootSignatureHashForLayout(pipelineLayout, emptyRootHash))
+	cacheKey := computePSOCacheKey(desc, &psoDesc, rootSignatureHashForLayout(pipelineLayout, d.emptyRootHash()))
 	var cachedBlob []byte
 	if d.psoCache != nil {
 		cachedBlob, _ = d.psoCache.Load(cacheKey)

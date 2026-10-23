@@ -13,6 +13,7 @@ import (
 	"unsafe"
 
 	"github.com/gogpu/naga/hlsl"
+	"github.com/gogpu/naga/ir"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/dx12/d3d12"
@@ -22,24 +23,27 @@ import (
 // ShaderModule Implementation
 // -----------------------------------------------------------------------------
 
-// ShaderModule implements hal.ShaderModule for DirectX 12.
-// Stores raw WGSL source for deferred compilation. Compilation happens during
-// pipeline creation when the PipelineLayout (with naga options) is available.
-// For pre-compiled SPIR-V, entryPoints is populated directly.
+// ShaderModule implements hal.ShaderModule for DirectX 12. WGSL is lowered
+// to naga IR when the module is made and compiled for each pipeline, with
+// the pipeline's layout (see Device.stageBytecode). Pre-compiled bytecode
+// is kept by entry point name.
 type ShaderModule struct {
-	wgslSource  string            // Raw WGSL source (for deferred compilation)
-	entryPoints map[string][]byte // entryName → DXBC bytecode (populated on pipeline creation or from SPIR-V)
+	wgslSource  string
+	irModule    *ir.Module
+	entryPoints map[string][]byte
 	device      *Device
 }
 
 // Destroy releases the shader module resources.
 func (m *ShaderModule) Destroy() {
 	m.wgslSource = ""
+	m.irModule = nil
 	m.entryPoints = nil
 	m.device = nil
 }
 
-// EntryPointBytecode returns the compiled DXBC bytecode for the given entry point.
+// EntryPointBytecode returns the pre-compiled bytecode of the given entry
+// point, nil for a WGSL module.
 func (m *ShaderModule) EntryPointBytecode(name string) []byte {
 	if m.entryPoints == nil {
 		return nil
@@ -47,10 +51,23 @@ func (m *ShaderModule) EntryPointBytecode(name string) []byte {
 	return m.entryPoints[name]
 }
 
-// IsDeferred returns true if this module contains raw WGSL that needs
-// compilation with pipeline-specific naga options.
+// IsDeferred returns true if this module contains WGSL, which each
+// pipeline compiles with its own layout.
 func (m *ShaderModule) IsDeferred() bool {
-	return m.wgslSource != "" && len(m.entryPoints) == 0
+	return m.irModule != nil
+}
+
+// entryPoint returns the module's WGSL entry point named name.
+func (m *ShaderModule) entryPoint(name string) (*ir.EntryPoint, bool) {
+	if m.irModule == nil {
+		return nil, false
+	}
+	for i := range m.irModule.EntryPoints {
+		if m.irModule.EntryPoints[i].Name == name {
+			return &m.irModule.EntryPoints[i], true
+		}
+	}
+	return nil, false
 }
 
 // -----------------------------------------------------------------------------
@@ -574,6 +591,7 @@ func (d *Device) buildGraphicsPipelineStateDesc(
 	desc *hal.RenderPipelineDescriptor,
 	inputElements []d3d12.D3D12_INPUT_ELEMENT_DESC,
 	_ [][]byte, // Keep semantic name strings alive (prevents GC during PSO creation)
+	vs, ps []byte,
 ) (*d3d12.D3D12_GRAPHICS_PIPELINE_STATE_DESC, error) {
 	psoDesc := &d3d12.D3D12_GRAPHICS_PIPELINE_STATE_DESC{}
 
@@ -596,27 +614,16 @@ func (d *Device) buildGraphicsPipelineStateDesc(
 		psoDesc.RootSignature = emptyRS
 	}
 
-	// Set vertex shader
-	if desc.Vertex.Module != nil {
-		bc, err := resolveShaderBytecode(desc.Vertex.Module, desc.Vertex.EntryPoint, "GOGPU_DX12_DXIL_OVERRIDE_VS")
-		if err != nil {
-			return nil, fmt.Errorf("dx12: vertex shader: %w", err)
-		}
+	if len(vs) > 0 {
 		psoDesc.VS = d3d12.D3D12_SHADER_BYTECODE{
-			ShaderBytecode: unsafe.Pointer(&bc[0]),
-			BytecodeLength: uintptr(len(bc)),
+			ShaderBytecode: unsafe.Pointer(&vs[0]),
+			BytecodeLength: uintptr(len(vs)),
 		}
 	}
-
-	// Set pixel (fragment) shader
-	if desc.Fragment != nil && desc.Fragment.Module != nil {
-		bc, err := resolveShaderBytecode(desc.Fragment.Module, desc.Fragment.EntryPoint, "GOGPU_DX12_DXIL_OVERRIDE_PS")
-		if err != nil {
-			return nil, fmt.Errorf("dx12: fragment shader: %w", err)
-		}
+	if len(ps) > 0 {
 		psoDesc.PS = d3d12.D3D12_SHADER_BYTECODE{
-			ShaderBytecode: unsafe.Pointer(&bc[0]),
-			BytecodeLength: uintptr(len(bc)),
+			ShaderBytecode: unsafe.Pointer(&ps[0]),
+			BytecodeLength: uintptr(len(ps)),
 		}
 	}
 
@@ -710,27 +717,22 @@ func (d *Device) buildGraphicsPipelineStateDesc(
 	return psoDesc, nil
 }
 
-// buildDepthStencilDesc builds a D3D12_DEPTH_STENCIL_DESC from a depth/stencil state.
-func resolveShaderBytecode(module hal.ShaderModule, entryPoint, overrideEnv string) ([]byte, error) {
-	sm, ok := module.(*ShaderModule)
-	if !ok {
-		return nil, fmt.Errorf("invalid shader module type")
+// overrideBytecode returns the bytecode in the file overrideEnv names, if
+// it names one, in place of bytecode.
+func overrideBytecode(bytecode []byte, overrideEnv string) ([]byte, error) {
+	path := os.Getenv(overrideEnv)
+	if path == "" {
+		return bytecode, nil
 	}
-	bytecode := sm.EntryPointBytecode(entryPoint)
-	if path := os.Getenv(overrideEnv); path != "" {
-		override, err := os.ReadFile(path)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read %s %q: %w", overrideEnv, path, err)
-		}
-		bytecode = override
-		fmt.Fprintf(os.Stderr, "[dx12] shader overridden from %s (%d bytes)\n", path, len(override))
+	override, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read %s %q: %w", overrideEnv, path, err)
 	}
-	if len(bytecode) == 0 {
-		return nil, fmt.Errorf("entry point %q not found in module", entryPoint)
-	}
-	return bytecode, nil
+	fmt.Fprintf(os.Stderr, "[dx12] shader overridden from %s (%d bytes)\n", path, len(override))
+	return override, nil
 }
 
+// buildDepthStencilDesc builds a D3D12_DEPTH_STENCIL_DESC from a depth/stencil state.
 func buildDepthStencilDesc(ds *hal.DepthStencilState) d3d12.D3D12_DEPTH_STENCIL_DESC {
 	desc := d3d12.D3D12_DEPTH_STENCIL_DESC{
 		DepthEnable:      1, // TRUE - enable depth testing
