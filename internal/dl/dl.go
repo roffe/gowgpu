@@ -15,6 +15,8 @@ extern void *dlsym(void *, const char *);
 extern char *dlerror(void);
 #if defined(__APPLE__)
 #define DL_RTLD_NOW_LOCAL (0x2 | 0x4)
+#elif defined(__ANDROID__) && !defined(__LP64__)
+#define DL_RTLD_NOW_LOCAL 0 // 32-bit bionic: RTLD_NOW and RTLD_LOCAL are 0, and 0x2 is RTLD_GLOBAL
 #else
 #define DL_RTLD_NOW_LOCAL 0x2 // RTLD_LOCAL is 0 on glibc, musl and 64-bit bionic
 #endif
