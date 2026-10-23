@@ -251,20 +251,23 @@ func TestSurfaceDisplaySyncFollowsPresentMode(t *testing.T) {
 }
 
 // TestSurfaceReconfigureAppliesUsageAndAlpha reconfigures a surface at the
-// same size with another usage and alpha mode: framebufferOnly and the
-// layer's opacity follow each configuration.
+// same size with another usage, view formats and alpha mode:
+// framebufferOnly and the layer's opacity follow each configuration.
 func TestSurfaceReconfigureAppliesUsageAndAlpha(t *testing.T) {
 	surface, open := newSurfaceTest(t)
 	for _, test := range []struct {
 		usage           gputypes.TextureUsage
+		viewFormats     []gputypes.TextureFormat
 		alpha           gputypes.CompositeAlphaMode
 		framebufferOnly bool
 		opaque          bool
 	}{
-		{gputypes.TextureUsageRenderAttachment, hal.CompositeAlphaModeOpaque, true, true},
-		{gputypes.TextureUsageRenderAttachment | gputypes.TextureUsageCopySrc, hal.CompositeAlphaModeOpaque, false, true},
-		{gputypes.TextureUsageRenderAttachment, hal.CompositeAlphaModePremultiplied, true, false},
-		{gputypes.TextureUsageRenderAttachment | gputypes.TextureUsageTextureBinding, hal.CompositeAlphaModeOpaque, false, true},
+		{gputypes.TextureUsageRenderAttachment, nil, hal.CompositeAlphaModeOpaque, true, true},
+		{gputypes.TextureUsageRenderAttachment | gputypes.TextureUsageCopySrc, nil, hal.CompositeAlphaModeOpaque, false, true},
+		{gputypes.TextureUsageRenderAttachment, nil, hal.CompositeAlphaModePremultiplied, true, false},
+		{gputypes.TextureUsageRenderAttachment | gputypes.TextureUsageTextureBinding, nil, hal.CompositeAlphaModeOpaque, false, true},
+		{gputypes.TextureUsageRenderAttachment, []gputypes.TextureFormat{gputypes.TextureFormatBGRA8Unorm}, hal.CompositeAlphaModeOpaque, true, true},
+		{gputypes.TextureUsageRenderAttachment, []gputypes.TextureFormat{gputypes.TextureFormatBGRA8UnormSrgb}, hal.CompositeAlphaModeOpaque, false, true},
 	} {
 		if err := surface.Configure(open.Device, &hal.SurfaceConfiguration{
 			Format:      gputypes.TextureFormatBGRA8Unorm,
@@ -272,12 +275,13 @@ func TestSurfaceReconfigureAppliesUsageAndAlpha(t *testing.T) {
 			Height:      16,
 			PresentMode: hal.PresentModeFifo,
 			Usage:       test.usage,
+			ViewFormats: test.viewFormats,
 			AlphaMode:   test.alpha,
 		}); err != nil {
 			t.Fatalf("Configure failed: %v", err)
 		}
 		if got := MsgSendBool(surface.layer, Sel("framebufferOnly")); got != test.framebufferOnly {
-			t.Errorf("usage %v: framebufferOnly %v, want %v", test.usage, got, test.framebufferOnly)
+			t.Errorf("usage %v, view formats %v: framebufferOnly %v, want %v", test.usage, test.viewFormats, got, test.framebufferOnly)
 		}
 		if got := MsgSendBool(surface.layer, Sel("isOpaque")); got != test.opaque {
 			t.Errorf("alpha mode %v: opaque %v, want %v", test.alpha, got, test.opaque)

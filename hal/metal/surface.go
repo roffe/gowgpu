@@ -8,6 +8,7 @@ package metal
 import (
 	"fmt"
 	"runtime"
+	"slices"
 
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
@@ -168,12 +169,16 @@ func layerPixelFormat(format gputypes.TextureFormat) MTLPixelFormat {
 
 // applyModes sets what a configuration changes without new drawables: the
 // display sync of its present mode, framebufferOnly for a surface that is
-// only ever an attachment, and the layer's opacity for its alpha mode.
+// only ever an attachment in its own format, and the layer's opacity for
+// its alpha mode.
 func (s *Surface) applyModes(config *hal.SurfaceConfiguration) {
 	s.presentMode = config.PresentMode
 	setDisplaySync(s.layer, displaySync(config.PresentMode))
-	// Any usage but the attachment reads, copies or samples the drawable.
-	msgSendVoid(s.layer, Sel("setFramebufferOnly:"), argBool(config.Usage == gputypes.TextureUsageRenderAttachment))
+	// Any usage but the attachment reads, copies or samples the drawable,
+	// and Metal makes no view in another format of a framebufferOnly one.
+	framebufferOnly := config.Usage == gputypes.TextureUsageRenderAttachment &&
+		!slices.ContainsFunc(config.ViewFormats, func(f gputypes.TextureFormat) bool { return f != config.Format })
+	msgSendVoid(s.layer, Sel("setFramebufferOnly:"), argBool(framebufferOnly))
 	// Only a premultiplied surface composites with what is behind it, as in
 	// Dawn and wgpu-hal: CALayer is not opaque by default.
 	msgSendVoid(s.layer, Sel("setOpaque:"), argBool(config.AlphaMode != hal.CompositeAlphaModePremultiplied))
