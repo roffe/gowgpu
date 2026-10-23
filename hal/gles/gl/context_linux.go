@@ -87,6 +87,8 @@ package gl
 #cgo nocallback gl_v_iiiiiip
 #cgo noescape gl_v_iiiiiu
 #cgo nocallback gl_v_iiiiiu
+#cgo noescape gl_v_iiiiu
+#cgo nocallback gl_v_iiiiu
 #cgo noescape gl_v_iiiu
 #cgo nocallback gl_v_iiiu
 #cgo noescape gl_v_iiiui
@@ -196,6 +198,7 @@ type Context struct {
 	glEnableVertexAttribArray  unsafe.Pointer
 	glDisableVertexAttribArray unsafe.Pointer
 	glVertexAttribPointer      unsafe.Pointer
+	glVertexAttribIPointer     unsafe.Pointer // GL 3.0+, ES 3.0+
 
 	// Textures (GL 1.1+)
 	glGenTextures    unsafe.Pointer
@@ -440,6 +443,7 @@ func (c *Context) Load(getProcAddr ProcAddressFunc, isGLES ...bool) error {
 	c.glEnableVertexAttribArray = getProcAddr("glEnableVertexAttribArray")
 	c.glDisableVertexAttribArray = getProcAddr("glDisableVertexAttribArray")
 	c.glVertexAttribPointer = getProcAddr("glVertexAttribPointer")
+	c.glVertexAttribIPointer = getProcAddr("glVertexAttribIPointer")
 
 	// Textures
 	c.glGenTextures = getProcAddr("glGenTextures")
@@ -900,6 +904,12 @@ func (c *Context) VertexAttribPointer(index uint32, size int32, typ uint32, norm
 		norm = 1
 	}
 	C.gl_v_iiiiiu(C.uintptr_t(uintptr(c.glVertexAttribPointer)), C.uint32_t(index), C.uint32_t(size), C.uint32_t(typ), C.uint32_t(norm), C.uint32_t(stride), C.uintptr_t(offset))
+}
+
+// VertexAttribIPointer points an attribute the shader reads as integers at
+// the bound array buffer, which it reads as they are.
+func (c *Context) VertexAttribIPointer(index uint32, size int32, typ uint32, stride int32, offset uintptr) {
+	C.gl_v_iiiiu(C.uintptr_t(uintptr(c.glVertexAttribIPointer)), C.uint32_t(index), C.uint32_t(size), C.uint32_t(typ), C.uint32_t(stride), C.uintptr_t(offset))
 }
 
 // VertexAttribDivisor sets the instance divisor for a vertex attribute.

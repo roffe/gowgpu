@@ -73,11 +73,13 @@ type ShadowRange struct {
 }
 
 // ShadowAttrib is one enabled vertex attribute's pointer and divisor.
+// Integer is set for a pointer from glVertexAttribIPointer.
 type ShadowAttrib struct {
 	Buffer     uint32
 	Size       int32
 	Type       uint32
 	Normalized bool
+	Integer    bool
 	Stride     int32
 	Offset     uintptr
 	Divisor    uint32

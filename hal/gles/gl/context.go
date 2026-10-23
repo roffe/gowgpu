@@ -85,6 +85,7 @@ type Context struct {
 	glEnableVertexAttribArray  uintptr
 	glDisableVertexAttribArray uintptr
 	glVertexAttribPointer      uintptr
+	glVertexAttribIPointer     uintptr // GL 3.0+
 
 	// Textures (GL 1.1+)
 	glGenTextures    uintptr
@@ -304,6 +305,7 @@ func (c *Context) Load(getProcAddr ProcAddressFunc) error {
 	c.glEnableVertexAttribArray = getProcAddr("glEnableVertexAttribArray")
 	c.glDisableVertexAttribArray = getProcAddr("glDisableVertexAttribArray")
 	c.glVertexAttribPointer = getProcAddr("glVertexAttribPointer")
+	c.glVertexAttribIPointer = getProcAddr("glVertexAttribIPointer")
 
 	// Textures
 	c.glGenTextures = getProcAddr("glGenTextures")
@@ -748,6 +750,12 @@ func (c *Context) VertexAttribPointer(index uint32, size int32, typ uint32, norm
 	}
 	syscall.SyscallN(c.glVertexAttribPointer, uintptr(index), uintptr(size),
 		uintptr(typ), norm, uintptr(stride), offset)
+}
+
+// VertexAttribIPointer points an attribute the shader reads as integers at
+// the bound array buffer, which it reads as they are.
+func (c *Context) VertexAttribIPointer(index uint32, size int32, typ uint32, stride int32, offset uintptr) {
+	syscall.SyscallN(c.glVertexAttribIPointer, uintptr(index), uintptr(size), uintptr(typ), uintptr(stride), offset)
 }
 
 // VertexAttribDivisor sets the instance divisor for a vertex attribute.

@@ -1585,9 +1585,9 @@ func (c *SetVertexBufferCommand) Execute(ctx *gl.Context) {
 	}
 	for _, attr := range c.layout.Attributes {
 		loc := attr.ShaderLocation
-		size, typ, normalized := vertexFormatToGL(attr.Format)
+		size, typ, normalized, integer := vertexFormatToGL(attr.Format)
 		want := gl.ShadowAttrib{
-			Buffer: c.buffer.id, Size: size, Type: typ, Normalized: normalized,
+			Buffer: c.buffer.id, Size: size, Type: typ, Normalized: normalized, Integer: integer,
 			Stride: stride, Offset: uintptr(c.offset) + uintptr(attr.Offset), Divisor: divisor, Set: true,
 		}
 		// An attribute the bound VAO has like this already is left alone:
@@ -1597,7 +1597,11 @@ func (c *SetVertexBufferCommand) Execute(ctx *gl.Context) {
 			continue
 		}
 		ctx.EnableVertexAttribArray(loc)
-		ctx.VertexAttribPointer(loc, size, typ, normalized, stride, want.Offset)
+		if integer {
+			ctx.VertexAttribIPointer(loc, size, typ, stride, want.Offset)
+		} else {
+			ctx.VertexAttribPointer(loc, size, typ, normalized, stride, want.Offset)
+		}
 		// Set the instance divisor. Per-vertex attributes get divisor=0 (reset),
 		// per-instance attributes get divisor=1. Without this, instanced rendering
 		// reads the same instance data for all instances.
@@ -2286,74 +2290,77 @@ func (c *TimestampQueryCommand) Execute(ctx *gl.Context) {
 	ctx.QueryCounter(c.query, gl.TIMESTAMP)
 }
 
-// vertexFormatToGL converts a WebGPU vertex format to GL component count and type.
-func vertexFormatToGL(format gputypes.VertexFormat) (size int32, typ uint32, normalized bool) {
+// vertexFormatToGL converts a WebGPU vertex format to GL component count and
+// type, and whether the shader reads it as integers, which only
+// glVertexAttribIPointer hands it: glVertexAttribPointer converts every
+// component to a float.
+func vertexFormatToGL(format gputypes.VertexFormat) (size int32, typ uint32, normalized, integer bool) {
 	switch format {
 	case gputypes.VertexFormatFloat32:
-		return 1, gl.FLOAT, false
+		return 1, gl.FLOAT, false, false
 	case gputypes.VertexFormatFloat32x2:
-		return 2, gl.FLOAT, false
+		return 2, gl.FLOAT, false, false
 	case gputypes.VertexFormatFloat32x3:
-		return 3, gl.FLOAT, false
+		return 3, gl.FLOAT, false, false
 	case gputypes.VertexFormatFloat32x4:
-		return 4, gl.FLOAT, false
+		return 4, gl.FLOAT, false, false
 	case gputypes.VertexFormatUint8x2:
-		return 2, gl.UNSIGNED_BYTE, false
+		return 2, gl.UNSIGNED_BYTE, false, true
 	case gputypes.VertexFormatUint8x4:
-		return 4, gl.UNSIGNED_BYTE, false
+		return 4, gl.UNSIGNED_BYTE, false, true
 	case gputypes.VertexFormatUnorm8x2:
-		return 2, gl.UNSIGNED_BYTE, true
+		return 2, gl.UNSIGNED_BYTE, true, false
 	case gputypes.VertexFormatUnorm8x4:
-		return 4, gl.UNSIGNED_BYTE, true
+		return 4, gl.UNSIGNED_BYTE, true, false
 	case gputypes.VertexFormatSint8x2:
-		return 2, gl.BYTE, false
+		return 2, gl.BYTE, false, true
 	case gputypes.VertexFormatSint8x4:
-		return 4, gl.BYTE, false
+		return 4, gl.BYTE, false, true
 	case gputypes.VertexFormatSnorm8x2:
-		return 2, gl.BYTE, true
+		return 2, gl.BYTE, true, false
 	case gputypes.VertexFormatSnorm8x4:
-		return 4, gl.BYTE, true
+		return 4, gl.BYTE, true, false
 	case gputypes.VertexFormatUint16x2:
-		return 2, gl.UNSIGNED_SHORT, false
+		return 2, gl.UNSIGNED_SHORT, false, true
 	case gputypes.VertexFormatUint16x4:
-		return 4, gl.UNSIGNED_SHORT, false
+		return 4, gl.UNSIGNED_SHORT, false, true
 	case gputypes.VertexFormatUnorm16x2:
-		return 2, gl.UNSIGNED_SHORT, true
+		return 2, gl.UNSIGNED_SHORT, true, false
 	case gputypes.VertexFormatUnorm16x4:
-		return 4, gl.UNSIGNED_SHORT, true
+		return 4, gl.UNSIGNED_SHORT, true, false
 	case gputypes.VertexFormatSint16x2:
-		return 2, gl.SHORT, false
+		return 2, gl.SHORT, false, true
 	case gputypes.VertexFormatSint16x4:
-		return 4, gl.SHORT, false
+		return 4, gl.SHORT, false, true
 	case gputypes.VertexFormatSnorm16x2:
-		return 2, gl.SHORT, true
+		return 2, gl.SHORT, true, false
 	case gputypes.VertexFormatSnorm16x4:
-		return 4, gl.SHORT, true
+		return 4, gl.SHORT, true, false
 	case gputypes.VertexFormatUint32:
-		return 1, gl.UNSIGNED_INT, false
+		return 1, gl.UNSIGNED_INT, false, true
 	case gputypes.VertexFormatUint32x2:
-		return 2, gl.UNSIGNED_INT, false
+		return 2, gl.UNSIGNED_INT, false, true
 	case gputypes.VertexFormatUint32x3:
-		return 3, gl.UNSIGNED_INT, false
+		return 3, gl.UNSIGNED_INT, false, true
 	case gputypes.VertexFormatUint32x4:
-		return 4, gl.UNSIGNED_INT, false
+		return 4, gl.UNSIGNED_INT, false, true
 	case gputypes.VertexFormatSint32:
-		return 1, gl.INT, false
+		return 1, gl.INT, false, true
 	case gputypes.VertexFormatSint32x2:
-		return 2, gl.INT, false
+		return 2, gl.INT, false, true
 	case gputypes.VertexFormatSint32x3:
-		return 3, gl.INT, false
+		return 3, gl.INT, false, true
 	case gputypes.VertexFormatSint32x4:
-		return 4, gl.INT, false
+		return 4, gl.INT, false, true
 	case gputypes.VertexFormatFloat16x2:
-		return 2, gl.HALF_FLOAT, false
+		return 2, gl.HALF_FLOAT, false, false
 	case gputypes.VertexFormatFloat16x4:
-		return 4, gl.HALF_FLOAT, false
+		return 4, gl.HALF_FLOAT, false, false
 	default:
 		if _, warned := unhandledVertexFormats.LoadOrStore(format, true); !warned {
 			hal.Logger().Warn("gles: vertex format not handled, bound as four floats", "format", format)
 		}
-		return 4, gl.FLOAT, false
+		return 4, gl.FLOAT, false, false
 	}
 }
 
