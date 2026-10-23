@@ -141,3 +141,40 @@ func TestBrowserDeviceWithoutLimitsGetsTheAdapters(t *testing.T) {
 		t.Fatalf("requiredLimits %s, want %s", got, want)
 	}
 }
+
+func TestBrowserUncapturedErrorHandler(t *testing.T) {
+	js.Global().Set("GPUOutOfMemoryError", jsEval("class GPUOutOfMemoryError extends Error {}"))
+	defer js.Global().Delete("GPUOutOfMemoryError")
+	dev := jsEval("new EventTarget()")
+	dev.Set("queue", jsEval("{}"))
+	d := &Device{browser: browser.NewDevice(dev)}
+	dispatch := func(errorClass, message string) (prevented bool) {
+		event := js.Global().Get("Event").New("uncapturederror", map[string]any{"cancelable": true})
+		event.Set("error", jsEval("(c, m) => new c(m)").Invoke(jsEval(errorClass), message))
+		dev.Call("dispatchEvent", event)
+		return event.Get("defaultPrevented").Bool()
+	}
+
+	var got []*GPUError
+	d.SetUncapturedErrorHandler(func(e *GPUError) { t.Fatal("replaced handler called") })
+	d.SetUncapturedErrorHandler(func(e *GPUError) { got = append(got, e) })
+	if !dispatch("Error", "bad bind group") {
+		t.Error("the event's default, the browser's console warning, was not prevented with a handler set")
+	}
+	dispatch("GPUOutOfMemoryError", "out of memory")
+	want := []GPUError{{Type: ErrorFilterValidation, Message: "bad bind group"}, {Type: ErrorFilterOutOfMemory, Message: "out of memory"}}
+	if len(got) != len(want) || *got[0] != want[0] || *got[1] != want[1] {
+		t.Fatalf("handler got %v, want %v", got, want)
+	}
+
+	d.SetUncapturedErrorHandler(nil)
+	if dispatch("Error", "after nil") || len(got) != 2 {
+		t.Fatal("the handler or its listener is still there after SetUncapturedErrorHandler(nil)")
+	}
+
+	d.SetUncapturedErrorHandler(func(e *GPUError) { got = append(got, e) })
+	d.Release()
+	if dispatch("Error", "after Release") || len(got) != 2 {
+		t.Fatal("the handler is still listening after Release")
+	}
+}

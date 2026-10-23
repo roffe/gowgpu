@@ -27,6 +27,8 @@ type Device struct {
 	// mapsSettled counts the buffer maps that have settled, mapsPolled what
 	// it was at the previous Poll.
 	mapsSettled, mapsPolled uint64
+
+	uncapturedErrorHandler func(*GPUError)
 }
 
 // usable returns ErrReleased for a released device and ErrDeviceLost for a
@@ -424,6 +426,46 @@ func (d *Device) PopErrorScope() *GPUError {
 	return &GPUError{Type: filter, Message: jsErr.Get("message").String()}
 }
 
+// SetUncapturedErrorHandler sets the function that gets every GPU error no
+// error scope captured: validation, out-of-memory and internal errors, each
+// with its Type and message. A newer call replaces the older handler, and
+// nil removes it and restores the default handling of uncaptured errors.
+//
+// In the browser the handler runs as a js.FuncOf callback for the device's
+// uncapturederror event, which the browser's event loop waits for, so it
+// must not block: hand the error to another goroutine for work that waits.
+// While a handler is set, a browser that lets the event be canceled leaves
+// out its console warning for the error, and a browser may stop reporting
+// errors once there are many.
+func (d *Device) SetUncapturedErrorHandler(handler func(*GPUError)) {
+	d.uncapturedErrorHandler = handler
+	if handler == nil {
+		d.browser.SetUncapturedErrorListener(nil)
+		return
+	}
+	d.browser.SetUncapturedErrorListener(func(gpuError js.Value) {
+		if h := d.uncapturedErrorHandler; h != nil {
+			h(&GPUError{Type: errorFilterOf(gpuError), Message: gpuError.Get("message").String()})
+		}
+	})
+}
+
+// errorFilterOf returns the filter that captures gpuError, a GPUError.
+func errorFilterOf(gpuError js.Value) ErrorFilter {
+	for _, kind := range []struct {
+		class  string
+		filter ErrorFilter
+	}{
+		{"GPUOutOfMemoryError", ErrorFilterOutOfMemory},
+		{"GPUInternalError", ErrorFilterInternal},
+	} {
+		if class := js.Global().Get(kind.class); class.Type() == js.TypeFunction && gpuError.InstanceOf(class) {
+			return kind.filter
+		}
+	}
+	return ErrorFilterValidation
+}
+
 // WaitIdle waits for all GPU work to complete.
 //
 // On browser it waits for queue.onSubmittedWorkDone(), which also settles
@@ -475,6 +517,7 @@ func (d *Device) Release() {
 	}
 	d.released = true
 	if d.browser != nil {
+		d.browser.SetUncapturedErrorListener(nil)
 		d.browser.Destroy()
 	}
 }

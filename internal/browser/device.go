@@ -45,6 +45,12 @@ type Device struct {
 	lostInfo    js.Value
 	lostMessage string
 	lost        bool
+
+	// onUncapturedError gets the GPUError of each uncapturederror event
+	// while uncapturedListener listens for them.
+	onUncapturedError  func(gpuError js.Value)
+	uncapturedListener js.Func
+	listening          bool
 }
 
 // NewDevice constructs a Device from a GPUDevice js.Value.
@@ -272,6 +278,32 @@ func (d *Device) PushErrorScope(filter string) {
 // and an error when the browser rejects the pop.
 func (d *Device) PopErrorScope() (js.Value, error) {
 	return AwaitPromise(d.ref_.Call("popErrorScope"))
+}
+
+// SetUncapturedErrorListener has fn called with the GPUError of every
+// uncapturederror event the device fires, and cancels the event, which
+// leaves out the browser's console warning where the event is cancelable.
+// With fn nil it stops listening. fn runs in the event's callback, so it
+// must not block.
+func (d *Device) SetUncapturedErrorListener(fn func(gpuError js.Value)) {
+	d.onUncapturedError = fn
+	switch {
+	case fn != nil && !d.listening:
+		d.uncapturedListener = js.FuncOf(func(_ js.Value, args []js.Value) any {
+			event := args[0]
+			event.Call("preventDefault")
+			if d.onUncapturedError != nil {
+				d.onUncapturedError(event.Get("error"))
+			}
+			return nil
+		})
+		d.ref_.Call("addEventListener", "uncapturederror", d.uncapturedListener)
+		d.listening = true
+	case fn == nil && d.listening:
+		d.ref_.Call("removeEventListener", "uncapturederror", d.uncapturedListener)
+		d.uncapturedListener.Release()
+		d.listening = false
+	}
 }
 
 // Destroy calls GPUDevice.destroy() to release GPU resources.
