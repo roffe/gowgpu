@@ -14,9 +14,8 @@ gowgpu runs fyne's WebGPU painter on Linux, Windows, macOS, iOS and Android, thr
    - Android: the tablet on Vulkan and GLES with fyne and fmw, and the root suite built with the NDK. On GLES: readback, sRGB window surfaces, multisampled renderbuffers, ETC2 and ASTC, texture views on Mali, zeroing at creation, and the base vertex and indirect draw paths.
 2. **The naga fixes upstream.** The first ones are open as gogpu/naga#118 to #126, the later rounds follow, and the fork goes once they're all in.
 3. **`gl_` names in GLSL.** naga keeps WGSL identifiers that start with `gl_`, which GLSL reserves. Rename them on the way out, either in naga or before the GLSL reaches the driver.
-4. **What the vet left open.** Integer vertex formats on GL, zeroing a texture a pass discarded on GL, timestamp queries on Vulkan, DX12 and Metal, BC formats on Metal, and tracking the aspects of a depth/stencil texture apart. The rest of the known issues are in the [README](README.md).
-5. **The browser backend.** Get `examples/browser-compute` building against the current API again.
-6. **The lint backlog**, then a first tagged release.
+4. **What the vet left open.** Timestamp queries on Vulkan, DX12 and Metal, BC formats on Metal, and tracking the aspects of a depth/stencil texture apart. The rest of the known issues are in the [README](README.md).
+5. **The lint backlog**, then a first tagged release.
 
 ## Not planned
 

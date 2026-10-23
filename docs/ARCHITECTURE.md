@@ -170,7 +170,7 @@ Known issue: naga keeps GLSL identifiers that start with `gl_` and Mali refuses 
 - A browser exception comes back as an error: from the call that threw, or from `Finish` for a pass method. The device records `GPUDevice.lost`, and calls return `ErrDeviceLost` after it. Error scopes are the browser's own, and `SetUncapturedErrorHandler` is a listener for the device's `uncapturederror` event.
 - JS methods on hot paths are bound once up front (`method.Call("bind", obj)`).
 
-It has run in Firefox 158 and Chrome 156. `examples/browser-test` builds, `examples/browser-compute` doesn't.
+It has run in Firefox 158 and Chrome 156. `examples/browser-test` and `examples/browser-compute` build.
 
 ### Ray tracing
 
@@ -305,11 +305,11 @@ Queue.Submit(cmds)         |
 
 The staging memory comes from a staging belt (`staging_belt.go`): 256 KB chunks handed out with a bump pointer and reused once the GPU is done with them, so the steady state allocates nothing. A bigger write gets its own staging buffers, at most 64 MB each (Rust wgpu's cap, and on Vulkan never more than `maxMemoryAllocationSize`), with one copy per piece.
 
-GL writes go straight to the driver instead (its `SupportsCommandBufferCopies()` is false), with no staging. The one thing GL's pending writes record is the clear of a surface texture that a present zeroes.
+GL writes go straight to the driver instead (its `SupportsCommandBufferCopies()` is false), with no staging. GL's pending writes record only the passes that zero textures, and submit them before a direct write goes out.
 
 `Submit` flushes pending writes, and so does `Surface.Present`, which submits them before it hands the frame over, as wgpu-core does. `MapAsync` submits first when one of them goes to the buffer it maps, so a map sees the write.
 
-New buffers are zeroed in the batch on Vulkan, ahead of every command buffer that can use them, unless a write covers them whole, and a mappable one through a mapping; on GL every new buffer is written with zeros straight away, and DX12 and Metal hand them out zeroed. New textures are zeroed by copies or a clear pass in the batch, and on GL by CPU writes or by the GL backend when it makes them.
+New buffers are zeroed in the batch on Vulkan, ahead of every command buffer that can use them, unless a write covers them whole, and a mappable one through a mapping; on GL every new buffer is written with zeros straight away, and DX12 and Metal hand them out zeroed. New textures are zeroed by copies or a clear pass in the batch. On GL, which has no copies in the batch, the ones a pass can't clear are written with zeros from the CPU, and compressed ones are zeroed by the GL backend when it makes them.
 
 ## Resource lifecycle
 

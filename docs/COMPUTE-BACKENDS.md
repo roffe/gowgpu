@@ -76,7 +76,7 @@ Things that are the same everywhere:
 - `DispatchIndirect` is `dispatchWorkgroupsIndirect`.
 - There are no query sets in the browser build.
 - Limits and features are whatever the browser reports. `RequestDevice(nil)` asks for the adapter's limits, as natively.
-- It has run in Firefox 158 and Chrome 156. `examples/browser-compute` doesn't build (it was written against an older API and was already broken in gogpu v0.34.5). `examples/browser-test` builds.
+- It has run in Firefox 158 and Chrome 156. `examples/browser-compute` and `examples/browser-test` build.
 
 ## Noop
 
