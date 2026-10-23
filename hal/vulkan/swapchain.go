@@ -564,9 +564,9 @@ func (s *Surface) createSwapchain(device *Device, config *hal.SurfaceConfigurati
 
 	vkFormat := selectedFormat.Format
 
-	// Wait for an existing swapchain before passing it as OldSwapchain. This
-	// keeps its semaphores and views intact if creation or image enumeration
-	// fails; reconfiguration is transactional until the replacement is ready.
+	// Wait for an existing swapchain before passing it as OldSwapchain: the
+	// call retires it, and its views and synchronization primitives go
+	// right after.
 	var oldSwapchain *Swapchain
 	var oldSwapchainHandle vk.SwapchainKHR
 	if s.swapchain != nil {
@@ -600,6 +600,19 @@ func (s *Surface) createSwapchain(device *Device, config *hal.SurfaceConfigurati
 
 	var swapchainHandle vk.SwapchainKHR
 	result := vkCreateSwapchainKHR(device, &createInfo, nil, &swapchainHandle)
+	// The old swapchain is retired whether creation succeeded or not: it
+	// can neither acquire nor be an OldSwapchain again, and on Android its
+	// window is already let go of. It goes now, as in wgpu-hal and Dawn,
+	// and a configure that fails from here leaves the surface without one.
+	if oldSwapchain != nil {
+		s.swapchain = nil
+		if err := retireOldSwapchain(device, oldSwapchain, oldSwapchainHandle); err != nil {
+			if result == vk.Success {
+				vkDestroySwapchainKHR(device, swapchainHandle, nil)
+			}
+			return err
+		}
+	}
 	if result != vk.Success {
 		return swapchainCreateError(result)
 	}
@@ -803,15 +816,6 @@ func (s *Surface) createSwapchain(device *Device, config *hal.SurfaceConfigurati
 		return fmt.Errorf("vulkan: register configured surface: %w", err)
 	}
 
-	// Retire the old swapchain only after the replacement has fully succeeded.
-	// Its handle remains valid until its views and synchronization primitives are
-	// released, as required by Vulkan's OldSwapchain transition rules.
-	if err := retireOldSwapchain(device, oldSwapchain, oldSwapchainHandle); err != nil {
-		_ = swapchain.destroyResources()
-		vkDestroySwapchainKHR(device, swapchainHandle, nil)
-		return err
-	}
-
 	s.swapchain = swapchain
 	s.device = device
 	if oldDevice != nil && oldDevice != device {
@@ -843,8 +847,7 @@ func retireOldSwapchain(device *Device, oldSwapchain *Swapchain, oldHandle vk.Sw
 }
 
 // releaseSyncResources releases synchronization primitives after the device is
-// idle. It keeps the idle wait explicit so callers can propagate failures and
-// reconfiguration can remain transactional.
+// idle. It keeps the idle wait explicit so callers can propagate failures.
 func (sc *Swapchain) releaseSyncResources() error {
 	if sc == nil || sc.device == nil {
 		return nil
@@ -895,8 +898,8 @@ func (sc *Swapchain) destroyResources() error {
 	return sc.destroyResourcesAfterIdle()
 }
 
-// destroyResourcesAfterIdle is used by transactional reconfiguration after a
-// successful vkDeviceWaitIdle. It performs no unchecked synchronization wait.
+// destroyResourcesAfterIdle is used by reconfiguration after a successful
+// vkDeviceWaitIdle. It performs no unchecked synchronization wait.
 func (sc *Swapchain) destroyResourcesAfterIdle() error {
 	if sc == nil || sc.device == nil {
 		return nil
