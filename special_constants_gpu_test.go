@@ -104,7 +104,7 @@ func TestDrawsSeeFirstVertexAndInstance(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.indirect {
-				skipRootConstantIndirectOnWine(t, h)
+				skipRootConstantIndirectOnVkd3d(t, h)
 			}
 			tex, view := pixTexture(t, device, "vertex-index", TextureUsageRenderAttachment|TextureUsageCopySrc)
 			defer releaseTextureView(tex, view)
@@ -154,7 +154,7 @@ func TestDispatchesSeeNumWorkgroups(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			if indirect {
-				skipRootConstantIndirectOnWine(t, h)
+				skipRootConstantIndirectOnVkd3d(t, h)
 			}
 			out := newStorageBuffer(t, device, 24*16)
 			group, err := device.CreateBindGroup(&BindGroupDescriptor{Layout: layout, Entries: []BindGroupEntry{{Binding: 0, Buffer: out}}})
@@ -196,13 +196,13 @@ func TestDispatchesSeeNumWorkgroups(t *testing.T) {
 	assertNoValidation(t, h)
 }
 
-// skipRootConstantIndirectOnWine skips an indirect call whose pipeline reads
-// the special constants on DX12 under Wine: DX12 sets them with a root
-// constant argument of the command signature, which vkd3d ignores along
-// with the whole ExecuteIndirect.
-func skipRootConstantIndirectOnWine(t *testing.T, h *captureHandler) {
+// skipRootConstantIndirectOnVkd3d skips an indirect call whose pipeline
+// reads the special constants on DX12 under Wine's own vkd3d: DX12 sets them
+// with a root constant argument of the command signature, which vkd3d
+// ignores along with the whole ExecuteIndirect. vkd3d-proton runs it.
+func skipRootConstantIndirectOnVkd3d(t *testing.T, h *captureHandler) {
 	t.Helper()
-	if h.backend == gputypes.BackendDX12 && underWine() {
+	if h.backend == gputypes.BackendDX12 && upstreamVkd3d() {
 		t.Skip("vkd3d ignores ExecuteIndirect with a root constant argument")
 	}
 }

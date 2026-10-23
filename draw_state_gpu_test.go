@@ -620,7 +620,7 @@ const indirectShader = `
 // and through one bound past it. GL recorded no indirect draw at all.
 func TestIndirectDraws(t *testing.T) {
 	device, h := newValidatedDevice(t)
-	skipRootConstantIndirectOnWine(t, h)
+	skipRootConstantIndirectOnVkd3d(t, h)
 	module, err := device.CreateShaderModule(&ShaderModuleDescriptor{Label: "indirect", WGSL: indirectShader})
 	if err != nil {
 		t.Fatalf("CreateShaderModule: %v", err)
@@ -777,7 +777,7 @@ func TestDrawIndexedFromBaseVertex(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if strings.Contains(tc.name, "Indirect") {
-				skipRootConstantIndirectOnWine(t, h)
+				skipRootConstantIndirectOnVkd3d(t, h)
 			}
 			st := readbackBuffer(t, device, "base-vertex-st")
 			enc, err := device.CreateCommandEncoder(nil)

@@ -109,7 +109,7 @@ func TestStencilAspectUploads(t *testing.T) {
 	if h.backend == gputypes.BackendGL {
 		t.Skip("the GL backend writes no stencil aspect of a combined depth/stencil texture")
 	}
-	skipStencilCopiesOnWine(t, h)
+	skipStencilCopiesOnVkd3d(t, h)
 	rows := make([]byte, pixSide*pixSide)
 	for y := range pixSide {
 		for x := range pixSide {
@@ -161,15 +161,16 @@ func TestStencilAspectUploads(t *testing.T) {
 	assertNoValidation(t, h)
 }
 
-// skipStencilCopiesOnWine skips a buffer copy of a stencil aspect on DX12
-// under Wine. D3D12 copies the stencil plane as plane 1 through an R8_UINT
-// footprint, and vkd3d takes the aspect of a copy from the footprint's
-// format and the subresource index as a mip level and an array layer: it
-// copies the colour of array layer 1, which the texture doesn't have, so
-// nothing reaches the stencil and it reads back as zeros.
-func skipStencilCopiesOnWine(t *testing.T, h *captureHandler) {
+// skipStencilCopiesOnVkd3d skips a buffer copy of a stencil aspect on DX12
+// under Wine's own vkd3d. D3D12 copies the stencil plane as plane 1 through an
+// R8_UINT footprint, and vkd3d takes the aspect of a copy from the
+// footprint's format and the subresource index as a mip level and an array
+// layer: it copies the colour of array layer 1, which the texture doesn't
+// have, so nothing reaches the stencil and it reads back as zeros.
+// vkd3d-proton copies the plane.
+func skipStencilCopiesOnVkd3d(t *testing.T, h *captureHandler) {
 	t.Helper()
-	if h.backend == gputypes.BackendDX12 && underWine() {
+	if h.backend == gputypes.BackendDX12 && upstreamVkd3d() {
 		t.Skip("vkd3d copies plane 1 through an R8_UINT footprint as the colour of array layer 1, not the stencil")
 	}
 }

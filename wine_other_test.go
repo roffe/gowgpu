@@ -2,4 +2,4 @@
 
 package wgpu
 
-func underWine() bool { return false }
+func upstreamVkd3d() bool { return false }

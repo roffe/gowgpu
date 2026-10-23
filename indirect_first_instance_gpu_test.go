@@ -20,7 +20,7 @@ func TestIndirectDrawWithAFirstInstanceIsANoOp(t *testing.T) {
 	if device.Features().Contains(gputypes.FeatureIndirectFirstInstance) {
 		t.Skip("the device has FeatureIndirectFirstInstance")
 	}
-	skipRootConstantIndirectOnWine(t, h)
+	skipRootConstantIndirectOnVkd3d(t, h)
 	shader, err := device.CreateShaderModule(&ShaderModuleDescriptor{WGSL: solidShader})
 	if err != nil {
 		t.Fatalf("CreateShaderModule: %v", err)
@@ -194,7 +194,7 @@ func TestIndirectDrawsFromAFirstInstance(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.pipeline == fromBuiltins {
-				skipRootConstantIndirectOnWine(t, h)
+				skipRootConstantIndirectOnVkd3d(t, h)
 			}
 			tex, view := pixTexture(t, device, "first-instance", TextureUsageRenderAttachment|TextureUsageCopySrc)
 			defer releaseTextureView(tex, view)

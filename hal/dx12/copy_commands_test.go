@@ -34,7 +34,7 @@ func TestDepthStencilCopiesAtUnalignedOffsets(t *testing.T) {
 		{"stencil of depth32float-stencil8", gputypes.TextureFormatDepth32FloatStencil8, gputypes.TextureAspectStencilOnly, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.bytes == 1 && underWine() {
+			if tc.bytes == 1 && upstreamVkd3d() {
 				t.Skip("vkd3d ignores barriers of the stencil plane alone")
 			}
 			tex := newTestTexture(t, dev, hal.TextureDescriptor{

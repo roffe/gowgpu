@@ -16,7 +16,7 @@ import (
 // pass call windows/arm64 clears with and reads the depth back.
 func TestClearDepthByRenderPass(t *testing.T) {
 	dev, queue := openTestDevice(t)
-	if underWine() {
+	if upstreamVkd3d() {
 		t.Skip("vkd3d's BeginRenderPass and EndRenderPass are stubs")
 	}
 	const side, pitch = 4, 256
