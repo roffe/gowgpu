@@ -21,6 +21,10 @@ type Buffer struct {
 	// mapState tracks the current mapping state. Updated by MapAsync/Unmap.
 	mapState MapState
 
+	// mapSerial numbers the MapAsync calls, so that a map settling after
+	// Unmap or Release canceled it can tell it is not the current one.
+	mapSerial uint64
+
 	// ranges are the MappedRange handles out for the current mapping.
 	ranges []*MappedRange
 }
@@ -93,8 +97,8 @@ func mapModeToJS(mode MapMode) uint32 {
 //	rng, _ := buf.MappedRange(0, size)
 //	data := rng.Bytes()
 //
-// On the browser, Map spawns a goroutine that calls GPUBuffer.mapAsync
-// (a JS Promise) via AwaitPromise. The ctx parameter allows cancellation.
+// On the browser, Map waits for the GPUBuffer.mapAsync promise. The ctx
+// parameter allows cancellation.
 func (b *Buffer) Map(ctx context.Context, mode MapMode, offset, size uint64) error {
 	if b == nil || b.browser == nil {
 		return ErrReleased
@@ -144,32 +148,32 @@ func (b *Buffer) MapAsync(mode MapMode, offset, size uint64) (*MapPending, error
 	}
 
 	b.mapState = MapStatePending
-	jsMode := mapModeToJS(mode)
+	b.mapSerial++
+	serial := b.mapSerial
+	done := make(chan error, 1)
+	b.browser.MapAsync(mapModeToJS(mode), offset, size, func(err error) {
+		done <- b.mapSettled(serial, err)
+	})
+	return &MapPending{buf: b, done: done}, nil
+}
 
-	// Create a MapPending that will resolve asynchronously.
-	p := &MapPending{
-		buf:  b,
-		done: make(chan error, 1),
+// mapSettled moves the buffer to the state the map numbered serial ended
+// in and returns what its waiter gets. A map that Unmap or Release
+// canceled, and that a later MapAsync may have replaced, leaves the state
+// alone and ends canceled.
+func (b *Buffer) mapSettled(serial uint64, err error) error {
+	if serial != b.mapSerial || b.mapState != MapStatePending {
+		return ErrMapCanceled
 	}
-
-	// Launch a goroutine to await the JS Promise. AwaitPromise blocks the
-	// goroutine (not the main thread) until the Promise settles.
-	go func() {
-		err := b.browser.MapAsync(jsMode, offset, size)
-		if err != nil {
-			b.mapState = MapStateUnmapped
-			if b.device.lostErr() != nil {
-				p.done <- ErrMapDeviceLost
-			} else {
-				p.done <- fmt.Errorf("mapAsync: %w", err)
-			}
-		} else {
-			b.mapState = MapStateMapped
-			p.done <- nil
-		}
-	}()
-
-	return p, nil
+	if err == nil {
+		b.mapState = MapStateMapped
+		return nil
+	}
+	b.mapState = MapStateUnmapped
+	if b.device.lostErr() != nil {
+		return ErrMapDeviceLost
+	}
+	return fmt.Errorf("mapAsync: %w", err)
 }
 
 // MappedRange returns a safe view over the mapped region [offset, offset+size).

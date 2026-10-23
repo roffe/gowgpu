@@ -6,9 +6,8 @@ import "context"
 
 // MapPending is a handle to an in-flight Buffer.MapAsync on the browser.
 //
-// The browser backend uses a goroutine + channel pattern: MapAsync spawns
-// a goroutine that calls AwaitPromise on the GPUBuffer.mapAsync JS Promise.
-// The result (nil on success, error on rejection) is sent to the done channel.
+// MapAsync calls GPUBuffer.mapAsync right away, and the promise's callback
+// sends the result (nil on success, error on rejection) to the done channel.
 //
 // This differs from the native backend (which uses core.MapWaiter + Device.Poll)
 // because browser WebGPU resolves promises via the JS event loop, not via

@@ -3,6 +3,7 @@
 package browser
 
 import (
+	"errors"
 	"fmt"
 	"syscall/js"
 )
@@ -66,26 +67,27 @@ func (b *Buffer) Destroy() {
 	}
 }
 
-// MapAsync maps the buffer for CPU access by calling GPUBuffer.mapAsync(mode, offset, size).
-// Blocks the calling goroutine until the JS Promise resolves or rejects.
+// MapAsync calls GPUBuffer.mapAsync(mode, offset, size) and calls done with
+// nil once the mapping is ready, or with the rejection as an error. done
+// runs in a JavaScript callback, so it must not block.
 //
 // mode uses WebGPU GPUMapMode flags: 1 = MAP_READ, 2 = MAP_WRITE.
-// The caller MUST be on a goroutine (not the main goroutine) or the program
-// will deadlock, because AwaitPromise yields via a channel.
 //
 // On success the mapped range is recorded so that subsequent GetMappedRangeBytes
 // calls can cache the JS ArrayBuffer (matching Rust wgpu WebBuffer.set_mapped_range).
-func (b *Buffer) MapAsync(mode uint32, offset, size uint64) error {
+func (b *Buffer) MapAsync(mode uint32, offset, size uint64, done func(error)) {
 	promise := b.ref_.Call("mapAsync", mode, float64(offset), float64(size))
-	_, err := AwaitPromise(promise)
-	if err != nil {
-		return fmt.Errorf("GPUBuffer.mapAsync: %w", err)
-	}
-	// Record the mapped range so GetMappedRangeBytes can lazily fetch
-	// the ArrayBuffer on the first call (Rust wgpu set_mapped_range).
-	b.mappedOffset = offset
-	b.mappedSize = size
-	return nil
+	OnSettled(promise, func(js.Value) {
+		b.mappedOffset = offset
+		b.mappedSize = size
+		done(nil)
+	}, func(reason js.Value) {
+		err := errors.New("rejected")
+		if jsErr := NewJSError(reason); jsErr != nil {
+			err = jsErr
+		}
+		done(fmt.Errorf("GPUBuffer.mapAsync: %w", err))
+	})
 }
 
 // ensureMappedBuffer calls GPUBuffer.getMappedRange once for the entire
