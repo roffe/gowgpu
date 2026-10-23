@@ -802,27 +802,7 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 		if t == nil {
 			return nil, fmt.Errorf("vulkan: nil swapchain texture")
 		}
-		// A surface takes no view formats, so its images are viewed in its own.
-		if desc != nil && desc.Format != gputypes.TextureFormatUndefined && desc.Format != t.format {
-			return nil, fmt.Errorf("vulkan: a view of a surface texture of %v cannot be %v", t.format, desc.Format)
-		}
-		// For swapchain textures, reuse the pre-created view from the swapchain,
-		// which was named when the swapchain made it. Creating new views for
-		// swapchain images can cause rendering issues. The wrapper is made
-		// once per image, so a frame allocates nothing for it.
-		if t.textureView == nil {
-			t.textureView = &TextureView{
-				handle:      t.view,
-				device:      d,
-				size:        t.size,
-				image:       t.handle,
-				isSwapchain: true,
-				swapchain:   t.swapchain,
-				format:      t.format,
-				vkFormat:    d.vkFormat(t.format),
-			}
-		}
-		return t.textureView, nil
+		return d.swapchainView(t, desc)
 	default:
 		return nil, fmt.Errorf("vulkan: invalid texture type %T", texture)
 	}

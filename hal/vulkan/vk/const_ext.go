@@ -28,6 +28,11 @@ const (
 	// StructureTypeImageViewUsageCreateInfo = VK_STRUCTURE_TYPE_IMAGE_VIEW_USAGE_CREATE_INFO
 	StructureTypeImageViewUsageCreateInfo StructureType = 1000117002
 
+	// === Vulkan 1.2 Core (promoted from VK_KHR_image_format_list) ===
+
+	// StructureTypeImageFormatListCreateInfo = VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO
+	StructureTypeImageFormatListCreateInfo StructureType = 1000147000
+
 	// === Vulkan 1.2 Core (promoted from VK_KHR_timeline_semaphore) ===
 
 	// StructureTypePhysicalDeviceTimelineSemaphoreFeatures = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES

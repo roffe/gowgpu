@@ -11,6 +11,7 @@ import (
 	"image"
 	"math"
 	"runtime"
+	"slices"
 	"unsafe"
 
 	"github.com/roffe/gowgpu/gputypes"
@@ -28,6 +29,10 @@ type Swapchain struct {
 	format      vk.Format
 	extent      vk.Extent2D
 	presentMode vk.PresentModeKHR
+	// viewFormats are the formats besides the surface's that views of the
+	// images may have, and usage is the images' usage.
+	viewFormats []gputypes.TextureFormat
+	usage       vk.ImageUsageFlags
 	// Acquire semaphores - rotated through for each acquire (like wgpu).
 	// We don't know which image we'll get, so we can't index by image.
 	acquireSemaphores  []vk.Semaphore
@@ -107,6 +112,17 @@ type SwapchainTexture struct {
 	// textureView wraps view, made the first time a view is asked for and
 	// shared after that: every view of a swapchain image is the swapchain's.
 	textureView *TextureView
+	// views are its views in a view format of the surface or as a 2D
+	// array, see swapchainView.
+	views []swapchainImageView
+}
+
+// swapchainImageView is a view of a swapchain image other than the
+// swapchain's own.
+type swapchainImageView struct {
+	format    gputypes.TextureFormat
+	dimension gputypes.TextureViewDimension
+	view      *TextureView
 }
 
 // CurrentUsage returns 0 — Vulkan swapchain images are managed by the swapchain.
@@ -122,6 +138,106 @@ func (t *SwapchainTexture) Destroy() {
 // NativeHandle returns the raw VkImage handle as uintptr.
 func (t *SwapchainTexture) NativeHandle() uintptr {
 	return uintptr(t.handle)
+}
+
+// swapchainView returns the view of t that desc asks for, of its one mip
+// level and layer: the swapchain's own view for a 2D view in the surface's
+// format, and for one in a view format of the surface or a 2D array view
+// one made the first time it is asked for. Both are the swapchain's, shared
+// by every frame and destroyed with it, so a frame allocates nothing for
+// them.
+func (d *Device) swapchainView(t *SwapchainTexture, desc *hal.TextureViewDescriptor) (*TextureView, error) {
+	var r hal.TextureViewDescriptor
+	if desc != nil {
+		r = *desc
+	}
+	if r.Format == gputypes.TextureFormatUndefined {
+		r.Format = t.format
+	}
+	if r.Dimension == gputypes.TextureViewDimensionUndefined {
+		r.Dimension = gputypes.TextureViewDimension2D
+	}
+	switch {
+	case r.Format != t.format && (t.swapchain == nil || !slices.Contains(t.swapchain.viewFormats, r.Format)):
+		return nil, fmt.Errorf("vulkan: a view of a surface texture of %v cannot be %v, which is not one of the surface's view formats", t.format, r.Format)
+	case r.Dimension != gputypes.TextureViewDimension2D && r.Dimension != gputypes.TextureViewDimension2DArray:
+		return nil, fmt.Errorf("vulkan: a view of a surface texture cannot be %v", r.Dimension)
+	case r.Aspect != gputypes.TextureAspectUndefined && r.Aspect != gputypes.TextureAspectAll,
+		r.BaseMipLevel != 0, r.MipLevelCount > 1, r.BaseArrayLayer != 0, r.ArrayLayerCount > 1:
+		return nil, fmt.Errorf("vulkan: a view of a surface texture is of all of its one mip level and layer")
+	}
+
+	if r.Format == t.format && r.Dimension == gputypes.TextureViewDimension2D {
+		if t.textureView == nil {
+			t.textureView = &TextureView{
+				handle:      t.view,
+				device:      d,
+				size:        t.size,
+				image:       t.handle,
+				isSwapchain: true,
+				swapchain:   t.swapchain,
+				format:      t.format,
+				vkFormat:    d.vkFormat(t.format),
+			}
+		}
+		return t.textureView, nil
+	}
+	for _, v := range t.views {
+		if v.format == r.Format && v.dimension == r.Dimension {
+			return v.view, nil
+		}
+	}
+	if t.swapchain == nil || t.handle == 0 {
+		return nil, fmt.Errorf("vulkan: the surface texture's swapchain is gone")
+	}
+
+	vkFormat := d.vkFormat(r.Format)
+	createInfo := vk.ImageViewCreateInfo{
+		SType:    vk.StructureTypeImageViewCreateInfo,
+		Image:    t.handle,
+		ViewType: textureViewDimensionToVk(r.Dimension),
+		Format:   vkFormat,
+		Components: vk.ComponentMapping{
+			R: vk.ComponentSwizzleIdentity,
+			G: vk.ComponentSwizzleIdentity,
+			B: vk.ComponentSwizzleIdentity,
+			A: vk.ComponentSwizzleIdentity,
+		},
+		SubresourceRange: vk.ImageSubresourceRange{
+			AspectMask: vk.ImageAspectFlags(vk.ImageAspectColorBit),
+			LevelCount: 1,
+			LayerCount: 1,
+		},
+	}
+	// An sRGB view of a storage image has the image's usage less storage,
+	// which no sRGB format has (VUID-VkImageViewCreateInfo-usage-02275).
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+	if storage := vk.ImageUsageFlags(vk.ImageUsageStorageBit); r.Format.IsSrgb() && t.swapchain.usage&storage != 0 {
+		viewUsage := &vk.ImageViewUsageCreateInfo{
+			SType: vk.StructureTypeImageViewUsageCreateInfo,
+			Usage: t.swapchain.usage &^ storage,
+		}
+		pinner.Pin(viewUsage)
+		createInfo.PNext = (*uintptr)(unsafe.Pointer(viewUsage))
+	}
+	var handle vk.ImageView
+	if result := vkCreateImageViewSwapchain(d, &createInfo, nil, &handle); result != vk.Success {
+		return nil, fmt.Errorf("vulkan: vkCreateImageView of a surface texture failed: %d", result)
+	}
+	d.setObjectName(vk.ObjectTypeImageView, uint64(handle), fmt.Sprintf("SwapchainView(%d %v %v)", t.index, r.Format, r.Dimension))
+	view := &TextureView{
+		handle:      handle,
+		device:      d,
+		size:        t.size,
+		image:       t.handle,
+		isSwapchain: true,
+		swapchain:   t.swapchain,
+		format:      r.Format,
+		vkFormat:    vkFormat,
+	}
+	t.views = append(t.views, swapchainImageView{format: r.Format, dimension: r.Dimension, view: view})
+	return view, nil
 }
 
 func (sc *Swapchain) markBroken(err error) {
@@ -499,6 +615,10 @@ func (s *Surface) createSwapchain(device *Device, config *hal.SurfaceConfigurati
 	if s.instance == nil || device == nil || device.instance == nil || device.instance != s.instance {
 		return fmt.Errorf("vulkan: device does not belong to surface instance")
 	}
+	viewFormats := slices.DeleteFunc(slices.Clone(config.ViewFormats), func(f gputypes.TextureFormat) bool { return f == config.Format })
+	if len(viewFormats) > 0 && !device.swapchainMutableFormat {
+		return fmt.Errorf("vulkan: views of a surface's textures in %v need VK_KHR_swapchain_mutable_format, which the device lacks", viewFormats)
+	}
 	var presentable vk.Bool32
 	if result := s.instance.cmds.GetPhysicalDeviceSurfaceSupportKHR(device.physicalDevice, device.graphicsFamily, s.handle, &presentable); result != vk.Success {
 		return mapVulkanResult("vkGetPhysicalDeviceSurfaceSupportKHR", result)
@@ -604,6 +724,25 @@ func (s *Surface) createSwapchain(device *Device, config *hal.SurfaceConfigurati
 		PresentMode:      presentMode,
 		Clipped:          vk.True,
 		OldSwapchain:     oldSwapchainHandle,
+	}
+	// Views in other formats need a mutable format swapchain, whose format
+	// list has its own format too (VUID-VkSwapchainCreateInfoKHR-flags-03168).
+	var pinner runtime.Pinner
+	defer pinner.Unpin()
+	if len(viewFormats) > 0 {
+		vkViewFormats := []vk.Format{vkFormat}
+		for _, f := range viewFormats {
+			vkViewFormats = append(vkViewFormats, device.vkFormat(f))
+		}
+		formatList := &vk.ImageFormatListCreateInfo{
+			SType:           vk.StructureTypeImageFormatListCreateInfo,
+			ViewFormatCount: uint32(len(vkViewFormats)),
+			PViewFormats:    &vkViewFormats[0],
+		}
+		pinner.Pin(formatList)
+		pinner.Pin(&vkViewFormats[0])
+		createInfo.Flags = vk.SwapchainCreateFlagsKHR(vk.SwapchainCreateMutableFormatBitKhr)
+		createInfo.PNext = (*uintptr)(unsafe.Pointer(formatList))
 	}
 
 	var swapchainHandle vk.SwapchainKHR
@@ -787,6 +926,8 @@ func (s *Surface) createSwapchain(device *Device, config *hal.SurfaceConfigurati
 		format:             vkFormat,
 		extent:             extent,
 		presentMode:        presentMode,
+		viewFormats:        viewFormats,
+		usage:              imageUsage,
 		acquireSemaphores:  acquireSemaphores,
 		acquireFenceValues: make([]uint64, len(acquireSemaphores)),
 		nextAcquireIdx:     0,
@@ -913,6 +1054,15 @@ func (sc *Swapchain) destroyResourcesAfterIdle() error {
 	}
 	sc.releaseSyncResourcesAfterIdle()
 
+	for _, texture := range sc.surfaceTextures {
+		if texture == nil {
+			continue
+		}
+		for _, v := range texture.views {
+			vkDestroyImageViewSwapchain(sc.device, v.view.handle, nil)
+		}
+		texture.views = nil
+	}
 	for _, view := range sc.imageViews {
 		if view != 0 {
 			vkDestroyImageViewSwapchain(sc.device, view, nil)
@@ -1011,6 +1161,7 @@ func (sc *Swapchain) abandonDeviceResources() {
 		if texture != nil {
 			texture.handle = 0
 			texture.view = 0
+			texture.views = nil
 			texture.swapchain = nil
 		}
 	}
