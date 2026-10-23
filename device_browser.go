@@ -403,8 +403,8 @@ func (d *Device) PushErrorScope(filter ErrorFilter) {
 }
 
 // PopErrorScope pops the most recently pushed error scope.
-// Returns the captured error, or nil if no error occurred.
-// Panics if no error scope is pushed.
+// Returns the captured error, or nil if no error occurred or the device is
+// lost. Panics if no error scope is pushed.
 //
 // The browser reports the scope's error through a promise, so PopErrorScope
 // blocks until it settles: call it from main or another goroutine, never
@@ -416,11 +416,10 @@ func (d *Device) PopErrorScope() *GPUError {
 	}
 	filter := d.errorScopes[n-1]
 	d.errorScopes = d.errorScopes[:n-1]
+	// A lost device reports no errors. Chrome rejects the pop, rather than
+	// settling it with null, once the GPU process that held the device died.
 	jsErr, err := d.browser.PopErrorScope()
-	if err != nil {
-		panic(fmt.Sprintf("PopErrorScope: %v", err))
-	}
-	if jsErr.Type() != js.TypeObject {
+	if err != nil || jsErr.Type() != js.TypeObject {
 		return nil
 	}
 	return &GPUError{Type: filter, Message: jsErr.Get("message").String()}

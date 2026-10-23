@@ -178,3 +178,16 @@ func TestBrowserUncapturedErrorHandler(t *testing.T) {
 		t.Fatal("the handler is still listening after Release")
 	}
 }
+
+func TestBrowserPopErrorScopeOnALostInstanceReturnsNil(t *testing.T) {
+	dev := jsEval(`{
+		queue: {},
+		pushErrorScope() {},
+		popErrorScope() { return Promise.reject(new DOMException("Instance dropped in popErrorScope", "OperationError")) },
+	}`)
+	d := &Device{browser: browser.NewDevice(dev)}
+	d.PushErrorScope(ErrorFilterValidation)
+	if gpuErr := d.PopErrorScope(); gpuErr != nil {
+		t.Fatalf("PopErrorScope = %v after the browser rejected the pop, want nil", gpuErr)
+	}
+}
