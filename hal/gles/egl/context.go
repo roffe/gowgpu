@@ -8,6 +8,7 @@ package egl
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"unsafe"
 )
 
@@ -81,11 +82,15 @@ func NewContext(config ContextConfig) (*Context, error) {
 		}
 	}
 
-	// Initialize EGL
-	var major, minor EGLInt
-	if Initialize(display, &major, &minor) == False {
+	major, minor, err := initializeDisplay(display)
+	if err != nil {
 		closeOwner()
-		return nil, fmt.Errorf("eglInitialize failed: error 0x%x", GetError())
+		return nil, err
+	}
+	fail := func(err error) (*Context, error) {
+		releaseDisplay(display)
+		closeOwner()
+		return nil, err
 	}
 
 	// Bind OpenGL or OpenGL ES API
@@ -94,25 +99,19 @@ func NewContext(config ContextConfig) (*Context, error) {
 		api = OpenGLESAPI
 	}
 	if BindAPI(api) == False {
-		Terminate(display)
-		closeOwner()
-		return nil, fmt.Errorf("eglBindAPI failed: error 0x%x", GetError())
+		return fail(fmt.Errorf("eglBindAPI failed: error 0x%x", GetError()))
 	}
 
 	// Choose EGL frame buffer configuration
 	eglConfig, err := chooseEGLConfig(display, config, windowKind)
 	if err != nil {
-		Terminate(display)
-		closeOwner()
-		return nil, fmt.Errorf("failed to choose EGL config: %w", err)
+		return fail(fmt.Errorf("failed to choose EGL config: %w", err))
 	}
 
 	// Create EGL context
 	eglContext := createEGLContext(display, eglConfig, config, NoContext)
 	if eglContext == NoContext {
-		Terminate(display)
-		closeOwner()
-		return nil, fmt.Errorf("eglCreateContext failed: error 0x%x", GetError())
+		return fail(fmt.Errorf("eglCreateContext failed: error 0x%x", GetError()))
 	}
 
 	// Surfaceless context: EGL 1.5+ or EGL_KHR_surfaceless_context allows
@@ -129,10 +128,9 @@ func NewContext(config ContextConfig) (*Context, error) {
 	} else {
 		pbuffer = createPbufferSurface(display, eglConfig)
 		if pbuffer == NoSurface {
+			err := fmt.Errorf("eglCreatePbufferSurface failed and no surfaceless support: error 0x%x", GetError())
 			DestroyContext(display, eglContext)
-			Terminate(display)
-			closeOwner()
-			return nil, fmt.Errorf("eglCreatePbufferSurface failed and no surfaceless support: error 0x%x", GetError())
+			return fail(err)
 		}
 	}
 
@@ -148,6 +146,40 @@ func NewContext(config ContextConfig) (*Context, error) {
 		extensions:   displayExts,
 		displayOwner: displayOwner,
 	}, nil
+}
+
+// displayRefs counts the Contexts on each EGLDisplay this package
+// initialized. EGL gives every caller in the process the same EGLDisplay for
+// one platform and native display, and eglTerminate ends every context and
+// surface on it, so only the last Context on a display terminates it.
+var (
+	displayMu   sync.Mutex
+	displayRefs = map[EGLDisplay]int{}
+)
+
+// initializeDisplay initializes display, or finds it initialized, for one
+// more Context.
+func initializeDisplay(display EGLDisplay) (major, minor EGLInt, err error) {
+	displayMu.Lock()
+	defer displayMu.Unlock()
+	if Initialize(display, &major, &minor) == False {
+		return 0, 0, fmt.Errorf("eglInitialize failed: error 0x%x", GetError())
+	}
+	displayRefs[display]++
+	return major, minor, nil
+}
+
+// releaseDisplay gives up a Context's hold on display, and terminates it
+// when no other Context has one.
+func releaseDisplay(display EGLDisplay) {
+	displayMu.Lock()
+	defer displayMu.Unlock()
+	displayRefs[display]--
+	if displayRefs[display] > 0 {
+		return
+	}
+	delete(displayRefs, display)
+	Terminate(display)
 }
 
 // HasExtension reports whether the context's display has the EGL extension.
@@ -313,10 +345,11 @@ func (c *Context) Display() EGLDisplay { return c.display }
 // Config returns the EGL config handle.
 func (c *Context) Config() EGLConfig { return c.config }
 
-// Destroy releases the context and its associated resources.
-// Order matters: EGL resources first, then the native display connection.
-// Closing the native display (e.g. XCloseDisplay) before eglTerminate
-// would cause EGL to access a freed connection.
+// Destroy releases the context and its associated resources, and
+// terminates the display when no other Context uses it. Order matters: EGL
+// resources first, then the native display connection. Closing the native
+// display (e.g. XCloseDisplay) before eglTerminate would cause EGL to access
+// a freed connection.
 func (c *Context) Destroy() {
 	if c.context != NoContext {
 		// Unbind context first
@@ -332,7 +365,7 @@ func (c *Context) Destroy() {
 		return // the display is the sharing context's
 	}
 	if c.display != NoDisplay {
-		Terminate(c.display)
+		releaseDisplay(c.display)
 		c.display = NoDisplay
 	}
 	// Close native display connection AFTER eglTerminate.
