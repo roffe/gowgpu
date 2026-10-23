@@ -249,7 +249,7 @@ func (t *TextureTracker) MergeInto(scope *TextureUsageScope, dst []TexturePendin
 	transitions := dst
 
 	for i := range scope.states {
-		if i < 0 || i > int(^TrackerIndex(0)-1) {
+		if i < 0 || uint64(i) > uint64(^TrackerIndex(0)-1) {
 			continue
 		}
 		index := TrackerIndex(i)

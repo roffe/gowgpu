@@ -187,7 +187,7 @@ func (t *BufferTracker) MergeInto(scope *BufferUsageScope, dst []PendingTransiti
 	transitions := dst
 
 	for i := range scope.states {
-		if i < 0 || i > int(^TrackerIndex(0)-1) {
+		if i < 0 || uint64(i) > uint64(^TrackerIndex(0)-1) {
 			continue // Skip if index would overflow TrackerIndex
 		}
 		index := TrackerIndex(i)
