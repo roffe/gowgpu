@@ -5,13 +5,13 @@ package vknoop
 /*
 #include <stdint.h>
 volatile uintptr_t vknoop_sink;
-static void noop_draw(uint64_t cb, uint32_t a, uint32_t b, uint32_t c, uint32_t d) { vknoop_sink = cb + a + b + c + d; }
-static void noop_bind(uint64_t cb, uint32_t bp, uint64_t layout, uint32_t first, uint32_t n, uintptr_t sets, uint32_t ndyn, uintptr_t dyn) {
+static void noop_draw(uintptr_t cb, uint32_t a, uint32_t b, uint32_t c, uint32_t d) { vknoop_sink = cb + a + b + c + d; }
+static void noop_bind(uintptr_t cb, uint32_t bp, uint64_t layout, uint32_t first, uint32_t n, uintptr_t sets, uint32_t ndyn, uintptr_t dyn) {
 	vknoop_sink = cb + bp + layout + first + n + *(const uint64_t *)sets + ndyn;
 }
-static int32_t noop_create(uint64_t dev, uintptr_t info, uintptr_t alloc, uintptr_t out) { *(uint64_t *)out = dev + 1; return 0; }
-static void noop_scissor(uint64_t cb, uint32_t first, uint32_t n, uintptr_t rects) { vknoop_sink = cb + first + n + rects; }
-static void noop_pipeline(uint64_t cb, uint32_t bp, uint64_t p) { vknoop_sink = cb + bp + p; }
+static int32_t noop_create(uintptr_t dev, uintptr_t info, uintptr_t alloc, uintptr_t out) { *(uint64_t *)out = dev + 1; return 0; }
+static void noop_scissor(uintptr_t cb, uint32_t first, uint32_t n, uintptr_t rects) { vknoop_sink = cb + first + n + rects; }
+static void noop_pipeline(uintptr_t cb, uint32_t bp, uint64_t p) { vknoop_sink = cb + bp + p; }
 static int32_t noop_submit(uintptr_t queue, uint32_t n, uintptr_t submits, uint64_t fence) { vknoop_sink = queue + n + submits + fence; return 0; }
 static uintptr_t p_draw(void) { return (uintptr_t)&noop_draw; }
 static uintptr_t p_bind(void) { return (uintptr_t)&noop_bind; }
