@@ -1203,8 +1203,8 @@ func (sc *Swapchain) present(queue *Queue, damageRects []image.Rectangle) error 
 	if queue == nil || queue.device != sc.device {
 		return fmt.Errorf("vulkan: present queue does not belong to swapchain device")
 	}
-	if !queue.holds(sc) || !sc.acquireUsed {
-		err := fmt.Errorf("vulkan: no successful swapchain submission is ready for presentation")
+	if !queue.holds(sc) {
+		err := fmt.Errorf("vulkan: the swapchain's image was not acquired for this queue")
 		sc.markBroken(err)
 		return err
 	}
@@ -1354,8 +1354,14 @@ func (sc *Swapchain) ensurePresentLayout(queue *Queue) error {
 		return fmt.Errorf("vulkan: invalid queue for present layout transition")
 	}
 
+	// No submission waited for the acquire, so none touched the image: it
+	// is as acquired, and the barrier's submission waits for the acquire,
+	// as wgpu-core and Dawn submit at present what has to wait for it.
 	currentLayout := sc.imageLayouts[idx]
-	if currentLayout == vk.ImageLayoutPresentSrcKhr {
+	waitAcquire := !sc.acquireUsed
+	if waitAcquire {
+		currentLayout = vk.ImageLayoutUndefined
+	} else if currentLayout == vk.ImageLayoutPresentSrcKhr {
 		// Common case: render pass already transitioned. Nothing to do.
 		return nil
 	}
@@ -1446,12 +1452,19 @@ func (sc *Swapchain) ensurePresentLayout(queue *Queue) error {
 	signalValue := tf.nextSignalValue()
 	signalSems := [2]vk.Semaphore{barrierSem}
 	signalValues := [2]uint64{0, signalValue}
+	waitStage := acquireWaitStages
+	waitValue := uint64(0)
 	submitInfo := vk.SubmitInfo{
 		SType:                vk.StructureTypeSubmitInfo,
 		CommandBufferCount:   1,
 		PCommandBuffers:      &cmdBuf,
 		SignalSemaphoreCount: 1,
 		PSignalSemaphores:    &signalSems[0],
+	}
+	if waitAcquire {
+		submitInfo.WaitSemaphoreCount = 1
+		submitInfo.PWaitSemaphores = &sc.currentAcquireSem
+		submitInfo.PWaitDstStageMask = &waitStage
 	}
 	fence := vk.Fence(0)
 	var timelineInfo vk.TimelineSemaphoreSubmitInfo
@@ -1463,6 +1476,10 @@ func (sc *Swapchain) ensurePresentLayout(queue *Queue) error {
 			SignalSemaphoreValueCount: 2,
 			PSignalSemaphoreValues:    &signalValues[0],
 		}
+		if waitAcquire {
+			timelineInfo.WaitSemaphoreValueCount = 1
+			timelineInfo.PWaitSemaphoreValues = &waitValue
+		}
 		submitInfo.PNext = (*uintptr)(unsafe.Pointer(&timelineInfo))
 	} else if fence, err = tf.signal(sc.device.cmds, sc.device.handle, signalValue); err != nil {
 		return fmt.Errorf("vulkan: barrier fence: %w", err)
@@ -1473,6 +1490,10 @@ func (sc *Swapchain) ensurePresentLayout(queue *Queue) error {
 	}
 	sc.barrierPending = true
 	sc.barrierFenceValue = signalValue
+	if waitAcquire {
+		sc.acquireUsed = true
+		sc.acquireFenceValues[sc.currentAcquireIdx] = signalValue
+	}
 
 	// Update tracked layout — the barrier transitions to PRESENT_SRC_KHR.
 	sc.imageLayouts[idx] = vk.ImageLayoutPresentSrcKhr
