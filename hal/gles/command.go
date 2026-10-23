@@ -1311,7 +1311,14 @@ func (c *SetBindGroupCommand) Execute(ctx *gl.Context) {
 				slots[glBinding] = want
 			}
 
-		case bindingClassTexture, bindingClassImage:
+		case bindingClassImage:
+			// Image units are their own namespace: the storage texture's
+			// slot never touches the texture unit of that number.
+			if b.view != nil {
+				bindImage(ctx, glBinding, b.view, b.access, b.imageFormat)
+			}
+
+		case bindingClassTexture:
 			if b.view == nil {
 				continue
 			}

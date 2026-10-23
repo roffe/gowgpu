@@ -175,6 +175,7 @@ type Context struct {
 
 	// Compute shaders (GL 4.3+ / ES 3.1+)
 	glDispatchCompute         uintptr
+	glBindImageTexture        uintptr
 	glDispatchComputeIndirect uintptr
 	glMemoryBarrier           uintptr
 
@@ -367,6 +368,7 @@ func (c *Context) Load(getProcAddr ProcAddressFunc) error {
 
 	// Compute shaders (optional - may be nil on older GL versions)
 	c.glDispatchCompute = getProcAddr("glDispatchCompute")
+	c.glBindImageTexture = getProcAddr("glBindImageTexture")
 	c.glDispatchComputeIndirect = getProcAddr("glDispatchComputeIndirect")
 	c.glMemoryBarrier = getProcAddr("glMemoryBarrier")
 
@@ -1228,6 +1230,16 @@ func (c *Context) MemoryBarrier(barriers uint32) {
 		return
 	}
 	syscall.SyscallN(c.glMemoryBarrier, uintptr(barriers))
+}
+
+// BindImageTexture binds a level of a texture to an image unit for shaders
+// to load and store (GL 4.2): its layer, or all of them when layered.
+func (c *Context) BindImageTexture(unit, texture uint32, level int32, layered bool, layer int32, access, format uint32) {
+	var l uintptr
+	if layered {
+		l = TRUE
+	}
+	syscall.SyscallN(c.glBindImageTexture, uintptr(unit), uintptr(texture), uintptr(level), l, uintptr(layer), uintptr(access), uintptr(format))
 }
 
 // SupportsCompute returns true if compute shaders are supported.

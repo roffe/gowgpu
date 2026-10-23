@@ -304,6 +304,7 @@ func newTextureView(t *Texture, desc *TextureViewDescriptor) (*TextureView, erro
 		if !viewFormatAllowed(t.format, desc.Format, desc.Aspect) {
 			return nil, fmt.Errorf("gles: a %s view of a %s texture: GL has no views that change the format", desc.Format, t.format)
 		}
+		v.dimension = desc.Dimension
 		v.aspect = desc.Aspect
 		v.baseMip, v.baseLayer = desc.BaseMipLevel, desc.BaseArrayLayer
 		v.mipCount = desc.MipLevelCount
@@ -315,9 +316,35 @@ func newTextureView(t *Texture, desc *TextureViewDescriptor) (*TextureView, erro
 			v.layerCount = t.layers() - min(v.baseLayer, t.layers())
 		}
 	}
+	if v.dimension == gputypes.TextureViewDimensionUndefined {
+		// WebGPU's default: the texture's dimension, an array of 2D layers
+		// for a 2D texture with more than one.
+		switch {
+		case t.dimension == gputypes.TextureDimension3D:
+			v.dimension = gputypes.TextureViewDimension3D
+		case t.dimension == gputypes.TextureDimension1D:
+			v.dimension = gputypes.TextureViewDimension1D
+		case v.layerCount > 1:
+			v.dimension = gputypes.TextureViewDimension2DArray
+		default:
+			v.dimension = gputypes.TextureViewDimension2D
+		}
+	}
 	v.handle = lastViewKey.Add(1)
 	views.Store(v.handle, v)
 	return v, nil
+}
+
+// bindImage binds v's mip level to an image unit for shaders to load from
+// and store to: all its layers or slices for an array, cube or 3D view, its
+// one layer otherwise.
+func bindImage(ctx *gl.Context, unit uint32, v *TextureView, access, format uint32) {
+	if v.texture == nil || v.texture.id == 0 {
+		return
+	}
+	layered := v.dimension == gputypes.TextureViewDimension2DArray || v.dimension == gputypes.TextureViewDimension3D ||
+		v.dimension == gputypes.TextureViewDimensionCube || v.dimension == gputypes.TextureViewDimensionCubeArray
+	ctx.BindImageTexture(unit, v.texture.id, int32(v.baseMip), layered, int32(v.baseLayer), access, format)
 }
 
 // viewFormatAllowed reports whether a view of a tex texture can be view:

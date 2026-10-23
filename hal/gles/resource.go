@@ -106,6 +106,7 @@ func (t *Texture) NativeHandle() uintptr { return uintptr(t.id) }
 // bound, and its mip and layer chosen when it is attached.
 type TextureView struct {
 	texture    *Texture
+	dimension  gputypes.TextureViewDimension
 	aspect     gputypes.TextureAspect
 	baseMip    uint32
 	mipCount   uint32
@@ -205,6 +206,11 @@ type groupBinding struct {
 
 	view    *TextureView
 	sampler uint32 // GL sampler name
+
+	// access and imageFormat are how a storage texture's image unit is
+	// bound: GL_READ_ONLY, GL_WRITE_ONLY or GL_READ_WRITE, and the layout's
+	// format.
+	access, imageFormat uint32
 }
 
 // newBindGroup resolves desc's entries against its layout.
@@ -220,6 +226,11 @@ func newBindGroup(desc *BindGroupDescriptor) (*BindGroup, error) {
 			if le.Binding == e.Binding {
 				b.class = classifyBindGroupEntry(le)
 				b.dynamic = le.Buffer != nil && le.Buffer.HasDynamicOffset
+				if st := le.StorageTexture; st != nil {
+					b.access = imageAccess(st.Access)
+					f, _ := glFormats[st.Format]
+					b.imageFormat = f.internal
+				}
 				break
 			}
 		}
@@ -237,6 +248,17 @@ func newBindGroup(desc *BindGroupDescriptor) (*BindGroup, error) {
 	}
 	slices.SortFunc(g.bindings, func(a, b groupBinding) int { return cmp.Compare(a.binding, b.binding) })
 	return g, nil
+}
+
+// imageAccess is the image unit access of a storage texture's access mode.
+func imageAccess(access gputypes.StorageTextureAccess) uint32 {
+	switch access {
+	case gputypes.StorageTextureAccessReadOnly:
+		return gl.READ_ONLY
+	case gputypes.StorageTextureAccessReadWrite:
+		return gl.READ_WRITE
+	}
+	return gl.WRITE_ONLY
 }
 
 // Destroy is a no-op for bind groups.

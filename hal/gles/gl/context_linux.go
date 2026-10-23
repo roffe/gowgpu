@@ -63,6 +63,8 @@ package gl
 #cgo nocallback gl_v_iiiii
 #cgo noescape gl_v_iiiiii
 #cgo nocallback gl_v_iiiiii
+#cgo noescape gl_v_iiiiiii
+#cgo nocallback gl_v_iiiiiii
 #cgo noescape gl_v_iiiiiiii
 #cgo nocallback gl_v_iiiiiiii
 #cgo noescape gl_v_iiiiiiiii
@@ -278,6 +280,7 @@ type Context struct {
 
 	// Compute shaders (GL 4.3+ / ES 3.1+)
 	glDispatchCompute         unsafe.Pointer
+	glBindImageTexture        unsafe.Pointer
 	glDispatchComputeIndirect unsafe.Pointer
 	glMemoryBarrier           unsafe.Pointer
 
@@ -505,6 +508,7 @@ func (c *Context) Load(getProcAddr ProcAddressFunc, isGLES ...bool) error {
 
 	// Compute shaders (optional - may be nil on older GL versions)
 	c.glDispatchCompute = getProcAddr("glDispatchCompute")
+	c.glBindImageTexture = getProcAddr("glBindImageTexture")
 	c.glDispatchComputeIndirect = getProcAddr("glDispatchComputeIndirect")
 	c.glMemoryBarrier = getProcAddr("glMemoryBarrier")
 
@@ -1344,6 +1348,16 @@ func (c *Context) MemoryBarrier(barriers uint32) {
 		return
 	}
 	C.gl_v_i(C.uintptr_t(uintptr(c.glMemoryBarrier)), C.uint32_t(barriers))
+}
+
+// BindImageTexture binds a level of a texture to an image unit for shaders
+// to load and store (GL 4.2, ES 3.1): its layer, or all of them when layered.
+func (c *Context) BindImageTexture(unit, texture uint32, level int32, layered bool, layer int32, access, format uint32) {
+	var l uint32
+	if layered {
+		l = TRUE
+	}
+	C.gl_v_iiiiiii(C.uintptr_t(uintptr(c.glBindImageTexture)), C.uint32_t(unit), C.uint32_t(texture), C.uint32_t(level), C.uint32_t(l), C.uint32_t(layer), C.uint32_t(access), C.uint32_t(format))
 }
 
 // SupportsCompute returns true if compute shaders are supported.
