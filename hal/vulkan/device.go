@@ -837,6 +837,17 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 		},
 	}
 
+	// An sRGB view of a storage image has the image's usage less storage,
+	// which no sRGB format has (VUID-VkImageViewCreateInfo-usage-02275).
+	var viewUsage vk.ImageViewUsageCreateInfo
+	if t, ok := texture.(*Texture); ok && format.IsSrgb() && t.usageFlags&vk.ImageUsageFlags(vk.ImageUsageStorageBit) != 0 {
+		viewUsage = vk.ImageViewUsageCreateInfo{
+			SType: vk.StructureTypeImageViewUsageCreateInfo,
+			Usage: t.usageFlags &^ vk.ImageUsageFlags(vk.ImageUsageStorageBit),
+		}
+		createInfo.PNext = (*uintptr)(unsafe.Pointer(&viewUsage))
+	}
+
 	var imageView vk.ImageView
 	result := vkCreateImageView(d.cmds, d.handle, &createInfo, nil, &imageView)
 	if result != vk.Success {
