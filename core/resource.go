@@ -575,21 +575,23 @@ func (d *Device) CreateBuffer(desc *gputypes.BufferDescriptor) (*Buffer, error) 
 				HALError: err,
 			}
 		}
-		if base, _, size, ok := buffer.MappingInfo(); ok && base != nil && !zeroed {
+		if base, _, size, ok := buffer.MappingInfo(); ok && base != nil {
 			clear(unsafe.Slice((*byte)(base), size))
 		}
 		buffer.MarkInitialized(0, desc.Size)
-	case zeroed, mappable && zeroMapped(*halDevice, halBuffer, alignedSize):
+	case mappable && zeroMapped(*halDevice, halBuffer, alignedSize), zeroed:
 		buffer.MarkInitialized(0, desc.Size)
 	}
 
 	return buffer, nil
 }
 
-// buffersStartZeroed reports whether the backend's new buffers hold zeros,
-// as WebGPU hands them out: D3D12 committed resources and Metal's
-// newBufferWithLength do. Vulkan suballocates memory that a freed buffer
-// may have written, and GL's glBufferData without data leaves it undefined.
+// buffersStartZeroed reports whether the backend's new GPU-only buffers
+// hold zeros, as WebGPU hands them out: D3D12 committed resources and
+// Metal's newBufferWithLength do. Vulkan suballocates memory that a freed
+// buffer may have written, and GL's glBufferData without data leaves it
+// undefined. A buffer the CPU can map is zeroed through a mapping on every
+// backend: WARP handed out a readback buffer that held 0xff.
 func buffersStartZeroed(b gputypes.Backend) bool {
 	return b == gputypes.BackendDX12 || b == gputypes.BackendMetal
 }
