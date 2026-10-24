@@ -1026,6 +1026,40 @@ func TestDepthStencilReadBarrierAccess(t *testing.T) {
 	}
 }
 
+// TestDepthStencilAspectLayouts: the aspects of a depth/stencil image share
+// a layout, the one of both, a written attachment beside a read-only one
+// on a device with the layouts of Vulkan 1.1, and GENERAL without them.
+func TestDepthStencilAspectLayouts(t *testing.T) {
+	const (
+		write  = hal.TextureUsesDepthStencilWrite
+		read   = hal.TextureUsesDepthStencilRead
+		sample = hal.TextureUsesResource
+	)
+	tests := []struct {
+		name           string
+		depth, stencil hal.TextureUses
+		mixed          bool
+		want           vk.ImageLayout
+	}{
+		{"both written", write, write, true, vk.ImageLayoutDepthStencilAttachmentOptimal},
+		{"depth written, stencil sampled", write, read | sample, true, vk.ImageLayoutDepthAttachmentStencilReadOnlyOptimal},
+		{"depth sampled, stencil written", read | sample, write, true, vk.ImageLayoutDepthReadOnlyStencilAttachmentOptimal},
+		{"depth read-only, stencil sampled", read, sample, true, vk.ImageLayoutDepthStencilReadOnlyOptimal},
+		{"stencil uninitialized", hal.TextureUsesCopyDst, hal.TextureUsesUninitialized, true, vk.ImageLayoutTransferDstOptimal},
+		{"copy beside sampled", hal.TextureUsesCopySrc, sample, true, vk.ImageLayoutGeneral},
+		{"Vulkan 1.0", write, read, false, vk.ImageLayoutGeneral},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tex := &Texture{format: gputypes.TextureFormatDepth24PlusStencil8, device: &Device{mixedDepthStencilLayouts: tt.mixed}}
+			if got := depthStencilLayout(tex, tt.depth, tt.stencil); got != tt.want {
+				t.Errorf("depthStencilLayout = %v, want %v", got, tt.want)
+			}
+		})
+	}
+
+}
+
 // TestPresentModeToVk tests present mode conversions.
 func TestPresentModeToVk(t *testing.T) {
 	tests := []struct {

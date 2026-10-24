@@ -262,11 +262,19 @@ const (
 // written one into RenderAttachment, while Vulkan keeps them in different
 // layouts. Zero means not known, and the backend derives the state from
 // the coarse usage and the texture format (TextureUsesFromUsage).
+//
+// StencilOld and StencilNew are the fine-grained states of the stencil
+// aspect of a texture with a depth and a stencil aspect whose aspects are
+// in different states before or after the barrier: Old and New are then
+// the depth aspect's, and OldUsage and NewUsage those of both. Both zero
+// means the stencil aspect goes from Old to New with the depth aspect.
 type TextureUsageTransition struct {
-	OldUsage gputypes.TextureUsage
-	NewUsage gputypes.TextureUsage
-	Old      TextureUses
-	New      TextureUses
+	OldUsage   gputypes.TextureUsage
+	NewUsage   gputypes.TextureUsage
+	Old        TextureUses
+	New        TextureUses
+	StencilOld TextureUses
+	StencilNew TextureUses
 }
 
 // TextureUses is the fine-grained usage state of a texture, the states the
@@ -289,6 +297,29 @@ const (
 	TextureUsesStorageRead       TextureUses = 1 << 8 // Storage texture read-only
 	TextureUsesStorageWrite      TextureUses = 1 << 9 // Storage texture write-only
 )
+
+// Usage is the coarse WebGPU usage of u: the attachment states are
+// RenderAttachment, the storage states StorageBinding, and Uninitialized
+// and Present are no usage.
+func (u TextureUses) Usage() gputypes.TextureUsage {
+	var usage gputypes.TextureUsage
+	if u&TextureUsesCopySrc != 0 {
+		usage |= gputypes.TextureUsageCopySrc
+	}
+	if u&TextureUsesCopyDst != 0 {
+		usage |= gputypes.TextureUsageCopyDst
+	}
+	if u&TextureUsesResource != 0 {
+		usage |= gputypes.TextureUsageTextureBinding
+	}
+	if u&(TextureUsesStorageRead|TextureUsesStorageWrite) != 0 {
+		usage |= gputypes.TextureUsageStorageBinding
+	}
+	if u&(TextureUsesColorTarget|TextureUsesDepthStencilWrite|TextureUsesDepthStencilRead) != 0 {
+		usage |= gputypes.TextureUsageRenderAttachment
+	}
+	return usage
+}
 
 // TextureUsesFromUsage is the fine-grained state a coarse usage stands for:
 // RenderAttachment is the depth/stencil write state on a depth/stencil

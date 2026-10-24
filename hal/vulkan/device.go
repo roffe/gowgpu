@@ -101,6 +101,11 @@ type Device struct {
 	// the aspect is stored, a write that the barriers after the pass wait for.
 	storeOpNone bool
 
+	// mixedDepthStencilLayouts is whether the device has the layouts of
+	// Vulkan 1.1 (VK_KHR_maintenance2) for a depth/stencil image with one
+	// aspect written as an attachment and the other read-only.
+	mixedDepthStencilLayouts bool
+
 	// alignedFills is whether a fill of 4096 bytes or more has to start
 	// 16-byte aligned: some NVIDIA drivers fill such a range from the wrong
 	// offset otherwise.

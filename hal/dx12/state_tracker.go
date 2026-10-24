@@ -374,7 +374,10 @@ func textureRangeSubresourcePlanesForPlanes(texture *Texture, r hal.TextureRange
 }
 
 func textureRangeSubresources(texture *Texture, r hal.TextureRange) []uint32 {
-	planes := textureRangeSubresourcePlanes(texture, r)
+	return textureSubresourceIndices(textureRangeSubresourcePlanes(texture, r))
+}
+
+func textureSubresourceIndices(planes []textureSubresource) []uint32 {
 	result := make([]uint32, 0, len(planes))
 	for _, plane := range planes {
 		result = append(result, plane.subresource)

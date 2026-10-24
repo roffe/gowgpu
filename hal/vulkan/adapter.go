@@ -78,6 +78,11 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 	if available["VK_KHR_portability_subset"] {
 		extensions = append(extensions, "VK_KHR_portability_subset\x00")
 	}
+	mixedDepthStencilLayouts := a.apiVersion() >= vkMakeVersion(1, 1, 0)
+	if !mixedDepthStencilLayouts && available["VK_KHR_maintenance2"] {
+		extensions = append(extensions, "VK_KHR_maintenance2\x00")
+		mixedDepthStencilLayouts = true
+	}
 	storeOpNone := a.apiVersion() >= vkMakeVersion(1, 3, 0)
 	for _, ext := range []string{"VK_KHR_load_store_op_none", "VK_EXT_load_store_op_none", "VK_QCOM_render_pass_store_ops"} {
 		if !storeOpNone && available[ext] {
@@ -201,6 +206,7 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 		supportsIncrementalPresent: hasIncrementalPresent,
 		swapchainMutableFormat:     mutableFormat,
 		storeOpNone:                storeOpNone,
+		mixedDepthStencilLayouts:   mixedDepthStencilLayouts,
 		alignedFills:               a.properties.VendorID == 0x10DE,
 		shaderOptions:              shaderOptions(a.apiVersion()),
 	}

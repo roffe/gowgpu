@@ -28,6 +28,12 @@ const (
 	// StructureTypeImageViewUsageCreateInfo = VK_STRUCTURE_TYPE_IMAGE_VIEW_USAGE_CREATE_INFO
 	StructureTypeImageViewUsageCreateInfo StructureType = 1000117002
 
+	// ImageLayoutDepthReadOnlyStencilAttachmentOptimal = VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL
+	ImageLayoutDepthReadOnlyStencilAttachmentOptimal ImageLayout = 1000117000
+
+	// ImageLayoutDepthAttachmentStencilReadOnlyOptimal = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL
+	ImageLayoutDepthAttachmentStencilReadOnlyOptimal ImageLayout = 1000117001
+
 	// === Vulkan 1.2 Core (promoted from VK_KHR_image_format_list) ===
 
 	// StructureTypeImageFormatListCreateInfo = VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO

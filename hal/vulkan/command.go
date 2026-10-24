@@ -563,8 +563,14 @@ func (e *CommandEncoder) TransitionTextures(barriers []hal.TextureBarrier) {
 			continue
 		}
 
-		srcAccess, srcStage, oldLayout := textureBarrierState(tex, textureUses(tex, b.Usage.Old, b.Usage.OldUsage))
-		dstAccess, dstStage, newLayout := textureBarrierState(tex, textureUses(tex, b.Usage.New, b.Usage.NewUsage))
+		oldUses, newUses := textureUses(tex, b.Usage.Old, b.Usage.OldUsage), textureUses(tex, b.Usage.New, b.Usage.NewUsage)
+		oldStencil, newStencil := oldUses, newUses
+		if b.Usage.StencilOld != 0 || b.Usage.StencilNew != 0 {
+			oldUses, newUses = b.Usage.Old, b.Usage.New
+			oldStencil, newStencil = b.Usage.StencilOld, b.Usage.StencilNew
+		}
+		srcAccess, srcStage, oldLayout := aspectsBarrierState(tex, oldUses, oldStencil)
+		dstAccess, dstStage, newLayout := aspectsBarrierState(tex, newUses, newStencil)
 		srcStages |= srcStage
 		dstStages |= dstStage
 
@@ -2008,6 +2014,48 @@ func textureBarrierState(tex *Texture, uses hal.TextureUses) (vk.AccessFlags, vk
 	}
 
 	return access, stage, deriveImageLayout(tex, uses)
+}
+
+// aspectsBarrierState is textureBarrierState of an image whose depth aspect
+// is in the state depth and stencil aspect in stencil, in the layout
+// depthStencilLayout puts them in.
+func aspectsBarrierState(tex *Texture, depth, stencil hal.TextureUses) (vk.AccessFlags, vk.PipelineStageFlags, vk.ImageLayout) {
+	if depth == stencil {
+		return textureBarrierState(tex, depth)
+	}
+	depthAccess, depthStage, _ := textureBarrierState(tex, depth)
+	stencilAccess, stencilStage, _ := textureBarrierState(tex, stencil)
+	return depthAccess | stencilAccess, depthStage | stencilStage, depthStencilLayout(tex, depth, stencil)
+}
+
+// depthStencilLayout is the layout of an image of tex's format, which has
+// a depth and a stencil aspect, whose depth aspect is in the state depth
+// and stencil aspect in stencil. The aspects share a layout (see
+// barrierAspects): an uninitialized aspect is in the other's, an aspect
+// written as an attachment beside a read-only one in the layout of Vulkan
+// 1.1 that keeps the read-only one so, the attachment layouts a render
+// pass that writes one aspect alone keeps the image in. Anything else, and
+// those on a device without them, is GENERAL.
+//
+// Reference: Dawn vulkan/TextureVk.cpp VulkanImageLayout (combined
+// depth/stencil aspects)
+func depthStencilLayout(tex *Texture, depth, stencil hal.TextureUses) vk.ImageLayout {
+	depthLayout, stencilLayout := deriveImageLayout(tex, depth), deriveImageLayout(tex, stencil)
+	switch {
+	case depthLayout == stencilLayout, stencilLayout == vk.ImageLayoutUndefined:
+		return depthLayout
+	case depthLayout == vk.ImageLayoutUndefined:
+		return stencilLayout
+	}
+	if tex != nil && tex.device != nil && tex.device.mixedDepthStencilLayouts {
+		switch {
+		case depthLayout == vk.ImageLayoutDepthStencilAttachmentOptimal && stencilLayout == vk.ImageLayoutDepthStencilReadOnlyOptimal:
+			return vk.ImageLayoutDepthAttachmentStencilReadOnlyOptimal
+		case depthLayout == vk.ImageLayoutDepthStencilReadOnlyOptimal && stencilLayout == vk.ImageLayoutDepthStencilAttachmentOptimal:
+			return vk.ImageLayoutDepthReadOnlyStencilAttachmentOptimal
+		}
+	}
+	return vk.ImageLayoutGeneral
 }
 
 // deriveImageLayout is the layout an image of tex's format is in while it

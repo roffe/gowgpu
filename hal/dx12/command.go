@@ -332,6 +332,13 @@ func (e *CommandEncoder) TransitionTextures(barriers []hal.TextureBarrier) {
 			continue
 		}
 
+		if (b.Usage.StencilOld != 0 || b.Usage.StencilNew != 0) && tex.planeCount() > 1 {
+			for plane, uses := range [2]hal.TextureUses{b.Usage.New, b.Usage.StencilNew} {
+				subresources := textureSubresourceIndices(textureRangeSubresourcePlanesForPlanes(tex, b.Range, []uint32{uint32(plane)}))
+				plans = append(plans, e.stateTracker.transitionTextureRange(tex, subresources, textureBarrierState(tex, uses.Usage(), uses))...)
+			}
+			continue
+		}
 		afterState := textureBarrierState(tex, b.Usage.NewUsage, b.Usage.New)
 		plans = append(plans, e.stateTracker.transitionTextureRange(tex, textureRangeSubresources(tex, b.Range), afterState)...)
 	}
