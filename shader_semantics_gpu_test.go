@@ -635,7 +635,8 @@ struct U {
 // TestStorageLayoutCopies copies values whose scalars have padding between
 // them through a storage buffer, a struct of two vec3s and a mat3x3, and
 // picks an element of a let array by a run-time index. Each padding word
-// holds a marker the copies must leave alone. naga's DXIL wrote the
+// holds a marker no scalar may land on; Metal copies a whole mat3x3 with
+// its padding, so there the source's marker may. naga's DXIL wrote the
 // scalars one after the other into the padding, and took element 0 of the
 // let array whatever the index.
 func TestStorageLayoutCopies(t *testing.T) {
@@ -672,6 +673,11 @@ struct M { a: mat3x3<f32>, b: mat3x3<f32> }
 	m.b = m.a;
 }
 `, nil, in)
+		for c := 0; c < 3; c++ {
+			if k := 12 + c*4 + 3; got[k] == pad {
+				got[k] = mark
+			}
+		}
 		if !slices.Equal(got, want) {
 			t.Errorf("buffer %v, want %v", got, want)
 		}
