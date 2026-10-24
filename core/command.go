@@ -899,7 +899,6 @@ func (e *CoreCommandEncoder) BeginComputePass(desc *CoreComputePassDescriptor) (
 	halDesc := &hal.ComputePassDescriptor{}
 	if desc != nil {
 		halDesc.Label = desc.Label
-		// TimestampWrites conversion would go here
 	}
 
 	// Get HAL encoder
@@ -918,6 +917,15 @@ func (e *CoreCommandEncoder) BeginComputePass(desc *CoreComputePassDescriptor) (
 	if err := e.ensureOpenLocked(*halEncoder); err != nil {
 		e.setError(err)
 		return nil, err
+	}
+	if desc != nil && desc.TimestampWrites != nil && desc.TimestampWrites.QuerySet != nil {
+		if raw := desc.TimestampWrites.QuerySet.Raw(guard); raw != nil {
+			halDesc.TimestampWrites = &hal.ComputePassTimestampWrites{
+				QuerySet:                  raw,
+				BeginningOfPassWriteIndex: desc.TimestampWrites.BeginningOfPassWriteIndex,
+				EndOfPassWriteIndex:       desc.TimestampWrites.EndOfPassWriteIndex,
+			}
+		}
 	}
 
 	// Each dispatch of the pass is a usage scope of its own, see
@@ -2004,6 +2012,10 @@ func (p *CoreRenderPassEncoder) End() error {
 type CoreComputePassDescriptor struct {
 	// Label is an optional debug name.
 	Label string
+
+	// TimestampWrites are timestamp queries to write at the pass's
+	// boundaries, which take the same shape as a render pass's.
+	TimestampWrites *RenderPassTimestampWrites
 }
 
 // CoreComputePassEncoder records compute commands within a pass.

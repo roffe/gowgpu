@@ -17,7 +17,8 @@ What's still open after the 2026-10-23 vet and the perf check on 2026-10-24. The
 - [x] Vulkan: clamp `frag_depth` for pipelines whose layout has push constants of its own (HAL users only).
 - [x] Track the depth and stencil aspects of a texture apart, as Dawn does.
 - [x] DX12: `arrayLength()` on a storage buffer with a dynamic offset counts the binding.
-- [ ] Timestamp queries on Vulkan, DX12 and Metal.
+- [x] Timestamp queries on Vulkan and DX12, compute passes included, with `Queue.TimestampPeriod` for the tick length.
+- [ ] Timestamp queries on Metal: counter sample buffers, which differ between Apple silicon and Intel/AMD Macs.
 - [ ] BC formats on Metal.
 - [ ] Browser: the 16-bit normalized formats, needs a `texture-formats-tier1` feature in gputypes.
 

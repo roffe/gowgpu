@@ -469,6 +469,7 @@ type RenderPassDescriptor struct {
 }
 
 // RenderPassTimestampWrites describes timestamp query writes at render pass boundaries.
+// The timestamps are in ticks of Queue.TimestampPeriod nanoseconds.
 type RenderPassTimestampWrites struct {
 	QuerySet                  *QuerySet
 	BeginningOfPassWriteIndex *uint32
@@ -553,8 +554,13 @@ func (d *RenderPassDescriptor) toHAL() *hal.RenderPassDescriptor {
 
 // ComputePassDescriptor describes a compute pass.
 type ComputePassDescriptor struct {
-	Label string
+	Label           string
+	TimestampWrites *ComputePassTimestampWrites
 }
+
+// ComputePassTimestampWrites describes timestamp query writes at compute pass
+// boundaries, as a render pass's.
+type ComputePassTimestampWrites = RenderPassTimestampWrites
 
 // toHAL converts a ComputePassDescriptor to a hal.ComputePassDescriptor.
 func (d *ComputePassDescriptor) toHAL() *hal.ComputePassDescriptor {

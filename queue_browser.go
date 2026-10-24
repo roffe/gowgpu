@@ -120,6 +120,10 @@ func (q *Queue) WriteTexture(dst *ImageCopyTexture, data []byte, layout *ImageDa
 // WebGPU browser API handles swapchain synchronization internally.
 func (q *Queue) SetSwapchainSuppressed(_ bool) {}
 
+// TimestampPeriod returns how many nanoseconds a tick of a resolved
+// timestamp query is: 1, the browser resolves nanoseconds.
+func (q *Queue) TimestampPeriod() float32 { return 1 }
+
 // LastSubmissionIndex returns the most recent submission index.
 // On browser, submission indices are not tracked. Returns 0.
 func (q *Queue) LastSubmissionIndex() uint64 {

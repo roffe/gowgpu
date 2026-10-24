@@ -140,7 +140,7 @@ The fixes from the vet on 2026-10-23 (see the [CHANGELOG](CHANGELOG.md)) have on
 
 - GL without texture views (desktop GL below 4.3 without `GL_ARB_texture_view`, GLES without `OES_` or `EXT_texture_view`): a bind group refuses a view of some of a texture's layers, or of another dimension, to sample or to store to more than one layer, and a dispatch that samples one mip level of a texture and stores to another stores nothing.
 - GL has no views in another format, so it offers neither `DownlevelFlagsViewFormats` nor surface view formats, and it reads no compressed texture back: `CopyTextureToBuffer` of one logs an error and copies nothing, as in wgpu-hal. GLES reads no depth or stencil back either, and refuses a write into the stencil of a combined depth/stencil texture.
-- Timestamp queries only work on desktop GL. Vulkan, DX12 and Metal don't offer `FeatureTimestampQuery` yet.
+- Timestamp queries work on Vulkan, DX12 and desktop GL; Metal doesn't offer `FeatureTimestampQuery` yet.
 - Metal has no compressed texture formats yet, so it doesn't offer `TextureCompressionBC`.
 - Metal applies a pipeline's sample mask in its fragment stage, so a pipeline without one ignores the mask. Dawn adds a fragment stage for it.
 - In the browser the 16-bit normalized formats can't be used, as gputypes has no `texture-formats-tier1` feature to ask for.

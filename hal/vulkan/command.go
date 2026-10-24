@@ -1116,9 +1116,13 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 	rpe.framebuffer = 0
 	rpe.begun = false
 	rpe.depthRange = [2]float32{0, 1}
+	rpe.endStamp = 0
 
 	if e.active == 0 {
 		return rpe
+	}
+	if desc != nil {
+		rpe.beginTimestamps(desc.TimestampWrites)
 	}
 
 	// Render area and sample count both come from the attachment that defines
@@ -1359,11 +1363,39 @@ type RenderPassEncoder struct {
 	framebuffer vk.Framebuffer
 	// begun records whether vkCmdBeginRenderPass actually ran, which End needs
 	// because BeginRenderPass returns an encoder either way.
-	begun  bool
-	groups bindGroups
+	begun bool
+	// endStamp is the query pool End writes the end-of-pass timestamp to,
+	// at endIndex, or 0 for none.
+	endStamp vk.QueryPool
+	endIndex uint32
+	groups   bindGroups
 	// depthRange is the viewport's depth range, which fragment shaders
 	// clamp the depth they write to (shaderOptions).
 	depthRange [2]float32
+}
+
+// beginTimestamps writes the beginning-of-pass timestamp and readies the
+// end-of-pass one. Both queries are reset here: a query cannot be reset
+// inside a render pass, and End writes its timestamp after the pass.
+func (e *RenderPassEncoder) beginTimestamps(w *hal.RenderPassTimestampWrites) {
+	if w == nil {
+		return
+	}
+	qs, ok := w.QuerySet.(*QuerySet)
+	if !ok || qs.pool == 0 {
+		return
+	}
+	cmds, cb := e.encoder.device.cmds, e.encoder.active
+	if idx := w.BeginningOfPassWriteIndex; idx != nil {
+		qs.write(*idx)
+		cmds.CmdResetQueryPool(cb, qs.pool, *idx, 1)
+		cmds.CmdWriteTimestamp(cb, vk.PipelineStageTopOfPipeBit, qs.pool, *idx)
+	}
+	if idx := w.EndOfPassWriteIndex; idx != nil {
+		qs.write(*idx)
+		cmds.CmdResetQueryPool(cb, qs.pool, *idx, 1)
+		e.endStamp, e.endIndex = qs.pool, *idx
+	}
 }
 
 // maxBindGroupSlots is how many bind group slots a pass has (WebGPU's
@@ -1443,6 +1475,9 @@ func (e *RenderPassEncoder) End() {
 	// via FinalLayout in AttachmentDescription)
 	if e.begun && e.encoder.active != 0 {
 		vkCmdEndRenderPass(e.encoder.device.cmds, e.encoder.active)
+	}
+	if e.endStamp != 0 && e.encoder.active != 0 {
+		e.encoder.device.cmds.CmdWriteTimestamp(e.encoder.active, vk.PipelineStageBottomOfPipeBit, e.endStamp, e.endIndex)
 	}
 
 	// Return to pool for reuse.

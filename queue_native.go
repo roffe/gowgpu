@@ -704,6 +704,15 @@ func (q *Queue) SetSwapchainSuppressed(suppressed bool) {
 	}
 }
 
+// TimestampPeriod returns how many nanoseconds a tick of a resolved
+// timestamp query is. Vulkan and DX12 resolve ticks, GL nanoseconds.
+func (q *Queue) TimestampPeriod() float32 {
+	if q.released() {
+		return 1
+	}
+	return q.hal.GetTimestampPeriod()
+}
+
 // LastSubmissionIndex returns the most recent submission index.
 // Used by resource Release() and onZero callbacks to schedule deferred destruction.
 // Lock-free via atomic — safe to call from onZero callbacks during Triage

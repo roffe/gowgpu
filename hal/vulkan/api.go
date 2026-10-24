@@ -308,7 +308,7 @@ func (i *Instance) EnumerateAdapters(surfaceHint hal.Surface) []hal.ExposedAdapt
 					vkVersionPatch(props.ApiVersion)),
 				Backend: gputypes.BackendVulkan,
 			},
-			Features: featuresFromPhysicalDevice(&features, features12.DrawIndirectCount != 0, adapter.supportsDepthAttachment(vk.FormatD32SfloatS8Uint)),
+			Features: featuresFromPhysicalDevice(&features, features12.DrawIndirectCount != 0, adapter.supportsDepthAttachment(vk.FormatD32SfloatS8Uint)) | timestampFeature(&props),
 			Capabilities: hal.Capabilities{
 				Limits: limitsFromProps(&props, maxPerSetDescriptors(&i.cmds, device)),
 				AlignmentsMask: hal.Alignments{
@@ -579,6 +579,15 @@ func vendorIDToName(id uint32) string {
 	default:
 		return fmt.Sprintf("0x%04X", id)
 	}
+}
+
+// timestampFeature is FeatureTimestampQuery when every graphics and compute
+// queue writes timestamps, as Dawn checks.
+func timestampFeature(props *vk.PhysicalDeviceProperties) gputypes.Features {
+	if props.Limits.TimestampComputeAndGraphics != 0 {
+		return gputypes.Features(gputypes.FeatureTimestampQuery)
+	}
+	return 0
 }
 
 // featuresFromPhysicalDevice maps Vulkan physical device features to WebGPU

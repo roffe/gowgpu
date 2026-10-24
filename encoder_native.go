@@ -650,7 +650,7 @@ func (e *CommandEncoder) BeginRenderPass(desc *RenderPassDescriptor) (*RenderPas
 		return nil, err
 	}
 	if desc != nil {
-		if err := validateTimestampWrites(desc.TimestampWrites); err != nil {
+		if err := validateTimestampWrites("BeginRenderPass", desc.TimestampWrites); err != nil {
 			e.setError(err)
 			return nil, err
 		}
@@ -836,6 +836,21 @@ func (e *CommandEncoder) BeginComputePass(desc *ComputePassDescriptor) (*Compute
 	var coreDesc *core.CoreComputePassDescriptor
 	if desc != nil {
 		coreDesc = &core.CoreComputePassDescriptor{Label: desc.Label}
+		if w := desc.TimestampWrites; w != nil {
+			if err := validateTimestampWrites("BeginComputePass", w); err != nil {
+				e.setError(err)
+				return nil, err
+			}
+			if e.foreign("BeginComputePass", w.QuerySet.device, "the timestamp query set") {
+				return nil, errForeign("BeginComputePass", "the timestamp query set")
+			}
+			e.trackQuerySet(w.QuerySet)
+			coreDesc.TimestampWrites = &core.RenderPassTimestampWrites{
+				QuerySet:                  w.QuerySet.core,
+				BeginningOfPassWriteIndex: w.BeginningOfPassWriteIndex,
+				EndOfPassWriteIndex:       w.EndOfPassWriteIndex,
+			}
+		}
 	}
 
 	corePass, err := e.core.BeginComputePass(coreDesc)
@@ -1260,12 +1275,12 @@ func validateRenderPassTextureViews(desc *RenderPassDescriptor) error {
 	return nil
 }
 
-// validateTimestampWrites checks a render pass's timestamp writes: a live
+// validateTimestampWrites checks a pass's timestamp writes, for op: a live
 // timestamp query set, at least one index, each inside the set, and not the
 // same one twice.
 //
 // Reference: Dawn CommandEncoder.cpp ValidatePassTimestampWrites
-func validateTimestampWrites(w *RenderPassTimestampWrites) error {
+func validateTimestampWrites(op string, w *RenderPassTimestampWrites) error {
 	if w == nil {
 		return nil
 	}
@@ -1287,7 +1302,7 @@ func validateTimestampWrites(w *RenderPassTimestampWrites) error {
 		err = fmt.Errorf("query %d for both the beginning and the end of the pass", *begin)
 	}
 	if err != nil {
-		return fmt.Errorf("wgpu: BeginRenderPass: timestamp writes: %w", err)
+		return fmt.Errorf("wgpu: %s: timestamp writes: %w", op, err)
 	}
 	return nil
 }
