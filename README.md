@@ -140,7 +140,6 @@ The fixes from the vet on 2026-10-23 (see the [CHANGELOG](CHANGELOG.md)) have on
 
 - A storage buffer with a dynamic offset on DX12: `arrayLength()` on it counts from the bind group's offset to the end of the buffer, not to the end of the binding, as in Rust's wgpu.
 - Usage is tracked per mip level and array layer but not per aspect, as in wgpu-core: a pass that writes the depth of a depth/stencil texture can't sample its stencil, or the other way round.
-- On Vulkan `frag_depth` is clamped to the viewport's depth range through a push constant, so a pipeline whose layout has push constants of its own writes it unclamped. Only HAL users can make one, the root package has no push constant ranges.
 - GL without texture views (desktop GL below 4.3 without `GL_ARB_texture_view`, GLES without `OES_` or `EXT_texture_view`): a bind group refuses a view of some of a texture's layers, or of another dimension, to sample or to store to more than one layer, and a dispatch that samples one mip level of a texture and stores to another stores nothing.
 - GL has no views in another format, so it offers neither `DownlevelFlagsViewFormats` nor surface view formats, and it reads no compressed texture back: `CopyTextureToBuffer` of one logs an error and copies nothing, as in wgpu-hal. GLES reads no depth or stencil back either, and refuses a write into the stencil of a combined depth/stencil texture.
 - Timestamp queries only work on desktop GL. Vulkan, DX12 and Metal don't offer `FeatureTimestampQuery` yet.

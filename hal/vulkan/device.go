@@ -140,6 +140,9 @@ type Device struct {
 	samplers    map[vk.SamplerCreateInfo]*sharedSampler
 	samplersMu  sync.Mutex
 	maxSamplers uint32
+	// maxPushConstantsSize is VkPhysicalDeviceLimits.maxPushConstantsSize,
+	// which the frag_depth clamp's range has to fit in.
+	maxPushConstantsSize uint32
 
 	// mappedMemory tracks persistently mapped VkDeviceMemory objects.
 	// Vulkan only allows one active vkMapMemory per VkDeviceMemory;
@@ -339,6 +342,7 @@ func (d *Device) queryNonCoherentAtomSize() {
 	}
 	d.bufferImageGranularity = uint64(props.Limits.BufferImageGranularity)
 	d.maxSamplers = props.Limits.MaxSamplerAllocationCount
+	d.maxPushConstantsSize = props.Limits.MaxPushConstantsSize
 
 	hal.Logger().Debug("vulkan: device limits queried",
 		"nonCoherentAtomSize", atomSize,
@@ -1329,13 +1333,9 @@ func (d *Device) CreatePipelineLayout(desc *hal.PipelineLayoutDescriptor) (hal.P
 			Size:       pcr.Range.End - pcr.Range.Start,
 		})
 	}
-	clampsFragDepth := len(pushConstantRanges) == 0
-	if clampsFragDepth {
-		pushConstantRanges = append(pushConstantRanges, vk.PushConstantRange{
-			StageFlags: vk.ShaderStageFlags(vk.ShaderStageFragmentBit),
-			Offset:     fragDepthRangeOffset,
-			Size:       8,
-		})
+	fragDepth := d.fragDepthRangeOf(pushConstantRanges)
+	if fragDepth.stages != 0 {
+		pushConstantRanges = addFragDepthRange(pushConstantRanges, fragDepth.offset)
 	}
 
 	createInfo := vk.PipelineLayoutCreateInfo{
@@ -1361,7 +1361,7 @@ func (d *Device) CreatePipelineLayout(desc *hal.PipelineLayoutDescriptor) (hal.P
 	}
 
 	pl := &PipelineLayout{
-		bindingLayout: bindingLayout{handle: layout, sets: setLayouts, pushConstants: pushConstantRanges, clampsFragDepth: clampsFragDepth},
+		bindingLayout: bindingLayout{handle: layout, sets: setLayouts, pushConstants: pushConstantRanges, fragDepth: fragDepth},
 		device:        d,
 	}
 	d.live.pipelineLayouts.add(layout)
@@ -1415,10 +1415,14 @@ func (d *Device) CreateShaderModule(desc *hal.ShaderModuleDescriptor) (hal.Shade
 		if len(module.Overrides) > 0 {
 			return sm, nil
 		}
-		if spirvCode, err = d.compileWGSL(module, naga.OverrideOptions{}, true); err != nil {
+		sm.clampsFragDepth = !usesPushConstants(module)
+		var clamp *spirv.ClampFragDepth
+		if sm.clampsFragDepth {
+			clamp = &spirv.ClampFragDepth{Offset: 0}
+		}
+		if spirvCode, err = d.compileWGSL(module, naga.OverrideOptions{}, clamp); err != nil {
 			return nil, fmt.Errorf("vulkan: naga WGSL compilation failed: %w", err)
 		}
-		sm.clampsFragDepth = !usesPushConstants(module)
 	case len(desc.Source.SPIRV) > 0:
 		spirvCode = desc.Source.SPIRV
 	default:
@@ -1468,17 +1472,15 @@ func parseWGSL(source string) (*ir.Module, error) {
 }
 
 // compileWGSL compiles module to SPIR-V with its overrides as opts says,
-// clamping frag_depth when clampFragDepth is set and the module has no push
-// constants of its own.
-func (d *Device) compileWGSL(module *ir.Module, opts naga.OverrideOptions, clampFragDepth bool) ([]uint32, error) {
+// clamping frag_depth to the range clamp says is in the push constants, if
+// it isn't nil.
+func (d *Device) compileWGSL(module *ir.Module, opts naga.OverrideOptions, clamp *spirv.ClampFragDepth) ([]uint32, error) {
 	module, err := naga.ProcessOverrides(module, opts)
 	if err != nil {
 		return nil, fmt.Errorf("pipeline constants: %w", err)
 	}
 	options := d.shaderOptions
-	if !clampFragDepth || usesPushConstants(module) {
-		options.ClampFragDepth = nil
-	}
+	options.ClampFragDepth = clamp
 	code, err := naga.GenerateSPIRV(module, options)
 	if err != nil {
 		return nil, err
@@ -1498,10 +1500,8 @@ func (d *Device) compileWGSL(module *ir.Module, opts naga.OverrideOptions, clamp
 // index, a buffer access and an image load in bounds, which WGSL requires
 // and robustBufferAccess does not give for function, private and workgroup
 // arrays or image fetches, loops that cannot hang the GPU, and a point size
-// of 1, which a point list pipeline needs written. As in Dawn, a fragment
-// shader clamps the depth it writes to the viewport's depth range, which
-// the render pass pushes at fragDepthRangeOffset: WebGPU clamps it, Vulkan
-// doesn't. compileWGSL leaves the clamp out where push constants are taken.
+// of 1, which a point list pipeline needs written. The frag_depth clamp is
+// up to compileWGSL's caller.
 func shaderOptions(apiVersion uint32) spirv.Options {
 	version := spirv.Version1_3
 	if apiVersion < vkMakeVersion(1, 1, 0) {
@@ -1516,19 +1516,56 @@ func shaderOptions(apiVersion uint32) spirv.Options {
 		},
 		ForcePointSize:    true,
 		ForceLoopBounding: true,
-		ClampFragDepth:    &spirv.ClampFragDepth{Offset: fragDepthRangeOffset},
 	}
 }
 
-// fragDepthRangeOffset is where the push constants hold the depth range of
-// the frag_depth clamp, two floats in every pipeline layout without push
-// constants of its own. An entry point has one push constant block, so a
-// pipeline with push constants of its own writes frag_depth unclamped.
-const fragDepthRangeOffset = 0
+// fragDepthRange is where a pipeline layout has the depth range of the
+// frag_depth clamp, two floats the render pass pushes at offset to stages,
+// the stages of the push constant range that holds them: after the
+// layout's own push constants, in their fragment range when they have one,
+// as Vulkan takes one range per stage. As in Dawn, a fragment shader clamps
+// the depth it writes to the viewport's depth range: WebGPU clamps it,
+// Vulkan doesn't. stages is 0 when the push constants have no room for it.
+type fragDepthRange struct {
+	offset uint32
+	stages vk.ShaderStageFlags
+}
 
-// usesPushConstants reports whether module has push constants, which leave
-// its entry points no block for the frag_depth clamp. After ProcessOverrides
-// selected an entry point, they are that entry point's.
+// fragDepthRangeOf is where a pipeline layout with push constant ranges
+// has the frag_depth clamp's range.
+func (d *Device) fragDepthRangeOf(ranges []vk.PushConstantRange) fragDepthRange {
+	var end uint32
+	stages := vk.ShaderStageFlags(vk.ShaderStageFragmentBit)
+	for _, r := range ranges {
+		end = max(end, r.Offset+r.Size)
+		if r.StageFlags&vk.ShaderStageFlags(vk.ShaderStageFragmentBit) != 0 {
+			stages = r.StageFlags
+		}
+	}
+	end = (end + 3) &^ 3
+	if d.maxPushConstantsSize != 0 && end+8 > d.maxPushConstantsSize {
+		return fragDepthRange{}
+	}
+	return fragDepthRange{offset: end, stages: stages}
+}
+
+// addFragDepthRange is ranges with the 8 bytes of the frag_depth clamp's
+// range at offset, past every range, added to their fragment range, or as
+// a fragment range of their own when they have none.
+func addFragDepthRange(ranges []vk.PushConstantRange, offset uint32) []vk.PushConstantRange {
+	for i := range ranges {
+		if ranges[i].StageFlags&vk.ShaderStageFlags(vk.ShaderStageFragmentBit) != 0 {
+			ranges[i].Size = offset + 8 - ranges[i].Offset
+			return ranges
+		}
+	}
+	return append(ranges, vk.PushConstantRange{StageFlags: vk.ShaderStageFlags(vk.ShaderStageFragmentBit), Offset: offset, Size: 8})
+}
+
+// usesPushConstants reports whether module has push constants. Such a
+// module is compiled whole without the frag_depth clamp, whose range would
+// go in the block every stage using it declares; its fragment stages that
+// clamp are compiled alone.
 func usesPushConstants(module *ir.Module) bool {
 	return slices.ContainsFunc(module.GlobalVariables, func(g ir.GlobalVariable) bool {
 		return g.Space == ir.SpacePushConstant || g.Space == ir.SpaceImmediate
@@ -1578,15 +1615,22 @@ func (d *Device) createVkShaderModule(code []uint32) (vk.ShaderModule, error) {
 }
 
 // stageModule is the VkShaderModule of a pipeline stage of sm at entry
-// point entry with constants, for a pipeline layout that has the frag_depth
-// clamp's range or not (clampFragDepth): the module's own when it has one,
+// point entry with constants, for a pipeline layout with the frag_depth
+// clamp's range where fragDepth says: the module's own when it has one,
 // there are no constants and it clamps frag_depth as the layout needs, else
 // one compiled for the stage, which the caller destroys once the pipeline is
-// made (temporary).
-func (d *Device) stageModule(sm *ShaderModule, stage ir.ShaderStage, entry string, constants map[string]float64, clampFragDepth bool) (handle vk.ShaderModule, temporary bool, err error) {
+// made (temporary). A stage compiled alone keeps the push constant block
+// that carries the range out of the other stages.
+func (d *Device) stageModule(sm *ShaderModule, stage ir.ShaderStage, entry string, constants map[string]float64, fragDepth fragDepthRange) (handle vk.ShaderModule, temporary bool, err error) {
+	clamps := fragDepth.stages != 0
+	asModule := sm.clampsFragDepth == clamps && (!clamps || fragDepth.offset == 0)
 	if sm.handle != 0 && len(constants) == 0 &&
-		(sm.module == nil || sm.clampsFragDepth == clampFragDepth || !writesFragDepth(sm.module, stage, entry)) {
+		(sm.module == nil || asModule || !writesFragDepth(sm.module, stage, entry)) {
 		return sm.handle, false, nil
+	}
+	var clamp *spirv.ClampFragDepth
+	if clamps {
+		clamp = &spirv.ClampFragDepth{Offset: fragDepth.offset}
 	}
 	if sm.module == nil {
 		return 0, false, fmt.Errorf("vulkan: pipeline constants need a WGSL shader module")
@@ -1594,7 +1638,7 @@ func (d *Device) stageModule(sm *ShaderModule, stage ir.ShaderStage, entry strin
 	code, err := d.compileWGSL(sm.module, naga.OverrideOptions{
 		Constants:  constants,
 		EntryPoint: &naga.EntryPointSelector{Stage: stage, Name: entry},
-	}, clampFragDepth)
+	}, clamp)
 	if err != nil {
 		return 0, false, fmt.Errorf("vulkan: naga WGSL compilation failed: %w", err)
 	}

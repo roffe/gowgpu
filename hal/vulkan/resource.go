@@ -228,10 +228,8 @@ type bindingLayout struct {
 	handle        vk.PipelineLayout
 	sets          []vk.DescriptorSetLayout
 	pushConstants []vk.PushConstantRange
-	// clampsFragDepth is set when pushConstants is the frag_depth clamp's
-	// range alone, which a layout with push constants of its own goes
-	// without.
-	clampsFragDepth bool
+	// fragDepth is where pushConstants have the frag_depth clamp's range.
+	fragDepth fragDepthRange
 }
 
 // compatibleSets is how many of the first sets bound with l a pipeline of

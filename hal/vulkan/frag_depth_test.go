@@ -15,7 +15,6 @@ import (
 
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
-	"github.com/roffe/gowgpu/hal/vulkan/vk"
 )
 
 // fullScreenVertex draws a triangle over the whole target.
@@ -43,34 +42,43 @@ func (h *layerMessages) Handle(_ context.Context, r slog.Record) error {
 func (h *layerMessages) WithAttrs([]slog.Attr) slog.Handler { return h }
 func (h *layerMessages) WithGroup(string) slog.Handler      { return h }
 
-// A pipeline layout with push constants of its own leaves its fragment
-// stages no push constant block for the frag_depth clamp: a stage that
-// writes frag_depth, from the push constants or not, is made without the
-// clamp and draws the depth it writes, and the depth range a pass pushes for
-// the clamp stays out of the push constants.
-func TestFragDepthBesidePushConstants(t *testing.T) {
+// A pipeline layout with push constants of its own has the frag_depth
+// clamp's range after them: a fragment stage that writes frag_depth, from
+// the push constants or not, stores it clamped to the viewport's depth
+// range, whether the layout's push constants are the fragment stage's, the
+// vertex and fragment stages' or the vertex stage's alone, and the range
+// the pass pushes leaves the push constants' own data as it was.
+func TestFragDepthClampBesidePushConstants(t *testing.T) {
 	h := &layerMessages{}
 	prev := hal.Logger()
 	hal.SetLogger(slog.New(h))
 	t.Cleanup(func() { hal.SetLogger(prev) })
 	d := openTestDevice(t, gputypes.InstanceFlagsDebug)
 
-	for _, tc := range []struct {
-		name     string
-		fragment string
-		want     float32
-	}{
-		{"depth from the push constants", `
+	const fromPushConstants = `
 struct Depth { value: f32 }
 var<push_constant> depth: Depth;
 @fragment fn fs_main() -> @builtin(frag_depth) f32 { return depth.value; }
-`, 0.25},
-		{"depth of its own", `
+`
+	const ofItsOwn = `
 @fragment fn fs_main() -> @builtin(frag_depth) f32 { return 0.75; }
-`, 0.75},
+`
+	vertexFragment := gputypes.ShaderStageVertex | gputypes.ShaderStageFragment
+	for _, tc := range []struct {
+		name     string
+		stages   gputypes.ShaderStages
+		fragment string
+		pushed   float32
+		want     float32
+	}{
+		{"depth from the push constants", gputypes.ShaderStageFragment, fromPushConstants, 0.75, 0.5},
+		{"depth from the push constants under the clamp", gputypes.ShaderStageFragment, fromPushConstants, 0.25, 0.25},
+		{"depth of its own", gputypes.ShaderStageFragment, ofItsOwn, 0.25, 0.5},
+		{"vertex and fragment push constants", vertexFragment, fromPushConstants, 0.75, 0.5},
+		{"vertex push constants", gputypes.ShaderStageVertex, ofItsOwn, 0.25, 0.5},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got := drawFragDepth(t, d, fullScreenVertex+tc.fragment, 0.25)
+			got := drawFragDepth(t, d, fullScreenVertex+tc.fragment, tc.stages, tc.pushed)
 			for i, v := range got {
 				if v != tc.want {
 					t.Fatalf("depth at texel %d = %v, want %v", i, v, tc.want)
@@ -87,10 +95,11 @@ var<push_constant> depth: Depth;
 	}
 }
 
-// drawFragDepth draws wgsl into a 4x4 Depth32Float target with a pipeline
-// layout that has a 4-byte fragment push constant range, pushing pushed
-// there, and returns the depth of each texel.
-func drawFragDepth(t *testing.T, d *Device, wgsl string, pushed float32) []float32 {
+// drawFragDepth draws wgsl into a 4x4 Depth32Float target with a viewport
+// depth range of 0 to 0.5 and a pipeline layout that has a 4-byte push
+// constant range for stages, pushing pushed there, and returns the depth of
+// each texel.
+func drawFragDepth(t *testing.T, d *Device, wgsl string, stages gputypes.ShaderStages, pushed float32) []float32 {
 	t.Helper()
 	const side = 4
 	module, err := d.CreateShaderModule(&hal.ShaderModuleDescriptor{Label: "frag-depth", Source: hal.ShaderSource{WGSL: wgsl}})
@@ -99,7 +108,7 @@ func drawFragDepth(t *testing.T, d *Device, wgsl string, pushed float32) []float
 	}
 	defer d.DestroyShaderModule(module)
 	layout, err := d.CreatePipelineLayout(&hal.PipelineLayoutDescriptor{
-		PushConstantRanges: []hal.PushConstantRange{{Stages: gputypes.ShaderStageFragment, Range: hal.Range{End: 4}}},
+		PushConstantRanges: []hal.PushConstantRange{{Stages: stages, Range: hal.Range{End: 4}}},
 	})
 	if err != nil {
 		t.Fatalf("CreatePipelineLayout: %v", err)
@@ -159,8 +168,8 @@ func drawFragDepth(t *testing.T, d *Device, wgsl string, pushed float32) []float
 	}})
 	pass.SetPipeline(pipeline)
 	d.cmds.CmdPushConstants(enc.(*CommandEncoder).active, layout.(*PipelineLayout).handle,
-		vk.ShaderStageFlags(vk.ShaderStageFragmentBit), 0, 4, (*uintptr)(unsafe.Pointer(&pushed)))
-	pass.SetViewport(gputypes.Viewport{Width: side, Height: side, MinDepth: 0, MaxDepth: 1})
+		shaderStagesToVk(stages), 0, 4, (*uintptr)(unsafe.Pointer(&pushed)))
+	pass.SetViewport(gputypes.Viewport{Width: side, Height: side, MinDepth: 0, MaxDepth: 0.5})
 	pass.Draw(gputypes.DrawArgs{VertexCount: 3, InstanceCount: 1})
 	pass.End()
 	enc.TransitionTextures([]hal.TextureBarrier{{Texture: tex, Usage: hal.TextureUsageTransition{
