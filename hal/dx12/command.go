@@ -1362,8 +1362,10 @@ func (e *CommandEncoder) bindGroupToRoot(bindGroupIndex uint32, bg *BindGroup, o
 			index := uint32(m.dynamicIndex + m.dynamicUniforms)
 			if isCompute {
 				e.cmdList.SetComputeRoot32BitConstant(index, offset, uint32(storage))
+				e.cmdList.SetComputeRoot32BitConstant(index, d.size, uint32(m.dynamicStorage+storage))
 			} else {
 				e.cmdList.SetGraphicsRoot32BitConstant(index, offset, uint32(storage))
+				e.cmdList.SetGraphicsRoot32BitConstant(index, d.size, uint32(m.dynamicStorage+storage))
 			}
 			storage++
 		}

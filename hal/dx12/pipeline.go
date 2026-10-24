@@ -137,7 +137,8 @@ type rootParamMapping struct {
 	// From root param dynamicIndex on: a root CBV for each of the group's
 	// dynamicUniforms uniform buffers with a dynamic offset, in binding
 	// order, then, when dynamicStorage > 0, root constants with the offsets
-	// of its storage buffers with one.
+	// of its storage buffers with one, followed by their binding sizes,
+	// which arrayLength() counts.
 	dynamicIndex    int
 	dynamicUniforms int
 	dynamicStorage  int
@@ -258,6 +259,7 @@ func (g *BindGroup) GPUDescriptorHandle() d3d12.D3D12_GPU_DESCRIPTOR_HANDLE {
 type dynamicBuffer struct {
 	uniform bool
 	gpuVA   uint64
+	size    uint32
 }
 
 // -----------------------------------------------------------------------------
@@ -341,6 +343,12 @@ func (d *Device) createRootSignatureFromLayouts(layouts []hal.BindGroupLayout) (
 
 		// Build CBV/SRV/UAV descriptor ranges for this group.
 		rangeBase := len(allRanges)
+		storageWithOffsets := uint32(0)
+		for _, entry := range bgLayout.entries {
+			if entry.HasDynamicOffset && !entry.dynamicUniform() {
+				storageWithOffsets++
+			}
+		}
 
 		for _, entry := range bgLayout.entries {
 			rangeType, isSampler := bindingTypeToD3D12DescriptorRangeType(entry.Type)
@@ -367,9 +375,11 @@ func (d *Device) createRootSignatureFromLayouts(layouts []hal.BindGroupLayout) (
 			}
 			if entry.HasDynamicOffset {
 				// A storage buffer: naga adds its offset, the group's root
-				// constant at this index, to every address.
-				index := uint32(mapping.dynamicStorage)
+				// constant at this index, to every address, and counts the
+				// size after the offsets for arrayLength().
+				index, size := uint32(mapping.dynamicStorage), storageWithOffsets+uint32(mapping.dynamicStorage)
 				target.DynamicStorageBufferOffsetsIndex = &index
+				target.DynamicStorageBufferSizeIndex = &size
 				mapping.dynamicStorage++
 			}
 			bindingMap[hlsl.ResourceBinding{
@@ -469,7 +479,7 @@ func (d *Device) createRootSignatureFromLayouts(layouts []hal.BindGroupLayout) (
 			dynamicStorageOffsets[uint32(groupIdx)] = hlsl.OffsetsBindTarget{
 				Space:    0,
 				Register: bindCBV,
-				Size:     uint32(mapping.dynamicStorage),
+				Size:     2 * uint32(mapping.dynamicStorage),
 			}
 			param := d3d12.D3D12_ROOT_PARAMETER{
 				ParameterType:    d3d12.D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
@@ -477,7 +487,7 @@ func (d *Device) createRootSignatureFromLayouts(layouts []hal.BindGroupLayout) (
 			}
 			*(*d3d12.D3D12_ROOT_CONSTANTS)(unsafe.Pointer(&param.Union[0])) = d3d12.D3D12_ROOT_CONSTANTS{
 				ShaderRegister: bindCBV,
-				Num32BitValues: uint32(mapping.dynamicStorage),
+				Num32BitValues: 2 * uint32(mapping.dynamicStorage),
 			}
 			rootParams = append(rootParams, param)
 			bindCBV++

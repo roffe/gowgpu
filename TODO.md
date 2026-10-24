@@ -16,7 +16,7 @@ What's still open after the 2026-10-23 vet and the perf check on 2026-10-24. The
 
 - [x] Vulkan: clamp `frag_depth` for pipelines whose layout has push constants of its own (HAL users only).
 - [ ] Track the depth and stencil aspects of a texture apart, as wgpu-core's ComplexTextureState does.
-- [ ] DX12: `arrayLength()` on a storage buffer with a dynamic offset counts to the end of the buffer, not the binding.
+- [x] DX12: `arrayLength()` on a storage buffer with a dynamic offset counts the binding.
 - [ ] Timestamp queries on Vulkan, DX12 and Metal.
 - [ ] BC formats on Metal.
 - [ ] Browser: the 16-bit normalized formats, needs a `texture-formats-tier1` feature in gputypes.

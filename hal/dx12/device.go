@@ -1946,6 +1946,7 @@ func (d *Device) CreateBindGroup(desc *hal.BindGroupDescriptor) (hal.BindGroup, 
 						bg.dynamicBuffers = append(bg.dynamicBuffers, dynamicBuffer{
 							uniform: layoutEntry.Type == BindingTypeUniformBuffer,
 							gpuVA:   buf.gpuVA + bufBinding.Offset,
+							size:    uint32(bufferBindingSize(buf.size, bufBinding)),
 						})
 					}
 				}
@@ -2258,6 +2259,7 @@ func hlslToDXILBindingMap(m map[hlsl.ResourceBinding]hlsl.BindTarget) dxil.Bindi
 			Register:                         v.Register,
 			RestrictIndexing:                 v.RestrictIndexing,
 			DynamicStorageBufferOffsetsIndex: v.DynamicStorageBufferOffsetsIndex,
+			DynamicStorageBufferSizeIndex:    v.DynamicStorageBufferSizeIndex,
 		}
 	}
 	return out

@@ -122,11 +122,9 @@ func rawBufferViewRange(offset, size uint64) (firstElement uint64, numElements u
 func (d *Device) writeBufferViewDescriptor(le BindGroupLayoutEntry, buf *Buffer, res gputypes.BufferBinding, dest d3d12.D3D12_CPU_DESCRIPTOR_HANDLE) error {
 	if le.HasDynamicOffset {
 		// A storage buffer the shader adds its dynamic offset to: the view
-		// runs to the end of the buffer, as in Rust's wgpu-hal.
-		// ponytail: so arrayLength() on it counts from the bind group's
-		// offset to the end of the buffer, whatever the binding size and
-		// the dynamic offset, as in Rust. Fixing it takes the binding size
-		// in the root constants and naga reading it from there.
+		// runs to the end of the buffer, as in Rust's wgpu-hal, and the
+		// shader reads the binding size for arrayLength() from the root
+		// constants.
 		res.Size = 0
 	}
 	size := bufferBindingSize(buf.size, res)
