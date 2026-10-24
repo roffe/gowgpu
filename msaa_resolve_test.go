@@ -84,9 +84,6 @@ func TestMultisampleStateWritesItsSamples(t *testing.T) {
 		{"sample mask", gputypes.MultisampleState{Count: 4, Mask: 1}, 160, 224},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.ms.Mask != 0xFFFFFFFF && h.backend == gputypes.BackendMetal {
-				t.Skip("Metal has no pipeline sample mask, see the known issues")
-			}
 			pipe, err := device.CreateRenderPipeline(&RenderPipelineDescriptor{
 				Label:       tc.name,
 				Vertex:      VertexState{Module: module, EntryPoint: "vs_main"},

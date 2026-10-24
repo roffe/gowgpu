@@ -652,11 +652,13 @@ func (c *compiledLibrary) release() {
 // size of a point it doesn't write undefined. A vertex stage with vertex
 // buffers reads its attributes from them itself, bounds checked, as naga's
 // vertex pulling writes it: Metal's vertex fetch neither checks bounds nor
-// takes attribute offsets that aren't a multiple of 4.
+// takes attribute offsets that aren't a multiple of 4. A fragment stage
+// applies sampleMask, when it isn't nil, itself: Metal has no pipeline
+// sample mask.
 //
 // Reference: Rust wgpu-hal metal/device.rs load_shader.
 func (d *Device) compileLibrary(module *ShaderModule, layout *PipelineLayout, stage ir.ShaderStage, name string, constants map[string]float64,
-	points bool, vertexBuffers []msl.VertexBufferMapping) (*compiledLibrary, error) {
+	points bool, vertexBuffers []msl.VertexBufferMapping, sampleMask *uint32) (*compiledLibrary, error) {
 	if module == nil || module.irModule == nil {
 		return nil, fmt.Errorf("metal: shader module has no WGSL source")
 	}
@@ -677,6 +679,7 @@ func (d *Device) compileLibrary(module *ShaderModule, layout *PipelineLayout, st
 		return nil, fmt.Errorf("metal: %w", err)
 	}
 	options.AllowAndForcePointSize = points
+	options.FixedSampleMask = sampleMask
 	sizesBindings, err := mslmap.SizesBindings(irModule, stage, name)
 	if err == nil && len(vertexBuffers) > 0 {
 		options.VertexPullingTransform = true
@@ -732,6 +735,18 @@ func (d *Device) compileLibrary(module *ShaderModule, layout *PipelineLayout, st
 
 	return &compiledLibrary{library: library, function: function, sizesBindings: sizesBindings, sizesSlot: sizesSlot,
 		clampsFragDepth: options.ClampFragDepth != nil}, nil
+}
+
+// fixedSampleMask is the sample mask of ms the fragment stage has to apply,
+// or nil when it leaves every sample of the pipeline on. A mask of 0 is all
+// samples, as on the other backends.
+func fixedSampleMask(ms gputypes.MultisampleState) *uint32 {
+	all := uint32(1)<<max(ms.Count, 1) - 1
+	mask := uint32(ms.Mask)
+	if ms.Mask == 0 || mask&all == all {
+		return nil
+	}
+	return &mask
 }
 
 // withOverrides is module with its overrides replaced by constants, a
@@ -813,7 +828,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 	if err != nil {
 		return nil, fmt.Errorf("metal: %w", err)
 	}
-	vertex, err := d.compileLibrary(vertexModule, pipeLayout, ir.StageVertex, desc.Vertex.EntryPoint, nil, points, vertexBuffers)
+	vertex, err := d.compileLibrary(vertexModule, pipeLayout, ir.StageVertex, desc.Vertex.EntryPoint, nil, points, vertexBuffers, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -825,7 +840,8 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		if !ok || fragmentModule == nil {
 			return nil, fmt.Errorf("metal: invalid fragment shader module")
 		}
-		fragment, err = d.compileLibrary(fragmentModule, pipeLayout, ir.StageFragment, desc.Fragment.EntryPoint, nil, false, nil)
+		fragment, err = d.compileLibrary(fragmentModule, pipeLayout, ir.StageFragment, desc.Fragment.EntryPoint, nil, false, nil,
+			fixedSampleMask(desc.Multisample))
 		if err != nil {
 			return nil, err
 		}
@@ -1061,7 +1077,7 @@ func (d *Device) CreateComputePipeline(desc *hal.ComputePipelineDescriptor) (hal
 		return nil, fmt.Errorf("metal: invalid compute shader module")
 	}
 
-	lib, err := d.compileLibrary(computeModule, pipeLayout, ir.StageCompute, desc.Compute.EntryPoint, desc.Compute.Constants, false, nil)
+	lib, err := d.compileLibrary(computeModule, pipeLayout, ir.StageCompute, desc.Compute.EntryPoint, desc.Compute.Constants, false, nil, nil)
 	if err != nil {
 		return nil, err
 	}
