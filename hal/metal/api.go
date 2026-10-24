@@ -162,6 +162,7 @@ func (i *Instance) EnumerateAdapters(surfaceHint hal.Surface) []hal.ExposedAdapt
 					MaxComputeWorkgroupSizeY:          family.threadsPerThreadgroup,
 					MaxComputeWorkgroupSizeZ:          family.threadsPerThreadgroup,
 					MaxComputeWorkgroupsPerDimension:  65535,
+					MaxNonSamplerBindings:             1000000,
 				},
 				AlignmentsMask: hal.Alignments{
 					BufferCopyOffset: 4,
