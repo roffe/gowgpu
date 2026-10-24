@@ -859,7 +859,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		colorAttachments := MsgSend(pipelineDesc, Sel("colorAttachments"))
 		for i, target := range desc.Fragment.Targets {
 			attachment := MsgSend(colorAttachments, Sel("objectAtIndexedSubscript:"), uintptr(i))
-			if attachment == 0 {
+			if attachment == 0 || target.Format == gputypes.TextureFormatUndefined {
 				continue
 			}
 
