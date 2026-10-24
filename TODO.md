@@ -9,8 +9,8 @@ What's still open after the 2026-10-23 vet and the perf check on 2026-10-24. The
 
 ## naga (the fork, then upstream)
 
-- [x] HLSL writes `@builtin(primitive_index)` as `SV_PrimitiveID`, sorted ahead of the other system values as Rust naga does for FXC. Needs a PR to gogpu/naga.
-- [x] MSL folds a pipeline's sample mask into the fragment stage (`msl.Options.FixedSampleMask`), and the Metal HAL passes it. Needs a PR to gogpu/naga and a run of `TestMultisampleStateWritesItsSamples` on the Mac.
+- [x] HLSL writes `@builtin(primitive_index)` as `SV_PrimitiveID`, sorted ahead of the other system values as Rust naga does for FXC. Upstream as gogpu/naga#130.
+- [x] MSL folds a pipeline's sample mask into the fragment stage (`msl.Options.FixedSampleMask`), and the Metal HAL passes it. Passes on the Mac, upstream as gogpu/naga#131.
 
 ## Backends
 
