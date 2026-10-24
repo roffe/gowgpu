@@ -1229,7 +1229,7 @@ func (e *CommandEncoder) BeginRenderPass(desc *hal.RenderPassDescriptor) hal.Ren
 			format := dsView.texture.format
 			hasDepth, hasStencil := format.HasDepth(), hasStencilAspect(format)
 			rpKey.DepthFormat = dsView.vkFormat
-			rpKey.DepthReadOnly = (dsa.DepthReadOnly || !hasDepth) && (dsa.StencilReadOnly || !hasStencil)
+			rpKey.DepthLayout = depthAttachmentLayout(dsView.texture, dsa.DepthReadOnly, dsa.StencilReadOnly)
 			rpKey.DepthLoadOp, rpKey.DepthStoreOp = vk.AttachmentLoadOpDontCare, vk.AttachmentStoreOpDontCare
 			rpKey.StencilLoadOp, rpKey.StencilStoreOp = vk.AttachmentLoadOpDontCare, vk.AttachmentStoreOpDontCare
 			if hasDepth {
@@ -2056,6 +2056,27 @@ func depthStencilLayout(tex *Texture, depth, stencil hal.TextureUses) vk.ImageLa
 		}
 	}
 	return vk.ImageLayoutGeneral
+}
+
+// depthAttachmentLayout is the layout a render pass keeps the depth/stencil
+// attachment view, of a texture of tex's format, in: the one the barriers
+// into the pass put it in, from the usage of each aspect. An aspect the
+// format lacks is in the state of the other.
+func depthAttachmentLayout(tex *Texture, depthReadOnly, stencilReadOnly bool) vk.ImageLayout {
+	uses := func(readOnly bool) hal.TextureUses {
+		if readOnly {
+			return hal.TextureUsesDepthStencilRead
+		}
+		return hal.TextureUsesDepthStencilWrite
+	}
+	depth, stencil := uses(depthReadOnly), uses(stencilReadOnly)
+	switch {
+	case !tex.format.HasDepth():
+		depth = stencil
+	case !hasStencilAspect(tex.format):
+		stencil = depth
+	}
+	return depthStencilLayout(tex, depth, stencil)
 }
 
 // deriveImageLayout is the layout an image of tex's format is in while it

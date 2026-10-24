@@ -1082,13 +1082,18 @@ func (t *Texture) TrackingData() *track.TrackingData {
 }
 
 // Subresources selects every subresource of the texture: each of its mip
-// levels in each of its array layers, of which a 3D texture has one.
+// levels in each of its array layers, of which a 3D texture has one, of
+// each of its aspects, of which a depth/stencil format has two.
 func (t *Texture) Subresources() track.TextureSelector {
 	layers := t.size.DepthOrArrayLayers
 	if t.dimension == gputypes.TextureDimension3D {
 		layers = 1
 	}
-	return track.TextureSubresources(t.mipLevelCount, layers)
+	sel := track.TextureSubresources(t.mipLevelCount, layers)
+	if hasDepthAspect(t.format) && hasStencilAspect(t.format) {
+		sel.Aspects = track.AspectsDepthStencil
+	}
+	return sel
 }
 
 // TextureView represents a view into a texture.
@@ -1139,8 +1144,9 @@ type TextureView struct {
 // Subresources selects the subresources of Parent the view is of.
 func (v *TextureView) Subresources() track.TextureSelector {
 	sel := track.TextureSelector{
-		Mips:   track.Range{Start: v.BaseMipLevel, End: v.BaseMipLevel + max(v.MipLevelCount, 1)},
-		Layers: track.Range{Start: v.BaseArrayLayer, End: v.BaseArrayLayer + max(v.ArrayLayerCount, 1)},
+		Mips:    track.Range{Start: v.BaseMipLevel, End: v.BaseMipLevel + max(v.MipLevelCount, 1)},
+		Layers:  track.Range{Start: v.BaseArrayLayer, End: v.BaseArrayLayer + max(v.ArrayLayerCount, 1)},
+		Aspects: track.AspectsOf(v.Aspect),
 	}
 	if v.Parent != nil && v.Parent.dimension == gputypes.TextureDimension3D {
 		sel.Layers = v.Parent.Subresources().Layers

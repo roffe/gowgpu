@@ -248,6 +248,7 @@ func (v *TextureView) subresources() track.TextureSelector {
 		MipLevelCount:   v.desc.MipLevelCount,
 		BaseArrayLayer:  v.desc.BaseArrayLayer,
 		ArrayLayerCount: v.desc.ArrayLayerCount,
+		Aspect:          v.desc.Aspect,
 	}
 	return cv.Subresources()
 }
@@ -259,7 +260,10 @@ func (t *Texture) copySubresources(base *hal.ImageCopyTexture, size *hal.Extent3
 	if t == nil || t.coreTexture == nil {
 		return track.TextureSelector{}
 	}
-	sel := track.TextureSelector{Mips: track.Range{Start: base.MipLevel, End: base.MipLevel + 1}}
+	sel := track.TextureSelector{
+		Mips:    track.Range{Start: base.MipLevel, End: base.MipLevel + 1},
+		Aspects: track.AspectsOf(base.Aspect),
+	}
 	if t.coreTexture.Dimension() == gputypes.TextureDimension3D {
 		sel.Layers = t.coreTexture.Subresources().Layers
 	} else {

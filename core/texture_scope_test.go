@@ -342,8 +342,8 @@ func TestBeginRenderPass_PopulatesTextureScope_DepthReadOnly(t *testing.T) {
 	}
 }
 
-// A depth/stencil attachment is read-only when every aspect its format has
-// is read-only: the flag of an aspect the format lacks does not count.
+// A depth/stencil attachment is used aspect by aspect: read-only where its
+// flag says so, the flag of an aspect the format lacks not counting.
 func TestDepthStencilUsage_PerAspect(t *testing.T) {
 	for _, tc := range []struct {
 		name           string
@@ -354,7 +354,8 @@ func TestDepthStencilUsage_PerAspect(t *testing.T) {
 		{"depth-only format, depth read-only", gputypes.TextureFormatDepth24Plus, true, false, track.TextureUsesDepthStencilRead},
 		{"depth-only format, nothing read-only", gputypes.TextureFormatDepth24Plus, false, false, track.TextureUsesDepthStencilWrite},
 		{"stencil-only format, stencil read-only", gputypes.TextureFormatStencil8, false, true, track.TextureUsesDepthStencilRead},
-		{"both aspects, depth read-only", gputypes.TextureFormatDepth24PlusStencil8, true, false, track.TextureUsesDepthStencilWrite},
+		{"both aspects, depth read-only", gputypes.TextureFormatDepth24PlusStencil8, true, false, track.DepthStencilUses(track.TextureUsesDepthStencilRead, track.TextureUsesDepthStencilWrite)},
+		{"both aspects, stencil read-only", gputypes.TextureFormatDepth32FloatStencil8, false, true, track.DepthStencilUses(track.TextureUsesDepthStencilWrite, track.TextureUsesDepthStencilRead)},
 		{"both aspects, both read-only", gputypes.TextureFormatDepth24PlusStencil8, true, true, track.TextureUsesDepthStencilRead},
 		{"no parent, depth read-only", gputypes.TextureFormatUndefined, true, false, track.TextureUsesDepthStencilWrite},
 	} {

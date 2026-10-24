@@ -72,7 +72,7 @@ func (u TextureUses) Contains(other TextureUses) bool {
 // When all usages are ordered, hardware guarantees access ordering.
 // Reference: wgpu-core track/mod.rs ResourceUses::all_ordered()
 func (u TextureUses) AllOrdered() bool {
-	return u&^textureUsesOrdered == 0
+	return (u|u>>stencilShift)&aspectUses&^textureUsesOrdered == 0
 }
 
 // IsExclusive returns true if any exclusive usage flag is set.
@@ -133,25 +133,7 @@ func (u TextureUses) ToHAL() hal.TextureUses {
 // barrier carries the fine state too (IntoHAL), which is what tells a
 // read-only depth attachment from a written one.
 func (u TextureUses) ToTextureUsage() gputypes.TextureUsage {
-	var result gputypes.TextureUsage
-
-	if u&TextureUsesCopySrc != 0 {
-		result |= gputypes.TextureUsageCopySrc
-	}
-	if u&TextureUsesCopyDst != 0 {
-		result |= gputypes.TextureUsageCopyDst
-	}
-	if u&TextureUsesResource != 0 {
-		result |= gputypes.TextureUsageTextureBinding
-	}
-	if u&(TextureUsesStorageRead|TextureUsesStorageWrite) != 0 {
-		result |= gputypes.TextureUsageStorageBinding
-	}
-	if u&(TextureUsesColorTarget|TextureUsesDepthStencilWrite|TextureUsesDepthStencilRead) != 0 {
-		result |= gputypes.TextureUsageRenderAttachment
-	}
-
-	return result
+	return u.any().ToHAL().Usage()
 }
 
 // TextureTracker tracks texture usage states for a device, per subresource.
@@ -233,6 +215,7 @@ func (t *TextureTracker) SetSubresourceUsage(index TrackerIndex, full, sel Textu
 // transitions to dst, and leaves it in end. An untracked texture is
 // inserted in end without transitions.
 func (t *TextureTracker) apply(index TrackerIndex, start, end stateSource, dst []TexturePendingTransition) []TexturePendingTransition {
+	start, end = start.filled(), end.filled()
 	t.ensureSize(int(index) + 1)
 	if !t.metadata.IsOwned(index) {
 		t.set.insert(index, end)
@@ -263,8 +246,10 @@ func (t *TextureTracker) MergeInto(scope *TextureUsageScope, dst []TexturePendin
 		if !valid || !scope.metadata.IsOwned(index) {
 			continue
 		}
-		if uses != usesComplex && t.setSimple(index, uses, uses, &dst) {
-			continue
+		if uses != usesComplex {
+			if uses = uses.filled(); t.setSimple(index, uses, uses, &dst) {
+				continue
+			}
 		}
 		src := sourceOf(&scope.set, index)
 		dst = t.apply(index, src, src, dst)
@@ -374,12 +359,12 @@ func (s *TextureUsageScope) SetUsage(index TrackerIndex, usage TextureUses) erro
 		return nil
 	}
 	cur := s.set.simple[index]
-	if cur == usesComplex {
+	if cur == usesComplex || (cur|usage)&usesSplit != 0 {
 		return s.set.merge(index, stateSource{uses: usage})
 	}
 	merged := cur | usage
-	if conflicting(merged) {
-		return &TextureUsageConflictError{Index: index, Existing: cur, New: usage}
+	if conflictingAspect(merged) {
+		return newConflict(index, TextureSelector{}, cur, usage)
 	}
 	s.set.simple[index] = merged
 	return nil
@@ -396,7 +381,7 @@ func (s *TextureUsageScope) SetSubresourceUsage(index TrackerIndex, full, sel Te
 	case !ok:
 		return nil
 	case src.simple():
-		return s.SetUsage(index, usage)
+		return s.SetUsage(index, src.uses)
 	}
 	s.set.ensureSize(int(index) + 1)
 	if !s.metadata.IsOwned(index) {
@@ -454,6 +439,9 @@ type TexturePendingTransition struct {
 }
 
 // TextureStateTransition represents a from-to state change for a texture.
+// A state of a texture with a depth and a stencil aspect in different
+// states holds the state of each, as DepthStencilUses makes it; IntoHAL
+// gives the backend them apart.
 type TextureStateTransition struct {
 	From TextureUses
 	To   TextureUses
@@ -465,19 +453,26 @@ func (t TextureStateTransition) NeedsBarrier() bool {
 }
 
 // IntoHAL converts a pending transition to a HAL texture barrier on its
-// subresources, with the coarse usages and the fine states behind them.
+// subresources, with the coarse usages and the fine states behind them,
+// the stencil aspect's apart when they are not the depth aspect's.
 // The caller provides the hal.Texture handle.
 func (p TexturePendingTransition) IntoHAL(texture hal.Texture) hal.TextureBarrier {
-	return hal.TextureBarrier{
+	oldDepth, oldStencil := p.Usage.From.aspects()
+	newDepth, newStencil := p.Usage.To.aspects()
+	b := hal.TextureBarrier{
 		Texture: texture,
 		Range:   p.Selector.HALRange(),
 		Usage: hal.TextureUsageTransition{
 			OldUsage: p.Usage.From.ToTextureUsage(),
 			NewUsage: p.Usage.To.ToTextureUsage(),
-			Old:      p.Usage.From.ToHAL(),
-			New:      p.Usage.To.ToHAL(),
+			Old:      oldDepth.ToHAL(),
+			New:      newDepth.ToHAL(),
 		},
 	}
+	if (p.Usage.From|p.Usage.To)&usesSplit != 0 {
+		b.Usage.StencilOld, b.Usage.StencilNew = oldStencil.ToHAL(), newStencil.ToHAL()
+	}
+	return b
 }
 
 // TextureUsageConflictError is returned when incompatible texture usages

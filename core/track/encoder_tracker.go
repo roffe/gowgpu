@@ -24,9 +24,12 @@ import (
 //     resource in the command buffer (start) and the current usage (end), and
 //     returns the transitions needed between consecutive usage scopes.
 //
-// Textures are tracked per subresource, mip level and array layer, in all
-// of them: a texture whose subresources are in different states keeps a
-// state per range of layers of each mip level.
+// Textures are tracked per subresource, mip level, array layer and, for a
+// format with both, depth or stencil aspect: a texture whose subresources
+// are in different states keeps a state per range of layers of each mip
+// level, which holds the state of each aspect. The usage scopes check each
+// aspect on its own. The trackers that make barriers move both aspects of
+// a range together where a command uses one, see TextureUses.filled.
 //
 // At submit time the device tracker emits barriers from its current state to
 // each command buffer's start state, then adopts the command buffer's end
@@ -90,6 +93,7 @@ func (t *EncoderTextureTracker) SetSubresourceUsage(index TrackerIndex, full, se
 //
 // Reference: wgpu-core track/texture.rs insert_or_barrier_update
 func (t *EncoderTextureTracker) apply(index TrackerIndex, src, start stateSource, startUses TextureUses, emit bool, dst []TexturePendingTransition) []TexturePendingTransition {
+	src, start, startUses = src.filled(), start.filled(), startUses.filled()
 	t.ensureSize(int(index) + 1)
 	if !t.metadata.IsOwned(index) {
 		t.start.insert(index, start)
@@ -156,9 +160,8 @@ func (t *EncoderTextureTracker) RecordTransition(index TrackerIndex, full, sel T
 	if !ok {
 		return
 	}
-	start := src
-	start.uses = from
-	t.apply(index, src, start, from, false, nil)
+	start, _ := selection(full, sel, from)
+	t.apply(index, src, start, start.uses, false, nil)
 }
 
 // StartUsage returns the first usage of the texture in this command buffer,

@@ -1029,6 +1029,7 @@ func TestDepthStencilReadBarrierAccess(t *testing.T) {
 // TestDepthStencilAspectLayouts: the aspects of a depth/stencil image share
 // a layout, the one of both, a written attachment beside a read-only one
 // on a device with the layouts of Vulkan 1.1, and GENERAL without them.
+// The render pass names the layout the barriers into it do.
 func TestDepthStencilAspectLayouts(t *testing.T) {
 	const (
 		write  = hal.TextureUsesDepthStencilWrite
@@ -1058,6 +1059,25 @@ func TestDepthStencilAspectLayouts(t *testing.T) {
 		})
 	}
 
+	mixed := &Device{mixedDepthStencilLayouts: true}
+	for _, tt := range []struct {
+		format                         gputypes.TextureFormat
+		depthReadOnly, stencilReadOnly bool
+		want                           vk.ImageLayout
+	}{
+		{gputypes.TextureFormatDepth24PlusStencil8, false, false, vk.ImageLayoutDepthStencilAttachmentOptimal},
+		{gputypes.TextureFormatDepth24PlusStencil8, false, true, vk.ImageLayoutDepthAttachmentStencilReadOnlyOptimal},
+		{gputypes.TextureFormatDepth32FloatStencil8, true, false, vk.ImageLayoutDepthReadOnlyStencilAttachmentOptimal},
+		{gputypes.TextureFormatDepth32FloatStencil8, true, true, vk.ImageLayoutDepthStencilReadOnlyOptimal},
+		{gputypes.TextureFormatDepth32Float, false, true, vk.ImageLayoutDepthStencilAttachmentOptimal},
+		{gputypes.TextureFormatDepth32Float, true, false, vk.ImageLayoutDepthStencilReadOnlyOptimal},
+		{gputypes.TextureFormatStencil8, true, false, vk.ImageLayoutDepthStencilAttachmentOptimal},
+	} {
+		tex := &Texture{format: tt.format, device: mixed}
+		if got := depthAttachmentLayout(tex, tt.depthReadOnly, tt.stencilReadOnly); got != tt.want {
+			t.Errorf("%v depth read-only %v, stencil read-only %v: layout %v, want %v", tt.format, tt.depthReadOnly, tt.stencilReadOnly, got, tt.want)
+		}
+	}
 }
 
 // TestPresentModeToVk tests present mode conversions.

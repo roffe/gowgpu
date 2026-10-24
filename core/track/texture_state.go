@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 )
 
@@ -24,13 +25,57 @@ func (r Range) empty() bool {
 }
 
 // TextureSelector selects subresources of a texture: the array layers
-// Layers of each of the mip levels Mips. The zero selector selects all of
-// them. A 3D texture has one layer, its depth slices are not subresources.
+// Layers of each of the mip levels Mips, of the aspects Aspects. Zero
+// ranges select every level and layer, and zero aspects every aspect: the
+// zero selector selects all of them. A 3D texture has one layer, its depth
+// slices are not subresources.
 //
 // Reference: wgpu-types TextureSelector
 type TextureSelector struct {
-	Mips   Range
-	Layers Range
+	Mips    Range
+	Layers  Range
+	Aspects Aspects
+}
+
+// Aspects selects the depth or the stencil aspect, or both, of a texture.
+// Only a texture with both is used per aspect: it selects every subresource
+// of the texture with AspectsDepthStencil, and the selection of one aspect
+// of any other texture is the selection of all of it.
+type Aspects uint8
+
+// Aspects of a depth/stencil texture.
+const (
+	AspectDepth Aspects = 1 << iota
+	AspectStencil
+
+	AspectsDepthStencil = AspectDepth | AspectStencil
+)
+
+// AspectsOf is the selection of the aspect a, all of them for
+// TextureAspectAll and TextureAspectUndefined.
+func AspectsOf(a gputypes.TextureAspect) Aspects {
+	switch a {
+	case gputypes.TextureAspectDepthOnly:
+		return AspectDepth
+	case gputypes.TextureAspectStencilOnly:
+		return AspectStencil
+	}
+	return 0
+}
+
+// uses is uses on the aspects sel selects of a texture of aspects a, the
+// aspects it does not select left unknown.
+func (a Aspects) uses(sel Aspects, uses TextureUses) TextureUses {
+	if a != AspectsDepthStencil {
+		return uses
+	}
+	switch sel {
+	case AspectDepth:
+		return joinAspects(uses, usesUnknown)
+	case AspectStencil:
+		return joinAspects(usesUnknown, uses)
+	}
+	return uses
 }
 
 // TextureSubresources selects every subresource of a texture of mips mip
@@ -43,12 +88,14 @@ func TextureSubresources(mips, layers uint32) TextureSelector {
 // subresources are full, a count of 0 meaning the levels or layers from
 // the base on.
 func SelectorFromRange(full TextureSelector, r hal.TextureRange) TextureSelector {
+	aspects := AspectsOf(r.Aspect)
 	if full.whole() {
-		return TextureSelector{}
+		return TextureSelector{Aspects: aspects}
 	}
 	sel := TextureSelector{
-		Mips:   Range{r.BaseMipLevel, full.Mips.End},
-		Layers: Range{r.BaseArrayLayer, full.Layers.End},
+		Mips:    Range{r.BaseMipLevel, full.Mips.End},
+		Layers:  Range{r.BaseArrayLayer, full.Layers.End},
+		Aspects: aspects,
 	}
 	if r.MipLevelCount != 0 {
 		sel.Mips.End = r.BaseMipLevel + r.MipLevelCount
@@ -59,12 +106,16 @@ func SelectorFromRange(full TextureSelector, r hal.TextureRange) TextureSelector
 	return sel
 }
 
+// whole reports whether s selects every mip level and layer.
 func (s TextureSelector) whole() bool {
-	return s == TextureSelector{}
+	return s.Mips == Range{} && s.Layers == Range{}
 }
 
 // Overlaps reports whether s and o select a subresource in common.
 func (s TextureSelector) Overlaps(o TextureSelector) bool {
+	if s.Aspects != 0 && o.Aspects != 0 && s.Aspects&o.Aspects == 0 {
+		return false
+	}
 	if s.whole() || o.whole() {
 		return true
 	}
@@ -73,29 +124,41 @@ func (s TextureSelector) Overlaps(o TextureSelector) bool {
 
 // HALRange is the HAL range of the subresources s selects.
 func (s TextureSelector) HALRange() hal.TextureRange {
+	var r hal.TextureRange
+	switch s.Aspects {
+	case AspectDepth:
+		r.Aspect = gputypes.TextureAspectDepthOnly
+	case AspectStencil:
+		r.Aspect = gputypes.TextureAspectStencilOnly
+	}
 	if s.whole() {
-		return hal.TextureRange{}
+		return r
 	}
-	return hal.TextureRange{
-		BaseMipLevel:    s.Mips.Start,
-		MipLevelCount:   s.Mips.End - s.Mips.Start,
-		BaseArrayLayer:  s.Layers.Start,
-		ArrayLayerCount: s.Layers.End - s.Layers.Start,
-	}
+	r.BaseMipLevel, r.MipLevelCount = s.Mips.Start, s.Mips.End-s.Mips.Start
+	r.BaseArrayLayer, r.ArrayLayerCount = s.Layers.Start, s.Layers.End-s.Layers.Start
+	return r
 }
 
 // String formats s for error messages.
 func (s TextureSelector) String() string {
-	if s.whole() {
-		return "every subresource"
+	aspect := ""
+	switch s.Aspects {
+	case AspectDepth:
+		aspect = " of the depth aspect"
+	case AspectStencil:
+		aspect = " of the stencil aspect"
 	}
-	return fmt.Sprintf("mip levels %d..%d, layers %d..%d", s.Mips.Start, s.Mips.End, s.Layers.Start, s.Layers.End)
+	if s.whole() {
+		return "every subresource" + aspect
+	}
+	return fmt.Sprintf("mip levels %d..%d, layers %d..%d%s", s.Mips.Start, s.Mips.End, s.Layers.Start, s.Layers.End, aspect)
 }
 
 // within is sel clamped to full, the zero selector when it takes in every
 // subresource, and false when it selects none. A texture whose subresources
-// are not known is used whole.
+// are not known is used whole. Aspects are left out.
 func (s TextureSelector) within(full TextureSelector) (TextureSelector, bool) {
+	s.Aspects, full.Aspects = 0, 0
 	if s.whole() || full.whole() {
 		return TextureSelector{}, true
 	}
@@ -114,18 +177,123 @@ func (s TextureSelector) within(full TextureSelector) (TextureSelector, bool) {
 // nothing about, which takes no barrier. usesComplex marks a texture whose
 // subresources are not all in one state in a stateSet.
 //
+// A texture with both a depth and a stencil aspect whose aspects are in
+// different states is in a state with usesSplit set: the depth aspect's
+// state in the bits below it, the stencil aspect's above, from
+// stencilShift. Every other state is the one of both aspects.
+//
 // Reference: wgpu-types TextureUses::UNKNOWN and TextureUses::COMPLEX
 const (
-	usesUnknown TextureUses = 1 << 30
+	usesUnknown TextureUses = 1 << 14
+	usesSplit   TextureUses = 1 << 15
 	usesComplex TextureUses = 1 << 31
+
+	stencilShift             = 16
+	aspectUses   TextureUses = (1<<stencilShift - 1) &^ usesSplit
 )
 
+// aspects is the state of the depth and of the stencil aspect of u.
+func (u TextureUses) aspects() (depth, stencil TextureUses) {
+	if u&usesSplit == 0 {
+		return u, u
+	}
+	return u & aspectUses, u >> stencilShift & aspectUses
+}
+
+// joinAspects is the state of a texture whose depth aspect is in depth and
+// stencil aspect in stencil.
+func joinAspects(depth, stencil TextureUses) TextureUses {
+	if depth == stencil {
+		return depth
+	}
+	return depth | usesSplit | stencil<<stencilShift
+}
+
+// DepthStencilUses is the usage of a texture with a depth and a stencil
+// aspect that uses its depth aspect with depth and its stencil aspect with
+// stencil.
+func DepthStencilUses(depth, stencil TextureUses) TextureUses {
+	return joinAspects(depth, stencil)
+}
+
+// any is every usage of an aspect of u, the unknown ones left out.
+func (u TextureUses) any() TextureUses {
+	depth, stencil := u.aspects()
+	return (depth | stencil) &^ usesUnknown
+}
+
+// filled is u with an aspect u says nothing about in the state of the
+// other. The trackers that make barriers move both aspects of a texture
+// together where a command uses one of them, as Dawn does: Vulkan keeps
+// the two aspects of an image in one layout.
+func (u TextureUses) filled() TextureUses {
+	if u&usesSplit == 0 {
+		return u
+	}
+	depth, stencil := u.aspects()
+	switch {
+	case depth == usesUnknown:
+		return stencil
+	case stencil == usesUnknown:
+		return depth
+	}
+	return u
+}
+
+// mergeUses is the state of a subresource in usage scope that has been
+// used with cur and is used with next, aspect by aspect.
+func mergeUses(cur, next TextureUses) TextureUses {
+	if (cur|next)&usesSplit == 0 {
+		return mergeAspect(cur, next)
+	}
+	cd, cs := cur.aspects()
+	nd, ns := next.aspects()
+	return joinAspects(mergeAspect(cd, nd), mergeAspect(cs, ns))
+}
+
+func mergeAspect(cur, next TextureUses) TextureUses {
+	switch {
+	case next == usesUnknown:
+		return cur
+	case cur == usesUnknown:
+		return next
+	}
+	return cur | next
+}
+
 // conflicting reports a state no subresource can be in: an exclusive usage
-// with any other.
+// with any other on one aspect.
 //
 // Reference: wgpu-core track/texture.rs ResourceUses::is_invalid
 func conflicting(u TextureUses) bool {
+	if u&usesSplit != 0 {
+		return conflictingAspects(u)
+	}
+	return conflictingAspect(u)
+}
+
+func conflictingAspects(u TextureUses) bool {
+	depth, stencil := u.aspects()
+	return conflictingAspect(depth) || conflictingAspect(stencil)
+}
+
+func conflictingAspect(u TextureUses) bool {
 	return u.IsExclusive() && !isPowerOfTwo(uint32(u))
+}
+
+// newConflict is the error of the subresources sel selects of the texture
+// at i, used with cur, being used with next too, naming the aspect they
+// conflict on when the aspects are used apart.
+func newConflict(i TrackerIndex, sel TextureSelector, cur, next TextureUses) *TextureUsageConflictError {
+	if (cur|next)&usesSplit != 0 {
+		cd, cs := cur.aspects()
+		nd, ns := next.aspects()
+		sel.Aspects, cur, next = AspectDepth, cd, nd
+		if !conflictingAspect(mergeAspect(cd, nd)) {
+			sel.Aspects, cur, next = AspectStencil, cs, ns
+		}
+	}
+	return &TextureUsageConflictError{Index: i, Selector: sel, Existing: cur &^ usesUnknown, New: next &^ usesUnknown}
 }
 
 // layerState is the state of a range of array layers of one mip level.
@@ -263,10 +431,21 @@ func (c *complexState) union() TextureUses {
 	var uses TextureUses
 	for _, states := range c.mips {
 		for _, s := range states {
-			uses |= s.uses
+			uses |= s.uses.any()
 		}
 	}
-	return uses &^ usesUnknown
+	return uses
+}
+
+// fill puts the aspect of each range of c it says nothing about in the
+// state of the other.
+func (c *complexState) fill() {
+	for mip, states := range c.mips {
+		for i := range states {
+			states[i].uses = states[i].uses.filled()
+		}
+		c.coalesce(uint32(mip))
+	}
 }
 
 // each calls f with the selector and state of every range of c.
@@ -312,7 +491,7 @@ func (s *stateSet) union(i TrackerIndex) TextureUses {
 	if c != nil {
 		return c.union()
 	}
-	return uses
+	return uses.any()
 }
 
 func (s *stateSet) setSimple(i TrackerIndex, uses TextureUses) {
@@ -376,7 +555,7 @@ func (s *stateSet) clear() {
 // stateSource is a state an operation brings to a texture: uses for the
 // subresources sel selects of a texture whose subresources are full, or
 // another tracker's state of the texture, the complex one when complex is
-// set.
+// set, its ranges filled when fill is.
 //
 // Reference: wgpu-core track/texture.rs TextureStateProvider
 type stateSource struct {
@@ -384,13 +563,27 @@ type stateSource struct {
 	sel     TextureSelector
 	uses    TextureUses
 	complex *complexState
+	fill    bool
 }
 
 // selection is the source of uses on the subresources sel selects of a
 // texture whose subresources are full. It is false when sel selects none.
 func selection(full, sel TextureSelector, uses TextureUses) (stateSource, bool) {
+	uses = full.Aspects.uses(sel.Aspects, uses)
+	full.Aspects = 0
 	sel, ok := sel.within(full)
 	return stateSource{full: full, sel: sel, uses: uses}, ok
+}
+
+// filled is the source with the aspect of a state it says nothing about in
+// the state of the other, for a tracker that makes barriers.
+func (src stateSource) filled() stateSource {
+	if src.complex != nil {
+		src.fill = true
+	} else {
+		src.uses = src.uses.filled()
+	}
+	return src
 }
 
 // sourceOf is the source of the state s has for the texture at i.
@@ -414,11 +607,14 @@ func (src stateSource) fullRange() TextureSelector {
 
 // each calls f with every selection of the source and its state.
 func (src stateSource) each(f func(TextureSelector, TextureUses)) {
-	if src.complex != nil {
+	switch {
+	case src.complex != nil && src.fill:
+		src.complex.each(func(sel TextureSelector, uses TextureUses) { f(sel, uses.filled()) })
+	case src.complex != nil:
 		src.complex.each(f)
-		return
+	default:
+		f(src.sel, src.uses)
 	}
-	f(src.sel, src.uses)
 }
 
 // insert makes src the state of the texture at i, which s does not track:
@@ -432,6 +628,9 @@ func (s *stateSet) insert(i TrackerIndex, src stateSource) {
 	case src.complex != nil:
 		c := s.newComplex()
 		c.copyFrom(src.complex)
+		if src.fill {
+			c.fill()
+		}
 		s.setComplex(i, c)
 	default:
 		c := s.newComplex()
@@ -449,9 +648,9 @@ func (s *stateSet) merge(i TrackerIndex, src stateSource) error {
 	cur, c := s.get(i)
 	switch {
 	case c == nil && src.simple():
-		merged := cur | src.uses
+		merged := mergeUses(cur, src.uses)
 		if conflicting(merged) {
-			return &TextureUsageConflictError{Index: i, Existing: cur, New: src.uses}
+			return newConflict(i, TextureSelector{}, cur, src.uses)
 		}
 		s.simple[i] = merged
 		return nil
@@ -463,9 +662,9 @@ func (s *stateSet) merge(i TrackerIndex, src stateSource) error {
 			if err != nil || uses == usesUnknown {
 				return
 			}
-			merged := cur | uses
+			merged := mergeUses(cur, uses)
 			if conflicting(merged) {
-				err = &TextureUsageConflictError{Index: i, Selector: sel, Existing: cur, New: uses}
+				err = newConflict(i, sel, cur, uses)
 				return
 			}
 			next.set(sel, merged)
@@ -486,12 +685,12 @@ func (s *stateSet) merge(i TrackerIndex, src stateSource) error {
 		for mip := sel.Mips.Start; mip < sel.Mips.End; mip++ {
 			states := c.isolate(mip, sel.Layers)
 			for k := range states {
-				merged := (states[k].uses | uses) &^ usesUnknown
-				if merged == TextureUsesNone {
+				merged := mergeUses(states[k].uses, uses)
+				if merged == usesUnknown {
 					continue
 				}
 				if conflicting(merged) {
-					err = &TextureUsageConflictError{Index: i, Selector: TextureSelector{Mips: Range{mip, mip + 1}, Layers: states[k].layers}, Existing: states[k].uses &^ usesUnknown, New: uses}
+					err = newConflict(i, TextureSelector{Mips: Range{mip, mip + 1}, Layers: states[k].layers}, states[k].uses, uses)
 					return
 				}
 				states[k].uses = merged
