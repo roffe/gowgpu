@@ -1722,8 +1722,9 @@ func (d *Device) CreateTextureView(texture hal.Texture, desc *hal.TextureViewDes
 	// Create a UAV if the texture can be a storage texture: a storage
 	// texture binding of a bind group is written from it (a UAV range of
 	// the root signature, see bindingTypeToD3D12DescriptorRangeType). Depth
-	// formats have no UAV, and WebGPU has no storage depth textures.
-	if tex.usage&gputypes.TextureUsageStorageBinding != 0 && !isDepthFormat(viewFormat) {
+	// formats have no UAV, and WebGPU has no storage depth textures. Nor
+	// does an sRGB format, which a storage texture may have a view in.
+	if tex.usage&gputypes.TextureUsageStorageBinding != 0 && !isDepthFormat(viewFormat) && !viewFormat.IsSrgb() {
 		uavHandle, uavIndex, err := d.stagingViewHeap.allocate()
 		if err != nil {
 			return failTextureViewCreation(view, fmt.Errorf("dx12: failed to allocate UAV descriptor: %w", err))
