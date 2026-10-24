@@ -1,9 +1,12 @@
 // Command fluid fills the bottom half of a window with water: smoothed
 // particle hydrodynamics on the GPU, 16,384 particles by default. Every
-// substep is four compute dispatches: predict where the particles go, bin
-// them into a grid with atomics, sum each one's density over the cells
-// around it, then apply pressure and viscosity and move them. A render
-// pipeline draws the same buffer as soft discs.
+// substep is seven compute dispatches: predict where the particles go, count
+// them into a grid with atomics, sum the counts into where each cell starts
+// (two dispatches), sort the particles into cell order, sum each one's
+// density over the cells around it, then apply pressure and viscosity and
+// move them. The sort keeps neighbors next to each other in memory, which
+// the water would otherwise shuffle as it moves. A render pipeline draws
+// the same buffer as soft discs.
 //
 // Hold the left mouse button to pull the water to the pointer and the right
 // one to blast it away.
@@ -33,9 +36,8 @@ import (
 const (
 	particleBytes = 16 // pos: vec2<f32>, vel: vec2<f32>
 	workgroup     = 256
-	slotsPerCell  = 32 // K in the shaders
-	maxCells      = 1 << 16
-	maxParticles  = 1 << 17 // keeps the grid within maxCells
+	maxCells      = workgroup * workgroup // what the two scan dispatches sum
+	maxParticles  = 1 << 17               // keeps the grid within maxCells
 )
 
 // params mirrors Params in the shaders. The box reaches bounds either side
@@ -61,7 +63,6 @@ type params struct {
 
 // typesWGSL opens every shader.
 const typesWGSL = `
-const K: u32 = 32u;
 const PI: f32 = 3.14159265;
 const MOUSE_RADIUS: f32 = 0.4;
 
@@ -97,12 +98,10 @@ fn cell_of(p: vec2<f32>) -> vec2<i32> {
     return clamp(c, vec2<i32>(0), vec2<i32>(i32(params.grid_w) - 1, i32(params.grid_h) - 1));
 }
 
-// cell_index is the cell's place in counts and slots, or -1 outside the grid.
-fn cell_index(c: vec2<i32>) -> i32 {
-    if (c.x < 0 || c.y < 0 || c.x >= i32(params.grid_w) || c.y >= i32(params.grid_h)) {
-        return -1;
-    }
-    return c.y * i32(params.grid_w) + c.x;
+// cell_id is the place in counts and starts of the cell p is in.
+fn cell_id(p: vec2<f32>) -> u32 {
+    let c = cell_of(p);
+    return u32(c.y) * params.grid_w + u32(c.x);
 }
 
 // Kernels over a distance r under h, each integrating to 1 over the plane,
@@ -165,11 +164,11 @@ fn predict(@builtin(global_invocation_id) id: vec3<u32>) {
 }
 `
 
-// binWGSL puts each particle's index in its cell's slots.
+// binWGSL counts the particles in each cell and gives each its rank there.
 const binWGSL = `
 @group(0) @binding(1) var<storage, read> predicted: array<Particle>;
 @group(0) @binding(2) var<storage, read_write> counts: array<atomic<u32>>;
-@group(0) @binding(3) var<storage, read_write> slots: array<u32>;
+@group(0) @binding(3) var<storage, read_write> ranks: array<u32>;
 
 @compute @workgroup_size(256)
 fn bin(@builtin(global_invocation_id) id: vec3<u32>) {
@@ -177,20 +176,124 @@ fn bin(@builtin(global_invocation_id) id: vec3<u32>) {
     if (i >= params.count) {
         return;
     }
-    let c = u32(cell_index(cell_of(predicted[i].pos)));
-    let slot = atomicAdd(&counts[c], 1u);
-    if (slot < K) {
-        slots[c * K + slot] = i;
+    ranks[i] = atomicAdd(&counts[cell_id(predicted[i].pos)], 1u);
+}
+`
+
+// scanWGSL opens the two scan shaders: a prefix sum over a workgroup.
+const scanWGSL = `
+var<workgroup> partial: array<u32, 256>;
+
+// scan returns the sum of v over this invocation and the ones before it.
+fn scan(li: u32, v: u32) -> u32 {
+    partial[li] = v;
+    workgroupBarrier();
+    for (var off = 1u; off < 256u; off *= 2u) {
+        var add = 0u;
+        if (li >= off) {
+            add = partial[li - off];
+        }
+        workgroupBarrier();
+        partial[li] += add;
+        workgroupBarrier();
     }
+    return partial[li];
+}
+`
+
+// scanCellsWGSL sums the counts of each block of 256 cells into where each
+// cell starts within the block, and each block's total into sums.
+const scanCellsWGSL = `
+@group(0) @binding(1) var<storage, read> counts: array<u32>;
+@group(0) @binding(2) var<storage, read_write> starts: array<u32>;
+@group(0) @binding(3) var<storage, read_write> sums: array<u32>;
+
+@compute @workgroup_size(256)
+fn scan_cells(@builtin(global_invocation_id) id: vec3<u32>, @builtin(local_invocation_index) li: u32, @builtin(workgroup_id) wg: vec3<u32>) {
+    let cells = params.grid_w * params.grid_h;
+    var v = 0u;
+    if (id.x < cells) {
+        v = counts[id.x];
+    }
+    let total = scan(li, v);
+    if (id.x < cells) {
+        starts[id.x] = total - v;
+    }
+    if (li == 255u) {
+        sums[wg.x] = total;
+    }
+}
+`
+
+// scanBlocksWGSL turns the block totals into where each block starts, so a
+// cell starts at starts[c] + sums[c / 256].
+const scanBlocksWGSL = `
+@group(0) @binding(1) var<storage, read_write> sums: array<u32>;
+
+@compute @workgroup_size(256)
+fn scan_blocks(@builtin(local_invocation_index) li: u32) {
+    let blocks = (params.grid_w * params.grid_h + 255u) / 256u;
+    var v = 0u;
+    if (li < blocks) {
+        v = sums[li];
+    }
+    let total = scan(li, v);
+    if (li < blocks) {
+        sums[li] = total - v;
+    }
+}
+`
+
+// scatterWGSL sorts the predicted particles, and where they were, into cell order.
+const scatterWGSL = `
+@group(0) @binding(1) var<storage, read> particles: array<Particle>;
+@group(0) @binding(2) var<storage, read> predicted: array<Particle>;
+@group(0) @binding(3) var<storage, read> ranks: array<u32>;
+@group(0) @binding(4) var<storage, read> starts: array<u32>;
+@group(0) @binding(5) var<storage, read> sums: array<u32>;
+@group(0) @binding(6) var<storage, read_write> sorted: array<Particle>;
+@group(0) @binding(7) var<storage, read_write> previous: array<vec2<f32>>;
+
+@compute @workgroup_size(256)
+fn scatter(@builtin(global_invocation_id) id: vec3<u32>) {
+    let i = id.x;
+    if (i >= params.count) {
+        return;
+    }
+    let c = cell_id(predicted[i].pos);
+    let dest = starts[c] + sums[c / 256u] + ranks[i];
+    sorted[dest] = predicted[i];
+    previous[dest] = particles[i].pos;
+}
+`
+
+// gridWGSL follows funcsWGSL in the shaders that read the sorted particles,
+// which declare counts, starts and sums.
+const gridWGSL = `
+fn cell_start(c: u32) -> u32 {
+    return starts[c] + sums[c / 256u];
+}
+
+// row is the range of sorted particles in the cell dy rows from home and the
+// cells either side of it, which follow each other in cell order.
+fn row(home: vec2<i32>, dy: i32) -> vec2<u32> {
+    let y = home.y + dy;
+    if (y < 0 || y >= i32(params.grid_h)) {
+        return vec2<u32>(0u);
+    }
+    let first = u32(y) * params.grid_w + u32(max(home.x - 1, 0));
+    let last = u32(y) * params.grid_w + u32(min(home.x + 1, i32(params.grid_w) - 1));
+    return vec2<u32>(cell_start(first), cell_start(last) + counts[last]);
 }
 `
 
 // densityWGSL sums the kernels over each particle's neighbors, itself included.
 const densityWGSL = `
-@group(0) @binding(1) var<storage, read> predicted: array<Particle>;
+@group(0) @binding(1) var<storage, read> sorted: array<Particle>;
 @group(0) @binding(2) var<storage, read> counts: array<u32>;
-@group(0) @binding(3) var<storage, read> slots: array<u32>;
-@group(0) @binding(4) var<storage, read_write> densities: array<vec2<f32>>;
+@group(0) @binding(3) var<storage, read> starts: array<u32>;
+@group(0) @binding(4) var<storage, read> sums: array<u32>;
+@group(0) @binding(5) var<storage, read_write> densities: array<vec2<f32>>;
 
 @compute @workgroup_size(256)
 fn density(@builtin(global_invocation_id) id: vec3<u32>) {
@@ -198,21 +301,15 @@ fn density(@builtin(global_invocation_id) id: vec3<u32>) {
     if (i >= params.count) {
         return;
     }
-    let p = predicted[i].pos;
+    let p = sorted[i].pos;
     let home = cell_of(p);
     var rho = vec2<f32>(0.0);
     for (var dy = -1; dy <= 1; dy++) {
-        for (var dx = -1; dx <= 1; dx++) {
-            let c = cell_index(home + vec2<i32>(dx, dy));
-            if (c < 0) {
-                continue;
-            }
-            let n = min(counts[c], K);
-            for (var s = 0u; s < n; s++) {
-                let r = distance(p, predicted[slots[u32(c) * K + s]].pos);
-                if (r < params.h) {
-                    rho += vec2<f32>(w_density(r), w_near(r));
-                }
+        let span = row(home, dy);
+        for (var j = span.x; j < span.y; j++) {
+            let r = distance(p, sorted[j].pos);
+            if (r < params.h) {
+                rho += vec2<f32>(w_density(r), w_near(r));
             }
         }
     }
@@ -221,13 +318,16 @@ fn density(@builtin(global_invocation_id) id: vec3<u32>) {
 `
 
 // forceWGSL accelerates each particle by the pressure and viscosity of its
-// neighbors, moves it and keeps it in the box.
+// neighbors, moves it and keeps it in the box. The particles come out in
+// cell order.
 const forceWGSL = `
-@group(0) @binding(1) var<storage, read> predicted: array<Particle>;
+@group(0) @binding(1) var<storage, read> sorted: array<Particle>;
 @group(0) @binding(2) var<storage, read> counts: array<u32>;
-@group(0) @binding(3) var<storage, read> slots: array<u32>;
-@group(0) @binding(4) var<storage, read> densities: array<vec2<f32>>;
-@group(0) @binding(5) var<storage, read_write> particles: array<Particle>;
+@group(0) @binding(3) var<storage, read> starts: array<u32>;
+@group(0) @binding(4) var<storage, read> sums: array<u32>;
+@group(0) @binding(5) var<storage, read> densities: array<vec2<f32>>;
+@group(0) @binding(6) var<storage, read> previous: array<vec2<f32>>;
+@group(0) @binding(7) var<storage, read_write> particles: array<Particle>;
 
 fn pressure(rho: vec2<f32>) -> vec2<f32> {
     return vec2<f32>(params.stiffness * (rho.x - params.rest), params.near_stiffness * rho.y);
@@ -239,43 +339,36 @@ fn force(@builtin(global_invocation_id) id: vec3<u32>) {
     if (i >= params.count) {
         return;
     }
-    let p = predicted[i];
+    let p = sorted[i];
     let rho = densities[i];
     let pr = pressure(rho);
     let home = cell_of(p.pos);
     var a = vec2<f32>(0.0);
     var visc = vec2<f32>(0.0);
     for (var dy = -1; dy <= 1; dy++) {
-        for (var dx = -1; dx <= 1; dx++) {
-            let c = cell_index(home + vec2<i32>(dx, dy));
-            if (c < 0) {
+        let span = row(home, dy);
+        for (var j = span.x; j < span.y; j++) {
+            if (j == i) {
                 continue;
             }
-            let n = min(counts[c], K);
-            for (var s = 0u; s < n; s++) {
-                let j = slots[u32(c) * K + s];
-                if (j == i) {
-                    continue;
-                }
-                let q = predicted[j];
-                let d = q.pos - p.pos;
-                let r = length(d);
-                if (r >= params.h) {
-                    continue;
-                }
-                var dir = vec2<f32>(0.0, 1.0);
-                if (r > 0.0) {
-                    dir = d / r;
-                }
-                let rho_j = densities[j];
-                let pavg = (pr + pressure(rho_j)) * 0.5;
-                a += dir * (dw_density(r) * pavg.x / rho_j.x + dw_near(r) * pavg.y / rho_j.y);
-                visc += (q.vel - p.vel) * w_viscosity(r);
+            let q = sorted[j];
+            let d = q.pos - p.pos;
+            let r = length(d);
+            if (r >= params.h) {
+                continue;
             }
+            var dir = vec2<f32>(0.0, 1.0);
+            if (r > 0.0) {
+                dir = d / r;
+            }
+            let rho_j = densities[j];
+            let pavg = (pr + pressure(rho_j)) * 0.5;
+            a += dir * (dw_density(r) * pavg.x / rho_j.x + dw_near(r) * pavg.y / rho_j.y);
+            visc += (q.vel - p.vel) * w_viscosity(r);
         }
     }
     var vel = p.vel + (a / rho.x + visc * params.viscosity) * params.dt;
-    var pos = particles[i].pos + vel * params.dt;
+    var pos = previous[i] + vel * params.dt;
     let lim = params.bounds - params.radius;
     if (abs(pos.x) > lim.x) {
         pos.x = clamp(pos.x, -lim.x, lim.x);
@@ -361,16 +454,17 @@ type step struct {
 	groups   uint32 // workgroups to dispatch
 }
 
-// scene is the GPU side: the buffers, the four compute steps and the draw.
+// scene is the GPU side: the buffers, the seven compute steps and the draw.
 type scene struct {
 	p     params
 	dtMax float32 // the longest substep the simulation stays stable at
 	buf   []byte
 
-	particles, predicted, densities, counts, slots, uniforms *wgpu.Buffer
-	steps                                                    [4]step
-	render                                                   *wgpu.RenderPipeline
-	renderGroup                                              *wgpu.BindGroup
+	particles, predicted, sorted, previous, densities *wgpu.Buffer
+	counts, ranks, starts, sums, uniforms             *wgpu.Buffer
+	steps                                             [7]step
+	render                                            *wgpu.RenderPipeline
+	renderGroup                                       *wgpu.BindGroup
 
 	resources []interface{ Release() } // everything made, in order
 	err       error                    // the first failure while making the scene
@@ -402,9 +496,13 @@ func newScene(device *wgpu.Device, n uint32, aspect float32, format gputypes.Tex
 
 	s.particles = s.buffer(device, "particles", uint64(n)*particleBytes, wgpu.BufferUsageStorage|wgpu.BufferUsageVertex|wgpu.BufferUsageCopyDst)
 	s.predicted = s.buffer(device, "predicted", uint64(n)*particleBytes, wgpu.BufferUsageStorage)
+	s.sorted = s.buffer(device, "sorted", uint64(n)*particleBytes, wgpu.BufferUsageStorage)
+	s.previous = s.buffer(device, "previous", uint64(n)*8, wgpu.BufferUsageStorage)
 	s.densities = s.buffer(device, "densities", uint64(n)*8, wgpu.BufferUsageStorage)
 	s.counts = s.buffer(device, "counts", maxCells*4, wgpu.BufferUsageStorage)
-	s.slots = s.buffer(device, "slots", maxCells*slotsPerCell*4, wgpu.BufferUsageStorage)
+	s.ranks = s.buffer(device, "ranks", uint64(n)*4, wgpu.BufferUsageStorage)
+	s.starts = s.buffer(device, "starts", maxCells*4, wgpu.BufferUsageStorage)
+	s.sums = s.buffer(device, "sums", workgroup*4, wgpu.BufferUsageStorage)
 	s.uniforms = s.buffer(device, "params", uint64(binary.Size(params{})), wgpu.BufferUsageUniform|wgpu.BufferUsageCopyDst) //nolint:gosec // a struct is not negative
 	if s.err == nil {
 		s.err = device.Queue().WriteBuffer(s.particles, 0, seed(n, aspect, spacing))
@@ -414,19 +512,23 @@ func newScene(device *wgpu.Device, n uint32, aspect float32, format gputypes.Tex
 	// GetBindGroupLayout hands it out to make the bind group with. Params is
 	// binding 0 everywhere, then each step's buffers in order.
 	prelude := typesWGSL + funcsWGSL
+	perParticle := (n + workgroup - 1) / workgroup
 	for i, c := range []struct {
 		entry, wgsl string
 		buffers     []*wgpu.Buffer
+		groups      uint32
 	}{
-		{"predict", prelude + predictWGSL, []*wgpu.Buffer{s.particles, s.predicted, s.counts}},
-		{"bin", prelude + binWGSL, []*wgpu.Buffer{s.predicted, s.counts, s.slots}},
-		{"density", prelude + densityWGSL, []*wgpu.Buffer{s.predicted, s.counts, s.slots, s.densities}},
-		{"force", prelude + forceWGSL, []*wgpu.Buffer{s.predicted, s.counts, s.slots, s.densities, s.particles}},
+		{"predict", prelude + predictWGSL, []*wgpu.Buffer{s.particles, s.predicted, s.counts}, (max(n, maxCells) + workgroup - 1) / workgroup}, // it clears the grid too
+		{"bin", prelude + binWGSL, []*wgpu.Buffer{s.predicted, s.counts, s.ranks}, perParticle},
+		{"scan_cells", prelude + scanWGSL + scanCellsWGSL, []*wgpu.Buffer{s.counts, s.starts, s.sums}, maxCells / workgroup},
+		{"scan_blocks", prelude + scanWGSL + scanBlocksWGSL, []*wgpu.Buffer{s.sums}, 1},
+		{"scatter", prelude + scatterWGSL, []*wgpu.Buffer{s.particles, s.predicted, s.ranks, s.starts, s.sums, s.sorted, s.previous}, perParticle},
+		{"density", prelude + gridWGSL + densityWGSL, []*wgpu.Buffer{s.sorted, s.counts, s.starts, s.sums, s.densities}, perParticle},
+		{"force", prelude + gridWGSL + forceWGSL, []*wgpu.Buffer{s.sorted, s.counts, s.starts, s.sums, s.densities, s.previous, s.particles}, perParticle},
 	} {
 		s.steps[i] = s.step(device, c.entry, c.wgsl, c.buffers)
-		s.steps[i].groups = (n + workgroup - 1) / workgroup
+		s.steps[i].groups = c.groups
 	}
-	s.steps[0].groups = (max(n, maxCells) + workgroup - 1) / workgroup // predict clears the grid too
 	s.draw(device, format)
 	if s.err != nil {
 		s.release()
