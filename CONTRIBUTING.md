@@ -148,6 +148,23 @@ The last line stops the prefix's wineserver, or its `winedevice.exe` services ou
 
 It's still not Windows: the debug layer, the real runtime's DXIL signing and windows/arm64 need a Windows box.
 
+### The browser
+
+The browser build's tests run under node, where there's no WebGPU, so they only check the Go side against stand-ins of the JS objects. `TestBrowserGPU*` in `browser_gpu_test.go` run on a browser's real WebGPU through `cmd/wasmchrome`, which serves the test binary to Chrome and hands back its output and exit status:
+
+```bash
+# node: the stand-in tests, the GPU ones skip
+GOOS=js GOARCH=wasm go test -exec $(go env GOROOT)/lib/wasm/go_js_wasm_exec .
+
+# headless Chrome: WebGPU on SwiftShader, Chrome's CPU renderer, which runs anywhere
+GOOS=js GOARCH=wasm go test -exec "env GOOS= GOARCH= go run ./cmd/wasmchrome" -run BrowserGPU -v .
+
+# a Chrome window on the display: WebGPU on the GPU, with what it offers, texture-formats-tier1 for one
+WASMCHROME_WINDOW=1 GOOS=js GOARCH=wasm go test -exec "env GOOS= GOARCH= go run ./cmd/wasmchrome" -run BrowserGPU -v .
+```
+
+The runner is a program for the machine you're on, so its `go run` clears the `GOOS` and `GOARCH` the test binary is built with. `CHROME` picks another browser, `microsoft-edge-stable` for one, and `WASMCHROME_FLAGS` adds flags to it. Chrome runs on a profile of its own, deleted afterwards, and without a session bus, so it starts none of the desktop's portals or keyring.
+
 ## 32-bit builds
 
 linux/386, windows/386, android/arm and android/386 build:
