@@ -103,7 +103,7 @@ func TestBrowserExceptionsBecomeErrors(t *testing.T) {
 	d := &Device{browser: browser.NewDevice(dev), limits: gputypes.DefaultLimits()}
 
 	if _, err := d.CreateTexture(&TextureDescriptor{Size: Extent3D{Width: 1, Height: 1, DepthOrArrayLayers: 1},
-		MipLevelCount: 1, SampleCount: 1, Format: gputypes.TextureFormatR16Unorm}); err == nil {
+		MipLevelCount: 1, SampleCount: 1, Format: gputypes.TextureFormatRGBA8Unorm}); err == nil {
 		t.Error("CreateTexture: nil error for a throwing createTexture")
 	}
 	if _, err := d.CreateShaderModule(&ShaderModuleDescriptor{}); err == nil {
@@ -121,6 +121,11 @@ func TestBrowserCreateTextureNeedsTheFormatsFeature(t *testing.T) {
 		MipLevelCount: 1, SampleCount: 1, Format: gputypes.TextureFormatBC1RGBAUnorm})
 	if err == nil || !strings.Contains(err.Error(), "TextureCompressionBC") {
 		t.Fatalf("CreateTexture(BC1) without the feature = %v, want an error naming TextureCompressionBC", err)
+	}
+	_, err = d.CreateTexture(&TextureDescriptor{Size: Extent3D{Width: 4, Height: 4, DepthOrArrayLayers: 1},
+		MipLevelCount: 1, SampleCount: 1, Format: gputypes.TextureFormatR16Unorm})
+	if err == nil || !strings.Contains(err.Error(), "TextureFormatsTier1") {
+		t.Fatalf("CreateTexture(R16Unorm) without the feature = %v, want an error naming TextureFormatsTier1", err)
 	}
 }
 

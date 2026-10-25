@@ -149,6 +149,10 @@ func TextureFormatFeature(f gputypes.TextureFormat) gputypes.Feature {
 		return gputypes.FeatureTextureCompressionETC2
 	case f >= gputypes.TextureFormatASTC4x4Unorm && f <= gputypes.TextureFormatASTC12x12UnormSrgb:
 		return gputypes.FeatureTextureCompressionASTC
+	case f == gputypes.TextureFormatR16Unorm, f == gputypes.TextureFormatR16Snorm,
+		f == gputypes.TextureFormatRG16Unorm, f == gputypes.TextureFormatRG16Snorm,
+		f == gputypes.TextureFormatRGBA16Unorm, f == gputypes.TextureFormatRGBA16Snorm:
+		return gputypes.FeatureTextureFormatsTier1
 	default:
 		return 0
 	}

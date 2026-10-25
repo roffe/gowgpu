@@ -617,6 +617,9 @@ func TestTextureFormatFeature(t *testing.T) {
 		{gputypes.TextureFormatEACRG11Snorm, gputypes.FeatureTextureCompressionETC2},
 		{gputypes.TextureFormatASTC4x4Unorm, gputypes.FeatureTextureCompressionASTC},
 		{gputypes.TextureFormatASTC12x12UnormSrgb, gputypes.FeatureTextureCompressionASTC},
+		{gputypes.TextureFormatR16Unorm, gputypes.FeatureTextureFormatsTier1},
+		{gputypes.TextureFormatRGBA16Snorm, gputypes.FeatureTextureFormatsTier1},
+		{gputypes.TextureFormatRGBA16Float, 0},
 	}
 	for _, tc := range tests {
 		if got := TextureFormatFeature(tc.format); got != tc.want {

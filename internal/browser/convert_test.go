@@ -36,8 +36,8 @@ func TestRequiredFeatures(t *testing.T) {
 		t.Fatalf("featuresToJSArray with a native-only feature = %v, want an error naming PushConstants only", err)
 	}
 
-	supported := js.Global().Get("Set").New(js.ValueOf([]any{"subgroups"}))
-	if !ExtractFeatures(supported).Contains(gputypes.FeatureSubgroupOperations) {
-		t.Fatal("ExtractFeatures does not map subgroups")
+	supported := js.Global().Get("Set").New(js.ValueOf([]any{"subgroups", "texture-formats-tier1"}))
+	if got := ExtractFeatures(supported); !got.Contains(gputypes.FeatureSubgroupOperations) || !got.Contains(gputypes.FeatureTextureFormatsTier1) {
+		t.Fatalf("ExtractFeatures = %#x, want subgroups and texture-formats-tier1", uint64(got))
 	}
 }

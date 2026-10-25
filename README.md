@@ -143,7 +143,7 @@ The fixes from the vet on 2026-10-23 (see the [CHANGELOG](CHANGELOG.md)) have on
 - Timestamp queries work on Vulkan, DX12 and desktop GL; Metal doesn't offer `FeatureTimestampQuery` yet.
 - Metal has no compressed texture formats yet, so it doesn't offer `TextureCompressionBC`.
 - Metal applies a pipeline's sample mask in its fragment stage, so a pipeline without one ignores the mask. Dawn adds a fragment stage for it.
-- In the browser the 16-bit normalized formats can't be used, as gputypes has no `texture-formats-tier1` feature to ask for.
+- In the browser the 16-bit normalized formats need a device made with `FeatureTextureFormatsTier1`, WebGPU's `texture-formats-tier1`, where the browser offers it. Native takes them without it, and native adapters don't offer the feature.
 
 What's next is in [ROADMAP.md](ROADMAP.md).
 

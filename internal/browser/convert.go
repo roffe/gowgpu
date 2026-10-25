@@ -164,6 +164,7 @@ var featuresMappingTable = []featureMapping{
 	{gputypes.FeatureBGRA8UnormStorage, "bgra8unorm-storage"},
 	{gputypes.FeatureFloat32Filterable, "float32-filterable"},
 	{gputypes.FeatureSubgroupOperations, "subgroups"},
+	{gputypes.FeatureTextureFormatsTier1, "texture-formats-tier1"},
 }
 
 // featuresToJSArray builds a JS Array of feature name strings from Go flags.

@@ -60,6 +60,10 @@ const (
 	FeatureASBindingArray
 	// FeatureRayTracingPipelines enables dedicated ray tracing pipelines.
 	FeatureRayTracingPipelines
+	// FeatureTextureFormatsTier1 is WebGPU's texture-formats-tier1, which a
+	// browser asks for before the 16-bit normalized formats. Native
+	// backends take those formats without it and do not offer it.
+	FeatureTextureFormatsTier1
 )
 
 // String returns the feature name.
@@ -115,6 +119,8 @@ func (f Feature) String() string {
 		return "ASBindingArray"
 	case FeatureRayTracingPipelines:
 		return "RayTracingPipelines"
+	case FeatureTextureFormatsTier1:
+		return "TextureFormatsTier1"
 	default:
 		return "Unknown"
 	}
