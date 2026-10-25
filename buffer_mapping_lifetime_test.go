@@ -217,7 +217,9 @@ func TestBufferMapWaitsForItsOwnSubmission(t *testing.T) {
 		t.Fatalf("CreateBuffer: %v", err)
 	}
 	defer buf.Release()
-	later := busyCommands(t, device, 50_000_000, nil)
+	// Metal runs command buffers without a dependency side by side, so the
+	// later one runs three times as long to still end well after the first.
+	later := busyCommands(t, device, 150_000_000, nil)
 	start := time.Now()
 	first := submitBusy(t, device, 50_000_000, buf)
 
@@ -248,7 +250,7 @@ func TestBufferMapWaitsForItsOwnSubmission(t *testing.T) {
 		t.Fatalf("Unmap: %v", err)
 	}
 	device.Poll(PollWait)
-	busy := time.Since(start) / 2
+	busy := time.Since(start) / 4
 
 	if r.completed < first {
 		t.Errorf("Map returned with submission %d done, before its own, %d", r.completed, first)
