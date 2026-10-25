@@ -21,6 +21,9 @@ What's still open after the 2026-10-23 vet and the perf check on 2026-10-24. The
 - [ ] Timestamp queries on Metal: counter sample buffers, which differ between Apple silicon and Intel/AMD Macs.
 - [ ] BC formats on Metal.
 - [x] Browser: the 16-bit normalized formats, through `FeatureTextureFormatsTier1`.
+- [x] `ZeroInitializeWorkgroupMemory` honoured on every backend, Vulkan 1.3 zeroing in the driver, DXIL zeroing at all.
+- [x] Vulkan: 4x multisample support per format from `vkGetPhysicalDeviceImageFormatProperties`.
+- [ ] DX12: enhanced barriers (`ID3D12GraphicsCommandList7::Barrier`, resources made with `CreateCommittedResource3` and an initial layout) where `D3D12_FEATURE_D3D12_OPTIONS12` has them, keeping legacy states as the fallback. Acceleration structures can then take `D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE` (the TODO in `hal/dx12/raytracing.go`), which is invalid with legacy states. Needs bindings for `ID3D12Device10` and `ID3D12GraphicsCommandList7`, and a real Windows box to test on, as vkd3d-proton only covers part of it. Rust wgpu-hal has the same TODO.
 
 ## Hardware runs
 
