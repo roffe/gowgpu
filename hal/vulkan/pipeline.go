@@ -59,7 +59,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		entryPointVertex = defaultEntryPoint
 	}
 	vertexEntryBytes := append([]byte(entryPointVertex), 0)
-	vertexHandle, temporary, err := d.stageModule(vertexModule, ir.StageVertex, entryPointVertex, nil, vkLayout.fragDepth)
+	vertexHandle, temporary, err := d.stageModule(vertexModule, ir.StageVertex, entryPointVertex, nil, vkLayout.fragDepth, false)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 			entryPointFragment = defaultEntryPoint
 		}
 		fragmentEntryBytes = append([]byte(entryPointFragment), 0)
-		fragmentHandle, temporary, err := d.stageModule(fragmentModule, ir.StageFragment, entryPointFragment, nil, vkLayout.fragDepth)
+		fragmentHandle, temporary, err := d.stageModule(fragmentModule, ir.StageFragment, entryPointFragment, nil, vkLayout.fragDepth, false)
 		if err != nil {
 			return nil, err
 		}
@@ -380,13 +380,8 @@ func (d *Device) DestroyRenderPipeline(pipeline hal.RenderPipeline) {
 
 // CreateComputePipeline creates a compute pipeline, with its shader
 // compiled again for its pipeline constants when it has any, as wgpu-hal
-// does with naga's process_overrides.
-//
-// TODO(zero-init-workgroup): Pass desc.Compute.ZeroInitializeWorkgroupMemory
-// to naga SPIR-V options. When the VK_KHR_zero_initialize_workgroup_memory
-// device feature is available (Vulkan 1.3), use Native mode; otherwise naga
-// inserts explicit zero-stores. Rust wgpu-hal checks private_caps and sets
-// spv::ZeroInitializeWorkgroupMemoryMode accordingly (vulkan/device.rs:773).
+// does with naga's process_overrides, or to leave workgroup memory as it is
+// when desc.Compute.ZeroInitializeWorkgroupMemory is off.
 func (d *Device) CreateComputePipeline(desc *hal.ComputePipelineDescriptor) (hal.ComputePipeline, error) {
 	if desc == nil {
 		return nil, fmt.Errorf("BUG: compute pipeline descriptor is nil in Vulkan.CreateComputePipeline — core validation gap")
@@ -415,7 +410,7 @@ func (d *Device) CreateComputePipeline(desc *hal.ComputePipelineDescriptor) (hal
 		entryPoint = defaultEntryPoint
 	}
 	entryPointBytes := append([]byte(entryPoint), 0)
-	computeHandle, temporary, err := d.stageModule(computeModule, ir.StageCompute, entryPoint, desc.Compute.Constants, vkLayout.fragDepth)
+	computeHandle, temporary, err := d.stageModule(computeModule, ir.StageCompute, entryPoint, desc.Compute.Constants, vkLayout.fragDepth, !desc.Compute.ZeroInitializeWorkgroupMemory)
 	if err != nil {
 		return nil, err
 	}

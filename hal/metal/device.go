@@ -654,11 +654,11 @@ func (c *compiledLibrary) release() {
 // vertex pulling writes it: Metal's vertex fetch neither checks bounds nor
 // takes attribute offsets that aren't a multiple of 4. A fragment stage
 // applies sampleMask, when it isn't nil, itself: Metal has no pipeline
-// sample mask.
+// sample mask. A compute stage zeroes its workgroup memory if zeroInit.
 //
 // Reference: Rust wgpu-hal metal/device.rs load_shader.
 func (d *Device) compileLibrary(module *ShaderModule, layout *PipelineLayout, stage ir.ShaderStage, name string, constants map[string]float64,
-	points bool, vertexBuffers []msl.VertexBufferMapping, sampleMask *uint32) (*compiledLibrary, error) {
+	points bool, vertexBuffers []msl.VertexBufferMapping, sampleMask *uint32, zeroInit bool) (*compiledLibrary, error) {
 	if module == nil || module.irModule == nil {
 		return nil, fmt.Errorf("metal: shader module has no WGSL source")
 	}
@@ -680,6 +680,7 @@ func (d *Device) compileLibrary(module *ShaderModule, layout *PipelineLayout, st
 	}
 	options.AllowAndForcePointSize = points
 	options.FixedSampleMask = sampleMask
+	options.ZeroInitializeWorkgroupMemory = zeroInit
 	sizesBindings, err := mslmap.SizesBindings(irModule, stage, name)
 	if err == nil && len(vertexBuffers) > 0 {
 		options.VertexPullingTransform = true
@@ -828,7 +829,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 	if err != nil {
 		return nil, fmt.Errorf("metal: %w", err)
 	}
-	vertex, err := d.compileLibrary(vertexModule, pipeLayout, ir.StageVertex, desc.Vertex.EntryPoint, nil, points, vertexBuffers, nil)
+	vertex, err := d.compileLibrary(vertexModule, pipeLayout, ir.StageVertex, desc.Vertex.EntryPoint, nil, points, vertexBuffers, nil, true)
 	if err != nil {
 		return nil, err
 	}
@@ -841,7 +842,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 			return nil, fmt.Errorf("metal: invalid fragment shader module")
 		}
 		fragment, err = d.compileLibrary(fragmentModule, pipeLayout, ir.StageFragment, desc.Fragment.EntryPoint, nil, false, nil,
-			fixedSampleMask(desc.Multisample))
+			fixedSampleMask(desc.Multisample), true)
 		if err != nil {
 			return nil, err
 		}
@@ -1058,10 +1059,6 @@ func (d *Device) DestroyRenderPipeline(pipeline hal.RenderPipeline) {
 }
 
 // CreateComputePipeline creates a compute pipeline.
-//
-// TODO(zero-init-workgroup): Pass desc.Compute.ZeroInitializeWorkgroupMemory
-// to naga MSL options. Rust wgpu-hal sets pipeline_options.zero_initialize_workgroup_memory
-// per-stage (metal/device.rs:179).
 func (d *Device) CreateComputePipeline(desc *hal.ComputePipelineDescriptor) (hal.ComputePipeline, error) {
 	pool := NewAutoreleasePool()
 	defer pool.Drain()
@@ -1077,7 +1074,7 @@ func (d *Device) CreateComputePipeline(desc *hal.ComputePipelineDescriptor) (hal
 		return nil, fmt.Errorf("metal: invalid compute shader module")
 	}
 
-	lib, err := d.compileLibrary(computeModule, pipeLayout, ir.StageCompute, desc.Compute.EntryPoint, desc.Compute.Constants, false, nil, nil)
+	lib, err := d.compileLibrary(computeModule, pipeLayout, ir.StageCompute, desc.Compute.EntryPoint, desc.Compute.Constants, false, nil, nil, desc.Compute.ZeroInitializeWorkgroupMemory)
 	if err != nil {
 		return nil, err
 	}

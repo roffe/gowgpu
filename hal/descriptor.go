@@ -409,24 +409,12 @@ type ComputeState struct {
 	// with naga's ProcessOverrides before it compiles the stage.
 	Constants map[string]float64
 
-	// ZeroInitializeWorkgroupMemory controls whether workgroup-scoped shared memory
-	// is zero-initialized before compute shader execution.
-	//
-	// WebGPU spec requires this to be true by default. Setting it to false may
-	// improve performance for cross-platform applications that do not rely on
-	// zero-initialized workgroup memory, but exposes stale data from previous
-	// dispatches.
-	//
-	// Rust wgpu-hal: ProgrammableStage.zero_initialize_workgroup_memory (lib.rs:2278).
-	// - Vulkan: maps to VK_KHR_zero_initialize_workgroup_memory device feature
-	//   (promoted to Vulkan 1.3). When the feature is unavailable, naga inserts
-	//   explicit zero-stores in the shader.
-	// - DX12: passed to naga HLSL/DXIL options.zero_initialize_workgroup_memory
-	// - Metal: passed to naga MSL options
-	// - GLES: passed to naga GLSL options
-	//
-	// TODO(zero-init-workgroup): Each backend must pass this flag to naga shader
-	// compilation options. Currently plumbed but not consumed by backends.
+	// ZeroInitializeWorkgroupMemory zeroes the workgroup memory of a compute
+	// stage before it runs, as WebGPU requires by default. Turning it off
+	// saves the stores, but the shader then sees whatever an earlier
+	// dispatch left there. Vulkan zeroes it in the driver where the device
+	// has shaderZeroInitializeWorkgroupMemory, the other backends in the
+	// shader.
 	ZeroInitializeWorkgroupMemory bool
 }
 

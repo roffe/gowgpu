@@ -32,7 +32,7 @@ func TestImageLoadsAreBoundsChecked(t *testing.T) {
 		{glsl.Version{Major: 3, Minor: 30}, false},
 		{glsl.VersionES300, false},
 	} {
-		code, _, err := compileWGSLToGLSL(tc.v, src, ir.StageFragment, "fs_main", nil, nil)
+		code, _, err := compileWGSLToGLSL(tc.v, src, ir.StageFragment, "fs_main", nil, nil, false)
 		if err != nil {
 			t.Fatalf("GLSL %s: %v", tc.v, err)
 		}
@@ -54,7 +54,7 @@ var<private> p: array<f32, 5>;
 	return u.a[u.i] * p[u.i];
 }`}
 	for _, v := range []glsl.Version{{Major: 4, Minor: 50}, {Major: 3, Minor: 30}, glsl.VersionES300} {
-		code, _, err := compileWGSLToGLSL(v, src, ir.StageFragment, "fs_main", nil, nil)
+		code, _, err := compileWGSLToGLSL(v, src, ir.StageFragment, "fs_main", nil, nil, false)
 		if err != nil {
 			t.Fatalf("GLSL %s: %v", v, err)
 		}
@@ -82,7 +82,7 @@ override required: u32;
 	return vec4<f32>(f32(answer));
 }`}
 	v := glsl.Version{Major: 4, Minor: 50}
-	code, _, err := compileWGSLToGLSL(v, src, ir.StageCompute, "cs_main", map[string]float64{"answer": 42, "required": 7}, nil)
+	code, _, err := compileWGSLToGLSL(v, src, ir.StageCompute, "cs_main", map[string]float64{"answer": 42, "required": 7}, nil, false)
 	if err != nil {
 		t.Fatalf("compute: %v", err)
 	}
@@ -91,10 +91,10 @@ override required: u32;
 			t.Errorf("compute: no %q:\n%s", want, code)
 		}
 	}
-	if _, _, err := compileWGSLToGLSL(v, src, ir.StageCompute, "cs_main", map[string]float64{"answer": 42}, nil); err == nil {
+	if _, _, err := compileWGSLToGLSL(v, src, ir.StageCompute, "cs_main", map[string]float64{"answer": 42}, nil, false); err == nil {
 		t.Error("compute without a value for required compiled")
 	}
-	code, _, err = compileWGSLToGLSL(v, src, ir.StageFragment, "fs_main", nil, nil)
+	code, _, err = compileWGSLToGLSL(v, src, ir.StageFragment, "fs_main", nil, nil, false)
 	if err != nil {
 		t.Fatalf("fragment: %v", err)
 	}

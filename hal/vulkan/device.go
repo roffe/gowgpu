@@ -1425,7 +1425,7 @@ func (d *Device) CreateShaderModule(desc *hal.ShaderModuleDescriptor) (hal.Shade
 		if sm.clampsFragDepth {
 			clamp = &spirv.ClampFragDepth{Offset: 0}
 		}
-		if spirvCode, err = d.compileWGSL(module, naga.OverrideOptions{}, clamp); err != nil {
+		if spirvCode, err = d.compileWGSL(module, naga.OverrideOptions{}, clamp, false); err != nil {
 			return nil, fmt.Errorf("vulkan: naga WGSL compilation failed: %w", err)
 		}
 	case len(desc.Source.SPIRV) > 0:
@@ -1478,14 +1478,17 @@ func parseWGSL(source string) (*ir.Module, error) {
 
 // compileWGSL compiles module to SPIR-V with its overrides as opts says,
 // clamping frag_depth to the range clamp says is in the push constants, if
-// it isn't nil.
-func (d *Device) compileWGSL(module *ir.Module, opts naga.OverrideOptions, clamp *spirv.ClampFragDepth) ([]uint32, error) {
+// it isn't nil, and leaving workgroup memory as it is if skipZeroInit.
+func (d *Device) compileWGSL(module *ir.Module, opts naga.OverrideOptions, clamp *spirv.ClampFragDepth, skipZeroInit bool) ([]uint32, error) {
 	module, err := naga.ProcessOverrides(module, opts)
 	if err != nil {
 		return nil, fmt.Errorf("pipeline constants: %w", err)
 	}
 	options := d.shaderOptions
 	options.ClampFragDepth = clamp
+	if skipZeroInit {
+		options.ZeroInitializeWorkgroupMemory = spirv.ZeroInitWorkgroupNone
+	}
 	code, err := naga.GenerateSPIRV(module, options)
 	if err != nil {
 		return nil, err
@@ -1504,13 +1507,19 @@ func (d *Device) compileWGSL(module *ir.Module, opts naga.OverrideOptions, clamp
 // the SPIR-V version of the device's Vulkan, bounds checks that keep an
 // index, a buffer access and an image load in bounds, which WGSL requires
 // and robustBufferAccess does not give for function, private and workgroup
-// arrays or image fetches, loops that cannot hang the GPU, and a point size
-// of 1, which a point list pipeline needs written. The frag_depth clamp is
-// up to compileWGSL's caller.
-func shaderOptions(apiVersion uint32) spirv.Options {
+// arrays or image fetches, loops that cannot hang the GPU, a point size of
+// 1, which a point list pipeline needs written, and workgroup memory the
+// driver zeroes when zeroInitWorkgroup says the device has
+// shaderZeroInitializeWorkgroupMemory enabled. The frag_depth clamp is up to
+// compileWGSL's caller.
+func shaderOptions(apiVersion uint32, zeroInitWorkgroup bool) spirv.Options {
 	version := spirv.Version1_3
 	if apiVersion < vkMakeVersion(1, 1, 0) {
 		version = spirv.Version1_0
+	}
+	zeroInit := spirv.ZeroInitWorkgroupPolyfill
+	if zeroInitWorkgroup {
+		zeroInit = spirv.ZeroInitWorkgroupNative
 	}
 	return spirv.Options{
 		Version: version,
@@ -1521,6 +1530,8 @@ func shaderOptions(apiVersion uint32) spirv.Options {
 		},
 		ForcePointSize:    true,
 		ForceLoopBounding: true,
+
+		ZeroInitializeWorkgroupMemory: zeroInit,
 	}
 }
 
@@ -1577,6 +1588,12 @@ func usesPushConstants(module *ir.Module) bool {
 	})
 }
 
+func usesWorkgroupMemory(module *ir.Module) bool {
+	return slices.ContainsFunc(module.GlobalVariables, func(g ir.GlobalVariable) bool {
+		return g.Space == ir.SpaceWorkGroup
+	})
+}
+
 // writesFragDepth reports whether entry, an entry point of module for stage,
 // writes frag_depth.
 func writesFragDepth(module *ir.Module, stage ir.ShaderStage, entry string) bool {
@@ -1622,14 +1639,16 @@ func (d *Device) createVkShaderModule(code []uint32) (vk.ShaderModule, error) {
 // stageModule is the VkShaderModule of a pipeline stage of sm at entry
 // point entry with constants, for a pipeline layout with the frag_depth
 // clamp's range where fragDepth says: the module's own when it has one,
-// there are no constants and it clamps frag_depth as the layout needs, else
-// one compiled for the stage, which the caller destroys once the pipeline is
-// made (temporary). A stage compiled alone keeps the push constant block
-// that carries the range out of the other stages.
-func (d *Device) stageModule(sm *ShaderModule, stage ir.ShaderStage, entry string, constants map[string]float64, fragDepth fragDepthRange) (handle vk.ShaderModule, temporary bool, err error) {
+// there are no constants, it clamps frag_depth as the layout needs and
+// zeroes workgroup memory unless skipZeroInit, else one compiled for the
+// stage, which the caller destroys once the pipeline is made (temporary). A
+// stage compiled alone keeps the push constant block that carries the range
+// out of the other stages.
+func (d *Device) stageModule(sm *ShaderModule, stage ir.ShaderStage, entry string, constants map[string]float64, fragDepth fragDepthRange, skipZeroInit bool) (handle vk.ShaderModule, temporary bool, err error) {
 	clamps := fragDepth.stages != 0
 	asModule := sm.clampsFragDepth == clamps && (!clamps || fragDepth.offset == 0)
-	if sm.handle != 0 && len(constants) == 0 &&
+	skipZeroInit = skipZeroInit && sm.module != nil && usesWorkgroupMemory(sm.module)
+	if sm.handle != 0 && len(constants) == 0 && !skipZeroInit &&
 		(sm.module == nil || asModule || !writesFragDepth(sm.module, stage, entry)) {
 		return sm.handle, false, nil
 	}
@@ -1643,7 +1662,7 @@ func (d *Device) stageModule(sm *ShaderModule, stage ir.ShaderStage, entry strin
 	code, err := d.compileWGSL(sm.module, naga.OverrideOptions{
 		Constants:  constants,
 		EntryPoint: &naga.EntryPointSelector{Stage: stage, Name: entry},
-	}, clamp)
+	}, clamp, skipZeroInit)
 	if err != nil {
 		return 0, false, fmt.Errorf("vulkan: naga WGSL compilation failed: %w", err)
 	}

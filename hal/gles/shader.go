@@ -36,7 +36,8 @@ func boundsChecks(v glsl.Version) glsl.BoundsCheckPolicies {
 // compileWGSLToGLSL compiles a WGSL shader source to GLSL for the entry point
 // of stage. OpenGL does not understand WGSL, so we use naga to parse WGSL and
 // emit GLSL. The module's overrides take their values from constants, the
-// pipeline's, or their defaults.
+// pipeline's, or their defaults. A compute stage zeroes its workgroup memory
+// unless skipZeroInit.
 //
 // The version parameter specifies the target GLSL version. On GL 4.3+ this is typically
 // Version430; on older drivers (e.g., GL 4.1 / GLSL 410) it must match the driver's
@@ -51,7 +52,7 @@ func boundsChecks(v glsl.Version) glsl.BoundsCheckPolicies {
 // Returns the GLSL source and TranslationInfo containing TextureMappings for
 // SamplerBindMap construction (which sampler goes with which texture unit).
 func compileWGSLToGLSL(version glsl.Version, source hal.ShaderSource, stage ir.ShaderStage, entryPoint string,
-	constants map[string]float64, bindingMap map[glsl.BindingMapKey]uint8) (string, glsl.TranslationInfo, error) {
+	constants map[string]float64, bindingMap map[glsl.BindingMapKey]uint8, skipZeroInit bool) (string, glsl.TranslationInfo, error) {
 	if source.WGSL == "" {
 		return "", glsl.TranslationInfo{}, fmt.Errorf("gles: shader source has no WGSL code")
 	}
@@ -98,6 +99,8 @@ func compileWGSLToGLSL(version glsl.Version, source hal.ShaderSource, stage ir.S
 		// gets wrong Y values (BUG-GLES-SCROLLBAR-001).
 		WriterFlags:    glsl.WriterFlagAdjustCoordinateSpace | glsl.WriterFlagForcePointSize,
 		ClampFragDepth: true,
+
+		SkipWorkgroupMemoryZeroInit: skipZeroInit,
 	})
 	if err != nil {
 		return "", glsl.TranslationInfo{}, fmt.Errorf("gles: GLSL compile error for entry point %q: %w", entryPoint, err)

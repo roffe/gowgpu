@@ -167,7 +167,7 @@ func TestAPIVersions(t *testing.T) {
 	if got := a.apiVersion(); got != vkMakeVersion(1, 0, 0) {
 		t.Errorf("1.3 device on a 1.0 instance works at %#x, want 1.0", got)
 	}
-	if v := shaderOptions(a.apiVersion()).Version; v.Major != 1 || v.Minor != 0 {
+	if v := shaderOptions(a.apiVersion(), false).Version; v.Major != 1 || v.Minor != 0 {
 		t.Errorf("SPIR-V %d.%d on a 1.0 device, want 1.0", v.Major, v.Minor)
 	}
 }

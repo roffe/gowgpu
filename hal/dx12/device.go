@@ -2298,8 +2298,9 @@ func hlslToDXILSamplerHeapTargets(t hlsl.SamplerHeapBindTargets) *dxil.SamplerHe
 // layout it is used with, as Rust's wgpu-hal does in load_shader. A vertex
 // stage is compiled with the pipeline's fragment stage, since the fragment
 // inputs can be a subset of the vertex outputs and the two signatures have
-// to match register for register.
-func (d *Device) stageBytecode(module hal.ShaderModule, entryPoint string, constants map[string]float64, layout *PipelineLayout, fragment *hlsl.FragmentEntryPoint) ([]byte, error) {
+// to match register for register. A compute stage zeroes its workgroup
+// memory if zeroInit.
+func (d *Device) stageBytecode(module hal.ShaderModule, entryPoint string, constants map[string]float64, layout *PipelineLayout, fragment *hlsl.FragmentEntryPoint, zeroInit bool) ([]byte, error) {
 	sm, ok := module.(*ShaderModule)
 	if !ok || sm == nil {
 		return nil, fmt.Errorf("invalid shader module type")
@@ -2325,6 +2326,7 @@ func (d *Device) stageBytecode(module hal.ShaderModule, entryPoint string, const
 	opts := *layout.nagaOptions
 	opts.EntryPoint = entryPoint
 	opts.FragmentEntryPoint = fragment
+	opts.ZeroInitializeWorkgroupMemory = zeroInit
 	if d.useDXIL {
 		return d.compileDXIL(sm.wgslSource, irModule, ep, constants, &opts)
 	}
@@ -2425,6 +2427,7 @@ func (d *Device) compileDXIL(wgslSource string, module *ir.Module, ep *ir.EntryP
 	if f := nagaOpts.FragmentEntryPoint; f != nil {
 		opts.FragmentEntryPoint = &dxil.FragmentEntryPoint{Module: f.Module, Function: f.Function}
 	}
+	opts.ZeroInitializeWorkgroupMemory = nagaOpts.ZeroInitializeWorkgroupMemory
 
 	cacheKey := NewShaderCacheKey(dxilCacheSource(wgslSource, ep.Name, constants, opts), ep.Name, ep.Stage, "dxil")
 	if cached, ok := d.shaderCache.Get(cacheKey); ok {
@@ -2504,6 +2507,9 @@ func dxilCacheSource(wgslSource, entryPoint string, constants map[string]float64
 			fmt.Fprintf(h, ",%d", loc)
 		}
 	}
+	if !opts.ZeroInitializeWorkgroupMemory {
+		h.Write([]byte("\x00nozeroinit"))
+	}
 	return string(h.Sum(nil))
 }
 
@@ -2579,7 +2585,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 	}
 	var vs, ps []byte
 	if desc.Vertex.Module != nil {
-		bytecode, err := d.stageBytecode(desc.Vertex.Module, desc.Vertex.EntryPoint, nil, pipelineLayout, fragmentEntryPoint(desc.Fragment))
+		bytecode, err := d.stageBytecode(desc.Vertex.Module, desc.Vertex.EntryPoint, nil, pipelineLayout, fragmentEntryPoint(desc.Fragment), true)
 		if err == nil {
 			vs, err = overrideBytecode(bytecode, "GOGPU_DX12_DXIL_OVERRIDE_VS")
 		}
@@ -2588,7 +2594,7 @@ func (d *Device) CreateRenderPipeline(desc *hal.RenderPipelineDescriptor) (hal.R
 		}
 	}
 	if desc.Fragment != nil && desc.Fragment.Module != nil {
-		bytecode, err := d.stageBytecode(desc.Fragment.Module, desc.Fragment.EntryPoint, nil, pipelineLayout, nil)
+		bytecode, err := d.stageBytecode(desc.Fragment.Module, desc.Fragment.EntryPoint, nil, pipelineLayout, nil, true)
 		if err == nil {
 			ps, err = overrideBytecode(bytecode, "GOGPU_DX12_DXIL_OVERRIDE_PS")
 		}
@@ -2687,11 +2693,6 @@ func (d *Device) DestroyRenderPipeline(pipeline hal.RenderPipeline) {
 }
 
 // CreateComputePipeline creates a compute pipeline.
-//
-// TODO(zero-init-workgroup): Pass desc.Compute.ZeroInitializeWorkgroupMemory
-// to naga HLSL/DXIL options. Rust wgpu-hal sets naga_options.zero_initialize_workgroup_memory
-// per-stage (dx12/device.rs:299). The default layout naga_options already has it true
-// (dx12/device.rs:1486), but the per-pipeline override must be applied.
 func (d *Device) CreateComputePipeline(desc *hal.ComputePipelineDescriptor) (hal.ComputePipeline, error) {
 	start := time.Now()
 	if desc == nil {
@@ -2721,7 +2722,7 @@ func (d *Device) CreateComputePipeline(desc *hal.ComputePipelineDescriptor) (hal
 		rootSig = emptyRS
 	}
 
-	bytecode, err := d.stageBytecode(desc.Compute.Module, desc.Compute.EntryPoint, desc.Compute.Constants, pipelineLayout, nil)
+	bytecode, err := d.stageBytecode(desc.Compute.Module, desc.Compute.EntryPoint, desc.Compute.Constants, pipelineLayout, nil, desc.Compute.ZeroInitializeWorkgroupMemory)
 	if err != nil {
 		return nil, fmt.Errorf("dx12: compute shader: %w", err)
 	}

@@ -161,15 +161,25 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 	if has12.DrawIndirectCount != 0 {
 		vulkan12Enable.DrawIndirectCount = vk.Bool32(vk.True)
 	}
-	if hasTimelineSemaphore || has12.DrawIndirectCount != 0 {
-		deviceCreateInfo.PNext = (*uintptr)(unsafe.Pointer(vk.Pin(&pins, &vulkan12Enable)))
+	zeroInitWorkgroup := has13.ShaderZeroInitializeWorkgroupMemory != 0
+	if zeroInitWorkgroup {
+		vulkan13Enable.ShaderZeroInitializeWorkgroupMemory = vk.Bool32(vk.True)
 	}
 	if video != nil {
 		vulkan11Enable.SamplerYcbcrConversion = vk.Bool32(vk.True)
 		vulkan13Enable.Synchronization2 = vk.Bool32(vk.True)
-		deviceCreateInfo.PNext = (*uintptr)(unsafe.Pointer(vk.Pin(&pins, &vulkan11Enable)))
-		vulkan11Enable.PNext = (*uintptr)(unsafe.Pointer(vk.Pin(&pins, &vulkan12Enable)))
-		vulkan12Enable.PNext = (*uintptr)(unsafe.Pointer(vk.Pin(&pins, &vulkan13Enable)))
+	}
+	tail := &deviceCreateInfo.PNext
+	if video != nil {
+		*tail = (*uintptr)(unsafe.Pointer(vk.Pin(&pins, &vulkan11Enable)))
+		tail = &vulkan11Enable.PNext
+	}
+	if video != nil || hasTimelineSemaphore || has12.DrawIndirectCount != 0 {
+		*tail = (*uintptr)(unsafe.Pointer(vk.Pin(&pins, &vulkan12Enable)))
+		tail = &vulkan12Enable.PNext
+	}
+	if video != nil || zeroInitWorkgroup {
+		*tail = (*uintptr)(unsafe.Pointer(vk.Pin(&pins, &vulkan13Enable)))
 	}
 
 	var device vk.Device
@@ -208,7 +218,7 @@ func (a *Adapter) open(requestedQueueFamily *uint32) (hal.OpenDevice, error) {
 		storeOpNone:                storeOpNone,
 		mixedDepthStencilLayouts:   mixedDepthStencilLayouts,
 		alignedFills:               a.properties.VendorID == 0x10DE,
-		shaderOptions:              shaderOptions(a.apiVersion()),
+		shaderOptions:              shaderOptions(a.apiVersion(), zeroInitWorkgroup),
 	}
 	dev.depth24, dev.depth24Stencil8 = depth24Formats(a.supportsDepthAttachment)
 	dev.stencil8 = stencil8Format(a.supportsDepthAttachment, dev.depth24Stencil8)
