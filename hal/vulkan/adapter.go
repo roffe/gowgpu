@@ -415,17 +415,28 @@ func (a *Adapter) TextureFormatCapabilities(format gputypes.TextureFormat) hal.T
 
 	// Use OptimalTilingFeatures for texture capabilities (most common use case)
 	flags := vkFormatFeaturesToHAL(props.OptimalTilingFeatures)
-
-	// Check multisampling support via image format properties
-	// TODO: Query vkGetPhysicalDeviceImageFormatProperties for accurate multisample support
-	// For now, assume common formats support multisampling if they support rendering
-	if flags&hal.TextureFormatCapabilityRenderAttachment != 0 {
-		flags |= hal.TextureFormatCapabilityMultisample | hal.TextureFormatCapabilityMultisampleResolve
+	if flags&hal.TextureFormatCapabilityRenderAttachment != 0 && a.renders4x(vkFormat, format.IsDepthStencil()) {
+		flags |= hal.TextureFormatCapabilityMultisample
+		if !format.IsDepthStencil() {
+			flags |= hal.TextureFormatCapabilityMultisampleResolve
+		}
 	}
 
 	return hal.TextureFormatCapabilities{
 		Flags: flags,
 	}
+}
+
+// renders4x reports whether a 2D attachment of format can have 4 samples,
+// the one multisample count WebGPU has.
+func (a *Adapter) renders4x(format vk.Format, depthStencil bool) bool {
+	usage := vk.ImageUsageFlags(vk.ImageUsageColorAttachmentBit)
+	if depthStencil {
+		usage = vk.ImageUsageFlags(vk.ImageUsageDepthStencilAttachmentBit)
+	}
+	var props vk.ImageFormatProperties
+	result := a.instance.cmds.GetPhysicalDeviceImageFormatProperties(a.physicalDevice, format, vk.ImageType2d, vk.ImageTilingOptimal, usage, 0, &props)
+	return result == vk.Success && props.SampleCounts&vk.SampleCountFlags(vk.SampleCount4Bit) != 0
 }
 
 // SurfaceCapabilities returns surface capabilities.
