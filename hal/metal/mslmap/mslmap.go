@@ -118,9 +118,9 @@ func targetKind(t msl.BindTarget) int {
 // in module against a pipeline layout numbered by Resources, with naga's
 // `_buffer_sizes` argument at buffer slot sizesSlot. Every resource the entry
 // point uses must be in the layout, as a resource of the same kind. A
-// fragment entry point that writes frag_depth clamps it to the range at
-// buffer slot sizesSlot+1, where the encoder binds the viewport's depth
-// range: WebGPU clamps frag_depth to it.
+// fragment entry point that writes frag_depth clamps it to the range at the
+// start of its immediates buffer, at buffer slot sizesSlot+1, where the
+// encoder binds the viewport's depth range: WebGPU clamps frag_depth to it.
 //
 // sizesSlot is the first buffer slot after the layout's buffers, as in Rust
 // wgpu-hal.
@@ -152,15 +152,16 @@ func Options(module *ir.Module, stage ir.ShaderStage, name string, resources map
 	}
 
 	slot := uint8(sizesSlot)
-	opts.PerEntryPointMap = map[string]msl.EntryPointResources{
-		name: {Resources: resources, SizesBuffer: &slot},
-	}
+	entry := msl.EntryPointResources{Resources: resources, SizesBuffer: &slot}
 	if writesFragDepth(module, stage, name) {
 		if sizesSlot == maxBufferSlot {
 			return opts, fmt.Errorf("mslmap: no buffer slot after %d for the frag_depth range", sizesSlot)
 		}
-		opts.ClampFragDepth = &msl.ClampFragDepth{Buffer: slot + 1}
+		immediates := slot + 1
+		entry.ImmediatesBuffer = &immediates
+		opts.ClampFragDepth = &msl.ClampFragDepth{Offset: 0}
 	}
+	opts.PerEntryPointMap = map[string]msl.EntryPointResources{name: entry}
 	return opts, nil
 }
 

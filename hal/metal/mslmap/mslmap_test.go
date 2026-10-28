@@ -243,8 +243,9 @@ fn helper() { out[0] = arrayLength(&out); }
 }
 
 // TestOptionsClampFragDepth checks that a fragment entry point that writes
-// frag_depth takes the range it clamps it to at the slot after the sizes,
-// and that one that doesn't, and a vertex entry point, take none.
+// frag_depth takes the range it clamps it to at the start of its
+// immediates buffer, at the slot after the sizes, and that one that
+// doesn't, and a vertex entry point, take none.
 func TestOptionsClampFragDepth(t *testing.T) {
 	t.Parallel()
 
@@ -264,8 +265,11 @@ struct Out { @location(0) color: vec4<f32>, @builtin(frag_depth) depth: f32 }
 		{ir.StageVertex, "vs", ""},
 	} {
 		source := compileEntryPoint(t, module, tc.stage, tc.name, nil, 3)
-		if got := slots(source)["_frag_depth_range"]; got != tc.want {
-			t.Errorf("%s: frag_depth range at %q, want %q\nMSL:\n%s", tc.name, got, tc.want, source)
+		if got := slots(source)["_immediates"]; got != tc.want {
+			t.Errorf("%s: immediates buffer at %q, want %q\nMSL:\n%s", tc.name, got, tc.want, source)
+		}
+		if reads := strings.Contains(source, "(_immediates + 0)"); reads != (tc.want != "") {
+			t.Errorf("%s: reads the range at offset 0: %v, want %v\nMSL:\n%s", tc.name, reads, tc.want != "", source)
 		}
 	}
 }
