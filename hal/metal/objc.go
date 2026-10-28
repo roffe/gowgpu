@@ -99,6 +99,14 @@ static G3u gm_3u_p(U o, U s, U a) {
 	return ((G3u (*)(U, U, U))objc_msgSend)(o, s, a);
 #endif
 }
+static G2d gm_2d(U o, U s) { return ((G2d (*)(U, U))objc_msgSend)(o, s); }
+static G4d gm_4d(U o, U s) {
+#if defined(__x86_64__)
+	return ((G4d (*)(U, U))objc_msgSend_stret)(o, s);
+#else
+	return ((G4d (*)(U, U))objc_msgSend)(o, s);
+#endif
+}
 
 // Sends that hand Metal Go memory take it as a pointer to bytes, which cgo
 // passes without a cgocheck walk and keeps adjustable by stack copying.
@@ -407,6 +415,15 @@ func msgSend(obj ID, sel SEL, retType structType, retPtr unsafe.Pointer, args ..
 			panic("metal: unexpected struct result")
 		}
 		*(*C.G3u)(retPtr) = C.gm_3u_p(o, s, a[0].word())
+	case "":
+		switch retType {
+		case cgSizeType:
+			*(*C.G2d)(retPtr) = C.gm_2d(o, s)
+		case mtlClearColorType:
+			*(*C.G4d)(retPtr) = C.gm_4d(o, s)
+		default:
+			panic("metal: unexpected struct result")
+		}
 	default:
 		panic("metal: no objc_msgSend trampoline for argument shape " + k)
 	}
