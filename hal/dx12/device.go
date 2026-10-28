@@ -2427,7 +2427,7 @@ func (d *Device) compileDXIL(wgslSource string, module *ir.Module, ep *ir.EntryP
 	if f := nagaOpts.FragmentEntryPoint; f != nil {
 		opts.FragmentEntryPoint = &dxil.FragmentEntryPoint{Module: f.Module, Function: f.Function}
 	}
-	opts.ZeroInitializeWorkgroupMemory = nagaOpts.ZeroInitializeWorkgroupMemory
+	opts.SkipWorkgroupMemoryZeroInit = !nagaOpts.ZeroInitializeWorkgroupMemory
 
 	cacheKey := NewShaderCacheKey(dxilCacheSource(wgslSource, ep.Name, constants, opts), ep.Name, ep.Stage, "dxil")
 	if cached, ok := d.shaderCache.Get(cacheKey); ok {
@@ -2507,7 +2507,7 @@ func dxilCacheSource(wgslSource, entryPoint string, constants map[string]float64
 			fmt.Fprintf(h, ",%d", loc)
 		}
 	}
-	if !opts.ZeroInitializeWorkgroupMemory {
+	if opts.SkipWorkgroupMemoryZeroInit {
 		h.Write([]byte("\x00nozeroinit"))
 	}
 	return string(h.Sum(nil))

@@ -78,7 +78,7 @@ On 2026-10-23 a correctness vet against Rust's wgpu, Dawn and the API specs conf
 - **Sampled and storage textures are tracked.** Binding a bind group records its textures' usage in the usage scope of the pass that binds it, so the texture is transitioned into the pass: ahead of it when an earlier command of the same encoder used it differently, at submit when the last submit did.
 - **New textures get CopyDst on the HAL side** when gowgpu zeroes them by copies, and RenderAttachment when a render pass zeroes them (see Fixed).
 - **CI builds with cgo** on Linux, Windows and macOS, cross builds for Android, iOS, Windows without cgo and the browser, checks that regenerating the Vulkan bindings changes nothing, and runs the tests on Mesa's lavapipe and llvmpipe, on WARP and on Metal, skipping the failures each one is known for. gogpu's workflow, with cgo off and the Rust backend, is gone.
-- **deps:** naga v0.19.0 → v0.20.3, then github.com/gogpu/naga → github.com/roffe/naga, my fork of v0.20.3 with shader translator fixes (see Added). They're on their way upstream, the first as gogpu/naga#118 to #126, and every import moves to the fork's module path. Breaking only for code that hands naga's types to `hal/metal/mslmap`, the one package whose API has them.
+- **deps:** naga v0.19.0 → v0.20.3, then github.com/gogpu/naga → github.com/roffe/naga, my fork with shader translator fixes (see Added). They're on their way upstream as gogpu/naga#118 to #137, seven merged by now, and the fork follows upstream's main with the open ones on top. Every import moves to the fork's module path. Breaking only for code that hands naga's types to `hal/metal/mslmap`, the one package whose API has them.
 
 ### Added
 
