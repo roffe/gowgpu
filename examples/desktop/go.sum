@@ -1,6 +1,6 @@
 github.com/go-gl/glfw/v3.4/glfw v0.1.0-pre.2 h1:ez76TQInhkDIMobWbOFcPJw6FeB7coXRAVZpKwF8NBg=
 github.com/go-gl/glfw/v3.4/glfw v0.1.0-pre.2/go.mod h1:T5Dn0JwIJOX1euPZ/iT4tq6nFYtmukjcYa7937HuYK8=
-github.com/roffe/naga v0.0.0-20261028084905-021509fb1ce6 h1:I0UO9D8a8c+0EZJSxpjzH/XVneOtNLDs0l2JZuw5RqU=
-github.com/roffe/naga v0.0.0-20261028084905-021509fb1ce6/go.mod h1:xVSreQeq7W169Wr9X6TuyO/I959MnEGw4xxAGOsGQns=
+github.com/roffe/naga v0.0.0-20261028100100-81f6a794b048 h1:4YQOT9xQeDyAwUlukrf7n5owHekf8ky0wSCnsS8PB1s=
+github.com/roffe/naga v0.0.0-20261028100100-81f6a794b048/go.mod h1:xVSreQeq7W169Wr9X6TuyO/I959MnEGw4xxAGOsGQns=
 golang.org/x/sys v0.47.0 h1:o7XGOvZQCADBQQ4Y7VNq2dRWQR7JmOUW8Kxx4ZsNgWs=
 golang.org/x/sys v0.47.0/go.mod h1:4GL1E5IUh+htKOUEOaiffhrAeqysfVGipDYzABqnCmw=
