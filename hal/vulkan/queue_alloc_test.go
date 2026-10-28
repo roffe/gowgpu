@@ -13,6 +13,9 @@ import (
 // Submit to allocate nothing: the arrays its submit info points at go to
 // the stack, where pinning them in a Pinner would allocate past five.
 func TestSubmitAllocatesNothing(t *testing.T) {
+	if raceEnabled {
+		t.Skip("the race detector makes sync.Pool drop a quarter of what is put back, so Submit's pooled slice is made again at random")
+	}
 	d := openTestDevice(t, 0)
 	const runs = 20
 	cbs := make([][]hal.CommandBuffer, runs+1)
