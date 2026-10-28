@@ -138,7 +138,7 @@ func textureUsageToMTL(usage gputypes.TextureUsage) MTLTextureUsage {
 // and sample count. Returns the storage mode and whether it is Shared (CPU-writable).
 //
 // Apple GPU (A-series, M-series) + single-sample: Shared — zero-copy CPU writes via
-// replaceRegion: and setPurgeableState(empty) for immediate OS memory reclaim.
+// replaceRegion:.
 //
 // Apple GPU + multisample: Private — MSAA textures are never CPU-read, have a
 // one-frame lifetime, and gain no benefit from Shared storage.

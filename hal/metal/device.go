@@ -49,9 +49,9 @@ type Device struct {
 	eventListener ID     // id<MTLSharedEventListener> — created lazily, reused
 	queue         *Queue // back-reference for WaitIdle semaphore draining
 	// hasUnifiedMemory is true on Apple Silicon (UMA). On UMA, MTLStorageModeShared
-	// textures are physically identical to Private but allow setPurgeableState(empty)
-	// and direct CPU writes without a staging blit, which eliminates the main source
-	// of resize-induced memory growth.
+	// textures are physically identical to Private but allow direct CPU writes
+	// without a staging blit, which eliminates the main source of resize-induced
+	// memory growth.
 	hasUnifiedMemory bool
 	// isAppleGPU is true when the device belongs to MTLGPUFamilyApple1 or higher
 	// (Apple-designed GPU: A-series, M-series). Intel/AMD GPUs on Mac report
@@ -256,7 +256,7 @@ func (d *Device) CreateTexture(desc *hal.TextureDescriptor) (hal.Texture, error)
 	_ = MsgSend(texDesc, Sel("setUsage:"), uintptr(usage))
 
 	// Select storage mode based on GPU family, format and sample count.
-	// Apple GPU + single-sample colour → Shared (zero-copy CPU writes, setPurgeableState).
+	// Apple GPU + single-sample colour → Shared (zero-copy CPU writes).
 	// Apple GPU + multisample or depth/stencil → Private.
 	// Non-Apple GPU (Intel/AMD) → Private always (spec requirement for MSAA).
 	storageMode, isShared := textureStorageMode(d.isAppleGPU, desc.Format, sampleCount)
@@ -290,20 +290,12 @@ func (d *Device) CreateTexture(desc *hal.TextureDescriptor) (hal.Texture, error)
 }
 
 // DestroyTexture destroys a GPU texture.
-//
-// setPurgeableState(empty) is called before Release so that Metal can reclaim
-// the physical memory pages immediately, even if Metal's internal retain count
-// has not yet reached zero (e.g. the texture is referenced by a completed but
-// not-yet-garbage-collected command buffer). This is safe because DestroyTexture
-// is only called from DestroyQueue.Triage after the GPU submission that last
-// used the texture has completed.
 func (d *Device) DestroyTexture(texture hal.Texture) {
 	mtlTexture, ok := texture.(*Texture)
 	if !ok || mtlTexture == nil {
 		return
 	}
 	if mtlTexture.raw != 0 && !mtlTexture.isExternal {
-		_ = MsgSend(mtlTexture.raw, Sel("setPurgeableState:"), uintptr(MTLPurgeableStateEmpty))
 		Release(mtlTexture.raw)
 		mtlTexture.raw = 0
 	}
