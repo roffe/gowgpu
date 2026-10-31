@@ -2,7 +2,7 @@
 
 WebGPU for Go. One API over Vulkan, Metal, DirectX 12 and OpenGL, and over the browser's own WebGPU when you build for wasm.
 
-It started out as a fork of [gogpu/wgpu](https://github.com/gogpu/wgpu) v0.34.5 and went its own way. Native calls go through cgo instead of goffi, the Rust and software backends are gone, and the only dependencies left are [naga](https://github.com/roffe/naga), the shader compiler (my fork of gogpu/naga), and `golang.org/x/sys`.
+It started out as a fork of [gogpu/wgpu](https://github.com/gogpu/wgpu) v0.34.5 and went its own way. Native calls go through cgo instead of goffi, the Rust and software backends are gone, and the only dependencies left are [naga](https://github.com/gogpu/naga), the shader compiler, and `golang.org/x/sys`.
 
 It's what draws everything in the WebGPU painter of [fyne](https://github.com/roffe/fyne/tree/wgpu), so that's where it gets its mileage.
 
@@ -165,7 +165,7 @@ Picking a backend is up to the app. fyne reads `FYNE_WGPU_BACKEND=vulkan|dx12|me
 - `gputypes` lives in this module now, as `github.com/roffe/gowgpu/gputypes`.
 - OpenGL is back in `hal/allbackends` as an opt-in fallback, and it works on Android too.
 - DX12 falls back to WARP when there's no GPU.
-- naga is my fork, [github.com/roffe/naga](https://github.com/roffe/naga): gogpu/naga v0.20.3 with shader translator fixes, which are on their way upstream (gogpu/naga#118 to #126 so far, more to come).
+- naga is gogpu/naga's main past v0.20.5, with the shader translator fixes from the vet merged upstream as gogpu/naga#118 to #137. They lived in my fork until then.
 - GPU handles are `uint64`, so 32-bit builds keep Vulkan's 64-bit handles whole, and the Vulkan bindings are laid out as C lays them out on 386 and arm.
 - A correctness vet against Rust's wgpu, Dawn and the API specs confirmed 239 defects in core and the backends, and the fixes are in: render bundles work on every backend, textures are tracked per mip level and layer, native error scopes capture errors, much more of WebGPU's validation runs before a call reaches the driver, and a lot of smaller things per backend. What's left of it is under known issues.
 - Fixes along the way: GL presenting into the window and uploading textures at an offset, the EGL config for X11 windows on NVIDIA, Vulkan surface formats after an Android app comes back to the foreground, Metal triangle strips, depth bias and iOS display sync, draws with a non-zero first instance, and DX12 under `-race`.

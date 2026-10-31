@@ -14,11 +14,11 @@ import (
 	"sync"
 	"unsafe"
 
+	"github.com/gogpu/naga/hlsl"
+	"github.com/gogpu/naga/ir"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/dx12/d3d12"
-	"github.com/roffe/naga/hlsl"
-	"github.com/roffe/naga/ir"
 )
 
 // -----------------------------------------------------------------------------

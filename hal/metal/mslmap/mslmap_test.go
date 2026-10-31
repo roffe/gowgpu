@@ -9,11 +9,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gogpu/naga"
+	"github.com/gogpu/naga/ir"
+	"github.com/gogpu/naga/msl"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal/metal/mslmap"
-	"github.com/roffe/naga"
-	"github.com/roffe/naga/ir"
-	"github.com/roffe/naga/msl"
 )
 
 // wgslRuntimeArray calls arrayLength() on a runtime-sized storage array and

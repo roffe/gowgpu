@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gogpu/naga/glsl"
+	"github.com/gogpu/naga/ir"
 	"github.com/roffe/gowgpu/hal"
-	"github.com/roffe/naga/glsl"
-	"github.com/roffe/naga/ir"
 )
 
 // Image loads read zero out of bounds where GLSL has textureQueryLevels,

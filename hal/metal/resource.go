@@ -9,10 +9,10 @@ import (
 	"sync/atomic"
 	"unsafe"
 
+	"github.com/gogpu/naga/ir"
+	"github.com/gogpu/naga/msl"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
-	"github.com/roffe/naga/ir"
-	"github.com/roffe/naga/msl"
 )
 
 // Buffer implements hal.Buffer for Metal.

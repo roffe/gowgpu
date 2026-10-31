@@ -9,11 +9,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/gogpu/naga/glsl"
+	"github.com/gogpu/naga/ir"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/gles/gl"
-	"github.com/roffe/naga/glsl"
-	"github.com/roffe/naga/ir"
 )
 
 // createRenderPipeline compiles and links a render pipeline. The context
@@ -143,8 +143,15 @@ func (d *Device) createRenderPipeline(glCtx *gl.Context, desc *RenderPipelineDes
 	// naga writes instance_index as gl_InstanceID plus this uniform, and
 	// gl_InstanceID starts at 0 even in a base instance draw.
 	pipeline.firstInstanceLoc = glCtx.GetUniformLocation(programID, "naga_vs_first_instance")
-	pipeline.fragDepthRangeLoc = glCtx.GetUniformLocation(programID, glsl.FragDepthRangeUniform)
-	pipeline.clampsFragDepth = pipeline.fragDepthRangeLoc >= 0
+	// The frag_depth range, min then max, is all the immediate data these
+	// shaders have.
+	if items := fragmentTranslationInfo.ImmediateItems; len(items) == 2 {
+		pipeline.fragDepthRangeLocs = [2]int32{
+			glCtx.GetUniformLocation(programID, items[0].AccessPath),
+			glCtx.GetUniformLocation(programID, items[1].AccessPath),
+		}
+		pipeline.clampsFragDepth = pipeline.fragDepthRangeLocs[0] >= 0
+	}
 
 	return pipeline, nil
 }

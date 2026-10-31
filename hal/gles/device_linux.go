@@ -9,10 +9,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/gogpu/naga/glsl"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/gles/gl"
-	"github.com/roffe/naga/glsl"
 )
 
 // Device implements hal.Device for OpenGL on Linux.

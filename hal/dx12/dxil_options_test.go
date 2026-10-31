@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/roffe/naga"
-	"github.com/roffe/naga/dxil"
-	"github.com/roffe/naga/hlsl"
+	"github.com/gogpu/naga"
+	"github.com/gogpu/naga/dxil"
+	"github.com/gogpu/naga/hlsl"
 )
 
 // The DXIL options take everything of the layout's HLSL options that

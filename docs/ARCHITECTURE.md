@@ -384,7 +384,7 @@ The files live in `os.UserCacheDir()/gowgpu/<backend>/<adapter key>/`, written b
 
 go.mod has two:
 
-- `github.com/roffe/naga`, the shader compiler: WGSL to SPIR-V for Vulkan, MSL for Metal, HLSL or DXIL for DX12 and GLSL for GL. It's my fork of gogpu/naga v0.20.3 with fixes that are on their way upstream, the first as gogpu/naga#118 to #126.
+- `github.com/gogpu/naga`, the shader compiler: WGSL to SPIR-V for Vulkan, MSL for Metal, HLSL or DXIL for DX12 and GLSL for GL. Pinned to upstream main until a release after v0.20.5 has gogpu/naga#131 in it.
 - `golang.org/x/sys`.
 
 `gputypes` used to be its own module (gogpu/gputypes v0.8.0). It's carried in this one now, with its MIT LICENSE in `gputypes/`.

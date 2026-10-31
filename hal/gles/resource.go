@@ -14,10 +14,10 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/gogpu/naga/glsl"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/gles/gl"
-	"github.com/roffe/naga/glsl"
 )
 
 // Surface and SurfaceTexture are defined in platform-specific files (resource_windows.go, resource_linux.go)
@@ -413,9 +413,9 @@ type RenderPipeline struct {
 	firstInstance    uint32
 
 	// clampsFragDepth is set when the fragment shader clamps the frag_depth
-	// it writes to the range in naga's uniform at fragDepthRangeLoc.
-	clampsFragDepth   bool
-	fragDepthRangeLoc int32
+	// it writes to the range, min and max at fragDepthRangeLocs.
+	clampsFragDepth    bool
+	fragDepthRangeLocs [2]int32
 }
 
 // setFirstInstance gives the program in use, p's, the first instance of the

@@ -10,12 +10,12 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/gogpu/naga"
+	"github.com/gogpu/naga/glsl"
+	"github.com/gogpu/naga/ir"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/gles/gl"
-	"github.com/roffe/naga"
-	"github.com/roffe/naga/glsl"
-	"github.com/roffe/naga/ir"
 )
 
 // boundsChecks clamps an index that may be out of bounds, which GL leaves
@@ -98,7 +98,7 @@ func compileWGSLToGLSL(version glsl.Version, source hal.ShaderSource, stage ir.S
 		// (GL convention). Without it, rrect_clip_coverage() in fragment shaders
 		// gets wrong Y values (BUG-GLES-SCROLLBAR-001).
 		WriterFlags:    glsl.WriterFlagAdjustCoordinateSpace | glsl.WriterFlagForcePointSize,
-		ClampFragDepth: true,
+		ClampFragDepth: &glsl.ClampFragDepth{}, // no immediates of its own here, so the range is all there is
 
 		SkipWorkgroupMemoryZeroInit: skipZeroInit,
 	})

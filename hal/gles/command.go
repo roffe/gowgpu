@@ -651,7 +651,7 @@ func (e *RenderPassEncoder) setFragDepthRange() {
 		return
 	}
 	e.encoder.commands = append(e.encoder.commands, &SetFragDepthRangeCommand{
-		location: e.pipeline.fragDepthRangeLoc, depthRange: e.depthRange,
+		locations: e.pipeline.fragDepthRangeLocs, depthRange: e.depthRange,
 	})
 }
 
@@ -1654,14 +1654,15 @@ func (c *SetViewportCommand) Execute(ctx *gl.Context) {
 }
 
 // SetFragDepthRangeCommand sets the frag_depth clamp range of the program
-// in use, at its uniform location.
+// in use, min and max at their uniform locations.
 type SetFragDepthRangeCommand struct {
-	location   int32
+	locations  [2]int32
 	depthRange [2]float32
 }
 
 func (c *SetFragDepthRangeCommand) Execute(ctx *gl.Context) {
-	ctx.Uniform2f(c.location, c.depthRange[0], c.depthRange[1])
+	ctx.Uniform1f(c.locations[0], c.depthRange[0])
+	ctx.Uniform1f(c.locations[1], c.depthRange[1])
 }
 
 // SetScissorCommand sets the scissor rectangle.
