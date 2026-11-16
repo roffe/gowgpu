@@ -11,6 +11,7 @@ What's still open after the 2026-10-23 vet and the perf check on 2026-10-24. The
 
 - [x] HLSL writes `@builtin(primitive_index)` as `SV_PrimitiveID`, sorted ahead of the other system values as Rust naga does for FXC. Upstream as gogpu/naga#130.
 - [x] MSL folds a pipeline's sample mask into the fragment stage (`msl.Options.FixedSampleMask`), and the Metal HAL passes it. Passes on the Mac, upstream as gogpu/naga#131.
+- [x] `countTrailingZeros(0)` was 0xffffffff instead of 32 on Vulkan, DX12 (FXC) and GL: SPIR-V, HLSL and GLSL passed the -1 of `FindILsb`/`firstbitlow`/`findLSB` through. Upstream as gogpu/naga#137, stacked on #136 (`countLeadingZeros`, issue #133). Not in the fork's main yet.
 
 ## Backends
 
