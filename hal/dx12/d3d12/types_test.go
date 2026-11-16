@@ -19,28 +19,64 @@ func TestIndirectArgumentDescABI(t *testing.T) {
 
 // The driver reads the whole C struct, and walks arrays of them by its size,
 // so a Go struct of another size has it reading the wrong bytes. Sizes and
-// offsets are those of the C structs on 64-bit Windows.
+// offsets are those of the C structs on 64-bit and 32-bit Windows, as the
+// mingw-w64 headers lay them out.
 func TestStructSizesMatchC(t *testing.T) {
 	for _, c := range []struct {
-		name      string
-		got, want uintptr
+		name              string
+		got, want, want32 uintptr
 	}{
-		{"D3D12_UNORDERED_ACCESS_VIEW_DESC", unsafe.Sizeof(D3D12_UNORDERED_ACCESS_VIEW_DESC{}), 40},
-		{"D3D12_UNORDERED_ACCESS_VIEW_DESC.Union", unsafe.Offsetof(D3D12_UNORDERED_ACCESS_VIEW_DESC{}.Union), 8},
-		{"D3D12_SHADER_RESOURCE_VIEW_DESC", unsafe.Sizeof(D3D12_SHADER_RESOURCE_VIEW_DESC{}), 40},
-		{"D3D12_SHADER_RESOURCE_VIEW_DESC.Union", unsafe.Offsetof(D3D12_SHADER_RESOURCE_VIEW_DESC{}.Union), 16},
-		{"D3D12_RENDER_TARGET_VIEW_DESC", unsafe.Sizeof(D3D12_RENDER_TARGET_VIEW_DESC{}), 24},
-		{"D3D12_DEPTH_STENCIL_VIEW_DESC", unsafe.Sizeof(D3D12_DEPTH_STENCIL_VIEW_DESC{}), 24},
-		{"D3D12_RAYTRACING_GEOMETRY_DESC", unsafe.Sizeof(D3D12_RAYTRACING_GEOMETRY_DESC{}), 56},
-		{"D3D12_AUTO_BREADCRUMB_NODE1", unsafe.Sizeof(D3D12AutoBreadcrumbNode1{}), 96},
-		{"D3D12_AUTO_BREADCRUMB_NODE1.BreadcrumbCount", unsafe.Offsetof(D3D12AutoBreadcrumbNode1{}.BreadcrumbCount), 48},
-		{"D3D12_DRED_ALLOCATION_NODE1", unsafe.Sizeof(D3D12DREDAllocationNode1{}), 40},
-		{"D3D12_RENDER_PASS_ENDING_ACCESS", unsafe.Sizeof(D3D12_RENDER_PASS_ENDING_ACCESS{}), 56},
-		{"D3D12_RENDER_PASS_DEPTH_STENCIL_DESC", unsafe.Sizeof(D3D12_RENDER_PASS_DEPTH_STENCIL_DESC{}), 168},
+		{"D3D12_UNORDERED_ACCESS_VIEW_DESC", unsafe.Sizeof(D3D12_UNORDERED_ACCESS_VIEW_DESC{}), 40, 40},
+		{"D3D12_UNORDERED_ACCESS_VIEW_DESC.Union", unsafe.Offsetof(D3D12_UNORDERED_ACCESS_VIEW_DESC{}.Union), 8, 8},
+		{"D3D12_SHADER_RESOURCE_VIEW_DESC", unsafe.Sizeof(D3D12_SHADER_RESOURCE_VIEW_DESC{}), 40, 40},
+		{"D3D12_SHADER_RESOURCE_VIEW_DESC.Union", unsafe.Offsetof(D3D12_SHADER_RESOURCE_VIEW_DESC{}.Union), 16, 16},
+		{"D3D12_RENDER_TARGET_VIEW_DESC", unsafe.Sizeof(D3D12_RENDER_TARGET_VIEW_DESC{}), 24, 24},
+		{"D3D12_DEPTH_STENCIL_VIEW_DESC", unsafe.Sizeof(D3D12_DEPTH_STENCIL_VIEW_DESC{}), 24, 24},
+		{"D3D12_RAYTRACING_GEOMETRY_DESC", unsafe.Sizeof(D3D12_RAYTRACING_GEOMETRY_DESC{}), 56, 56},
+		{"D3D12_AUTO_BREADCRUMB_NODE1", unsafe.Sizeof(D3D12AutoBreadcrumbNode1{}), 96, 48},
+		{"D3D12_AUTO_BREADCRUMB_NODE1.BreadcrumbCount", unsafe.Offsetof(D3D12AutoBreadcrumbNode1{}.BreadcrumbCount), 48, 24},
+		{"D3D12_DRED_ALLOCATION_NODE1", unsafe.Sizeof(D3D12DREDAllocationNode1{}), 40, 20},
+		{"D3D12_RENDER_PASS_ENDING_ACCESS", unsafe.Sizeof(D3D12_RENDER_PASS_ENDING_ACCESS{}), 56, 32},
+		{"D3D12_RENDER_PASS_ENDING_ACCESS.Union", unsafe.Offsetof(D3D12_RENDER_PASS_ENDING_ACCESS{}.Union), 8, 4},
+		{"D3D12_RENDER_PASS_RENDER_TARGET_DESC", unsafe.Sizeof(D3D12_RENDER_PASS_RENDER_TARGET_DESC{}), 88, 60},
+		{"D3D12_RENDER_PASS_DEPTH_STENCIL_DESC", unsafe.Sizeof(D3D12_RENDER_PASS_DEPTH_STENCIL_DESC{}), 168, 116},
+		{"D3D12_RESOURCE_DESC", unsafe.Sizeof(D3D12_RESOURCE_DESC{}), 56, 56},
+		{"D3D12_RESOURCE_DESC.Alignment", unsafe.Offsetof(D3D12_RESOURCE_DESC{}.Alignment), 8, 8},
+		{"D3D12_RESOURCE_DESC.Flags", unsafe.Offsetof(D3D12_RESOURCE_DESC{}.Flags), 48, 48},
+		{"D3D12_HEAP_DESC", unsafe.Sizeof(D3D12_HEAP_DESC{}), 48, 48},
+		{"D3D12_HEAP_DESC.Alignment", unsafe.Offsetof(D3D12_HEAP_DESC{}.Alignment), 32, 32},
+		{"D3D12_CONSTANT_BUFFER_VIEW_DESC", unsafe.Sizeof(D3D12_CONSTANT_BUFFER_VIEW_DESC{}), 16, 16},
+		{"D3D12_PLACED_SUBRESOURCE_FOOTPRINT", unsafe.Sizeof(D3D12_PLACED_SUBRESOURCE_FOOTPRINT{}), 32, 32},
+		{"D3D12_RESOURCE_BARRIER", unsafe.Sizeof(D3D12_RESOURCE_BARRIER{}), 32, 24},
+		{"D3D12_ROOT_PARAMETER", unsafe.Sizeof(D3D12_ROOT_PARAMETER{}), 32, 20},
+		{"D3D12_ROOT_PARAMETER.ShaderVisibility", unsafe.Offsetof(D3D12_ROOT_PARAMETER{}.ShaderVisibility), 24, 16},
+		{"D3D12_TEXTURE_COPY_LOCATION", unsafe.Sizeof(D3D12_TEXTURE_COPY_LOCATION{}), 48, 40},
+		{"D3D12_TEXTURE_COPY_LOCATION.Union", unsafe.Offsetof(D3D12_TEXTURE_COPY_LOCATION{}.Union), 16, 8},
+		{"D3D12_WRITEBUFFERIMMEDIATE_PARAMETER", unsafe.Sizeof(D3D12_WRITEBUFFERIMMEDIATE_PARAMETER{}), 16, 16},
 	} {
-		if c.got != c.want {
-			t.Errorf("%s size = %d, want %d", c.name, c.got, c.want)
+		want := c.want
+		if ptrSize == 4 {
+			want = c.want32
 		}
+		if c.got != want {
+			t.Errorf("%s = %d, want %d", c.name, c.got, want)
+		}
+	}
+}
+
+func TestSplit64(t *testing.T) {
+	const v = 0x1122_3344_5566_7788
+	if ptrSize == 8 {
+		if got := join64(lo(v), 0xdead); got != v {
+			t.Errorf("join64 = %#x, want %#x", got, uint64(v))
+		}
+		return
+	}
+	if lo(v) != 0x5566_7788 || hi(v) != 0x1122_3344 {
+		t.Errorf("lo, hi = %#x, %#x", lo(v), hi(v))
+	}
+	if got := join64(lo(v), hi(v)); got != v {
+		t.Errorf("join64 = %#x, want %#x", got, uint64(v))
 	}
 }
 

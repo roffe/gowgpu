@@ -181,7 +181,7 @@ CGO_ENABLED=1 GOOS=android GOARCH=arm \
   CC=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi31-clang go build ./...
 ```
 
-A linux/386 test binary runs on Vulkan with the 32-bit loader and driver installed (`lib32-vulkan-icd-loader` and `lib32-nvidia-utils` on Arch), and a windows/386 one under wine. The root suite passes both ways. 32-bit Android hasn't run: `hal/allbackends` registers nothing there. DX12 refuses a 32-bit build at `CreateInstance`.
+A linux/386 test binary runs on Vulkan with the 32-bit loader and driver installed (`lib32-vulkan-icd-loader` and `lib32-nvidia-utils` on Arch), and a windows/386 one under wine. The root suite passes both ways. 32-bit Android hasn't run: `hal/allbackends` registers nothing there. DX12 runs as well: the `hal/dx12` and root suites pass on GE-Proton's 32-bit vkd3d-proton, with Microsoft's 32-bit `d3dcompiler_47.dll` in the prefix's `syswow64` for FXC (the DXIL path, `GOGPU_DX12_DXIL=1`, needs none). `TestStructSizesMatchC` in `hal/dx12/d3d12` and `hal/dx12/dxgi` holds the C sizes for both pointer widths.
 
 `TestStructLayoutsMatchC` in `hal/vulkan/vk` checks the size and every field offset of the generated structs against `vulkan_core.h` through clang, for amd64, arm64, 386, arm and windows/386. It needs clang and the Vulkan headers, and skips without them. Run it after changing `cmd/vk-gen`.
 

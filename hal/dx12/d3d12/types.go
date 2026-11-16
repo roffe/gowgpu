@@ -7,6 +7,13 @@ package d3d12
 
 import "unsafe"
 
+// ptrSize is the size of a pointer, 4 bytes on 386.
+const ptrSize = unsafe.Sizeof(uintptr(0))
+
+// ptrPad is the 4 bytes C puts after a 4-byte field that is followed by a
+// pointer on 64-bit Windows. On 386 the pointer follows directly.
+type ptrPad [ptrSize - 4]byte
+
 // D3D12_COMMAND_QUEUE_DESC describes a command queue.
 type D3D12_COMMAND_QUEUE_DESC struct {
 	Type     D3D12_COMMAND_LIST_TYPE
@@ -28,13 +35,16 @@ type D3D12_HEAP_PROPERTIES struct {
 type D3D12_HEAP_DESC struct {
 	SizeInBytes uint64
 	Properties  D3D12_HEAP_PROPERTIES
+	_           uint32
 	Alignment   uint64
 	Flags       D3D12_HEAP_FLAGS
+	_           uint32
 }
 
 // D3D12_RESOURCE_DESC describes a resource.
 type D3D12_RESOURCE_DESC struct {
 	Dimension        D3D12_RESOURCE_DIMENSION
+	_                uint32
 	Alignment        uint64
 	Width            uint64
 	Height           uint32
@@ -44,6 +54,7 @@ type D3D12_RESOURCE_DESC struct {
 	SampleDesc       DXGI_SAMPLE_DESC
 	Layout           D3D12_TEXTURE_LAYOUT
 	Flags            D3D12_RESOURCE_FLAGS
+	_                uint32
 }
 
 // DXGI_SAMPLE_DESC describes multi-sampling parameters.
@@ -113,12 +124,11 @@ type D3D12_DESCRIPTOR_HEAP_DESC struct {
 type D3D12_RESOURCE_BARRIER struct {
 	Type  D3D12_RESOURCE_BARRIER_TYPE
 	Flags D3D12_RESOURCE_BARRIER_FLAGS
-	// This is a union in C. We use a fixed-size array and interpret based on Type.
-	// Transition: 24 bytes, Aliasing: 16 bytes, UAV: 8 bytes
-	// We use 24 bytes to accommodate the largest variant, as uint64s: every
-	// variant starts with a pointer, and checkptr (on under -race) rejects
-	// casting a byte array that may sit on a 4-byte boundary to one.
-	Union [3]uint64
+	// This is a union in C, as big as its largest variant, the transition
+	// barrier. Every variant starts with a pointer, so it is made of
+	// uintptrs: checkptr (on under -race) rejects casting a byte array that
+	// may sit on a 4-byte boundary to one.
+	Union [unsafe.Sizeof(D3D12_RESOURCE_TRANSITION_BARRIER{}) / ptrSize]uintptr
 }
 
 // D3D12_RESOURCE_TRANSITION_BARRIER describes a resource transition barrier.
@@ -205,6 +215,7 @@ type D3D12_STREAM_OUTPUT_BUFFER_VIEW struct {
 type D3D12_CONSTANT_BUFFER_VIEW_DESC struct {
 	BufferLocation uint64
 	SizeInBytes    uint32
+	_              uint32
 }
 
 // D3D12_SHADER_RESOURCE_VIEW_DESC describes a shader resource view.
@@ -295,16 +306,14 @@ type D3D12_BOX struct {
 }
 
 // D3D12_TEXTURE_COPY_LOCATION describes a texture copy location.
-// The Union field must start at offset 16 to match C ABI alignment.
-// In C, the union contains D3D12_PLACED_SUBRESOURCE_FOOTPRINT which starts with
-// UINT64 Offset, requiring 8-byte alignment. Without explicit padding, Go places
-// [32]byte (alignment 1) at offset 12 → wrong layout. With _ uint32, Go adds
-// 4 bytes at offset 12, pushing Union to offset 16 → correct 48-byte struct.
+// The union starts with the 8-byte aligned UINT64 Offset of
+// D3D12_PLACED_SUBRESOURCE_FOOTPRINT, at offset 16 on 64-bit Windows and 8 on
+// 386.
 type D3D12_TEXTURE_COPY_LOCATION struct {
 	Resource *ID3D12Resource
 	Type     D3D12_TEXTURE_COPY_TYPE
-	_        uint32    // C ABI padding: aligns Union to offset 16
-	Union    [4]uint64 // PlacedFootprint (32 bytes) or SubresourceIndex (4 bytes); 8-aligned like Offset
+	_        ptrPad
+	Union    [4]uint64 // PlacedFootprint (32 bytes) or SubresourceIndex (4 bytes)
 }
 
 // D3D12_TEXTURE_COPY_TYPE specifies texture copy type.
@@ -320,6 +329,7 @@ const (
 type D3D12_PLACED_SUBRESOURCE_FOOTPRINT struct {
 	Offset    uint64
 	Footprint D3D12_SUBRESOURCE_FOOTPRINT
+	_         uint32
 }
 
 // D3D12_SUBRESOURCE_FOOTPRINT describes a subresource footprint.
@@ -536,17 +546,16 @@ type D3D12_ROOT_SIGNATURE_DESC struct {
 }
 
 // D3D12_ROOT_PARAMETER describes a root parameter.
-// The Union field uses [2]uint64 (not [16]byte) to enforce 8-byte alignment,
-// matching the C ABI where the union contains a pointer (D3D12_ROOT_DESCRIPTOR_TABLE).
-// With [16]byte (alignment 1), Go places Union at offset 4 → 24-byte struct.
-// With [2]uint64 (alignment 8), Go pads to offset 8 → 32-byte struct (correct).
 type D3D12_ROOT_PARAMETER struct {
 	ParameterType D3D12_ROOT_PARAMETER_TYPE
-	// Union of DescriptorTable, Constants, or Descriptor.
-	// Access via unsafe.Pointer(&Union[0]) cast to the appropriate type.
-	Union            [2]uint64
+	// Union of DescriptorTable, Constants, or Descriptor, made of uintptrs
+	// because DescriptorTable holds a pointer. Access via
+	// unsafe.Pointer(&Union[0]) cast to the appropriate type.
+	Union            [rootParameterUnionSize / ptrSize]uintptr
 	ShaderVisibility D3D12_SHADER_VISIBILITY
 }
+
+const rootParameterUnionSize = max(unsafe.Sizeof(D3D12_ROOT_DESCRIPTOR_TABLE{}), unsafe.Sizeof(D3D12_ROOT_CONSTANTS{}))
 
 // D3D12_ROOT_DESCRIPTOR_TABLE describes a descriptor table.
 type D3D12_ROOT_DESCRIPTOR_TABLE struct {
@@ -694,9 +703,20 @@ type D3D12_RENDER_PASS_BEGINNING_ACCESS struct {
 // D3D12_RENDER_PASS_ENDING_ACCESS describes render pass ending access.
 type D3D12_RENDER_PASS_ENDING_ACCESS struct {
 	Type D3D12_RENDER_PASS_ENDING_ACCESS_TYPE
-	_    uint32 // C ABI padding: the resolve parameters hold pointers, 8-aligned
 	// Union for Resolve (D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_PARAMETERS)
-	Union [48]byte
+	Union [unsafe.Sizeof(renderPassResolveParameters{}) / ptrSize]uintptr
+}
+
+// renderPassResolveParameters is D3D12_RENDER_PASS_ENDING_ACCESS_RESOLVE_PARAMETERS,
+// here only for its size.
+type renderPassResolveParameters struct {
+	SrcResource           *ID3D12Resource
+	DstResource           *ID3D12Resource
+	SubresourceCount      uint32
+	SubresourceParameters uintptr
+	Format                DXGI_FORMAT
+	ResolveMode           uint32
+	PreserveResolveSource int32
 }
 
 // D3D12_RENDER_PASS_BEGINNING_ACCESS_CLEAR_PARAMETERS describes clear parameters.
@@ -732,6 +752,7 @@ type D3D12_DRAW_INDEXED_ARGUMENTS struct {
 type D3D12_WRITEBUFFERIMMEDIATE_PARAMETER struct {
 	Dest  uint64
 	Value uint32
+	_     uint32
 }
 
 // D3D12_WRITEBUFFERIMMEDIATE_MODE specifies write buffer immediate mode.

@@ -425,19 +425,34 @@ func (d *ID3D12Device) CreatePlacedResource(
 ) (*ID3D12Resource, error) {
 	var resource *ID3D12Resource
 
-	ret, _, _ := syscall.Syscall9(
-		d.vtbl.CreatePlacedResource,
-		8,
-		uintptr(unsafe.Pointer(d)),
-		uintptr(unsafe.Pointer(heap)),
-		uintptr(heapOffset),
-		uintptr(unsafe.Pointer(desc)),
-		uintptr(initialState),
-		uintptr(unsafe.Pointer(optimizedClearValue)),
-		uintptr(unsafe.Pointer(&IID_ID3D12Resource)),
-		uintptr(unsafe.Pointer(&resource)),
-		0,
-	)
+	var ret uintptr
+	if ptrSize == 4 {
+		ret, _, _ = syscall.SyscallN(
+			d.vtbl.CreatePlacedResource,
+			uintptr(unsafe.Pointer(d)),
+			uintptr(unsafe.Pointer(heap)),
+			lo(heapOffset), hi(heapOffset),
+			uintptr(unsafe.Pointer(desc)),
+			uintptr(initialState),
+			uintptr(unsafe.Pointer(optimizedClearValue)),
+			uintptr(unsafe.Pointer(&IID_ID3D12Resource)),
+			uintptr(unsafe.Pointer(&resource)),
+		)
+	} else {
+		ret, _, _ = syscall.Syscall9(
+			d.vtbl.CreatePlacedResource,
+			8,
+			uintptr(unsafe.Pointer(d)),
+			uintptr(unsafe.Pointer(heap)),
+			uintptr(heapOffset),
+			uintptr(unsafe.Pointer(desc)),
+			uintptr(initialState),
+			uintptr(unsafe.Pointer(optimizedClearValue)),
+			uintptr(unsafe.Pointer(&IID_ID3D12Resource)),
+			uintptr(unsafe.Pointer(&resource)),
+			0,
+		)
+	}
 
 	if int32(ret) < 0 {
 		return nil, HRESULTError(ret)
@@ -449,16 +464,28 @@ func (d *ID3D12Device) CreatePlacedResource(
 func (d *ID3D12Device) CreateFence(initialValue uint64, flags D3D12_FENCE_FLAGS) (*ID3D12Fence, error) {
 	var fence *ID3D12Fence
 
-	ret, _, _ := syscall.Syscall6(
-		d.vtbl.CreateFence,
-		5,
-		uintptr(unsafe.Pointer(d)),
-		uintptr(initialValue),
-		uintptr(flags),
-		uintptr(unsafe.Pointer(&IID_ID3D12Fence)),
-		uintptr(unsafe.Pointer(&fence)),
-		0,
-	)
+	var ret uintptr
+	if ptrSize == 4 {
+		ret, _, _ = syscall.SyscallN(
+			d.vtbl.CreateFence,
+			uintptr(unsafe.Pointer(d)),
+			lo(initialValue), hi(initialValue),
+			uintptr(flags),
+			uintptr(unsafe.Pointer(&IID_ID3D12Fence)),
+			uintptr(unsafe.Pointer(&fence)),
+		)
+	} else {
+		ret, _, _ = syscall.Syscall6(
+			d.vtbl.CreateFence,
+			5,
+			uintptr(unsafe.Pointer(d)),
+			uintptr(initialValue),
+			uintptr(flags),
+			uintptr(unsafe.Pointer(&IID_ID3D12Fence)),
+			uintptr(unsafe.Pointer(&fence)),
+			0,
+		)
+	}
 
 	if int32(ret) < 0 {
 		return nil, HRESULTError(ret)
@@ -573,13 +600,18 @@ func (q *ID3D12CommandQueue) ExecuteCommandLists(numCommandLists uint32, command
 
 // Signal sets a fence to a specified value.
 func (q *ID3D12CommandQueue) Signal(fence *ID3D12Fence, value uint64) error {
-	ret, _, _ := syscall.Syscall(
-		q.vtbl.Signal,
-		3,
-		uintptr(unsafe.Pointer(q)),
-		uintptr(unsafe.Pointer(fence)),
-		uintptr(value),
-	)
+	var ret uintptr
+	if ptrSize == 4 {
+		ret, _, _ = syscall.SyscallN(q.vtbl.Signal, uintptr(unsafe.Pointer(q)), uintptr(unsafe.Pointer(fence)), lo(value), hi(value))
+	} else {
+		ret, _, _ = syscall.Syscall(
+			q.vtbl.Signal,
+			3,
+			uintptr(unsafe.Pointer(q)),
+			uintptr(unsafe.Pointer(fence)),
+			uintptr(value),
+		)
+	}
 
 	if int32(ret) < 0 {
 		return HRESULTError(ret)
@@ -589,13 +621,18 @@ func (q *ID3D12CommandQueue) Signal(fence *ID3D12Fence, value uint64) error {
 
 // Wait waits on a fence.
 func (q *ID3D12CommandQueue) Wait(fence *ID3D12Fence, value uint64) error {
-	ret, _, _ := syscall.Syscall(
-		q.vtbl.Wait,
-		3,
-		uintptr(unsafe.Pointer(q)),
-		uintptr(unsafe.Pointer(fence)),
-		uintptr(value),
-	)
+	var ret uintptr
+	if ptrSize == 4 {
+		ret, _, _ = syscall.SyscallN(q.vtbl.Wait, uintptr(unsafe.Pointer(q)), uintptr(unsafe.Pointer(fence)), lo(value), hi(value))
+	} else {
+		ret, _, _ = syscall.Syscall(
+			q.vtbl.Wait,
+			3,
+			uintptr(unsafe.Pointer(q)),
+			uintptr(unsafe.Pointer(fence)),
+			uintptr(value),
+		)
+	}
 
 	if int32(ret) < 0 {
 		return HRESULTError(ret)
@@ -767,6 +804,18 @@ func (c *ID3D12GraphicsCommandList) Dispatch(threadGroupCountX, threadGroupCount
 
 // CopyBufferRegion copies a region from one buffer to another.
 func (c *ID3D12GraphicsCommandList) CopyBufferRegion(dstBuffer *ID3D12Resource, dstOffset uint64, srcBuffer *ID3D12Resource, srcOffset, numBytes uint64) {
+	if ptrSize == 4 {
+		_, _, _ = syscall.SyscallN(
+			c.vtbl.CopyBufferRegion,
+			uintptr(unsafe.Pointer(c)),
+			uintptr(unsafe.Pointer(dstBuffer)),
+			lo(dstOffset), hi(dstOffset),
+			uintptr(unsafe.Pointer(srcBuffer)),
+			lo(srcOffset), hi(srcOffset),
+			lo(numBytes), hi(numBytes),
+		)
+		return
+	}
 	_, _, _ = syscall.Syscall6(
 		c.vtbl.CopyBufferRegion,
 		6,
@@ -916,6 +965,10 @@ func (c *ID3D12GraphicsCommandList) SetGraphicsRootSignature(rootSignature *ID3D
 
 // SetComputeRootDescriptorTable sets a compute descriptor table.
 func (c *ID3D12GraphicsCommandList) SetComputeRootDescriptorTable(rootParameterIndex uint32, baseDescriptor D3D12_GPU_DESCRIPTOR_HANDLE) {
+	if ptrSize == 4 {
+		_, _, _ = syscall.SyscallN(c.vtbl.SetComputeRootDescriptorTable, uintptr(unsafe.Pointer(c)), uintptr(rootParameterIndex), lo(baseDescriptor.Ptr), hi(baseDescriptor.Ptr))
+		return
+	}
 	_, _, _ = syscall.Syscall(
 		c.vtbl.SetComputeRootDescriptorTable,
 		3,
@@ -927,6 +980,10 @@ func (c *ID3D12GraphicsCommandList) SetComputeRootDescriptorTable(rootParameterI
 
 // SetGraphicsRootDescriptorTable sets a graphics descriptor table.
 func (c *ID3D12GraphicsCommandList) SetGraphicsRootDescriptorTable(rootParameterIndex uint32, baseDescriptor D3D12_GPU_DESCRIPTOR_HANDLE) {
+	if ptrSize == 4 {
+		_, _, _ = syscall.SyscallN(c.vtbl.SetGraphicsRootDescriptorTable, uintptr(unsafe.Pointer(c)), uintptr(rootParameterIndex), lo(baseDescriptor.Ptr), hi(baseDescriptor.Ptr))
+		return
+	}
 	_, _, _ = syscall.Syscall(
 		c.vtbl.SetGraphicsRootDescriptorTable,
 		3,
@@ -970,6 +1027,10 @@ func (c *ID3D12GraphicsCommandList) SetGraphicsRoot32BitConstant(rootParameterIn
 
 // SetComputeRootConstantBufferView points a compute root CBV at a GPU virtual address.
 func (c *ID3D12GraphicsCommandList) SetComputeRootConstantBufferView(rootParameterIndex uint32, bufferLocation uint64) {
+	if ptrSize == 4 {
+		_, _, _ = syscall.SyscallN(c.vtbl.SetComputeRootConstantBufferView, uintptr(unsafe.Pointer(c)), uintptr(rootParameterIndex), lo(bufferLocation), hi(bufferLocation))
+		return
+	}
 	_, _, _ = syscall.Syscall(
 		c.vtbl.SetComputeRootConstantBufferView,
 		3,
@@ -981,6 +1042,10 @@ func (c *ID3D12GraphicsCommandList) SetComputeRootConstantBufferView(rootParamet
 
 // SetGraphicsRootConstantBufferView points a graphics root CBV at a GPU virtual address.
 func (c *ID3D12GraphicsCommandList) SetGraphicsRootConstantBufferView(rootParameterIndex uint32, bufferLocation uint64) {
+	if ptrSize == 4 {
+		_, _, _ = syscall.SyscallN(c.vtbl.SetGraphicsRootConstantBufferView, uintptr(unsafe.Pointer(c)), uintptr(rootParameterIndex), lo(bufferLocation), hi(bufferLocation))
+		return
+	}
 	_, _, _ = syscall.Syscall(
 		c.vtbl.SetGraphicsRootConstantBufferView,
 		3,
@@ -1085,6 +1150,19 @@ func (c *ID3D12GraphicsCommandList) ExecuteIndirect(
 	countBuffer *ID3D12Resource,
 	countBufferOffset uint64,
 ) {
+	if ptrSize == 4 {
+		_, _, _ = syscall.SyscallN(
+			c.vtbl.ExecuteIndirect,
+			uintptr(unsafe.Pointer(c)),
+			uintptr(unsafe.Pointer(commandSignature)),
+			uintptr(maxCommandCount),
+			uintptr(unsafe.Pointer(argumentBuffer)),
+			lo(argumentBufferOffset), hi(argumentBufferOffset),
+			uintptr(unsafe.Pointer(countBuffer)),
+			lo(countBufferOffset), hi(countBufferOffset),
+		)
+		return
+	}
 	_, _, _ = syscall.Syscall9(
 		c.vtbl.ExecuteIndirect,
 		7,
@@ -1124,6 +1202,19 @@ func (c *ID3D12GraphicsCommandList) ResolveQueryData(
 	destinationBuffer *ID3D12Resource,
 	alignedDestinationBufferOffset uint64,
 ) {
+	if ptrSize == 4 {
+		_, _, _ = syscall.SyscallN(
+			c.vtbl.ResolveQueryData,
+			uintptr(unsafe.Pointer(c)),
+			uintptr(unsafe.Pointer(queryHeap)),
+			uintptr(queryType),
+			uintptr(startIndex),
+			uintptr(numQueries),
+			uintptr(unsafe.Pointer(destinationBuffer)),
+			lo(alignedDestinationBufferOffset), hi(alignedDestinationBufferOffset),
+		)
+		return
+	}
 	_, _, _ = syscall.Syscall9(
 		c.vtbl.ResolveQueryData,
 		7,
@@ -1155,24 +1246,29 @@ func (f *ID3D12Fence) Release() uint32 {
 
 // GetCompletedValue returns the current fence value.
 func (f *ID3D12Fence) GetCompletedValue() uint64 {
-	ret, _, _ := syscall.Syscall(
+	r1, r2, _ := syscall.Syscall(
 		f.vtbl.GetCompletedValue,
 		1,
 		uintptr(unsafe.Pointer(f)),
 		0, 0,
 	)
-	return uint64(ret)
+	return join64(r1, r2)
 }
 
 // SetEventOnCompletion sets an event to be signaled when the fence reaches a value.
 func (f *ID3D12Fence) SetEventOnCompletion(value uint64, hEvent uintptr) error {
-	ret, _, _ := syscall.Syscall(
-		f.vtbl.SetEventOnCompletion,
-		3,
-		uintptr(unsafe.Pointer(f)),
-		uintptr(value),
-		hEvent,
-	)
+	var ret uintptr
+	if ptrSize == 4 {
+		ret, _, _ = syscall.SyscallN(f.vtbl.SetEventOnCompletion, uintptr(unsafe.Pointer(f)), lo(value), hi(value), hEvent)
+	} else {
+		ret, _, _ = syscall.Syscall(
+			f.vtbl.SetEventOnCompletion,
+			3,
+			uintptr(unsafe.Pointer(f)),
+			uintptr(value),
+			hEvent,
+		)
+	}
 
 	if int32(ret) < 0 {
 		return HRESULTError(ret)
@@ -1182,13 +1278,18 @@ func (f *ID3D12Fence) SetEventOnCompletion(value uint64, hEvent uintptr) error {
 
 // Signal sets the fence to a value from the CPU side.
 func (f *ID3D12Fence) Signal(value uint64) error {
-	ret, _, _ := syscall.Syscall(
-		f.vtbl.Signal,
-		2,
-		uintptr(unsafe.Pointer(f)),
-		uintptr(value),
-		0,
-	)
+	var ret uintptr
+	if ptrSize == 4 {
+		ret, _, _ = syscall.SyscallN(f.vtbl.Signal, uintptr(unsafe.Pointer(f)), lo(value), hi(value))
+	} else {
+		ret, _, _ = syscall.Syscall(
+			f.vtbl.Signal,
+			2,
+			uintptr(unsafe.Pointer(f)),
+			uintptr(value),
+			0,
+		)
+	}
 
 	if int32(ret) < 0 {
 		return HRESULTError(ret)
@@ -1255,13 +1356,13 @@ func (r *ID3D12Resource) Unmap(subresource uint32, writtenRange *D3D12_RANGE) {
 
 // GetGPUVirtualAddress returns the GPU virtual address of the resource.
 func (r *ID3D12Resource) GetGPUVirtualAddress() uint64 {
-	ret, _, _ := syscall.Syscall(
+	r1, r2, _ := syscall.Syscall(
 		r.vtbl.GetGPUVirtualAddress,
 		1,
 		uintptr(unsafe.Pointer(r)),
 		0, 0,
 	)
-	return uint64(ret)
+	return join64(r1, r2)
 }
 
 // GetDesc returns the resource description.
@@ -1620,13 +1721,13 @@ func (q *ID3D12InfoQueue) Release() uint32 {
 
 // GetNumStoredMessages returns the number of messages stored in the queue.
 func (q *ID3D12InfoQueue) GetNumStoredMessages() uint64 {
-	ret, _, _ := syscall.Syscall(
+	r1, r2, _ := syscall.Syscall(
 		q.vtbl.GetNumStoredMessages,
 		1,
 		uintptr(unsafe.Pointer(q)),
 		0, 0,
 	)
-	return uint64(ret)
+	return join64(r1, r2)
 }
 
 // D3D12MessageSeverity represents the severity of a debug message.
@@ -1697,30 +1798,39 @@ func (m *D3D12Message) Description() string {
 func (q *ID3D12InfoQueue) GetMessage(index uint64) *D3D12Message {
 	// First call: get required buffer size. Returns S_FALSE on success.
 	var msgSize uintptr
-	ret, _, _ := syscall.Syscall6(
-		q.vtbl.GetMessage,
-		4,
-		uintptr(unsafe.Pointer(q)),
-		uintptr(index),
-		0, // pMessage = nil → query size
-		uintptr(unsafe.Pointer(&msgSize)),
-		0, 0,
-	)
+	var ret uintptr
+	if ptrSize == 4 {
+		ret, _, _ = syscall.SyscallN(q.vtbl.GetMessage, uintptr(unsafe.Pointer(q)), lo(index), hi(index), 0, uintptr(unsafe.Pointer(&msgSize)))
+	} else {
+		ret, _, _ = syscall.Syscall6(
+			q.vtbl.GetMessage,
+			4,
+			uintptr(unsafe.Pointer(q)),
+			uintptr(index),
+			0, // pMessage = nil → query size
+			uintptr(unsafe.Pointer(&msgSize)),
+			0, 0,
+		)
+	}
 	if int32(ret) < 0 || msgSize == 0 {
 		return nil
 	}
 
 	// Allocate buffer and retrieve the message. Returns S_OK on success.
 	buf := make([]byte, msgSize)
-	ret, _, _ = syscall.Syscall6(
-		q.vtbl.GetMessage,
-		4,
-		uintptr(unsafe.Pointer(q)),
-		uintptr(index),
-		uintptr(unsafe.Pointer(&buf[0])),
-		uintptr(unsafe.Pointer(&msgSize)),
-		0, 0,
-	)
+	if ptrSize == 4 {
+		ret, _, _ = syscall.SyscallN(q.vtbl.GetMessage, uintptr(unsafe.Pointer(q)), lo(index), hi(index), uintptr(unsafe.Pointer(&buf[0])), uintptr(unsafe.Pointer(&msgSize)))
+	} else {
+		ret, _, _ = syscall.Syscall6(
+			q.vtbl.GetMessage,
+			4,
+			uintptr(unsafe.Pointer(q)),
+			uintptr(index),
+			uintptr(unsafe.Pointer(&buf[0])),
+			uintptr(unsafe.Pointer(&msgSize)),
+			0, 0,
+		)
+	}
 	if int32(ret) < 0 {
 		return nil
 	}

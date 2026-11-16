@@ -170,15 +170,27 @@ func (f *IDXGIFactory4) EnumAdapters1(index uint32) (*IDXGIAdapter1, error) {
 func (f *IDXGIFactory4) EnumAdapterByLuid(luid LUID) (*IDXGIAdapter1, error) {
 	var adapter *IDXGIAdapter1
 
-	ret, _, _ := syscall.Syscall6(
-		f.vtbl.EnumAdapterByLuid,
-		4,
-		uintptr(unsafe.Pointer(f)),
-		uintptr(*(*uint64)(unsafe.Pointer(&luid))), // LUID as 64-bit value
-		uintptr(unsafe.Pointer(&IID_IDXGIAdapter1)),
-		uintptr(unsafe.Pointer(&adapter)),
-		0, 0,
-	)
+	var ret uintptr
+	if unsafe.Sizeof(uintptr(0)) == 4 {
+		// 386 passes the 8-byte LUID in two stack slots.
+		ret, _, _ = syscall.SyscallN(
+			f.vtbl.EnumAdapterByLuid,
+			uintptr(unsafe.Pointer(f)),
+			uintptr(luid.LowPart), uintptr(luid.HighPart),
+			uintptr(unsafe.Pointer(&IID_IDXGIAdapter1)),
+			uintptr(unsafe.Pointer(&adapter)),
+		)
+	} else {
+		ret, _, _ = syscall.Syscall6(
+			f.vtbl.EnumAdapterByLuid,
+			4,
+			uintptr(unsafe.Pointer(f)),
+			uintptr(*(*uint64)(unsafe.Pointer(&luid))), // LUID as 64-bit value
+			uintptr(unsafe.Pointer(&IID_IDXGIAdapter1)),
+			uintptr(unsafe.Pointer(&adapter)),
+			0, 0,
+		)
+	}
 
 	if int32(ret) < 0 {
 		return nil, d3d12.HRESULTError(ret)
@@ -352,15 +364,27 @@ func (f *IDXGIFactory6) EnumAdapterByGpuPreference(
 func (f *IDXGIFactory6) EnumAdapterByLuid(luid LUID) (*IDXGIAdapter4, error) {
 	var adapter *IDXGIAdapter4
 
-	ret, _, _ := syscall.Syscall6(
-		f.vtbl.EnumAdapterByLuid,
-		4,
-		uintptr(unsafe.Pointer(f)),
-		uintptr(*(*uint64)(unsafe.Pointer(&luid))), // LUID as 64-bit value
-		uintptr(unsafe.Pointer(&IID_IDXGIAdapter4)),
-		uintptr(unsafe.Pointer(&adapter)),
-		0, 0,
-	)
+	var ret uintptr
+	if unsafe.Sizeof(uintptr(0)) == 4 {
+		// 386 passes the 8-byte LUID in two stack slots.
+		ret, _, _ = syscall.SyscallN(
+			f.vtbl.EnumAdapterByLuid,
+			uintptr(unsafe.Pointer(f)),
+			uintptr(luid.LowPart), uintptr(luid.HighPart),
+			uintptr(unsafe.Pointer(&IID_IDXGIAdapter4)),
+			uintptr(unsafe.Pointer(&adapter)),
+		)
+	} else {
+		ret, _, _ = syscall.Syscall6(
+			f.vtbl.EnumAdapterByLuid,
+			4,
+			uintptr(unsafe.Pointer(f)),
+			uintptr(*(*uint64)(unsafe.Pointer(&luid))), // LUID as 64-bit value
+			uintptr(unsafe.Pointer(&IID_IDXGIAdapter4)),
+			uintptr(unsafe.Pointer(&adapter)),
+			0, 0,
+		)
+	}
 
 	if int32(ret) < 0 {
 		return nil, d3d12.HRESULTError(ret)

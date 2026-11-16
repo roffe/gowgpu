@@ -22,9 +22,9 @@ type DXGI_ADAPTER_DESC1 struct {
 	DeviceID              uint32
 	SubSysID              uint32
 	Revision              uint32
-	DedicatedVideoMemory  uint64
-	DedicatedSystemMemory uint64
-	SharedSystemMemory    uint64
+	DedicatedVideoMemory  uintptr
+	DedicatedSystemMemory uintptr
+	SharedSystemMemory    uintptr
 	AdapterLuid           LUID
 	Flags                 DXGI_ADAPTER_FLAG
 }
@@ -41,9 +41,9 @@ type DXGI_ADAPTER_DESC3 struct {
 	DeviceID                      uint32
 	SubSysID                      uint32
 	Revision                      uint32
-	DedicatedVideoMemory          uint64
-	DedicatedSystemMemory         uint64
-	SharedSystemMemory            uint64
+	DedicatedVideoMemory          uintptr
+	DedicatedSystemMemory         uintptr
+	SharedSystemMemory            uintptr
 	AdapterLuid                   LUID
 	Flags                         DXGI_ADAPTER_FLAG
 	GraphicsPreemptionGranularity uint32
@@ -150,6 +150,7 @@ type DXGI_FRAME_STATISTICS struct {
 	PresentCount        uint32
 	PresentRefreshCount uint32
 	SyncRefreshCount    uint32
+	_                   uint32
 	SyncQPCTime         int64 // LARGE_INTEGER
 	SyncGPUTime         int64 // LARGE_INTEGER
 }

@@ -376,6 +376,16 @@ func (c *ID3D12GraphicsCommandList4) CopyRaytracingAccelerationStructure(
 	sourceAccelerationStructureData uint64,
 	mode D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE,
 ) {
+	if ptrSize == 4 {
+		_, _, _ = syscall.SyscallN(
+			c.vtbl.CopyRaytracingAccelerationStructure,
+			uintptr(unsafe.Pointer(c)),
+			lo(destAccelerationStructureData), hi(destAccelerationStructureData),
+			lo(sourceAccelerationStructureData), hi(sourceAccelerationStructureData),
+			uintptr(mode),
+		)
+		return
+	}
 	_, _, _ = syscall.Syscall6(
 		c.vtbl.CopyRaytracingAccelerationStructure,
 		4,

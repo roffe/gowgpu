@@ -124,7 +124,7 @@ fyne needs cgo anyway for GLFW and its mobile drivers, so there it costs nothing
 |---|---|---|
 | Linux | Vulkan | NVIDIA RTX 4080 SUPER, Mesa lavapipe, and a linux/386 build on NVIDIA's 32-bit driver |
 | Linux | GL | NVIDIA through EGL (Wayland, X11 and headless), Mesa llvmpipe |
-| Windows | DX12 | a Windows VM, WARP on GitHub Actions under `-race`, and wine with its own vkd3d and with GE-Proton's vkd3d-proton |
+| Windows | DX12 | a Windows VM, WARP on GitHub Actions under `-race`, and wine with its own vkd3d and with GE-Proton's vkd3d-proton, amd64 and 386 |
 | Windows | Vulkan | wine (winevulkan), amd64 and 386 |
 | Windows | GL | wine (WGL on NVIDIA) |
 | macOS | Metal | Apple M2 Pro, GitHub Actions macos-15 |

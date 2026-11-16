@@ -161,12 +161,10 @@ type D3D12AutoBreadcrumbNode1 struct {
 	CommandList             uintptr
 	CommandQueue            uintptr
 	BreadcrumbCount         uint32
-	_                       [4]byte // padding for alignment
 	LastBreadcrumbValue     *uint32
 	CommandHistory          *D3D12AutoBreadcrumbOp
 	Next                    *D3D12AutoBreadcrumbNode1
 	BreadcrumbContextsCount uint32
-	_                       [4]byte // padding for alignment
 	BreadcrumbContexts      uintptr
 }
 
@@ -192,7 +190,6 @@ type D3D12DREDAllocationNode1 struct {
 	ObjectNameA    *byte
 	ObjectNameW    *uint16
 	AllocationType int32
-	_              [4]byte // padding
 	Next           *D3D12DREDAllocationNode1
 	Object         uintptr
 }
