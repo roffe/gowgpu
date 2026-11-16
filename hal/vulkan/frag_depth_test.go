@@ -57,7 +57,7 @@ func TestFragDepthClampBesidePushConstants(t *testing.T) {
 
 	const fromPushConstants = `
 struct Depth { value: f32 }
-var<push_constant> depth: Depth;
+var<immediate> depth: Depth;
 @fragment fn fs_main() -> @builtin(frag_depth) f32 { return depth.value; }
 `
 	const ofItsOwn = `

@@ -30,6 +30,10 @@ func checkStageBindings(module *ShaderModule, entryPoint string, stage ir.Shader
 	}
 	uses := globalUses{used: make([]bool, len(mod.GlobalVariables)), sampled: make([]bool, len(mod.GlobalVariables))}
 	uses.walk(mod, &ep.Function, nil)
+	var layout ir.Layouter
+	if err := layout.Update(mod); err != nil {
+		return err
+	}
 	// entryOf returns the layout entry of a global and whether its layout is
 	// one derived from the shaders.
 	entryOf := func(gv *ir.GlobalVariable) (*gputypes.BindGroupLayoutEntry, bool) {
@@ -59,7 +63,7 @@ func checkStageBindings(module *ShaderModule, entryPoint string, stage ir.Shader
 		case entry.Visibility&visibility == 0:
 			return fmt.Errorf("%s is not visible to the stage in the pipeline layout", where)
 		}
-		shader, err := autoEntry(mod, gv, uses.sampled[h])
+		shader, err := autoEntry(mod, &layout, gv, uses.sampled[h])
 		if err != nil {
 			continue // binding arrays and external textures: nothing to compare
 		}

@@ -5,6 +5,7 @@ package core
 import (
 	"testing"
 
+	"github.com/gogpu/naga/valid"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 )
@@ -38,10 +39,10 @@ func TestValidateShaderSubgroupFeatures(t *testing.T) {
 		features gputypes.Features
 		wantErr  bool
 	}{
-		{"barrier without the features", `@compute @workgroup_size(1) fn main() { subgroupBarrier(); }`, ops, true},
-		{"operation with the feature", `@compute @workgroup_size(1) fn main() { let x = subgroupAdd(1u); }`, ops, false},
-		{"operation without the feature", `@compute @workgroup_size(1) fn main() { let x = subgroupAdd(1u); }`, 0, true},
-		{"built-in without the feature", `@compute @workgroup_size(1) fn main(@builtin(subgroup_size) n: u32) { }`, 0, true},
+		{"barrier without the features", `enable subgroups; @compute @workgroup_size(1) fn main() { subgroupBarrier(); }`, ops, true},
+		{"operation with the feature", `enable subgroups; @compute @workgroup_size(1) fn main() { let x = subgroupAdd(1u); }`, ops, false},
+		{"operation without the feature", `enable subgroups; @compute @workgroup_size(1) fn main() { let x = subgroupAdd(1u); }`, 0, true},
+		{"built-in without the feature", `enable subgroups; @compute @workgroup_size(1) fn main(@builtin(subgroup_size) n: u32) { }`, 0, true},
 		{"the word in a comment and a name", `// subgroup sizes vary
 @compute @workgroup_size(1) fn main() { let subgroupish = 1u; }`, 0, false},
 	} {
@@ -59,9 +60,11 @@ func TestValidateShaderSubgroupFeatures(t *testing.T) {
 
 func TestNagaCapabilitiesForFeatures(t *testing.T) {
 	t.Parallel()
+	if caps := nagaCapabilitiesForFeatures(0); caps&featureCapabilities != 0 {
+		t.Fatalf("no features enable %#x", caps&featureCapabilities)
+	}
 	features := gputypes.Features(gputypes.FeatureShaderF16 | gputypes.FeatureShaderFloat64)
-	caps := nagaCapabilitiesForFeatures(features)
-	if caps == 0 {
-		t.Fatal("expected non-zero capabilities")
+	if caps := nagaCapabilitiesForFeatures(features); caps&featureCapabilities != valid.CapShaderFloat16|valid.CapFloat64|valid.CapShaderInt64 {
+		t.Fatalf("f16 and f64 enable %#x", caps&featureCapabilities)
 	}
 }

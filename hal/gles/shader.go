@@ -11,8 +11,11 @@ import (
 	"log/slog"
 
 	"github.com/gogpu/naga"
+	"github.com/gogpu/naga/backend"
 	"github.com/gogpu/naga/glsl"
 	"github.com/gogpu/naga/ir"
+	"github.com/gogpu/naga/valid"
+	"github.com/gogpu/naga/wgsl"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/gles/gl"
@@ -24,12 +27,12 @@ import (
 // texelFetch is undefined, from GLSL 4.30, which has the
 // textureQueryLevels the check needs. wgpu-hal checks them from GL 4.3 the
 // same way.
-func boundsChecks(v glsl.Version) glsl.BoundsCheckPolicies {
-	p := glsl.BoundsCheckPolicies{Index: glsl.BoundsCheckRestrict, Buffer: glsl.BoundsCheckRestrict}
+func boundsChecks(v glsl.Version) backend.BoundsCheckPolicies {
+	p := backend.BoundsCheckPolicies{ImageLoad: backend.BoundsCheckUnchecked}
 	if v.ES || v.Major < 4 || v.Major == 4 && v.Minor < 30 {
 		return p
 	}
-	p.ImageLoad = glsl.BoundsCheckReadZeroSkipWrite
+	p.ImageLoad = backend.BoundsCheckReadZeroSkipWrite
 	return p
 }
 
@@ -52,26 +55,21 @@ func boundsChecks(v glsl.Version) glsl.BoundsCheckPolicies {
 // Returns the GLSL source and TranslationInfo containing TextureMappings for
 // SamplerBindMap construction (which sampler goes with which texture unit).
 func compileWGSLToGLSL(version glsl.Version, source hal.ShaderSource, stage ir.ShaderStage, entryPoint string,
-	constants map[string]float64, bindingMap map[glsl.BindingMapKey]uint8, skipZeroInit bool) (string, glsl.TranslationInfo, error) {
+	constants map[string]float64, bindingMap map[ir.ResourceBinding]uint8, skipZeroInit bool) (string, glsl.TranslationInfo, error) {
 	if source.WGSL == "" {
 		return "", glsl.TranslationInfo{}, fmt.Errorf("gles: shader source has no WGSL code")
 	}
 
-	// Parse WGSL to AST.
-	ast, err := naga.Parse(source.WGSL)
+	module, _, err := wgsl.Parse(source.WGSL, wgsl.ParseOptions{})
 	if err != nil {
 		return "", glsl.TranslationInfo{}, fmt.Errorf("gles: WGSL parse error: %w", err)
 	}
-
-	// Lower AST to IR.
-	module, err := naga.Lower(ast)
+	info, err := valid.Validate(module, valid.Options{Capabilities: valid.CapAll})
 	if err != nil {
-		return "", glsl.TranslationInfo{}, fmt.Errorf("gles: WGSL lower error: %w", err)
+		return "", glsl.TranslationInfo{}, fmt.Errorf("gles: WGSL validation error: %w", err)
 	}
-	module, err = naga.ProcessOverrides(module, naga.OverrideOptions{
-		Constants:  constants,
-		EntryPoint: &naga.EntryPointSelector{Stage: stage, Name: entryPoint},
-	})
+	ep := &backend.EntryPointSelector{Stage: stage, Name: entryPoint}
+	module, _, err = naga.ProcessOverrides(module, info, naga.OverrideOptions{Constants: constants, EntryPoint: ep})
 	if err != nil {
 		return "", glsl.TranslationInfo{}, fmt.Errorf("gles: pipeline constants for entry point %q: %w", entryPoint, err)
 	}
@@ -82,8 +80,7 @@ func compileWGSLToGLSL(version glsl.Version, source hal.ShaderSource, stage ir.S
 	// runtime after linking (see assignBindingsAfterLink).
 	glslCode, translationInfo, err := glsl.Compile(module, glsl.Options{
 		LangVersion:         version,
-		EntryPoint:          entryPoint,
-		ForceHighPrecision:  true,
+		EntryPoint:          ep,
 		BindingMap:          bindingMap,
 		BoundsCheckPolicies: boundsChecks(version),
 		// ADJUST_COORDINATE_SPACE: naga appends gl_Position.yz = vec2(-gl_Position.y, gl_Position.z * 2.0 - gl_Position.w)
@@ -97,10 +94,10 @@ func compileWGSLToGLSL(version glsl.Version, source hal.ShaderSource, stage ir.S
 		// the flip, gl_FragCoord.y=0 is at the top (WebGPU convention), not bottom
 		// (GL convention). Without it, rrect_clip_coverage() in fragment shaders
 		// gets wrong Y values (BUG-GLES-SCROLLBAR-001).
-		WriterFlags:    glsl.WriterFlagAdjustCoordinateSpace | glsl.WriterFlagForcePointSize,
-		ClampFragDepth: &glsl.ClampFragDepth{}, // no immediates of its own here, so the range is all there is
+		ForcePointSize: true,
+		ClampFragDepth: &backend.ClampFragDepth{}, // no immediates of its own here, so the range is all there is
 
-		SkipWorkgroupMemoryZeroInit: skipZeroInit,
+		ZeroInitializeWorkgroupMemory: zeroInitMode(skipZeroInit),
 	})
 	if err != nil {
 		return "", glsl.TranslationInfo{}, fmt.Errorf("gles: GLSL compile error for entry point %q: %w", entryPoint, err)
@@ -121,6 +118,15 @@ func compileWGSLToGLSL(version glsl.Version, source hal.ShaderSource, stage ir.S
 	return glslCode, translationInfo, nil
 }
 
+// zeroInitMode is the workgroup zeroing a compute stage gets: naga's
+// polyfill unless the caller skips it.
+func zeroInitMode(skip bool) backend.ZeroInitializeWorkgroupMemoryMode {
+	if skip {
+		return backend.ZeroInitWorkgroupNone
+	}
+	return backend.ZeroInitWorkgroupPolyfill
+}
+
 // assignBindingsAfterLink assigns uniform block and sampler bindings at runtime
 // after glLinkProgram on GL < 4.2 where layout(binding=N) is unavailable.
 //
@@ -138,7 +144,7 @@ func assignBindingsAfterLink(glCtx *gl.Context, program uint32, layout *Pipeline
 	// Assign uniform/storage buffer block bindings by name.
 	for _, info := range translationInfos {
 		for _, u := range info.Uniforms {
-			key := glsl.BindingMapKey{Group: u.Binding.Group, Binding: u.Binding.Binding}
+			key := u.Binding
 			slot, ok := layout.bindingMap[key]
 			if !ok {
 				continue
@@ -169,7 +175,7 @@ func assignBindingsAfterLink(glCtx *gl.Context, program uint32, layout *Pipeline
 
 		// Assign texture/image sampler bindings by combined variable name.
 		for name, tm := range info.TextureMappings {
-			key := glsl.BindingMapKey{Group: tm.TextureBinding.Group, Binding: tm.TextureBinding.Binding}
+			key := tm.TextureBinding
 			slot, ok := layout.bindingMap[key]
 			if !ok {
 				continue
@@ -200,7 +206,7 @@ func assignBindingsAfterLink(glCtx *gl.Context, program uint32, layout *Pipeline
 			if c := classifyBindGroupEntry(entry); c != bindingClassTexture && c != bindingClassImage {
 				continue
 			}
-			slot, ok := layout.bindingMap[glsl.BindingMapKey{Group: uint32(group), Binding: entry.Binding}]
+			slot, ok := layout.bindingMap[ir.ResourceBinding{Group: uint32(group), Binding: entry.Binding}]
 			if !ok {
 				continue
 			}
@@ -225,7 +231,7 @@ func assignBindingsAfterLink(glCtx *gl.Context, program uint32, layout *Pipeline
 // Returns:
 //   - bindingMap: maps (group, binding) to GL slot for naga GLSL writer
 //   - groupInfos: per-group BindingToSlot tables for runtime SetBindGroup
-func computeBindingMap(layouts []*BindGroupLayout) (map[glsl.BindingMapKey]uint8, []BindGroupLayoutInfo) {
+func computeBindingMap(layouts []*BindGroupLayout) (map[ir.ResourceBinding]uint8, []BindGroupLayoutInfo) {
 	var (
 		numSamplers       uint8
 		numTextures       uint8
@@ -234,7 +240,7 @@ func computeBindingMap(layouts []*BindGroupLayout) (map[glsl.BindingMapKey]uint8
 		numStorageBuffers uint8
 	)
 
-	bindingMap := make(map[glsl.BindingMapKey]uint8)
+	bindingMap := make(map[ir.ResourceBinding]uint8)
 	groupInfos := make([]BindGroupLayoutInfo, len(layouts))
 
 	for groupIdx, bgl := range layouts {
@@ -275,7 +281,7 @@ func computeBindingMap(layouts []*BindGroupLayout) (map[glsl.BindingMapKey]uint8
 
 			slot := *counter
 			bindingToSlot[entry.Binding] = slot
-			bindingMap[glsl.BindingMapKey{
+			bindingMap[ir.ResourceBinding{
 				Group:   uint32(groupIdx),
 				Binding: entry.Binding,
 			}] = slot

@@ -16,6 +16,7 @@ import (
 
 	"github.com/gogpu/naga/hlsl"
 	"github.com/gogpu/naga/ir"
+	"github.com/gogpu/naga/valid"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/dx12/d3d12"
@@ -32,6 +33,7 @@ import (
 type ShaderModule struct {
 	wgslSource  string
 	irModule    *ir.Module
+	info        valid.ModuleInfo
 	entryPoints map[string][]byte
 	device      *Device
 }
@@ -294,7 +296,7 @@ func (d *Device) createRootSignatureFromLayouts(layouts []hal.BindGroupLayout) (
 	var bindCBV, bindSRV, bindUAV uint32
 
 	// naga HLSL binding maps.
-	bindingMap := make(map[hlsl.ResourceBinding]hlsl.BindTarget)
+	bindingMap := make(map[ir.ResourceBinding]hlsl.BindTarget)
 	samplerBufferBindingMap := make(map[uint32]hlsl.BindTarget)
 	dynamicStorageOffsets := make(map[uint32]hlsl.OffsetsBindTarget)
 
@@ -382,7 +384,7 @@ func (d *Device) createRootSignatureFromLayouts(layouts []hal.BindGroupLayout) (
 				target.DynamicStorageBufferSizeIndex = &size
 				mapping.dynamicStorage++
 			}
-			bindingMap[hlsl.ResourceBinding{
+			bindingMap[ir.ResourceBinding{
 				Group:   uint32(groupIdx),
 				Binding: entry.Binding,
 			}] = target
@@ -404,7 +406,7 @@ func (d *Device) createRootSignatureFromLayouts(layouts []hal.BindGroupLayout) (
 			if entry.Type != BindingTypeSampler && entry.Type != BindingTypeComparisonSampler {
 				continue
 			}
-			bindingMap[hlsl.ResourceBinding{
+			bindingMap[ir.ResourceBinding{
 				Group:   uint32(groupIdx),
 				Binding: entry.Binding,
 			}] = hlsl.BindTarget{
@@ -458,7 +460,7 @@ func (d *Device) createRootSignatureFromLayouts(layouts []hal.BindGroupLayout) (
 				continue
 			}
 			// Nothing bounds checks a root CBV, so naga clamps the indexing.
-			bindingMap[hlsl.ResourceBinding{
+			bindingMap[ir.ResourceBinding{
 				Group:   uint32(groupIdx),
 				Binding: entry.Binding,
 			}] = hlsl.BindTarget{
@@ -595,10 +597,9 @@ func (d *Device) createRootSignatureFromLayouts(layouts []hal.BindGroupLayout) (
 	// Build naga HLSL options for deferred shader compilation.
 	nagaOpts := hlsl.DefaultOptions()
 	nagaOpts.BindingMap = bindingMap
-	nagaOpts.FakeMissingBindings = false
 	nagaOpts.SamplerBufferBindingMap = samplerBufferBindingMap
 	nagaOpts.DynamicStorageBufferOffsetsTargets = dynamicStorageOffsets
-	nagaOpts.SamplerHeapTargets = hlsl.SamplerHeapBindTargets{
+	nagaOpts.SamplerHeapTargets = &hlsl.SamplerHeapBindTargets{
 		StandardSamplers:   hlsl.BindTarget{Space: 0, Register: 0},
 		ComparisonSamplers: hlsl.BindTarget{Space: 0, Register: 2048},
 	}
@@ -610,7 +611,7 @@ func (d *Device) createRootSignatureFromLayouts(layouts []hal.BindGroupLayout) (
 		groupMappings:         groupMappings,
 		samplerRootIndex:      samplerRootIndex,
 		specialConstantsIndex: specialConstantsIndex,
-		nagaOptions:           nagaOpts,
+		nagaOptions:           &nagaOpts,
 	}, nil
 }
 

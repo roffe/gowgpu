@@ -91,6 +91,10 @@ func autoLayoutEntries(stages []autoStage) ([][]gputypes.BindGroupLayoutEntry, e
 		}
 		uses := globalUses{used: make([]bool, len(mod.GlobalVariables)), sampled: make([]bool, len(mod.GlobalVariables))}
 		uses.walk(mod, &mod.EntryPoints[ep].Function, nil)
+		var layout ir.Layouter
+		if err := layout.Update(mod); err != nil {
+			return nil, err
+		}
 
 		for h, used := range uses.used {
 			gv := &mod.GlobalVariables[h]
@@ -101,7 +105,7 @@ func autoLayoutEntries(stages []autoStage) ([][]gputypes.BindGroupLayoutEntry, e
 			if rb.Group >= MaxBindGroups {
 				return nil, fmt.Errorf("%s: @group(%d), there are only %d", gv.Name, rb.Group, MaxBindGroups)
 			}
-			entry, err := autoEntry(mod, gv, uses.sampled[h])
+			entry, err := autoEntry(mod, &layout, gv, uses.sampled[h])
 			if err != nil {
 				return nil, fmt.Errorf("%s: %w", gv.Name, err)
 			}
@@ -153,7 +157,7 @@ func isFloatSampleType(t gputypes.TextureSampleType) bool {
 
 // autoEntry is the layout entry for gv, as wgpu-core's derive_binding_type
 // makes it.
-func autoEntry(mod *ir.Module, gv *ir.GlobalVariable, sampled bool) (gputypes.BindGroupLayoutEntry, error) {
+func autoEntry(mod *ir.Module, layout *ir.Layouter, gv *ir.GlobalVariable, sampled bool) (gputypes.BindGroupLayoutEntry, error) {
 	e := gputypes.BindGroupLayoutEntry{Binding: gv.Binding.Binding}
 	switch t := mod.Types[gv.Type].Inner.(type) {
 	case ir.SamplerType:
@@ -170,9 +174,9 @@ func autoEntry(mod *ir.Module, gv *ir.GlobalVariable, sampled bool) (gputypes.Bi
 	case ir.BindingArrayType:
 		return e, errors.New("binding arrays need a Layout")
 	default:
-		e.Buffer = &gputypes.BufferBindingLayout{Type: gputypes.BufferBindingTypeUniform, MinBindingSize: uint64(ir.TypeSize(mod, gv.Type))}
+		e.Buffer = &gputypes.BufferBindingLayout{Type: gputypes.BufferBindingTypeUniform, MinBindingSize: uint64(layout.Layout(gv.Type).Size)}
 		switch {
-		case gv.Space == ir.SpaceStorage && gv.Access == ir.StorageRead:
+		case gv.Space == ir.SpaceStorage && !gv.Access.Contains(ir.StorageAccessStore):
 			e.Buffer.Type = gputypes.BufferBindingTypeReadOnlyStorage
 		case gv.Space == ir.SpaceStorage:
 			e.Buffer.Type = gputypes.BufferBindingTypeStorage
@@ -216,9 +220,9 @@ func autoTextureEntry(e *gputypes.BindGroupLayoutEntry, t ir.ImageType, sampled 
 		}
 		access := gputypes.StorageTextureAccessReadWrite
 		switch t.StorageAccess {
-		case ir.StorageAccessRead:
+		case ir.StorageAccessLoad:
 			access = gputypes.StorageTextureAccessReadOnly
-		case ir.StorageAccessWrite:
+		case ir.StorageAccessStore:
 			access = gputypes.StorageTextureAccessWriteOnly
 		}
 		e.StorageTexture = &gputypes.StorageTextureBindingLayout{Access: access, Format: format, ViewDimension: dim}

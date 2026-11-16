@@ -9,9 +9,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gogpu/naga"
+	"github.com/gogpu/naga/backend"
 	"github.com/gogpu/naga/dxil"
 	"github.com/gogpu/naga/hlsl"
+	"github.com/gogpu/naga/ir"
+	"github.com/gogpu/naga/valid"
+	"github.com/gogpu/naga/wgsl"
 )
 
 // The DXIL options take everything of the layout's HLSL options that
@@ -21,20 +24,16 @@ import (
 // shader.
 func TestDXILOptionsFollowTheHLSLOnes(t *testing.T) {
 	index := uint32(1)
-	got := hlslToDXILBindingMap(map[hlsl.ResourceBinding]hlsl.BindTarget{
+	got := hlslToDXILBindingMap(map[ir.ResourceBinding]hlsl.BindTarget{
 		{Group: 0, Binding: 2}: {Space: 1, Register: 3, RestrictIndexing: true, DynamicStorageBufferOffsetsIndex: &index},
-	})[dxil.BindingLocation{Group: 0, Binding: 2}]
+	})[ir.ResourceBinding{Group: 0, Binding: 2}]
 	if got.Space != 1 || got.Register != 3 || !got.RestrictIndexing || got.DynamicStorageBufferOffsetsIndex == nil || *got.DynamicStorageBufferOffsetsIndex != 1 {
 		t.Errorf("bind target %+v, want space 1, register 3, restricted indexing and offset index 1", got)
 	}
 
 	fragment := func(src string) *dxil.FragmentEntryPoint {
 		t.Helper()
-		ast, err := naga.Parse(src)
-		if err != nil {
-			t.Fatal(err)
-		}
-		m, err := naga.LowerWithSource(ast, src)
+		m, _, err := wgsl.Parse(src, wgsl.ParseOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -81,15 +80,15 @@ override level: f32 = 0.5;
 @vertex fn vs_main() -> @builtin(position) vec4<f32> { return vec4<f32>(level); }
 @fragment fn fs_main() -> @location(0) vec4<f32> { return vec4<f32>(level); }
 `
-	ast, err := naga.Parse(src)
+	module, _, err := wgsl.Parse(src, wgsl.ParseOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	module, err := naga.LowerWithSource(ast, src)
+	info, err := valid.Validate(module, valid.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	sm := &ShaderModule{irModule: module}
+	sm := &ShaderModule{irModule: module, info: info}
 	for _, tc := range []struct {
 		entry     string
 		constants map[string]float64
@@ -100,7 +99,7 @@ override level: f32 = 0.5;
 		{"fs_main", map[string]float64{"level": 0.25}, "0.25"},
 	} {
 		ep, _ := sm.entryPoint(tc.entry)
-		processed, processedEP, err := withOverrides(module, ep, tc.constants)
+		processed, processedEP, err := withOverrides(module, info, ep, tc.constants)
 		if err != nil {
 			t.Fatalf("%s with %v: %v", tc.entry, tc.constants, err)
 		}
@@ -108,7 +107,7 @@ override level: f32 = 0.5;
 			t.Fatalf("%s with %v: entry point %q", tc.entry, tc.constants, processedEP.Name)
 		}
 		opts := hlsl.DefaultOptions()
-		opts.EntryPoint = tc.entry
+		opts.EntryPoint = &backend.EntryPointSelector{Stage: processedEP.Stage, Name: tc.entry}
 		source, _, err := hlsl.Compile(processed, opts)
 		if err != nil {
 			t.Fatalf("%s with %v: hlsl.Compile: %v", tc.entry, tc.constants, err)
@@ -118,7 +117,7 @@ override level: f32 = 0.5;
 		}
 	}
 	ep, _ := sm.entryPoint("fs_main")
-	if _, _, err := withOverrides(module, ep, map[string]float64{"missing": 1}); err == nil {
+	if _, _, err := withOverrides(module, info, ep, map[string]float64{"missing": 1}); err == nil {
 		t.Error("a constant that names no override compiled")
 	}
 }

@@ -259,7 +259,7 @@ func sampleMaskFor(contextHasMasks bool, mask uint64) uint32 {
 }
 
 // compileFragmentShader compiles a fragment shader from WGSL source via GLSL.
-func compileFragmentShader(glCtx *gl.Context, version glsl.Version, frag *hal.FragmentState, bindingMap map[glsl.BindingMapKey]uint8) (uint32, glsl.TranslationInfo, error) {
+func compileFragmentShader(glCtx *gl.Context, version glsl.Version, frag *hal.FragmentState, bindingMap map[ir.ResourceBinding]uint8) (uint32, glsl.TranslationInfo, error) {
 	fragmentModule, ok := frag.Module.(*ShaderModule)
 	if !ok {
 		return 0, glsl.TranslationInfo{}, fmt.Errorf("gles: invalid fragment shader module type")

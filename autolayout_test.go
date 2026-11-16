@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	naga "github.com/gogpu/naga"
 	"github.com/gogpu/naga/ir"
+	"github.com/gogpu/naga/wgsl"
 	"github.com/roffe/gowgpu/gputypes"
 )
 
@@ -32,13 +32,9 @@ func expectEntries(t *testing.T, what string, got, want []gputypes.BindGroupLayo
 // parseModule is src as CreateShaderModule keeps it, without a device.
 func parseModule(t *testing.T, src string) *ShaderModule {
 	t.Helper()
-	ast, err := naga.Parse(src)
+	mod, _, err := wgsl.Parse(src, wgsl.ParseOptions{})
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
-	}
-	mod, err := naga.Lower(ast)
-	if err != nil {
-		t.Fatalf("Lower: %v", err)
 	}
 	return &ShaderModule{irModule: mod}
 }

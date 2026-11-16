@@ -15,8 +15,11 @@ import (
 	"unsafe"
 
 	"github.com/gogpu/naga"
+	"github.com/gogpu/naga/backend"
 	"github.com/gogpu/naga/ir"
 	"github.com/gogpu/naga/spirv"
+	"github.com/gogpu/naga/valid"
+	"github.com/gogpu/naga/wgsl"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/vulkan/memory"
@@ -1412,20 +1415,20 @@ func (d *Device) CreateShaderModule(desc *hal.ShaderModuleDescriptor) (hal.Shade
 	// hardcoded SPIR-V from external tools can fail silently on Intel drivers.
 	switch {
 	case desc.Source.WGSL != "":
-		module, err := parseWGSL(desc.Source.WGSL)
+		module, info, err := parseWGSL(desc.Source.WGSL)
 		if err != nil {
 			return nil, fmt.Errorf("vulkan: naga WGSL compilation failed: %w", err)
 		}
-		sm.module = module
+		sm.module, sm.info = module, info
 		if len(module.Overrides) > 0 {
 			return sm, nil
 		}
 		sm.clampsFragDepth = !usesPushConstants(module)
-		var clamp *spirv.ClampFragDepth
+		var clamp *backend.ClampFragDepth
 		if sm.clampsFragDepth {
-			clamp = &spirv.ClampFragDepth{Offset: 0}
+			clamp = &backend.ClampFragDepth{Offset: 0}
 		}
-		if spirvCode, err = d.compileWGSL(module, naga.OverrideOptions{}, clamp, false); err != nil {
+		if spirvCode, err = d.compileWGSL(module, info, naga.OverrideOptions{}, clamp, false); err != nil {
 			return nil, fmt.Errorf("vulkan: naga WGSL compilation failed: %w", err)
 		}
 	case len(desc.Source.SPIRV) > 0:
@@ -1456,40 +1459,34 @@ func (d *Device) CreateShaderModule(desc *hal.ShaderModuleDescriptor) (hal.Shade
 	return sm, nil
 }
 
-// parseWGSL parses, lowers and validates WGSL source.
-func parseWGSL(source string) (*ir.Module, error) {
-	ast, err := naga.Parse(source)
+// parseWGSL parses and validates WGSL source. The device's features were
+// checked against the module's capabilities before it got here.
+func parseWGSL(source string) (*ir.Module, valid.ModuleInfo, error) {
+	module, _, err := wgsl.Parse(source, wgsl.ParseOptions{})
 	if err != nil {
-		return nil, err
+		return nil, valid.ModuleInfo{}, err
 	}
-	module, err := naga.LowerWithSource(ast, source)
+	info, err := valid.Validate(module, valid.Options{Capabilities: valid.CapAll})
 	if err != nil {
-		return nil, fmt.Errorf("lowering error: %w", err)
+		return nil, valid.ModuleInfo{}, fmt.Errorf("validation failed: %w", err)
 	}
-	validationErrors, err := ir.ValidateWithCapabilities(module, 0)
-	if err != nil {
-		return nil, fmt.Errorf("validation error: %w", err)
-	}
-	if len(validationErrors) > 0 {
-		return nil, fmt.Errorf("validation failed: %w", &validationErrors[0])
-	}
-	return module, nil
+	return module, info, nil
 }
 
 // compileWGSL compiles module to SPIR-V with its overrides as opts says,
 // clamping frag_depth to the range clamp says is in the push constants, if
 // it isn't nil, and leaving workgroup memory as it is if skipZeroInit.
-func (d *Device) compileWGSL(module *ir.Module, opts naga.OverrideOptions, clamp *spirv.ClampFragDepth, skipZeroInit bool) ([]uint32, error) {
-	module, err := naga.ProcessOverrides(module, opts)
+func (d *Device) compileWGSL(module *ir.Module, info valid.ModuleInfo, opts naga.OverrideOptions, clamp *backend.ClampFragDepth, skipZeroInit bool) ([]uint32, error) {
+	module, _, err := naga.ProcessOverrides(module, info, opts)
 	if err != nil {
 		return nil, fmt.Errorf("pipeline constants: %w", err)
 	}
 	options := d.shaderOptions
 	options.ClampFragDepth = clamp
 	if skipZeroInit {
-		options.ZeroInitializeWorkgroupMemory = spirv.ZeroInitWorkgroupNone
+		options.ZeroInitializeWorkgroupMemory = backend.ZeroInitWorkgroupNone
 	}
-	code, err := naga.GenerateSPIRV(module, options)
+	code, _, err := spirv.Compile(module, options)
 	if err != nil {
 		return nil, err
 	}
@@ -1517,19 +1514,14 @@ func shaderOptions(apiVersion uint32, zeroInitWorkgroup bool) spirv.Options {
 	if apiVersion < vkMakeVersion(1, 1, 0) {
 		version = spirv.Version1_0
 	}
-	zeroInit := spirv.ZeroInitWorkgroupPolyfill
+	zeroInit := backend.ZeroInitWorkgroupPolyfill
 	if zeroInitWorkgroup {
-		zeroInit = spirv.ZeroInitWorkgroupNative
+		zeroInit = backend.ZeroInitWorkgroupNative
 	}
 	return spirv.Options{
-		Version: version,
-		BoundsCheckPolicies: spirv.BoundsCheckPolicies{
-			Index:     spirv.BoundsCheckRestrict,
-			Buffer:    spirv.BoundsCheckRestrict,
-			ImageLoad: spirv.BoundsCheckRestrict,
-		},
-		ForcePointSize:    true,
-		ForceLoopBounding: true,
+		Version:             version,
+		BoundsCheckPolicies: backend.BoundsCheckPolicies{BindingArray: backend.BoundsCheckUnchecked},
+		ForcePointSize:      true,
 
 		ZeroInitializeWorkgroupMemory: zeroInit,
 	}
@@ -1584,7 +1576,7 @@ func addFragDepthRange(ranges []vk.PushConstantRange, offset uint32) []vk.PushCo
 // clamp are compiled alone.
 func usesPushConstants(module *ir.Module) bool {
 	return slices.ContainsFunc(module.GlobalVariables, func(g ir.GlobalVariable) bool {
-		return g.Space == ir.SpacePushConstant || g.Space == ir.SpaceImmediate
+		return g.Space == ir.SpaceImmediate
 	})
 }
 
@@ -1652,16 +1644,16 @@ func (d *Device) stageModule(sm *ShaderModule, stage ir.ShaderStage, entry strin
 		(sm.module == nil || asModule || !writesFragDepth(sm.module, stage, entry)) {
 		return sm.handle, false, nil
 	}
-	var clamp *spirv.ClampFragDepth
+	var clamp *backend.ClampFragDepth
 	if clamps {
-		clamp = &spirv.ClampFragDepth{Offset: fragDepth.offset}
+		clamp = &backend.ClampFragDepth{Offset: fragDepth.offset}
 	}
 	if sm.module == nil {
 		return 0, false, fmt.Errorf("vulkan: pipeline constants need a WGSL shader module")
 	}
-	code, err := d.compileWGSL(sm.module, naga.OverrideOptions{
+	code, err := d.compileWGSL(sm.module, sm.info, naga.OverrideOptions{
 		Constants:  constants,
-		EntryPoint: &naga.EntryPointSelector{Stage: stage, Name: entry},
+		EntryPoint: &backend.EntryPointSelector{Stage: stage, Name: entry},
 	}, clamp, skipZeroInit)
 	if err != nil {
 		return 0, false, fmt.Errorf("vulkan: naga WGSL compilation failed: %w", err)

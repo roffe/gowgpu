@@ -11,8 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	naga "github.com/gogpu/naga"
 	"github.com/gogpu/naga/ir"
+	"github.com/gogpu/naga/wgsl"
 	"github.com/roffe/gowgpu/core"
 	"github.com/roffe/gowgpu/core/track"
 	"github.com/roffe/gowgpu/gputypes"
@@ -382,14 +382,10 @@ func (d *Device) CreateShaderModule(desc *ShaderModuleDescriptor) (_ *ShaderModu
 	// by Interface::check_stage during pipeline creation.
 	// SPIR-V shaders skip this — they go directly to HAL without IR-level introspection.
 	if desc.WGSL != "" {
-		ast, parseErr := naga.Parse(desc.WGSL)
-		if parseErr == nil {
-			irModule, lowerErr := naga.Lower(ast)
-			if lowerErr == nil {
-				sm.irModule = irModule
-			}
+		if irModule, _, err := wgsl.Parse(desc.WGSL, wgsl.ParseOptions{}); err == nil {
+			sm.irModule = irModule
 		}
-		// Parse/lower failures are non-fatal here — the HAL already compiled the shader
+		// A parse failure is not fatal here — the HAL already compiled the shader
 		// successfully. Late binding validation will be skipped if IR is unavailable.
 	}
 

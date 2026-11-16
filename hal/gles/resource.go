@@ -15,6 +15,7 @@ import (
 	"unsafe"
 
 	"github.com/gogpu/naga/glsl"
+	"github.com/gogpu/naga/ir"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/gles/gl"
@@ -352,7 +353,7 @@ type PipelineLayout struct {
 	groupInfos []BindGroupLayoutInfo
 	// bindingMap maps (group, binding) to flat GL slot index for naga GLSL writer.
 	// Computed simultaneously with groupInfos in CreatePipelineLayout.
-	bindingMap map[glsl.BindingMapKey]uint8
+	bindingMap map[ir.ResourceBinding]uint8
 }
 
 // Destroy is a no-op for pipeline layouts.
@@ -441,8 +442,8 @@ func samplerBindMapFor(layout *PipelineLayout, infos ...glsl.TranslationInfo) (m
 			if tm.SamplerBinding == nil {
 				continue
 			}
-			texKey := glsl.BindingMapKey{Group: tm.TextureBinding.Group, Binding: tm.TextureBinding.Binding}
-			samplerKey := glsl.BindingMapKey{Group: tm.SamplerBinding.Group, Binding: tm.SamplerBinding.Binding}
+			texKey := tm.TextureBinding
+			samplerKey := *tm.SamplerBinding
 			texUnit, texOk := layout.bindingMap[texKey]
 			samplerUnit, samplerOk := layout.bindingMap[samplerKey]
 			if texOk && samplerOk && texUnit < maxTextureSlots {

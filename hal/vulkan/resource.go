@@ -9,6 +9,7 @@ import (
 	"slices"
 
 	"github.com/gogpu/naga/ir"
+	"github.com/gogpu/naga/valid"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal/vulkan/memory"
 	"github.com/roffe/gowgpu/hal/vulkan/vk"
@@ -153,6 +154,7 @@ type ShaderModule struct {
 	// 0 when WGSL has overrides, which each pipeline compiles itself.
 	handle vk.ShaderModule
 	module *ir.Module // the WGSL's, nil for SPIR-V
+	info   valid.ModuleInfo
 	device *Device
 	// clampsFragDepth is set when handle clamps frag_depth, which a
 	// pipeline layout without the clamp's push constant range can't take.

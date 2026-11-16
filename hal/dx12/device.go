@@ -23,9 +23,12 @@ import (
 	"unsafe"
 
 	"github.com/gogpu/naga"
+	"github.com/gogpu/naga/backend"
 	"github.com/gogpu/naga/dxil"
 	"github.com/gogpu/naga/hlsl"
 	"github.com/gogpu/naga/ir"
+	"github.com/gogpu/naga/valid"
+	"github.com/gogpu/naga/wgsl"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/dx12/d3d12"
@@ -139,7 +142,8 @@ type Device struct {
 	// useDXIL enables direct DXIL compilation via naga dxil backend,
 	// bypassing the HLSL->FXC path. Opt-in via GOGPU_DX12_DXIL=1 env var.
 	// Requires SM 6.0+ and AgilitySDK 1.615+ for BYPASS hash support.
-	useDXIL bool
+	useDXIL         bool
+	dxilShaderModel backend.ShaderModel
 
 	// dxilValidate runs naga.dxil.Validate (IDxcValidator) on every
 	// DXIL blob right after Compile so real HRESULT errors surface in
@@ -285,7 +289,7 @@ func (h *DescriptorHeap) HandleToIndex(handle d3d12.D3D12_CPU_DESCRIPTOR_HANDLE)
 // newDevice creates a new DX12 device from a DXGI adapter.
 // adapterPtr is the IUnknown pointer to the DXGI adapter.
 // driverVersion is the version of the adapter's user-mode driver.
-func newDevice(instance *Instance, adapterPtr unsafe.Pointer, adapterDesc *dxgi.DXGI_ADAPTER_DESC1, driverVersion int64, featureLevel d3d12.D3D_FEATURE_LEVEL) (*Device, error) {
+func newDevice(instance *Instance, adapterPtr unsafe.Pointer, adapterDesc *dxgi.DXGI_ADAPTER_DESC1, driverVersion int64, featureLevel d3d12.D3D_FEATURE_LEVEL, shaderModel d3d12.D3D_SHADER_MODEL) (*Device, error) {
 	// Create D3D12 device
 	rawDevice, err := instance.d3d12Lib.CreateDevice(adapterPtr, featureLevel)
 	if err != nil {
@@ -335,13 +339,12 @@ func newDevice(instance *Instance, adapterPtr unsafe.Pointer, adapterDesc *dxgi.
 	// DXIL path uses naga dxil backend (SM 6.0, BYPASS hash) instead of HLSL->FXC.
 	dev.useDXIL = os.Getenv("GOGPU_DX12_DXIL") == "1"
 	dev.dxilValidate = os.Getenv("GOGPU_DX12_DXIL_VALIDATE") == "1"
-	if dev.useDXIL {
-		sm := d3d12.D3D12_FEATURE_DATA_SHADER_MODEL{HighestShaderModel: d3d12.D3D_SHADER_MODEL_6_0}
-		if rawDevice.CheckFeatureSupport(d3d12.D3D12_FEATURE_SHADER_MODEL, unsafe.Pointer(&sm), uint32(unsafe.Sizeof(sm))) != nil || sm.HighestShaderModel < d3d12.D3D_SHADER_MODEL_6_0 {
-			hal.Logger().Warn("dx12: GOGPU_DX12_DXIL needs shader model 6.0, compiling with FXC", "shaderModel", fmt.Sprintf("0x%x", sm.HighestShaderModel))
-			dev.useDXIL = false
-		}
+	if dev.useDXIL && shaderModel < d3d12.D3D_SHADER_MODEL_6_0 {
+		hal.Logger().Warn("dx12: GOGPU_DX12_DXIL needs shader model 6.0, compiling with FXC", "shaderModel", fmt.Sprintf("0x%x", shaderModel))
+		dev.useDXIL = false
 	}
+	// naga refuses a feature of a newer model than the one it is given.
+	dev.dxilShaderModel = backend.ShaderModel{Major: uint8(shaderModel >> 4), Minor: uint8(shaderModel & 0xf)}
 
 	// Create pre-built command signatures for indirect draw/dispatch.
 	// DX12 ExecuteIndirect requires an ID3D12CommandSignature that describes
@@ -2211,16 +2214,16 @@ func (d *Device) CreateShaderModule(desc *hal.ShaderModuleDescriptor) (hal.Shade
 
 	switch {
 	case desc.Source.WGSL != "":
-		ast, err := naga.Parse(desc.Source.WGSL)
+		irModule, _, err := wgsl.Parse(desc.Source.WGSL, wgsl.ParseOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("dx12: WGSL parse: %w", err)
 		}
-		irModule, err := naga.LowerWithSource(ast, desc.Source.WGSL)
+		info, err := valid.Validate(irModule, valid.Options{Capabilities: valid.CapAll})
 		if err != nil {
-			return nil, fmt.Errorf("dx12: WGSL lower: %w", err)
+			return nil, fmt.Errorf("dx12: WGSL validation: %w", err)
 		}
 		module.wgslSource = desc.Source.WGSL
-		module.irModule = irModule
+		module.irModule, module.info = irModule, info
 	case len(desc.Source.SPIRV) > 0:
 		// Legacy: pre-compiled SPIR-V stored as single entry "main"
 		bytecode := make([]byte, len(desc.Source.SPIRV)*4)
@@ -2248,14 +2251,14 @@ func (d *Device) CreateShaderModule(desc *hal.ShaderModuleDescriptor) (hal.Shade
 // is the concrete struct types, since dxil does not import hlsl.
 //
 // Returns nil if the input is nil, preserving the "no remap" default.
-func hlslToDXILBindingMap(m map[hlsl.ResourceBinding]hlsl.BindTarget) dxil.BindingMap {
+func hlslToDXILBindingMap(m map[ir.ResourceBinding]hlsl.BindTarget) dxil.BindingMap {
 	if m == nil {
 		return nil
 	}
 	out := make(dxil.BindingMap, len(m))
 	for k, v := range m {
-		out[dxil.BindingLocation{Group: k.Group, Binding: k.Binding}] = dxil.BindTarget{
-			Space:                            uint32(v.Space),
+		out[k] = dxil.BindTarget{
+			Space:                            v.Space,
 			Register:                         v.Register,
 			RestrictIndexing:                 v.RestrictIndexing,
 			DynamicStorageBufferOffsetsIndex: v.DynamicStorageBufferOffsetsIndex,
@@ -2272,21 +2275,24 @@ func hlslToDXILSamplerBufferBindingMap(m map[uint32]hlsl.BindTarget) map[uint32]
 	out := make(map[uint32]dxil.BindTarget, len(m))
 	for group, v := range m {
 		out[group] = dxil.BindTarget{
-			Space:    uint32(v.Space),
+			Space:    v.Space,
 			Register: v.Register,
 		}
 	}
 	return out
 }
 
-func hlslToDXILSamplerHeapTargets(t hlsl.SamplerHeapBindTargets) *dxil.SamplerHeapBindTargets {
+func hlslToDXILSamplerHeapTargets(t *hlsl.SamplerHeapBindTargets) *dxil.SamplerHeapBindTargets {
+	if t == nil {
+		return nil
+	}
 	return &dxil.SamplerHeapBindTargets{
 		StandardSamplers: dxil.BindTarget{
-			Space:    uint32(t.StandardSamplers.Space),
+			Space:    t.StandardSamplers.Space,
 			Register: t.StandardSamplers.Register,
 		},
 		ComparisonSamplers: dxil.BindTarget{
-			Space:    uint32(t.ComparisonSamplers.Space),
+			Space:    t.ComparisonSamplers.Space,
 			Register: t.ComparisonSamplers.Register,
 		},
 	}
@@ -2319,14 +2325,17 @@ func (d *Device) stageBytecode(module hal.ShaderModule, entryPoint string, const
 	if layout == nil || layout.nagaOptions == nil {
 		return nil, fmt.Errorf("WGSL compilation requires a PipelineLayout with naga options")
 	}
-	irModule, ep, err := withOverrides(sm.irModule, ep, constants)
+	irModule, ep, err := withOverrides(sm.irModule, sm.info, ep, constants)
 	if err != nil {
 		return nil, fmt.Errorf("pipeline constants: %w", err)
 	}
 	opts := *layout.nagaOptions
-	opts.EntryPoint = entryPoint
+	opts.EntryPoint = &backend.EntryPointSelector{Stage: ep.Stage, Name: entryPoint}
 	opts.FragmentEntryPoint = fragment
-	opts.ZeroInitializeWorkgroupMemory = zeroInit
+	opts.ZeroInitializeWorkgroupMemory = backend.ZeroInitWorkgroupPolyfill
+	if !zeroInit {
+		opts.ZeroInitializeWorkgroupMemory = backend.ZeroInitWorkgroupNone
+	}
 	if d.useDXIL {
 		return d.compileDXIL(sm.wgslSource, irModule, ep, constants, &opts)
 	}
@@ -2337,13 +2346,13 @@ func (d *Device) stageBytecode(module hal.ShaderModule, entryPoint string, const
 // constants or their defaults for the entry point ep, and ep in it, as
 // wgpu-hal's load_shader does with naga's process_overrides. A module
 // without overrides that is given no constants stays as it is.
-func withOverrides(module *ir.Module, ep *ir.EntryPoint, constants map[string]float64) (*ir.Module, *ir.EntryPoint, error) {
+func withOverrides(module *ir.Module, info valid.ModuleInfo, ep *ir.EntryPoint, constants map[string]float64) (*ir.Module, *ir.EntryPoint, error) {
 	if len(module.Overrides) == 0 && len(constants) == 0 {
 		return module, ep, nil
 	}
-	processed, err := naga.ProcessOverrides(module, naga.OverrideOptions{
+	processed, _, err := naga.ProcessOverrides(module, info, naga.OverrideOptions{
 		Constants:  constants,
-		EntryPoint: &naga.EntryPointSelector{Stage: ep.Stage, Name: ep.Name},
+		EntryPoint: &backend.EntryPointSelector{Stage: ep.Stage, Name: ep.Name},
 	})
 	if err != nil {
 		return nil, nil, err
@@ -2373,16 +2382,14 @@ func fragmentEntryPoint(fragment *hal.FragmentState) *hlsl.FragmentEntryPoint {
 // registers, with the entry point, stage and target, as Rust's ShaderCache
 // has it.
 func (d *Device) compileHLSL(module *ir.Module, ep *ir.EntryPoint, opts *hlsl.Options) ([]byte, error) {
-	hlslSource, info, err := hlsl.Compile(module, opts)
+	hlslSource, info, err := hlsl.Compile(module, *opts)
 	if err != nil {
 		return nil, fmt.Errorf("HLSL generation: %w", err)
 	}
 	target := shaderStageToTarget(ep.Stage)
 	hlslName := ep.Name
-	if info != nil {
-		if mapped, ok := info.EntryPointNames[ep.Name]; ok {
-			hlslName = mapped
-		}
+	if mapped, ok := info.EntryPointNames[ep.Name]; ok {
+		hlslName = mapped
 	}
 
 	cacheKey := NewShaderCacheKey(hlslSource, hlslName, ep.Stage, target)
@@ -2412,22 +2419,23 @@ func (d *Device) compileHLSL(module *ir.Module, ep *ir.EntryPoint, opts *hlsl.Op
 // module of its own that shares everything else.
 func (d *Device) compileDXIL(wgslSource string, module *ir.Module, ep *ir.EntryPoint, constants map[string]float64, nagaOpts *hlsl.Options) ([]byte, error) {
 	opts := dxil.DefaultOptions()
+	opts.ShaderModel = d.dxilShaderModel
 	opts.BindingMap = hlslToDXILBindingMap(nagaOpts.BindingMap)
 	opts.SamplerBufferBindingMap = hlslToDXILSamplerBufferBindingMap(nagaOpts.SamplerBufferBindingMap)
 	opts.SamplerHeapTargets = hlslToDXILSamplerHeapTargets(nagaOpts.SamplerHeapTargets)
 	if t := nagaOpts.SpecialConstantsBinding; t != nil {
-		opts.SpecialConstantsBinding = &dxil.BindTarget{Space: uint32(t.Space), Register: t.Register}
+		opts.SpecialConstantsBinding = &dxil.BindTarget{Space: t.Space, Register: t.Register}
 	}
 	if len(nagaOpts.DynamicStorageBufferOffsetsTargets) > 0 {
 		opts.DynamicStorageBufferOffsetsTargets = make(map[uint32]dxil.OffsetsBindTarget, len(nagaOpts.DynamicStorageBufferOffsetsTargets))
 		for group, t := range nagaOpts.DynamicStorageBufferOffsetsTargets {
-			opts.DynamicStorageBufferOffsetsTargets[group] = dxil.OffsetsBindTarget{Space: uint32(t.Space), Register: t.Register, Size: t.Size}
+			opts.DynamicStorageBufferOffsetsTargets[group] = dxil.OffsetsBindTarget{Space: t.Space, Register: t.Register, Size: t.Size}
 		}
 	}
 	if f := nagaOpts.FragmentEntryPoint; f != nil {
 		opts.FragmentEntryPoint = &dxil.FragmentEntryPoint{Module: f.Module, Function: f.Function}
 	}
-	opts.SkipWorkgroupMemoryZeroInit = !nagaOpts.ZeroInitializeWorkgroupMemory
+	opts.ZeroInitializeWorkgroupMemory = nagaOpts.ZeroInitializeWorkgroupMemory
 
 	cacheKey := NewShaderCacheKey(dxilCacheSource(wgslSource, ep.Name, constants, opts), ep.Name, ep.Stage, "dxil")
 	if cached, ok := d.shaderCache.Get(cacheKey); ok {
@@ -2436,7 +2444,7 @@ func (d *Device) compileDXIL(wgslSource string, module *ir.Module, ep *ir.EntryP
 
 	single := *module
 	single.EntryPoints = []ir.EntryPoint{*ep}
-	dxilBytes, err := dxil.Compile(&single, opts)
+	dxilBytes, _, err := dxil.Compile(&single, opts)
 	if err != nil {
 		return nil, fmt.Errorf("dx12: DXIL compile entry point %q: %w", ep.Name, err)
 	}
@@ -2472,11 +2480,11 @@ func dxilCacheSource(wgslSource, entryPoint string, constants map[string]float64
 		fmt.Fprintf(h, "\x00c%s=%v", key, constants[key])
 	}
 	fmt.Fprintf(h, "\x00sm%d", opts.ShaderModel)
-	locations := make([]dxil.BindingLocation, 0, len(opts.BindingMap))
+	locations := make([]ir.ResourceBinding, 0, len(opts.BindingMap))
 	for loc := range opts.BindingMap {
 		locations = append(locations, loc)
 	}
-	slices.SortFunc(locations, func(a, b dxil.BindingLocation) int {
+	slices.SortFunc(locations, func(a, b ir.ResourceBinding) int {
 		return cmp.Or(cmp.Compare(a.Group, b.Group), cmp.Compare(a.Binding, b.Binding))
 	})
 	for _, loc := range locations {
@@ -2507,7 +2515,7 @@ func dxilCacheSource(wgslSource, entryPoint string, constants map[string]float64
 			fmt.Fprintf(h, ",%d", loc)
 		}
 	}
-	if opts.SkipWorkgroupMemoryZeroInit {
+	if opts.ZeroInitializeWorkgroupMemory == backend.ZeroInitWorkgroupNone {
 		h.Write([]byte("\x00nozeroinit"))
 	}
 	return string(h.Sum(nil))

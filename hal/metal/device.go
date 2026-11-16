@@ -16,8 +16,11 @@ import (
 	"unsafe"
 
 	"github.com/gogpu/naga"
+	"github.com/gogpu/naga/backend"
 	"github.com/gogpu/naga/ir"
 	"github.com/gogpu/naga/msl"
+	"github.com/gogpu/naga/valid"
+	"github.com/gogpu/naga/wgsl"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 	"github.com/roffe/gowgpu/hal/metal/mslmap"
@@ -587,16 +590,13 @@ func (d *Device) CreateShaderModule(desc *hal.ShaderModuleDescriptor) (hal.Shade
 
 	start := time.Now()
 
-	// Parse WGSL to AST
-	ast, err := naga.Parse(desc.Source.WGSL)
+	irModule, _, err := wgsl.Parse(desc.Source.WGSL, wgsl.ParseOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("metal: failed to parse WGSL: %w", err)
 	}
-
-	// Lower AST to IR
-	irModule, err := naga.LowerWithSource(ast, desc.Source.WGSL)
+	info, err := valid.Validate(irModule, valid.Options{Capabilities: valid.CapAll})
 	if err != nil {
-		return nil, fmt.Errorf("metal: failed to lower WGSL to IR: %w", err)
+		return nil, fmt.Errorf("metal: WGSL validation failed: %w", err)
 	}
 
 	// Extract workgroup sizes from entry points for compute shaders
@@ -610,6 +610,7 @@ func (d *Device) CreateShaderModule(desc *hal.ShaderModuleDescriptor) (hal.Shade
 	return &ShaderModule{
 		source:         desc.Source,
 		irModule:       irModule,
+		info:           info,
 		device:         d,
 		workgroupSizes: workgroupSizes,
 	}, nil
@@ -657,7 +658,7 @@ func (d *Device) compileLibrary(module *ShaderModule, layout *PipelineLayout, st
 
 	start := time.Now()
 
-	irModule, err := withOverrides(module.irModule, stage, name, constants)
+	irModule, err := withOverrides(module.irModule, module.info, stage, name, constants)
 	if err != nil {
 		return nil, fmt.Errorf("metal: pipeline constants for entry point %q: %w", name, err)
 	}
@@ -672,19 +673,19 @@ func (d *Device) compileLibrary(module *ShaderModule, layout *PipelineLayout, st
 	}
 	options.AllowAndForcePointSize = points
 	options.FixedSampleMask = sampleMask
-	options.ZeroInitializeWorkgroupMemory = zeroInit
+	if !zeroInit {
+		options.ZeroInitializeWorkgroupMemory = backend.ZeroInitWorkgroupNone
+	}
 	sizesBindings, err := mslmap.SizesBindings(irModule, stage, name)
 	if err == nil && len(vertexBuffers) > 0 {
-		options.VertexPullingTransform = true
-		options.VertexBufferMappings = vertexBuffers
+		options.VertexPulling = &msl.VertexPullingOptions{VertexBuffers: vertexBuffers}
 		sizesBindings, err = mslmap.RuntimeArrayBindings(irModule)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("metal: %w", err)
 	}
 
-	mslSource, info, err := msl.CompileWithPipeline(irModule, options,
-		msl.PipelineOptions{EntryPoint: &msl.EntryPointSelector{Stage: stage, Name: name}})
+	mslSource, info, err := msl.Compile(irModule, options)
 	if err != nil {
 		return nil, fmt.Errorf("metal: failed to compile to MSL: %w", err)
 	}
@@ -746,14 +747,15 @@ func fixedSampleMask(ms gputypes.MultisampleState) *uint32 {
 // compute pipeline's, or their defaults, for the entry point name of stage,
 // as wgpu-hal's create_shader does with naga's process_overrides. A module
 // without overrides that is given no constants stays as it is.
-func withOverrides(module *ir.Module, stage ir.ShaderStage, name string, constants map[string]float64) (*ir.Module, error) {
+func withOverrides(module *ir.Module, info valid.ModuleInfo, stage ir.ShaderStage, name string, constants map[string]float64) (*ir.Module, error) {
 	if len(module.Overrides) == 0 && len(constants) == 0 {
 		return module, nil
 	}
-	return naga.ProcessOverrides(module, naga.OverrideOptions{
+	processed, _, err := naga.ProcessOverrides(module, info, naga.OverrideOptions{
 		Constants:  constants,
-		EntryPoint: &naga.EntryPointSelector{Stage: stage, Name: name},
+		EntryPoint: &backend.EntryPointSelector{Stage: stage, Name: name},
 	})
+	return processed, err
 }
 
 // newCompileOptions returns +1 MTLCompileOptions with Metal's defaults, but

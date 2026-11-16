@@ -10,8 +10,8 @@
 // happens to declare: a layout may hold entries a shader does not use.
 //
 // naga translates WGSL arrayLength() into arithmetic on an extra entry point
-// argument named `_buffer_sizes`, which gets a [[buffer(N)]] attribute only
-// through msl.Options.PerEntryPointMap[ep].SizesBuffer.
+// argument named `_buffer_sizes`, which takes its [[buffer(N)]] slot from
+// msl.Options.PerEntryPointMap[ep].SizesBuffer, after the layout's buffers.
 //
 // The package has no build tags and does not call Objective-C, so its tests run
 // on any CI runner.
@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/gogpu/naga/backend"
 	"github.com/gogpu/naga/ir"
 	"github.com/gogpu/naga/msl"
 	"github.com/roffe/gowgpu/gputypes"
@@ -125,7 +126,15 @@ func targetKind(t msl.BindTarget) int {
 // sizesSlot is the first buffer slot after the layout's buffers, as in Rust
 // wgpu-hal.
 func Options(module *ir.Module, stage ir.ShaderStage, name string, resources map[ir.ResourceBinding]msl.BindTarget, sizesSlot int) (msl.Options, error) {
-	opts := msl.DefaultOptions()
+	opts := msl.Options{
+		EntryPoint: &backend.EntryPointSelector{Stage: stage, Name: name},
+		BoundsCheckPolicies: backend.BoundsCheckPolicies{
+			Index:        backend.BoundsCheckReadZeroSkipWrite,
+			Buffer:       backend.BoundsCheckReadZeroSkipWrite,
+			ImageLoad:    backend.BoundsCheckReadZeroSkipWrite,
+			BindingArray: backend.BoundsCheckReadZeroSkipWrite,
+		},
+	}
 	if module == nil {
 		return opts, fmt.Errorf("mslmap: nil IR module")
 	}
@@ -159,7 +168,7 @@ func Options(module *ir.Module, stage ir.ShaderStage, name string, resources map
 		}
 		immediates := slot + 1
 		entry.ImmediatesBuffer = &immediates
-		opts.ClampFragDepth = &msl.ClampFragDepth{Offset: 0}
+		opts.ClampFragDepth = &backend.ClampFragDepth{Offset: 0}
 	}
 	opts.PerEntryPointMap = map[string]msl.EntryPointResources{name: entry}
 	return opts, nil

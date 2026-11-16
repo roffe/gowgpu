@@ -13,6 +13,7 @@ On 2026-10-23 a correctness vet against Rust's wgpu, Dawn and the API specs conf
 
 ### Changed
 
+- **naga v0.22.** Shaders go through naga's new API (`wgsl.Parse`, `valid.Validate`, one `Compile(module, Options)` per backend). WGSL follows the spec more closely with it: `f16` needs `enable f16;` and the subgroup built-ins `enable subgroups;`, and `var<push_constant>` is `var<immediate>`. A shader without the directive fails to parse instead of failing the feature check. The feature check reads subgroup operations and barriers from naga's capabilities, where it walked the IR itself.
 - **`ZeroInitializeWorkgroupMemory` does something.** Every backend zeroed workgroup memory whatever a compute pipeline asked for; turning it off now skips the stores. Vulkan devices with `shaderZeroInitializeWorkgroupMemory` (1.3) have the driver zero it instead of the shader, as wgpu-hal does, and DX12's DXIL path (`GOGPU_DX12_DXIL=1`) zeroes it at all, which it didn't. `TestWorkgroupMemoryStartsZeroed`.
 - **Vulkan asks the driver which formats take 4x multisampling** through `vkGetPhysicalDeviceImageFormatProperties`, instead of reporting it for every format it can render to, and reports multisample resolve for colour formats only, as DX12 and Metal do.
 - **`FeatureTextureFormatsTier1`**, WebGPU's `texture-formats-tier1`. The browser build maps it and makes a texture of a 16-bit normalized format only on a device made with it, which browsers require; native adapters don't offer it and take those formats without it.

@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gogpu/naga"
 	"github.com/gogpu/naga/ir"
 	"github.com/gogpu/naga/msl"
+	"github.com/gogpu/naga/wgsl"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal/metal/mslmap"
 )
@@ -79,13 +79,9 @@ var slotRe = regexp.MustCompile(`(\w+)\s*\[\[(buffer|texture|sampler)\((\d+)\)\]
 
 func lower(t *testing.T, source string) *ir.Module {
 	t.Helper()
-	ast, err := naga.Parse(source)
+	module, _, err := wgsl.Parse(source, wgsl.ParseOptions{})
 	if err != nil {
-		t.Fatalf("naga.Parse: %v", err)
-	}
-	module, err := naga.LowerWithSource(ast, source)
-	if err != nil {
-		t.Fatalf("naga.LowerWithSource: %v", err)
+		t.Fatalf("wgsl.Parse: %v", err)
 	}
 	return module
 }
@@ -106,9 +102,9 @@ func compileEntryPoint(t *testing.T, module *ir.Module, stage ir.ShaderStage, na
 	if err != nil {
 		t.Fatalf("mslmap.Options(%s): %v", name, err)
 	}
-	out, _, err := msl.CompileWithPipeline(module, opts, msl.PipelineOptions{EntryPoint: &msl.EntryPointSelector{Stage: stage, Name: name}})
+	out, _, err := msl.Compile(module, opts)
 	if err != nil {
-		t.Fatalf("msl.CompileWithPipeline(%s): %v", name, err)
+		t.Fatalf("msl.Compile(%s): %v", name, err)
 	}
 	return out
 }
@@ -120,28 +116,6 @@ func slots(mslSource string) map[string]string {
 		out[m[1]] = m[2] + "(" + m[3] + ")"
 	}
 	return out
-}
-
-// TestDefaultOptionsLeaveSizesBufferUnbound records why this package exists.
-// With msl.DefaultOptions, naga reports that the sizes buffer is required,
-// but it writes the argument without a [[buffer(N)]] attribute.
-func TestDefaultOptionsLeaveSizesBufferUnbound(t *testing.T) {
-	t.Parallel()
-
-	module := lower(t, wgslRuntimeArray)
-	source, info, err := msl.Compile(module, msl.DefaultOptions())
-	if err != nil {
-		t.Fatalf("msl.Compile: %v", err)
-	}
-	if !info.RequiresSizesBuffer {
-		t.Fatal("RequiresSizesBuffer = false; want true for a runtime-sized array")
-	}
-	if !strings.Contains(source, "_buffer_sizes") {
-		t.Fatal("generated MSL has no _buffer_sizes argument")
-	}
-	if slot, ok := slots(source)["_buffer_sizes"]; ok {
-		t.Fatalf("_buffer_sizes has [[%s]] under DefaultOptions; want no attribute", slot)
-	}
 }
 
 // TestOptionsBindSizesBuffer checks that the sizes argument goes at the slot
@@ -341,11 +315,10 @@ func TestVertexBuffersPullVertices(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mslmap.Options: %v", err)
 	}
-	opts.VertexPullingTransform = true
-	opts.VertexBufferMappings = mappings
-	source, _, err := msl.CompileWithPipeline(module, opts, msl.PipelineOptions{EntryPoint: &msl.EntryPointSelector{Stage: ir.StageVertex, Name: "vs"}})
+	opts.VertexPulling = &msl.VertexPullingOptions{VertexBuffers: mappings}
+	source, _, err := msl.Compile(module, opts)
 	if err != nil {
-		t.Fatalf("msl.CompileWithPipeline: %v", err)
+		t.Fatalf("msl.Compile: %v", err)
 	}
 	got := slots(source)
 	for name, slot := range map[string]string{"tint": "buffer(1)", "vb_30_in": "buffer(30)", "vb_28_in": "buffer(28)", "vb_27_in": "buffer(27)", "_buffer_sizes": "buffer(2)"} {

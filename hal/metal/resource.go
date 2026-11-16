@@ -11,6 +11,7 @@ import (
 
 	"github.com/gogpu/naga/ir"
 	"github.com/gogpu/naga/msl"
+	"github.com/gogpu/naga/valid"
 	"github.com/roffe/gowgpu/gputypes"
 	"github.com/roffe/gowgpu/hal"
 )
@@ -144,6 +145,7 @@ func (s *Sampler) NativeHandle() uint64 { return uint64(s.raw) }
 type ShaderModule struct {
 	source         hal.ShaderSource
 	irModule       *ir.Module // nil unless the module was created from WGSL
+	info           valid.ModuleInfo
 	device         *Device
 	workgroupSizes map[string][3]uint32 // entry point name -> workgroup size
 }

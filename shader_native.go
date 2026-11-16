@@ -37,6 +37,10 @@ func extractShaderBindingSizes(module *ir.Module) map[ir.ResourceBinding]uint64 
 		return nil
 	}
 
+	var layout ir.Layouter
+	if layout.Update(module) != nil {
+		return nil
+	}
 	sizes := make(map[ir.ResourceBinding]uint64)
 
 	for i := range module.GlobalVariables {
@@ -59,7 +63,7 @@ func extractShaderBindingSizes(module *ir.Module) map[ir.ResourceBinding]uint64 
 			continue
 		}
 
-		size := uint64(ir.TypeSize(module, gv.Type))
+		size := uint64(layout.Layout(gv.Type).Size)
 		if size == 0 {
 			continue
 		}
